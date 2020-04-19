@@ -8,6 +8,11 @@ namespace Expertiser.Database.Models
     [Table("Table_City")]
     public partial class TableCity
     {
+        public TableCity()
+        {
+            TableLocation = new HashSet<TableLocation>();
+        }
+
         [Key]
         public int Id { get; set; }
         [Required]
@@ -16,7 +21,15 @@ namespace Expertiser.Database.Models
         public int CountryId { get; set; }
         [StringLength(50)]
         public string Province { get; set; }
+        [StringLength(16)]
+        public string PostalCode { get; set; }
         [StringLength(50)]
         public string Region { get; set; }
+
+        [ForeignKey(nameof(CountryId))]
+        [InverseProperty(nameof(TableCountry.TableCity))]
+        public virtual TableCountry Country { get; set; }
+        [InverseProperty("City")]
+        public virtual ICollection<TableLocation> TableLocation { get; set; }
     }
 }

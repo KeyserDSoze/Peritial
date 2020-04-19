@@ -10,7 +10,7 @@ namespace Expertiser.Database.Models
     {
         public TableInspectorate()
         {
-            TableExpertise = new HashSet<TableExpertise>();
+            TableAccident = new HashSet<TableAccident>();
         }
 
         [Key]
@@ -30,6 +30,6 @@ namespace Expertiser.Database.Models
         [InverseProperty(nameof(TableInsuranceCompany.TableInspectorate))]
         public virtual TableInsuranceCompany InsuranceCompany { get; set; }
         [InverseProperty("Inspectorate")]
-        public virtual ICollection<TableExpertise> TableExpertise { get; set; }
+        public virtual ICollection<TableAccident> TableAccident { get; set; }
     }
 }

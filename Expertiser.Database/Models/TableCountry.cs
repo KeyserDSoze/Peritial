@@ -10,16 +10,23 @@ namespace Expertiser.Database.Models
     {
         public TableCountry()
         {
-            TableLocation = new HashSet<TableLocation>();
+            TableCity = new HashSet<TableCity>();
         }
 
         [Key]
         public int Id { get; set; }
+        [StringLength(3)]
+        public string CurrencyCode { get; set; }
+        [StringLength(2)]
+        public string AlphaCode2 { get; set; }
+        [StringLength(3)]
+        public string AlphaCode3 { get; set; }
+        public int? DialCode { get; set; }
         [Required]
         [StringLength(50)]
         public string Label { get; set; }
 
         [InverseProperty("Country")]
-        public virtual ICollection<TableLocation> TableLocation { get; set; }
+        public virtual ICollection<TableCity> TableCity { get; set; }
     }
 }

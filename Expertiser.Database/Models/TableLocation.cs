@@ -10,6 +10,7 @@ namespace Expertiser.Database.Models
     {
         public TableLocation()
         {
+            TableAccident = new HashSet<TableAccident>();
             TableCustomer = new HashSet<TableCustomer>();
             TableInspectorate = new HashSet<TableInspectorate>();
             TableInsuranceAgency = new HashSet<TableInsuranceAgency>();
@@ -20,16 +21,13 @@ namespace Expertiser.Database.Models
         public int Id { get; set; }
         [StringLength(100)]
         public string Address { get; set; }
-        [Required]
-        [StringLength(100)]
-        public string City { get; set; }
-        public int CountryId { get; set; }
-        [StringLength(16)]
-        public string PostalCode { get; set; }
+        public int CityId { get; set; }
 
-        [ForeignKey(nameof(CountryId))]
-        [InverseProperty(nameof(TableCountry.TableLocation))]
-        public virtual TableCountry Country { get; set; }
+        [ForeignKey(nameof(CityId))]
+        [InverseProperty(nameof(TableCity.TableLocation))]
+        public virtual TableCity City { get; set; }
+        [InverseProperty("Place")]
+        public virtual ICollection<TableAccident> TableAccident { get; set; }
         [InverseProperty("Address")]
         public virtual ICollection<TableCustomer> TableCustomer { get; set; }
         [InverseProperty("Address")]
