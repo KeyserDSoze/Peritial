@@ -21,7 +21,7 @@ namespace Expertiser.Database.Models
         public int CountryId { get; set; }
         [StringLength(50)]
         public string Province { get; set; }
-        [StringLength(16)]
+        [StringLength(8000)]
         public string PostalCode { get; set; }
         [StringLength(50)]
         public string Region { get; set; }

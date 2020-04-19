@@ -80,17 +80,17 @@ namespace Expertiser.Database.Models
             modelBuilder.Entity<TableBranch>(entity =>
             {
                 entity.Property(e => e.Label).IsUnicode(false);
+
+                entity.HasOne(d => d.BranchType)
+                    .WithMany(p => p.TableBranch)
+                    .HasForeignKey(d => d.BranchTypeId)
+                    .OnDelete(DeleteBehavior.ClientSetNull)
+                    .HasConstraintName("FK_Table_Branch_Table_BranchType");
             });
 
             modelBuilder.Entity<TableBranchType>(entity =>
             {
                 entity.Property(e => e.Label).IsUnicode(false);
-
-                entity.HasOne(d => d.Branch)
-                    .WithMany(p => p.TableBranchType)
-                    .HasForeignKey(d => d.BranchId)
-                    .OnDelete(DeleteBehavior.ClientSetNull)
-                    .HasConstraintName("FK_Table_BranchType_Table_Branch");
             });
 
             modelBuilder.Entity<TableCity>(entity =>
@@ -157,7 +157,7 @@ namespace Expertiser.Database.Models
                     .WithMany(p => p.TableExpertise)
                     .HasForeignKey(d => d.BranchId)
                     .OnDelete(DeleteBehavior.ClientSetNull)
-                    .HasConstraintName("FK_Table_Expertise_Table_BranchType");
+                    .HasConstraintName("FK_Table_Expertise_Table_Branch");
 
                 entity.HasOne(d => d.Contributor)
                     .WithMany(p => p.TableExpertise)
@@ -193,7 +193,6 @@ namespace Expertiser.Database.Models
                 entity.HasOne(d => d.Address)
                     .WithMany(p => p.TableInspectorate)
                     .HasForeignKey(d => d.AddressId)
-                    .OnDelete(DeleteBehavior.ClientSetNull)
                     .HasConstraintName("FK_Table_Inspectorate_Table_Location");
 
                 entity.HasOne(d => d.InsuranceCompany)
@@ -231,7 +230,6 @@ namespace Expertiser.Database.Models
                 entity.HasOne(d => d.Address)
                     .WithMany(p => p.TableInsuranceAgency)
                     .HasForeignKey(d => d.AddressId)
-                    .OnDelete(DeleteBehavior.ClientSetNull)
                     .HasConstraintName("FK_Table_InsuranceAgency_Table_Location");
 
                 entity.HasOne(d => d.InsuranceCompany)
@@ -250,7 +248,6 @@ namespace Expertiser.Database.Models
                 entity.HasOne(d => d.Address)
                     .WithMany(p => p.TableInsuranceCompany)
                     .HasForeignKey(d => d.AddressId)
-                    .OnDelete(DeleteBehavior.ClientSetNull)
                     .HasConstraintName("FK_Table_InsuranceCompany_Table_Location");
             });
 

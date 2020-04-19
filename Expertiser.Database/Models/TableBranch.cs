@@ -10,7 +10,7 @@ namespace Expertiser.Database.Models
     {
         public TableBranch()
         {
-            TableBranchType = new HashSet<TableBranchType>();
+            TableExpertise = new HashSet<TableExpertise>();
         }
 
         [Key]
@@ -18,8 +18,12 @@ namespace Expertiser.Database.Models
         [Required]
         [StringLength(100)]
         public string Label { get; set; }
+        public int BranchTypeId { get; set; }
 
+        [ForeignKey(nameof(BranchTypeId))]
+        [InverseProperty(nameof(TableBranchType.TableBranch))]
+        public virtual TableBranchType BranchType { get; set; }
         [InverseProperty("Branch")]
-        public virtual ICollection<TableBranchType> TableBranchType { get; set; }
+        public virtual ICollection<TableExpertise> TableExpertise { get; set; }
     }
 }

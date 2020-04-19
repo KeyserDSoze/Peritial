@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Rystem.Interfaces.Utility.Tester;
+using System;
 
 namespace Expertiser
 {
@@ -6,7 +7,8 @@ namespace Expertiser
     {
         static void Main(string[] args)
         {
-            Console.WriteLine("Hello World!");
+            var testMachine = new TestMachine<IImporter>("Expertiser");
+            testMachine.Start();
         }
     }
 }

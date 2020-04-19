@@ -20,7 +20,7 @@ namespace Expertiser.Database.Models
         [Required]
         [StringLength(100)]
         public string Label { get; set; }
-        public int AddressId { get; set; }
+        public int? AddressId { get; set; }
         [StringLength(64)]
         public string ExternalId { get; set; }
         public bool IsActive { get; set; }

@@ -35,8 +35,8 @@ namespace Expertiser.Database.Models
         [InverseProperty(nameof(TableAccident.TableExpertise))]
         public virtual TableAccident Accident { get; set; }
         [ForeignKey(nameof(BranchId))]
-        [InverseProperty(nameof(TableBranchType.TableExpertise))]
-        public virtual TableBranchType Branch { get; set; }
+        [InverseProperty(nameof(TableBranch.TableExpertise))]
+        public virtual TableBranch Branch { get; set; }
         [ForeignKey(nameof(ContributorId))]
         [InverseProperty(nameof(TableContributor.TableExpertise))]
         public virtual TableContributor Contributor { get; set; }

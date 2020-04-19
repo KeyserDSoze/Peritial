@@ -15,12 +15,13 @@ namespace Expertiser.Database.Models
 
         [Key]
         public int Id { get; set; }
+        public bool? IsActive { get; set; }
         [Required]
         [StringLength(100)]
         public string Label { get; set; }
         [StringLength(64)]
         public string ExternalId { get; set; }
-        public int AddressId { get; set; }
+        public int? AddressId { get; set; }
         public int InsuranceCompanyId { get; set; }
 
         [ForeignKey(nameof(AddressId))]

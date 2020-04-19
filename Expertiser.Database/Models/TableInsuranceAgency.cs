@@ -21,7 +21,7 @@ namespace Expertiser.Database.Models
         [StringLength(64)]
         public string ExternalId { get; set; }
         public int InsuranceCompanyId { get; set; }
-        public int AddressId { get; set; }
+        public int? AddressId { get; set; }
         public bool IsActive { get; set; }
 
         [ForeignKey(nameof(AddressId))]

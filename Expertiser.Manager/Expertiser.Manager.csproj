@@ -5,8 +5,17 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Rystem" Version="4.9.6" />
+    <PackageReference Include="Rystem.Interfaces" Version="4.9.5" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Expertiser.Database\Expertiser.Database.csproj" />
     <ProjectReference Include="..\Expertiser.Interfaces\Expertiser.Interfaces.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Registry\" />
   </ItemGroup>
 
 </Project>
