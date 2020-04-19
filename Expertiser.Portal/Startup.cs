@@ -12,6 +12,7 @@ using Expertiser.Portal.Data;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Expertiser.Database.Models;
 
 namespace Expertiser.Portal
 {
@@ -32,7 +33,12 @@ namespace Expertiser.Portal
                     Configuration.GetConnectionString("DefaultConnection")));
             services.AddDefaultIdentity<IdentityUser>(options => options.SignIn.RequireConfirmedAccount = true)
                 .AddEntityFrameworkStores<ApplicationDbContext>();
+            services.AddScoped<ContextExpertiser>();
+#if DEBUG
+            services.AddControllersWithViews().AddRazorRuntimeCompilation();
+#else
             services.AddControllersWithViews();
+#endif
             services.AddRazorPages();
         }
 
