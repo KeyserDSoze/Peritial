@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace Expertiser.Interfaces
+﻿namespace Expertiser.Interfaces
 {
     public enum StatusType
     {
