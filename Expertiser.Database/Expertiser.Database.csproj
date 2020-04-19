@@ -16,4 +16,8 @@
     </PackageReference>
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\Expertiser.Base\Expertiser.Base.csproj" />
+  </ItemGroup>
+
 </Project>

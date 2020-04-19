@@ -6,6 +6,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Expertiser.Database\Expertiser.Database.csproj" />
+    <ProjectReference Include="..\Expertiser.Interfaces\Expertiser.Interfaces.csproj" />
   </ItemGroup>
 
 </Project>

@@ -15,6 +15,7 @@ namespace Expertiser.Database.Models
         {
         }
 
+        public virtual DbSet<TableCity> TableCity { get; set; }
         public virtual DbSet<TableContributor> TableContributor { get; set; }
         public virtual DbSet<TableCountry> TableCountry { get; set; }
         public virtual DbSet<TableCustomer> TableCustomer { get; set; }
@@ -30,6 +31,15 @@ namespace Expertiser.Database.Models
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            modelBuilder.Entity<TableCity>(entity =>
+            {
+                entity.Property(e => e.Name).IsUnicode(false);
+
+                entity.Property(e => e.Province).IsUnicode(false);
+
+                entity.Property(e => e.Region).IsUnicode(false);
+            });
+
             modelBuilder.Entity<TableContributor>(entity =>
             {
                 entity.HasOne(d => d.Contributor)

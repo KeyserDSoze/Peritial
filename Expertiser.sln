@@ -3,15 +3,25 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
 VisualStudioVersion = 16.0.29920.165
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Expertiser", "Expertiser\Expertiser.csproj", "{FBC5B1B4-2BE6-41CE-A7BF-5D02ABD768E7}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Expertiser", "Expertiser\Expertiser.csproj", "{FBC5B1B4-2BE6-41CE-A7BF-5D02ABD768E7}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Expertiser.Database", "Expertiser.Database\Expertiser.Database.csproj", "{B01D492B-ED42-4684-A768-82D0422D506C}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Expertiser.Database", "Expertiser.Database\Expertiser.Database.csproj", "{B01D492B-ED42-4684-A768-82D0422D506C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Expertiser.Interfaces", "Expertiser.Interfaces\Expertiser.Interfaces.csproj", "{58409079-F7BE-45E1-91F3-479DB9601720}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Expertiser.Interfaces", "Expertiser.Interfaces\Expertiser.Interfaces.csproj", "{58409079-F7BE-45E1-91F3-479DB9601720}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Expertiser.Manager", "Expertiser.Manager\Expertiser.Manager.csproj", "{F1F7BAF2-F7E4-470A-93D5-923233F31857}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Expertiser.Manager", "Expertiser.Manager\Expertiser.Manager.csproj", "{F1F7BAF2-F7E4-470A-93D5-923233F31857}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Expertiser.Portal", "Expertiser.Portal\Expertiser.Portal.csproj", "{E6A2C2C7-CB06-495B-96A2-BBCFC59CDF91}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Expertiser.Portal", "Expertiser.Portal\Expertiser.Portal.csproj", "{E6A2C2C7-CB06-495B-96A2-BBCFC59CDF91}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Expertiser.Base", "Expertiser.Base\Expertiser.Base.csproj", "{7449FF85-37F8-4861-B26C-CA39576662A9}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Expertiser.Debug", "Expertiser.Debug", "{FEF240CC-22C5-477F-A367-8FFA951D77EB}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Expertiser.Core", "Expertiser.Core", "{C25D2A41-52BF-4837-B5D2-62E436999A83}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Expertiser.Database", "Expertiser.Database", "{9B6C5465-0A65-4227-ABDB-72FF4BDA23E0}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Expertiser.Web", "Expertiser.Web", "{7D4CF4D0-8230-4FD1-9A6A-68803CE18BE4}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -39,9 +49,21 @@ Global
 		{E6A2C2C7-CB06-495B-96A2-BBCFC59CDF91}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{E6A2C2C7-CB06-495B-96A2-BBCFC59CDF91}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{E6A2C2C7-CB06-495B-96A2-BBCFC59CDF91}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7449FF85-37F8-4861-B26C-CA39576662A9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7449FF85-37F8-4861-B26C-CA39576662A9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7449FF85-37F8-4861-B26C-CA39576662A9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7449FF85-37F8-4861-B26C-CA39576662A9}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{FBC5B1B4-2BE6-41CE-A7BF-5D02ABD768E7} = {FEF240CC-22C5-477F-A367-8FFA951D77EB}
+		{B01D492B-ED42-4684-A768-82D0422D506C} = {9B6C5465-0A65-4227-ABDB-72FF4BDA23E0}
+		{58409079-F7BE-45E1-91F3-479DB9601720} = {C25D2A41-52BF-4837-B5D2-62E436999A83}
+		{F1F7BAF2-F7E4-470A-93D5-923233F31857} = {C25D2A41-52BF-4837-B5D2-62E436999A83}
+		{E6A2C2C7-CB06-495B-96A2-BBCFC59CDF91} = {7D4CF4D0-8230-4FD1-9A6A-68803CE18BE4}
+		{7449FF85-37F8-4861-B26C-CA39576662A9} = {C25D2A41-52BF-4837-B5D2-62E436999A83}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {9BF98413-7B6F-479B-8F54-BDE539EFF7D6}

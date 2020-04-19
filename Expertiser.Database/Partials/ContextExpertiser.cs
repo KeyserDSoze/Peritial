@@ -16,7 +16,7 @@ namespace Expertiser.Database.Models
         {
             if (!optionsBuilder.IsConfigured)
             {
-                optionsBuilder.UseSqlServer(this.ConnectionString ?? "Server=tcp:kynsextesting.database.windows.net;Initial Catalog=Testing;Persist Security Info=True;User ID=kynsex;Password=396RfAqChDHXLvvR;MultipleActiveResultSets=True;Connection Timeout=30;");
+                optionsBuilder.UseSqlServer(this.ConnectionString ?? Const.DatabaseConnectionString);
             }
         }
     }
