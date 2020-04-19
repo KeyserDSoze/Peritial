@@ -22,4 +22,9 @@
     <ProjectReference Include="..\Expertiser.Manager\Expertiser.Manager.csproj" />
   </ItemGroup>
 
+
+  <ItemGroup>
+    <Folder Include="Resources\" />
+  </ItemGroup>
+
 </Project>

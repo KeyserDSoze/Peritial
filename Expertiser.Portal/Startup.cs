@@ -13,6 +13,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Expertiser.Database.Models;
+using Microsoft.AspNetCore.Mvc.Razor;
+using System.Globalization;
+using Microsoft.AspNetCore.Localization;
 
 namespace Expertiser.Portal
 {
@@ -34,12 +37,27 @@ namespace Expertiser.Portal
             services.AddDefaultIdentity<IdentityUser>(options => options.SignIn.RequireConfirmedAccount = true)
                 .AddEntityFrameworkStores<ApplicationDbContext>();
             services.AddScoped<ContextExpertiser>();
+            services.AddLocalization(options => options.ResourcesPath = "Resources");
 #if DEBUG
             services.AddControllersWithViews().AddRazorRuntimeCompilation();
 #else
             services.AddControllersWithViews();
 #endif
-            services.AddRazorPages();
+            services.AddRazorPages().AddViewLocalization(LanguageViewLocationExpanderFormat.Suffix)
+                .AddDataAnnotationsLocalization();
+
+            services.Configure<RequestLocalizationOptions>(options =>
+            {
+                var supportedCultures = new List<CultureInfo>
+                    {
+                        new CultureInfo("it-IT"),
+                        new CultureInfo("en-US"),
+                    };
+
+                options.DefaultRequestCulture = new RequestCulture("it-IT");
+                options.SupportedCultures = supportedCultures;
+                options.SupportedUICultures = supportedCultures;
+            });
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -59,10 +77,26 @@ namespace Expertiser.Portal
             app.UseHttpsRedirection();
             app.UseStaticFiles();
 
+            var supportedCultures = new[]
+            {
+                  new CultureInfo("it-IT"),
+                new CultureInfo("en-US"),
+            };
+
+            app.UseRequestLocalization(new RequestLocalizationOptions
+            {
+                DefaultRequestCulture = new RequestCulture("en-US"),
+                // Formatting numbers, dates, etc.
+                SupportedCultures = supportedCultures,
+                // UI strings that we have localized.
+                SupportedUICultures = supportedCultures
+            });
             app.UseRouting();
 
             app.UseAuthentication();
             app.UseAuthorization();
+
+            app.UseRequestLocalization();
 
             app.UseEndpoints(endpoints =>
             {
