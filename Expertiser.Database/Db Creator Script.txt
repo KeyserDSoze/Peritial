@@ -1,0 +1,6 @@
+﻿Install-Package Microsoft.EntityFrameworkCore.Tools se c'è da installarlo e non lo si ha e ti da "is not recognized as the name of a cmdlet"
+#Wonda Database
+Ogni volta che si fa lo scaffolding c'è da cancellare il metodo OnConfiguring 
+che si trova già in partial classes con il valore connection string const del DB
+pacchetto nuget
+Scaffold-DbContext "Server=tcp:kynsextesting.database.windows.net;Initial Catalog=Testing;Persist Security Info=True;User ID=kynsex;Password=396RfAqChDHXLvvR;MultipleActiveResultSets=True;Connection Timeout=30;" Microsoft.EntityFrameworkCore.SqlServer -OutputDir Models -Tables Table_Insurance,Table_Messages,Table_Contributor,Table_Member,Table_Expertise,Table_Country,Table_Customer,Table_ExternalAccount,Table_Location,Table_InsuranceCompany,Table_Inspectorate,Table_InsuranceAgency -Context "ContextExpertiser" -DataAnnotations -Project Expertiser.Database -Verbose -Force
