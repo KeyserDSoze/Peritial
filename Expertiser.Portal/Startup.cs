@@ -16,6 +16,7 @@ using Expertiser.Database.Models;
 using Microsoft.AspNetCore.Mvc.Razor;
 using System.Globalization;
 using Microsoft.AspNetCore.Localization;
+using Microsoft.Extensions.Options;
 
 namespace Expertiser.Portal
 {
@@ -77,26 +78,13 @@ namespace Expertiser.Portal
             app.UseHttpsRedirection();
             app.UseStaticFiles();
 
-            var supportedCultures = new[]
-            {
-                  new CultureInfo("it-IT"),
-                new CultureInfo("en-US"),
-            };
-
-            app.UseRequestLocalization(new RequestLocalizationOptions
-            {
-                DefaultRequestCulture = new RequestCulture("en-US"),
-                // Formatting numbers, dates, etc.
-                SupportedCultures = supportedCultures,
-                // UI strings that we have localized.
-                SupportedUICultures = supportedCultures
-            });
             app.UseRouting();
 
             app.UseAuthentication();
             app.UseAuthorization();
 
-            app.UseRequestLocalization();
+            var options = app.ApplicationServices.GetService<IOptions<RequestLocalizationOptions>>();
+            app.UseRequestLocalization(options.Value);
 
             app.UseEndpoints(endpoints =>
             {
