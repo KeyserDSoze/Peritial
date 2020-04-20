@@ -101,6 +101,8 @@ namespace Expertiser.Database.Models
 
                 entity.Property(e => e.Province).IsUnicode(false);
 
+                entity.Property(e => e.ProvinceAbbreviation).IsFixedLength();
+
                 entity.Property(e => e.Region).IsUnicode(false);
 
                 entity.HasOne(d => d.Country)

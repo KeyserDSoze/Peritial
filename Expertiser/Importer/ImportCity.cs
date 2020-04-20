@@ -25,6 +25,7 @@ namespace Expertiser.Importer
                         PostalCode = JsonConvert.SerializeObject(city.PostalCodes),
                         Province = city.Province.Name,
                         Region = city.Region.Name,
+                        ProvinceAbbreviation = city.Abbreviation
                     });
                 context.SaveChanges();
             }
