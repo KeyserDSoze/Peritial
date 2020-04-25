@@ -9,10 +9,11 @@ using Expertiser.Portal.Models;
 using Microsoft.AspNetCore.Localization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Localization;
-
+using Microsoft.AspNetCore.Authorization;
 
 namespace Expertiser.Portal.Controllers
 {
+    [Authorize]
     public class HomeController : Controller
     {
         private readonly ILogger<HomeController> _logger;
