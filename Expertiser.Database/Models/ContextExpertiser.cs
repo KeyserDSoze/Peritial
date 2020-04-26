@@ -89,8 +89,6 @@ namespace Expertiser.Database.Models
 
             modelBuilder.Entity<TableAccident>(entity =>
             {
-                entity.Property(e => e.Id).ValueGeneratedNever();
-
                 entity.Property(e => e.ExternalId).IsUnicode(false);
 
                 entity.HasOne(d => d.Inspectorate)
@@ -230,8 +228,6 @@ namespace Expertiser.Database.Models
 
             modelBuilder.Entity<TableInsurance>(entity =>
             {
-                entity.Property(e => e.Id).ValueGeneratedNever();
-
                 entity.Property(e => e.ExternalId).IsUnicode(false);
 
                 entity.HasOne(d => d.Customer)

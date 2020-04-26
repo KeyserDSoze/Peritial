@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using Expertiser.Database.Models;
 using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
 
 namespace Expertiser.Portal.Controllers
 {
@@ -70,7 +71,17 @@ namespace Expertiser.Portal.Controllers
             {
                 _context.Add(tableAccident);
                 await _context.SaveChangesAsync();
-                return RedirectToAction(nameof(Index));
+                TableExpertise tableExpertise = new TableExpertise()
+                {
+                    AccidentId = tableAccident.Id,
+                    MemberId = HttpContext.User.Claims.FirstOrDefault(x => x.Type == ClaimTypes.NameIdentifier).Value,
+                    Status = 0,
+                    BranchId = 1,
+                    ExternalId = string.Empty
+                };
+                _context.TableExpertise.Add(tableExpertise);
+                await _context.SaveChangesAsync();
+                return RedirectToAction("Edit", "Experty", tableExpertise.Id);
             }
             ViewData["InspectorateId"] = new SelectList(_context.TableInspectorate, "Id", "Label", tableAccident.InspectorateId);
             ViewData["InsuranceId"] = new SelectList(_context.TableInsurance, "Id", "ExternalId", tableAccident.InsuranceId);
