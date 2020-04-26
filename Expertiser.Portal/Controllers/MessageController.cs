@@ -6,9 +6,11 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using Expertiser.Database.Models;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Expertiser.Portal.Controllers
 {
+    [Authorize]
     public class MessageController : Controller
     {
         private readonly ContextExpertiser _context;

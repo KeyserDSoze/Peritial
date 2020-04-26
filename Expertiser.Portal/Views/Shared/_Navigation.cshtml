@@ -13,7 +13,7 @@
         </a>
     </li>
 
-    <hr class="sidebar-divider">
+    <hr class="sidebar-divider" />
     <div class="sidebar-heading">
         @SharedLocalizer["Manage Experty"]
     </div>
@@ -42,9 +42,7 @@
         </a>
         <div id="collapseMember" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
             <div class="bg-white py-2 collapse-inner rounded">
-                <a class="collapse-item" asp-area="" asp-controller="Member" asp-action="Index">@SharedLocalizer["Members"]</a>
-                <a class="collapse-item" asp-area="" asp-controller="ExternalAccount" asp-action="Index">@SharedLocalizer["External Account"]</a>
-                <a class="collapse-item" asp-area="" asp-controller="Contributor" asp-action="Index">@SharedLocalizer["Contributor"]</a>
+                <a class="collapse-item" asp-area="" asp-controller="User" asp-action="Index">@SharedLocalizer["Members"]</a>
             </div>
         </div>
     </li>
@@ -73,7 +71,7 @@
         </a>
         <div id="collapseCustomer" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
             <div class="bg-white py-2 collapse-inner rounded">
-                <a class="collapse-item" asp-area="" asp-controller="Insurance" asp-action="Index">@SharedLocalizer["InsurancesUtil"]</a>
+                <a class="collapse-item" asp-area="" asp-controller="Insurance" asp-action="Index">@SharedLocalizer["Insurances"]</a>
                 <a class="collapse-item" asp-area="" asp-controller="Customer" asp-action="Index">@SharedLocalizer["Customers"]</a>
             </div>
         </div>

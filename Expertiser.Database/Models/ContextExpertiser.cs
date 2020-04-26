@@ -15,26 +15,78 @@ namespace Expertiser.Database.Models
         {
         }
 
+        public virtual DbSet<AspNetRoleClaims> AspNetRoleClaims { get; set; }
+        public virtual DbSet<AspNetRoles> AspNetRoles { get; set; }
+        public virtual DbSet<AspNetUserClaims> AspNetUserClaims { get; set; }
+        public virtual DbSet<AspNetUserLogins> AspNetUserLogins { get; set; }
+        public virtual DbSet<AspNetUserRoles> AspNetUserRoles { get; set; }
+        public virtual DbSet<AspNetUserTokens> AspNetUserTokens { get; set; }
+        public virtual DbSet<AspNetUsers> AspNetUsers { get; set; }
         public virtual DbSet<TableAccident> TableAccident { get; set; }
         public virtual DbSet<TableBill> TableBill { get; set; }
         public virtual DbSet<TableBranch> TableBranch { get; set; }
         public virtual DbSet<TableBranchType> TableBranchType { get; set; }
         public virtual DbSet<TableCity> TableCity { get; set; }
-        public virtual DbSet<TableContributor> TableContributor { get; set; }
         public virtual DbSet<TableCountry> TableCountry { get; set; }
         public virtual DbSet<TableCustomer> TableCustomer { get; set; }
         public virtual DbSet<TableExpertise> TableExpertise { get; set; }
-        public virtual DbSet<TableExternalAccount> TableExternalAccount { get; set; }
         public virtual DbSet<TableInspectorate> TableInspectorate { get; set; }
         public virtual DbSet<TableInsurance> TableInsurance { get; set; }
         public virtual DbSet<TableInsuranceAgency> TableInsuranceAgency { get; set; }
         public virtual DbSet<TableInsuranceCompany> TableInsuranceCompany { get; set; }
         public virtual DbSet<TableLocation> TableLocation { get; set; }
-        public virtual DbSet<TableMember> TableMember { get; set; }
         public virtual DbSet<TableMessages> TableMessages { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            modelBuilder.Entity<AspNetRoleClaims>(entity =>
+            {
+                entity.HasIndex(e => e.RoleId);
+            });
+
+            modelBuilder.Entity<AspNetRoles>(entity =>
+            {
+                entity.HasIndex(e => e.NormalizedName)
+                    .HasName("RoleNameIndex")
+                    .IsUnique()
+                    .HasFilter("([NormalizedName] IS NOT NULL)");
+            });
+
+            modelBuilder.Entity<AspNetUserClaims>(entity =>
+            {
+                entity.HasIndex(e => e.UserId);
+            });
+
+            modelBuilder.Entity<AspNetUserLogins>(entity =>
+            {
+                entity.HasKey(e => new { e.LoginProvider, e.ProviderKey });
+
+                entity.HasIndex(e => e.UserId);
+            });
+
+            modelBuilder.Entity<AspNetUserRoles>(entity =>
+            {
+                entity.HasKey(e => new { e.UserId, e.RoleId });
+
+                entity.HasIndex(e => e.RoleId);
+            });
+
+            modelBuilder.Entity<AspNetUserTokens>(entity =>
+            {
+                entity.HasKey(e => new { e.UserId, e.LoginProvider, e.Name });
+            });
+
+            modelBuilder.Entity<AspNetUsers>(entity =>
+            {
+                entity.HasIndex(e => e.NormalizedEmail)
+                    .HasName("EmailIndex");
+
+                entity.HasIndex(e => e.NormalizedUserName)
+                    .HasName("UserNameIndex")
+                    .IsUnique()
+                    .HasFilter("([NormalizedUserName] IS NOT NULL)");
+            });
+
             modelBuilder.Entity<TableAccident>(entity =>
             {
                 entity.Property(e => e.Id).ValueGeneratedNever();
@@ -112,21 +164,6 @@ namespace Expertiser.Database.Models
                     .HasConstraintName("FK_Table_City_Table_Country");
             });
 
-            modelBuilder.Entity<TableContributor>(entity =>
-            {
-                entity.HasOne(d => d.Contributor)
-                    .WithMany(p => p.TableContributorContributor)
-                    .HasForeignKey(d => d.ContributorId)
-                    .OnDelete(DeleteBehavior.ClientSetNull)
-                    .HasConstraintName("FK_Table_Contributor_Table_Member");
-
-                entity.HasOne(d => d.Member)
-                    .WithMany(p => p.TableContributorMember)
-                    .HasForeignKey(d => d.MemberId)
-                    .OnDelete(DeleteBehavior.ClientSetNull)
-                    .HasConstraintName("FK_Table_Contributor_Table_Member1");
-            });
-
             modelBuilder.Entity<TableCountry>(entity =>
             {
                 entity.Property(e => e.Id).ValueGeneratedNever();
@@ -162,28 +199,15 @@ namespace Expertiser.Database.Models
                     .HasConstraintName("FK_Table_Expertise_Table_Branch");
 
                 entity.HasOne(d => d.Contributor)
-                    .WithMany(p => p.TableExpertise)
+                    .WithMany(p => p.TableExpertiseContributor)
                     .HasForeignKey(d => d.ContributorId)
-                    .HasConstraintName("FK_Table_Expertise_Table_Contributor");
+                    .HasConstraintName("FK_Table_Expertise_AspNetUsers1");
 
                 entity.HasOne(d => d.Member)
-                    .WithMany(p => p.TableExpertise)
+                    .WithMany(p => p.TableExpertiseMember)
                     .HasForeignKey(d => d.MemberId)
                     .OnDelete(DeleteBehavior.ClientSetNull)
-                    .HasConstraintName("FK_Table_Expertise_Table_Member");
-            });
-
-            modelBuilder.Entity<TableExternalAccount>(entity =>
-            {
-                entity.Property(e => e.Passowrd).IsUnicode(false);
-
-                entity.Property(e => e.Username).IsUnicode(false);
-
-                entity.HasOne(d => d.Member)
-                    .WithMany(p => p.TableExternalAccount)
-                    .HasForeignKey(d => d.MemberId)
-                    .OnDelete(DeleteBehavior.ClientSetNull)
-                    .HasConstraintName("FK_Table_ExternalAccount_Table_Member");
+                    .HasConstraintName("FK_Table_Expertise_AspNetUsers");
             });
 
             modelBuilder.Entity<TableInspectorate>(entity =>
@@ -262,13 +286,6 @@ namespace Expertiser.Database.Models
                     .HasForeignKey(d => d.CityId)
                     .OnDelete(DeleteBehavior.ClientSetNull)
                     .HasConstraintName("FK_Table_Location_Table_City");
-            });
-
-            modelBuilder.Entity<TableMember>(entity =>
-            {
-                entity.Property(e => e.Name).IsUnicode(false);
-
-                entity.Property(e => e.Title).IsUnicode(false);
             });
 
             modelBuilder.Entity<TableMessages>(entity =>

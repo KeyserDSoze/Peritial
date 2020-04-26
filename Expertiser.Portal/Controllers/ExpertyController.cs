@@ -6,9 +6,11 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using Expertiser.Database.Models;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Expertiser.Portal.Controllers
 {
+    [Authorize]
     public class ExpertyController : Controller
     {
         private readonly ContextExpertiser _context;
@@ -52,8 +54,8 @@ namespace Expertiser.Portal.Controllers
         {
             ViewData["AccidentId"] = new SelectList(_context.TableAccident, "Id", "ExternalId");
             ViewData["BranchId"] = new SelectList(_context.TableBranch, "Id", "Label");
-            ViewData["ContributorId"] = new SelectList(_context.TableContributor, "Id", "Id");
-            ViewData["MemberId"] = new SelectList(_context.TableMember, "Id", "Name");
+            ViewData["ContributorId"] = new SelectList(_context.AspNetUsers, "Id", "Id");
+            ViewData["MemberId"] = new SelectList(_context.AspNetUsers, "Id", "UserName");
             return View();
         }
 
@@ -72,8 +74,8 @@ namespace Expertiser.Portal.Controllers
             }
             ViewData["AccidentId"] = new SelectList(_context.TableAccident, "Id", "ExternalId", tableExpertise.AccidentId);
             ViewData["BranchId"] = new SelectList(_context.TableBranch, "Id", "Label", tableExpertise.BranchId);
-            ViewData["ContributorId"] = new SelectList(_context.TableContributor, "Id", "Id", tableExpertise.ContributorId);
-            ViewData["MemberId"] = new SelectList(_context.TableMember, "Id", "Name", tableExpertise.MemberId);
+            ViewData["ContributorId"] = new SelectList(_context.AspNetUsers, "Id", "Id", tableExpertise.ContributorId);
+            ViewData["MemberId"] = new SelectList(_context.AspNetUsers, "Id", "UserName", tableExpertise.MemberId);
             return View(tableExpertise);
         }
 
@@ -92,8 +94,8 @@ namespace Expertiser.Portal.Controllers
             }
             ViewData["AccidentId"] = new SelectList(_context.TableAccident, "Id", "ExternalId", tableExpertise.AccidentId);
             ViewData["BranchId"] = new SelectList(_context.TableBranch, "Id", "Label", tableExpertise.BranchId);
-            ViewData["ContributorId"] = new SelectList(_context.TableContributor, "Id", "Id", tableExpertise.ContributorId);
-            ViewData["MemberId"] = new SelectList(_context.TableMember, "Id", "Name", tableExpertise.MemberId);
+            ViewData["ContributorId"] = new SelectList(_context.AspNetUsers, "Id", "Id", tableExpertise.ContributorId);
+            ViewData["MemberId"] = new SelectList(_context.AspNetUsers, "Id", "UserName", tableExpertise.MemberId);
             return View(tableExpertise);
         }
 
@@ -131,8 +133,8 @@ namespace Expertiser.Portal.Controllers
             }
             ViewData["AccidentId"] = new SelectList(_context.TableAccident, "Id", "ExternalId", tableExpertise.AccidentId);
             ViewData["BranchId"] = new SelectList(_context.TableBranch, "Id", "Label", tableExpertise.BranchId);
-            ViewData["ContributorId"] = new SelectList(_context.TableContributor, "Id", "Id", tableExpertise.ContributorId);
-            ViewData["MemberId"] = new SelectList(_context.TableMember, "Id", "Name", tableExpertise.MemberId);
+            ViewData["ContributorId"] = new SelectList(_context.AspNetUsers, "Id", "Id", tableExpertise.ContributorId);
+            ViewData["MemberId"] = new SelectList(_context.AspNetUsers, "Id", "UserName", tableExpertise.MemberId);
             return View(tableExpertise);
         }
 

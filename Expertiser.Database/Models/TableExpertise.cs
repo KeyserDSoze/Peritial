@@ -16,8 +16,11 @@ namespace Expertiser.Database.Models
 
         [Key]
         public int Id { get; set; }
-        public int MemberId { get; set; }
-        public int? ContributorId { get; set; }
+        [Required]
+        [StringLength(450)]
+        public string MemberId { get; set; }
+        [StringLength(450)]
+        public string ContributorId { get; set; }
         public int Status { get; set; }
         public int BranchId { get; set; }
         [Required]
@@ -38,11 +41,11 @@ namespace Expertiser.Database.Models
         [InverseProperty(nameof(TableBranch.TableExpertise))]
         public virtual TableBranch Branch { get; set; }
         [ForeignKey(nameof(ContributorId))]
-        [InverseProperty(nameof(TableContributor.TableExpertise))]
-        public virtual TableContributor Contributor { get; set; }
+        [InverseProperty(nameof(AspNetUsers.TableExpertiseContributor))]
+        public virtual AspNetUsers Contributor { get; set; }
         [ForeignKey(nameof(MemberId))]
-        [InverseProperty(nameof(TableMember.TableExpertise))]
-        public virtual TableMember Member { get; set; }
+        [InverseProperty(nameof(AspNetUsers.TableExpertiseMember))]
+        public virtual AspNetUsers Member { get; set; }
         [InverseProperty("Expertise")]
         public virtual ICollection<TableBill> TableBill { get; set; }
         [InverseProperty("Expertise")]
