@@ -17,6 +17,8 @@ using Microsoft.AspNetCore.Mvc.Razor;
 using System.Globalization;
 using Microsoft.AspNetCore.Localization;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Localization;
+using System.Reflection;
 
 namespace Expertiser.Portal
 {
@@ -44,7 +46,14 @@ namespace Expertiser.Portal
             services.AddControllersWithViews();
 #endif
             services.AddRazorPages().AddViewLocalization(LanguageViewLocationExpanderFormat.Suffix)
-                .AddDataAnnotationsLocalization();
+                .AddDataAnnotationsLocalization(options =>
+                {
+                    options.DataAnnotationLocalizerProvider = (type, factory) =>
+                    {
+                        var assemblyName = new AssemblyName(typeof(DatabaseShared).GetTypeInfo().Assembly.FullName);
+                        return factory.Create(nameof(DatabaseShared), assemblyName.Name);
+                    };
+                });
 
             services.Configure<RequestLocalizationOptions>(options =>
             {
@@ -59,7 +68,6 @@ namespace Expertiser.Portal
                 options.SupportedUICultures = supportedCultures;
             });
         }
-
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
