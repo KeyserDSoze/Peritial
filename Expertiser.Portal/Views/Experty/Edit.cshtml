@@ -6,7 +6,7 @@
 
 <h1>@SharedLocalizer["Edit"]</h1>
 
-<h4>TableExpertise</h4>
+<h4>@SharedLocalizer["Expertise"]</h4>
 <hr />
 <div class="row">
     <div class="col-md-4">
@@ -33,11 +33,11 @@
                 <select asp-for="BranchId" class="form-control" asp-items="ViewBag.BranchId"></select>
                 <span asp-validation-for="BranchId" class="text-danger"></span>
             </div>
-            <div class="form-group">
+            @*<div class="form-group">
                 <label asp-for="ExternalId" class="control-label"></label>
                 <input asp-for="ExternalId" class="form-control" />
                 <span asp-validation-for="ExternalId" class="text-danger"></span>
-            </div>
+            </div>*@
             <div class="form-group">
                 <label asp-for="AssignmentDate" class="control-label"></label>
                 <input asp-for="AssignmentDate" class="form-control" />
@@ -52,11 +52,6 @@
                 <label asp-for="Liquidated" class="control-label"></label>
                 <input asp-for="Liquidated" class="form-control" />
                 <span asp-validation-for="Liquidated" class="text-danger"></span>
-            </div>
-            <div class="form-group">
-                <label asp-for="AccidentId" class="control-label"></label>
-                <select asp-for="AccidentId" class="form-control" asp-items="ViewBag.AccidentId"></select>
-                <span asp-validation-for="AccidentId" class="text-danger"></span>
             </div>
             <div class="form-group">
                 <input type="submit" value="Save" class="btn btn-primary" />

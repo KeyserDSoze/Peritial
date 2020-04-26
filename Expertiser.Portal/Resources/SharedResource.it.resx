@@ -156,6 +156,9 @@
   <data name="Edit" xml:space="preserve">
     <value>Modifica</value>
   </data>
+  <data name="Expertise" xml:space="preserve">
+    <value>Perizia</value>
+  </data>
   <data name="Expertises" xml:space="preserve">
     <value>Perizie</value>
   </data>
@@ -211,7 +214,7 @@
     <value>Membri</value>
   </data>
   <data name="Messages" xml:space="preserve">
-    <value>Messaggi</value>
+    <value>Comunicazioni</value>
   </data>
   <data name="Utilities" xml:space="preserve">
     <value>Utilità</value>

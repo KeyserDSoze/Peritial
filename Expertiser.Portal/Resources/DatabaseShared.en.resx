@@ -117,17 +117,50 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
+  <data name="Accident" xml:space="preserve">
+    <value>Accident</value>
+  </data>
   <data name="AccidentDate" xml:space="preserve">
     <value>Accident Date</value>
+  </data>
+  <data name="AccidentId" xml:space="preserve">
+    <value>Accident</value>
+  </data>
+  <data name="AssignmentDate" xml:space="preserve">
+    <value>Assignment Date</value>
+  </data>
+  <data name="Branch" xml:space="preserve">
+    <value>Branch</value>
+  </data>
+  <data name="BranchId" xml:space="preserve">
+    <value>Branch</value>
+  </data>
+  <data name="Contributor" xml:space="preserve">
+    <value>Contributor</value>
+  </data>
+  <data name="ContributorId" xml:space="preserve">
+    <value>Contributor</value>
   </data>
   <data name="DenunciationDate" xml:space="preserve">
     <value>Denunciation Date</value>
   </data>
   <data name="ExternalId" xml:space="preserve">
-    <value>Accident</value>
+    <value>Accident Id</value>
+  </data>
+  <data name="InspectionDate" xml:space="preserve">
+    <value>Inspection Date</value>
+  </data>
+  <data name="Inspectorate" xml:space="preserve">
+    <value>Inspectorate</value>
   </data>
   <data name="InspectorateId" xml:space="preserve">
-    <value>Inspectorate</value>
+    <value>Inspectorate Id</value>
+  </data>
+  <data name="Insurance" xml:space="preserve">
+    <value>Insurance</value>
+  </data>
+  <data name="InsuranceAgency" xml:space="preserve">
+    <value>Insurance Agency</value>
   </data>
   <data name="InsuranceAgencyId" xml:space="preserve">
     <value>Insurance Agency</value>
@@ -135,7 +168,31 @@
   <data name="InsuranceId" xml:space="preserve">
     <value>Insurance</value>
   </data>
+  <data name="Liquidated" xml:space="preserve">
+    <value>Liquidated</value>
+  </data>
+  <data name="Member" xml:space="preserve">
+    <value>Member</value>
+  </data>
+  <data name="MemberId" xml:space="preserve">
+    <value>Member</value>
+  </data>
+  <data name="Place" xml:space="preserve">
+    <value>Address</value>
+  </data>
   <data name="PlaceId" xml:space="preserve">
     <value>Address</value>
+  </data>
+  <data name="Status" xml:space="preserve">
+    <value>Status</value>
+  </data>
+  <data name="TableBill" xml:space="preserve">
+    <value>Billing</value>
+  </data>
+  <data name="TableExpertise" xml:space="preserve">
+    <value>Expertise</value>
+  </data>
+  <data name="TableMessages" xml:space="preserve">
+    <value>Messages</value>
   </data>
 </root>

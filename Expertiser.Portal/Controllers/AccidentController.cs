@@ -56,7 +56,7 @@ namespace Expertiser.Portal.Controllers
             ViewData["InspectorateId"] = new SelectList(_context.TableInspectorate, "Id", "Label");
             ViewData["InsuranceId"] = new SelectList(_context.TableInsurance, "Id", "ExternalId");
             ViewData["InsuranceAgencyId"] = new SelectList(_context.TableInsuranceAgency, "Id", "Label");
-            ViewData["PlaceId"] = new SelectList(_context.TableLocation, "Id", "Id");
+            ViewData["PlaceId"] = new SelectList(_context.TableLocation, "Id", "Address");
             return View();
         }
 
@@ -81,7 +81,7 @@ namespace Expertiser.Portal.Controllers
                 };
                 _context.TableExpertise.Add(tableExpertise);
                 await _context.SaveChangesAsync();
-                return RedirectToAction("Edit", "Experty", tableExpertise.Id);
+                return RedirectToAction("Edit", "Experty", new { Id = tableExpertise.Id });
             }
             ViewData["InspectorateId"] = new SelectList(_context.TableInspectorate, "Id", "Label", tableAccident.InspectorateId);
             ViewData["InsuranceId"] = new SelectList(_context.TableInsurance, "Id", "ExternalId", tableAccident.InsuranceId);

@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 using System.Text;
 
 namespace Expertiser.Database.Models
@@ -30,9 +31,13 @@ namespace Expertiser.Database.Models
         public string ExternalId { get; set; }
 
         [Display(Name = nameof(AccidentDate))]
+        [DisplayFormat(ApplyFormatInEditMode = true, DataFormatString = "{0:dd/MM/yyyy}")]
+        [DataType(DataType.Date)]
         public DateTime AccidentDate { get; set; }
 
         [Display(Name = nameof(DenunciationDate))]
+        [DisplayFormat(ApplyFormatInEditMode = true, DataFormatString = "{0:dd/MM/yyyy}")]
+        [DataType(DataType.Date)]
         public DateTime? DenunciationDate { get; set; }
 
         [Display(Name = nameof(Inspectorate))]

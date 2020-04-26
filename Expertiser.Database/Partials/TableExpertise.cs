@@ -10,35 +10,57 @@ namespace Expertiser.Database.Models
     [ModelMetadataType(typeof(TableExpertiseMetadata))]
     public partial class TableExpertise
     {
-        
+
     }
     public class TableExpertiseMetadata
     {
-        [DisplayName(nameof(MemberId))]
+        [Display(Name = nameof(MemberId))]
         public string MemberId { get; set; }
 
-        [DisplayName(nameof(ContributorId))]
+        [Display(Name = nameof(ContributorId))]
         public string ContributorId { get; set; }
 
-        [DisplayName(nameof(Status))]
+        [Display(Name = nameof(Status))]
         public int Status { get; set; }
 
-        [DisplayName(nameof(BranchId))]
+        [Display(Name = nameof(BranchId))]
         public int BranchId { get; set; }
 
-        [DisplayName(nameof(ExternalId))]
+        [Display(Name = nameof(ExternalId))]
         public string ExternalId { get; set; }
 
-        [DisplayName(nameof(AssignmentDate))]
+        [Display(Name = nameof(AssignmentDate))]
+        [DisplayFormat(ApplyFormatInEditMode = true, DataFormatString = "{0:dd/MM/yyyy}")]
+        [DataType(DataType.Date)]
         public DateTime? AssignmentDate { get; set; }
 
-        [DisplayName(nameof(InspectionDate))]
+        [Display(Name = nameof(InspectionDate))]
+        [DisplayFormat(ApplyFormatInEditMode = true, DataFormatString = "{0:dd/MM/yyyy}")]
+        [DataType(DataType.Date)]
         public DateTime? InspectionDate { get; set; }
 
-        [DisplayName(nameof(Liquidated))]
+        [Display(Name = nameof(Liquidated))]
         public decimal? Liquidated { get; set; }
 
-        [DisplayName(nameof(AccidentId))]
+        [Display(Name = nameof(AccidentId))]
         public int AccidentId { get; set; }
+
+        [Display(Name = nameof(Accident))]
+        public virtual TableAccident Accident { get; set; }
+
+        [Display(Name = nameof(Branch))]
+        public virtual TableBranch Branch { get; set; }
+
+        [Display(Name = nameof(Contributor))]
+        public virtual AspNetUsers Contributor { get; set; }
+
+        [Display(Name = nameof(Member))]
+        public virtual AspNetUsers Member { get; set; }
+
+        [Display(Name = nameof(TableBill))]
+        public virtual ICollection<TableBill> TableBill { get; set; }
+
+        [Display(Name = nameof(TableMessages))]
+        public virtual ICollection<TableMessages> TableMessages { get; set; }
     }
 }

@@ -54,7 +54,7 @@ namespace Expertiser.Portal.Controllers
         {
             ViewData["AccidentId"] = new SelectList(_context.TableAccident, "Id", "ExternalId");
             ViewData["BranchId"] = new SelectList(_context.TableBranch, "Id", "Label");
-            ViewData["ContributorId"] = new SelectList(_context.AspNetUsers, "Id", "Id");
+            ViewData["ContributorId"] = new SelectList(_context.AspNetUsers, "Id", "UserName");
             ViewData["MemberId"] = new SelectList(_context.AspNetUsers, "Id", "UserName");
             return View();
         }
@@ -74,7 +74,7 @@ namespace Expertiser.Portal.Controllers
             }
             ViewData["AccidentId"] = new SelectList(_context.TableAccident, "Id", "ExternalId", tableExpertise.AccidentId);
             ViewData["BranchId"] = new SelectList(_context.TableBranch, "Id", "Label", tableExpertise.BranchId);
-            ViewData["ContributorId"] = new SelectList(_context.AspNetUsers, "Id", "Id", tableExpertise.ContributorId);
+            ViewData["ContributorId"] = new SelectList(_context.AspNetUsers, "Id", "UserName", tableExpertise.ContributorId);
             ViewData["MemberId"] = new SelectList(_context.AspNetUsers, "Id", "UserName", tableExpertise.MemberId);
             return View(tableExpertise);
         }
@@ -94,7 +94,7 @@ namespace Expertiser.Portal.Controllers
             }
             ViewData["AccidentId"] = new SelectList(_context.TableAccident, "Id", "ExternalId", tableExpertise.AccidentId);
             ViewData["BranchId"] = new SelectList(_context.TableBranch, "Id", "Label", tableExpertise.BranchId);
-            ViewData["ContributorId"] = new SelectList(_context.AspNetUsers, "Id", "Id", tableExpertise.ContributorId);
+            ViewData["ContributorId"] = new SelectList(_context.AspNetUsers, "Id", "UserName", tableExpertise.ContributorId);
             ViewData["MemberId"] = new SelectList(_context.AspNetUsers, "Id", "UserName", tableExpertise.MemberId);
             return View(tableExpertise);
         }
@@ -133,7 +133,7 @@ namespace Expertiser.Portal.Controllers
             }
             ViewData["AccidentId"] = new SelectList(_context.TableAccident, "Id", "ExternalId", tableExpertise.AccidentId);
             ViewData["BranchId"] = new SelectList(_context.TableBranch, "Id", "Label", tableExpertise.BranchId);
-            ViewData["ContributorId"] = new SelectList(_context.AspNetUsers, "Id", "Id", tableExpertise.ContributorId);
+            ViewData["ContributorId"] = new SelectList(_context.AspNetUsers, "Id", "UserName", tableExpertise.ContributorId);
             ViewData["MemberId"] = new SelectList(_context.AspNetUsers, "Id", "UserName", tableExpertise.MemberId);
             return View(tableExpertise);
         }

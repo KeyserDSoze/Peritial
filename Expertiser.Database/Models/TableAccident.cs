@@ -22,8 +22,10 @@ namespace Expertiser.Database.Models
         [Required]
         [StringLength(100)]
         public string ExternalId { get; set; }
+
         [Column(TypeName = "datetime")]
         public DateTime AccidentDate { get; set; }
+        
         [Column(TypeName = "datetime")]
         public DateTime? DenunciationDate { get; set; }
 

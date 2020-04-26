@@ -117,14 +117,38 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
+  <data name="Accident" xml:space="preserve">
+    <value>Sinistro</value>
+  </data>
   <data name="AccidentDate" xml:space="preserve">
     <value>Data Sinistro</value>
+  </data>
+  <data name="AccidentId" xml:space="preserve">
+    <value>Sinistro</value>
+  </data>
+  <data name="AssignmentDate" xml:space="preserve">
+    <value>Data Incarico</value>
+  </data>
+  <data name="Branch" xml:space="preserve">
+    <value>Ramo</value>
+  </data>
+  <data name="BranchId" xml:space="preserve">
+    <value>Ramo</value>
+  </data>
+  <data name="Contributor" xml:space="preserve">
+    <value>Perito</value>
+  </data>
+  <data name="ContributorId" xml:space="preserve">
+    <value>Perito</value>
   </data>
   <data name="DenunciationDate" xml:space="preserve">
     <value>Data Denuncia</value>
   </data>
   <data name="ExternalId" xml:space="preserve">
     <value>Sinistro</value>
+  </data>
+  <data name="InspectionDate" xml:space="preserve">
+    <value>Data Sopralluogo</value>
   </data>
   <data name="Inspectorate" xml:space="preserve">
     <value>Ispettorato</value>
@@ -144,13 +168,31 @@
   <data name="InsuranceId" xml:space="preserve">
     <value>Assicurazione</value>
   </data>
+  <data name="Liquidated" xml:space="preserve">
+    <value>Liquidato</value>
+  </data>
+  <data name="Member" xml:space="preserve">
+    <value>Supervisore</value>
+  </data>
+  <data name="MemberId" xml:space="preserve">
+    <value>Supervisore</value>
+  </data>
   <data name="Place" xml:space="preserve">
     <value>Indirizzo</value>
   </data>
   <data name="PlaceId" xml:space="preserve">
     <value>Indirizzo</value>
   </data>
+  <data name="Status" xml:space="preserve">
+    <value>Stato</value>
+  </data>
+  <data name="TableBill" xml:space="preserve">
+    <value>Fatturato</value>
+  </data>
   <data name="TableExpertise" xml:space="preserve">
     <value>Perizia</value>
+  </data>
+  <data name="TableMessages" xml:space="preserve">
+    <value>Comunicazioni</value>
   </data>
 </root>
