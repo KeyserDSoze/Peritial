@@ -65,6 +65,7 @@ namespace Expertiser.Portal.Controllers
         // more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Style", "IDE0037:Use inferred member name", Justification = "<Pending>")]
         public async Task<IActionResult> Create([Bind("Id,PlaceId,InsuranceId,InsuranceAgencyId,InspectorateId,ExternalId,AccidentDate,DenunciationDate")] TableAccident tableAccident)
         {
             if (ModelState.IsValid)

@@ -41,7 +41,8 @@ namespace Expertiser.Portal
             services.AddScoped<ContextExpertiser>();
             services.AddLocalization(options => options.ResourcesPath = "Resources");
 #if DEBUG
-            services.AddControllersWithViews().AddRazorRuntimeCompilation();
+            services.AddControllersWithViews();
+                //.AddRazorRuntimeCompilation();
 #else
             services.AddControllersWithViews();
 #endif

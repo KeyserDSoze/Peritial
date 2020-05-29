@@ -5,8 +5,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Rystem" Version="4.9.6" />
-    <PackageReference Include="Rystem.Interfaces" Version="4.9.5" />
+    <PackageReference Include="Rystem" Version="6.0.9" />
+    <PackageReference Include="Rystem.Interfaces" Version="6.0.8" />
   </ItemGroup>
 
   <ItemGroup>

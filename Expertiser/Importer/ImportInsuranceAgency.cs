@@ -1,30 +1,31 @@
 ﻿using Expertiser.Database.Models;
-using Rystem.Interfaces.Utility.Tester;
+using Rystem.UnitTest;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 
 namespace Expertiser.Importer
 {
-    public class ImportInsuranceAgency : IImporter, ITest
+    public class ImportInsuranceAgency : IImporter, IUnitTest
     {
-        public bool DoWork(Action<object> action, params string[] args)
+        public async Task<bool> DoWorkAsync(Action<object> action, params string[] args)
         {
             using (ContextExpertiser context = new ContextExpertiser())
             {
                 foreach (var t in new InsuranceAgencyReader().Get(context.TableInsuranceCompany.ToList()))
                     context.TableInsuranceAgency.Add(t);
-                context.SaveChanges();
+                await context.SaveChangesAsync();
             }
             return true;
         }
     }
     public class InsuranceAgencyReader
     {
-        private static Regex Regex = new Regex("<option[^<]*<");
+        private static readonly Regex Regex = new Regex("<option[^<]*<");
         public List<TableInsuranceAgency> Get(List<TableInsuranceCompany> comapanies)
         {
             List<TableInsuranceAgency> insuranceAgencies = new List<TableInsuranceAgency>();

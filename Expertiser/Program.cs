@@ -1,13 +1,13 @@
-﻿using Rystem.Interfaces.Utility.Tester;
+﻿using Rystem.UnitTest;
 using System;
 
 namespace Expertiser
 {
     class Program
     {
-        static void Main(string[] args)
+        static void Main()
         {
-            var testMachine = new TestMachine<IImporter>("Expertiser");
+            var testMachine = new ConsoleMachine<IImporter>("Expertiser");
             testMachine.Start();
         }
     }

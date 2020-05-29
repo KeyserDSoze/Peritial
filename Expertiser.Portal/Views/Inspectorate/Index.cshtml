@@ -39,7 +39,9 @@
                 </td>
                 <td>
                     @if (item.Address != null)
+                    {
                         @Html.DisplayFor(modelItem => item.Address.City)
+                    }
                 </td>
                 <td>
                     @Html.DisplayFor(modelItem => item.InsuranceCompany.Label)

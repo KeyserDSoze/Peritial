@@ -1,0 +1,96 @@
+﻿<ul class="navbar-nav bg-gradient-primary sidebar sidebar-dark accordion" id="accordionSidebar">
+    <a class="sidebar-brand d-flex align-items-center justify-content-center" asp-area="" asp-controller="Home" asp-action="Index">
+        <div class="sidebar-brand-icon rotate-n-15">
+            <i class="fas fa-institution"></i>
+        </div>
+        <div class="sidebar-brand-text mx-3">Experty</div>
+    </a>
+    <hr class="sidebar-divider my-0">
+    <li class="nav-item">
+        <a class="nav-link" asp-area="" asp-controller="Home" asp-action="Index">
+            <i class="fas fa-fw fa-business-time"></i>
+            <span>@SharedLocalizer["Home"]</span>
+        </a>
+    </li>
+
+    <hr class="sidebar-divider" />
+    <div class="sidebar-heading">
+        @SharedLocalizer["Manage Experty"]
+    </div>
+    <li class="nav-item">
+        <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseExpertise" aria-expanded="true" aria-controls="collapseTwo">
+            <i class="fas fa-fw fa-cog"></i>
+            <span>@SharedLocalizer["Expertises"]</span>
+        </a>
+        <div id="collapseExpertise" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
+            <div class="bg-white py-2 collapse-inner rounded">
+                <a class="collapse-item" asp-area="" asp-controller="Accident" asp-action="Index">@SharedLocalizer["Accidents"]</a>
+                <a class="collapse-item" asp-area="" asp-controller="Message" asp-action="Index">@SharedLocalizer["Messages"]</a>
+            </div>
+        </div>
+    </li>
+
+    <hr class="sidebar-divider">
+    <div class="sidebar-heading">
+        @SharedLocalizer["Manage"]
+    </div>
+    <li class="nav-item">
+        <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseMember" aria-expanded="true" aria-controls="collapseTwo">
+            <i class="fas fa-fw fa-user-check"></i>
+            <span>@SharedLocalizer["Manage Members"]</span>
+
+        </a>
+        <div id="collapseMember" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
+            <div class="bg-white py-2 collapse-inner rounded">
+                <a class="collapse-item" asp-area="" asp-controller="User" asp-action="Index">@SharedLocalizer["Members"]</a>
+            </div>
+        </div>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseCompany" aria-expanded="true" aria-controls="collapseTwo">
+            <i class="fas fa-fw fa-memory"></i>
+            <span>@SharedLocalizer["Companies"]</span>
+        </a>
+        <div id="collapseCompany" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
+            <div class="bg-white py-2 collapse-inner rounded">
+                <a class="collapse-item" asp-area="" asp-controller="Inspectorate" asp-action="Index">@SharedLocalizer["Inspectorates"]</a>
+                <a class="collapse-item" asp-area="" asp-controller="InsuranceAgency" asp-action="Index">@SharedLocalizer["Insurance Agencies"]</a>
+                <a class="collapse-item" asp-area="" asp-controller="InsuranceCompany" asp-action="Index">@SharedLocalizer["Insurance Companies"]</a>
+            </div>
+        </div>
+    </li>
+
+    <hr class="sidebar-divider">
+    <div class="sidebar-heading">
+        @SharedLocalizer["Customer and Utility"]
+    </div>
+    <li class="nav-item">
+        <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseCustomer" aria-expanded="true" aria-controls="collapseTwo">
+            <i class="fas fa-fw fa-user"></i>
+            <span>@SharedLocalizer["Customers"]</span>
+        </a>
+        <div id="collapseCustomer" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
+            <div class="bg-white py-2 collapse-inner rounded">
+                <a class="collapse-item" asp-area="" asp-controller="Insurance" asp-action="Index">@SharedLocalizer["Insurances"]</a>
+                <a class="collapse-item" asp-area="" asp-controller="Customer" asp-action="Index">@SharedLocalizer["Customers"]</a>
+            </div>
+        </div>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseUtility" aria-expanded="true" aria-controls="collapseTwo">
+            <i class="fas fa-fw fa-tools"></i>
+            <span>@SharedLocalizer["Utilities"]</span>
+        </a>
+        <div id="collapseUtility" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
+            <div class="bg-white py-2 collapse-inner rounded">
+                <a class="collapse-item" asp-area="" asp-controller="Country" asp-action="Index">@SharedLocalizer["Countries"]</a>
+                <a class="collapse-item" asp-area="" asp-controller="Location" asp-action="Index">@SharedLocalizer["Locations"]</a>
+            </div>
+        </div>
+    </li>
+
+    <hr class="sidebar-divider d-none d-md-block">
+    <div class="text-center d-none d-md-inline">
+        <button class="rounded-circle border-0" id="sidebarToggle"></button>
+    </div>
+</ul>

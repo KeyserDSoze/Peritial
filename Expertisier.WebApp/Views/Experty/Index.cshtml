@@ -1,0 +1,83 @@
+﻿@model IEnumerable<Expertiser.Database.Models.TableExpertise>
+
+@{
+    ViewData["Title"] = "Index";
+}
+
+<h1>@SharedLocalizer["Index"]</h1>
+
+<p>
+    <a asp-action="Create">@SharedLocalizer["Create New"]</a>
+</p>
+<table class="table">
+    <thead>
+        <tr>
+            <th>
+                @Html.DisplayNameFor(model => model.Status)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.ExternalId)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.AssignmentDate)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.InspectionDate)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.Liquidated)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.Accident)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.Branch)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.Contributor)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.Member)
+            </th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+@foreach (var item in Model) {
+        <tr>
+            <td>
+                @Html.DisplayFor(modelItem => item.Status)
+            </td>
+            <td>
+                @Html.DisplayFor(modelItem => item.ExternalId)
+            </td>
+            <td>
+                @Html.DisplayFor(modelItem => item.AssignmentDate)
+            </td>
+            <td>
+                @Html.DisplayFor(modelItem => item.InspectionDate)
+            </td>
+            <td>
+                @Html.DisplayFor(modelItem => item.Liquidated)
+            </td>
+            <td>
+                @Html.DisplayFor(modelItem => item.Accident.ExternalId)
+            </td>
+            <td>
+                @Html.DisplayFor(modelItem => item.Branch.Label)
+            </td>
+            <td>
+                @Html.DisplayFor(modelItem => item.Contributor.Id)
+            </td>
+            <td>
+                @Html.DisplayFor(modelItem => item.Member.UserName)
+            </td>
+            <td>
+                <a asp-action="Edit" asp-route-id="@item.Id">Edit</a> |
+                <a asp-action="Details" asp-route-id="@item.Id">Details</a> |
+                <a asp-action="Delete" asp-route-id="@item.Id">Delete</a>
+            </td>
+        </tr>
+}
+    </tbody>
+</table>

@@ -18,6 +18,8 @@ namespace Expertiser.Portal.Controllers
     {
         public IActionResult Index()
             => View();
+
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "SCS0027:Open redirect: possibly unvalidated input in {1} argument passed to '{0}'", Justification = "<Pending>")]
         public IActionResult SetLanguage(string culture, string returnUrl)
         {
             Response.Cookies.Append(

@@ -1,18 +1,19 @@
 ﻿using Expertiser.Base.Utility;
 using Expertiser.Database.Models;
 using Newtonsoft.Json;
-using Rystem.Interfaces.Utility.Tester;
+using Rystem.UnitTest;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace Expertiser.Importer
 {
-    public class ImportCity : IImporter, ITest
+    public class ImportCity : IImporter, IUnitTest
     {
         private const string Uri = "https://raw.githubusercontent.com/matteocontrini/comuni-json/master/comuni.json";
-        public bool DoWork(Action<object> action, params string[] args)
+        public async Task<bool> DoWorkAsync(Action<object> action, params string[] args)
         {
             List<City> cities = JsonConvert.DeserializeObject<List<City>>(Request.Make(Uri));
             using (ContextExpertiser context = new ContextExpertiser())
@@ -27,7 +28,7 @@ namespace Expertiser.Importer
                         Region = city.Region.Name,
                         ProvinceAbbreviation = city.Abbreviation
                     });
-                context.SaveChanges();
+                await context.SaveChangesAsync();
             }
             return true;
         }

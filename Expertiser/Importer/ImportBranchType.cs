@@ -1,30 +1,31 @@
 ﻿using Expertiser.Database.Models;
-using Rystem.Interfaces.Utility.Tester;
+using Rystem.UnitTest;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 
 namespace Expertiser.Importer
 {
-    public class ImportBranchType : IImporter, ITest
+    public class ImportBranchType : IImporter, IUnitTest
     {
-        public bool DoWork(Action<object> action, params string[] args)
+        public async Task<bool> DoWorkAsync(Action<object> action, params string[] args)
         {
             using (ContextExpertiser context = new ContextExpertiser())
             {
                 foreach (var t in new BranchTypeReader().Get())
                     context.TableBranchType.Add(t);
-                context.SaveChanges();
+                await context.SaveChangesAsync();
             }
             return true;
         }
     }
     public class BranchTypeReader
     {
-        private static Regex Regex = new Regex("<option[^<]*<");
+        private static readonly Regex Regex = new Regex("<option[^<]*<");
         public List<TableBranchType> Get()
         {
             List<TableBranchType> branchTypes = new List<TableBranchType>();
@@ -32,7 +33,8 @@ namespace Expertiser.Importer
             foreach (var t in Regex.Matches(reader.ReadToEnd()))
             {
                 string value = t.ToString();
-                string externalId = value.Split('"')[1];
+                //externalId
+                _ = value.Split('"')[1];
                 string name = value.Split('>')[1].Trim('<');
                 if (string.IsNullOrWhiteSpace(name))
                     continue;
