@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Expertiser.Database.Models;
 using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
+using Rystem.Web;
 
 namespace Expertiser.Portal.Controllers
 {
@@ -15,10 +16,11 @@ namespace Expertiser.Portal.Controllers
     public class AccidentController : Controller
     {
         private readonly ContextExpertiser _context;
-
+        private readonly IQueryable<TableLocation> Locations;
         public AccidentController(ContextExpertiser context)
         {
             _context = context;
+            Locations = _context.TableLocation.Include(x => x.City);
         }
 
         // GET: Accident
@@ -56,7 +58,7 @@ namespace Expertiser.Portal.Controllers
             ViewData["InspectorateId"] = new SelectList(_context.TableInspectorate, "Id", "Label");
             ViewData["InsuranceId"] = new SelectList(_context.TableInsurance, "Id", "ExternalId");
             ViewData["InsuranceAgencyId"] = new SelectList(_context.TableInsuranceAgency, "Id", "Label");
-            ViewData["PlaceId"] = new SelectList(_context.TableLocation, "Id", "Address");
+            ViewData["PlaceId"] = Locations.Select(x => new DropdownItem() { Value = x.Id.ToString(), Group = x.City.Name, Label = x.Address });
             return View();
         }
 

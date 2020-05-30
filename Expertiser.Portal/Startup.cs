@@ -19,6 +19,7 @@ using Microsoft.AspNetCore.Localization;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Localization;
 using System.Reflection;
+using Rystem.Web;
 
 namespace Expertiser.Portal
 {
@@ -85,7 +86,7 @@ namespace Expertiser.Portal
             }
             app.UseHttpsRedirection();
             app.UseStaticFiles();
-
+            app.UseRystem();
             app.UseRouting();
 
             app.UseAuthentication();
