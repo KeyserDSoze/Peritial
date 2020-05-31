@@ -18,20 +18,23 @@
                     <partial name="_GetLocations" model="0" />
                 </div>
                 <rystem-ajax-modal rystem-request-context="Manager.ModalManager.CreateNewLocation" rystem-size="Large">
-                    <div>@SharedLocalizer["Create"]</div>
+                    <div class="btn btn-primary">@Localizer["Create New Address"]</div>
                 </rystem-ajax-modal>
             </div>
             <div class="form-group">
                 <label asp-for="InsuranceId" class="control-label"></label>
                 <select asp-for="InsuranceId" class="form-control" asp-items="ViewBag.InsuranceId"></select>
+                <rystem-ajax-modal rystem-request-context="Manager.ModalManager.CreateNewLocation" rystem-size="Large">
+                    <div class="btn btn-primary">@Localizer["Create New Insurance"]</div>
+                </rystem-ajax-modal>
             </div>
             <div class="form-group">
                 <label asp-for="InsuranceAgencyId" class="control-label"></label>
-                <select asp-for="InsuranceAgencyId" class="form-control" asp-items="ViewBag.InsuranceAgencyId"></select>
+                <rystem-dropdown name="InsuranceAgencyId" rystem-data="Manager.DropdownManager.GetInsuranceAgencies()"></rystem-dropdown>
             </div>
             <div class="form-group">
                 <label asp-for="InspectorateId" class="control-label"></label>
-                <select asp-for="InspectorateId" class="form-control" asp-items="ViewBag.InspectorateId"></select>
+                <rystem-dropdown name="InspectorateId" rystem-data="Manager.DropdownManager.GetInspectorates()"></rystem-dropdown>
             </div>
             <div class="form-group">
                 <label asp-for="ExternalId" class="control-label"></label>
@@ -49,7 +52,7 @@
                 <span asp-validation-for="DenunciationDate" class="text-danger"></span>
             </div>
             <div class="form-group">
-                <input type="submit" value="Create" class="btn btn-primary" />
+                <input type="submit" value="@SharedLocalizer["Create"]" class="btn btn-primary" />
             </div>
         </form>
     </div>

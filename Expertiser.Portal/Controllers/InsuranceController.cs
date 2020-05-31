@@ -27,28 +27,14 @@ namespace Expertiser.Portal.Controllers
             return View(await contextExpertiser.ToListAsync());
         }
 
-        // GET: Insurance/Details/5
-        public async Task<IActionResult> Details(int? id)
-        {
-            if (id == null)
-            {
-                return NotFound();
-            }
-
-            var tableInsurance = await _context.TableInsurance
-                .Include(t => t.Customer)
-                .Include(t => t.InsuranceCompany)
-                .FirstOrDefaultAsync(m => m.Id == id);
-            if (tableInsurance == null)
-            {
-                return NotFound();
-            }
-
-            return View(tableInsurance);
-        }
-
         // GET: Insurance/Create
-        public IActionResult Create()
+        public IActionResult Manage(int? id)
+        {
+            //if (id == null)
+            //    await _context.TableInsurance.FindAsync(id);
+            return View();
+        }
+        public IActionResult PartialManage()
         {
             ViewData["CustomerId"] = new SelectList(_context.TableCustomer, "Id", "Name");
             ViewData["InsuranceCompanyId"] = new SelectList(_context.TableInsuranceCompany, "Id", "Label");

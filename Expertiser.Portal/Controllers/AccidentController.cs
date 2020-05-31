@@ -13,57 +13,24 @@ using Rystem.Web;
 namespace Expertiser.Portal.Controllers
 {
     [Authorize]
-    public class AccidentController : Controller
+    public class AccidentController : BaseController
     {
-        private readonly ContextExpertiser _context;
-        private readonly IQueryable<TableLocation> Locations;
-        private readonly IQueryable<TableInsurance> InsuranceAgencies;
-        public AccidentController(ContextExpertiser context)
+        public AccidentController(Manager manager) : base(manager)
         {
-            _context = context;
-            Locations = _context.TableLocation.Include(x => x.City);
-            InsuranceAgencies = _context.TableInsurance
-                    .Include(x => x.InsuranceCompany)
-                    .ThenInclude(x => x.Address);
         }
-
         // GET: Accident
-        public async Task<IActionResult> Index()
-        {
-            var contextExpertiser = _context.TableAccident.Include(t => t.Inspectorate).Include(t => t.Insurance).Include(t => t.InsuranceAgency).Include(t => t.Place);
-            return View(await contextExpertiser.ToListAsync());
-        }
+        public ActionResult Index()
+            => View(Manager.QueryManager.Accidents);
 
-        // GET: Accident/Details/5
-        public async Task<IActionResult> Details(int? id)
+        // GET: Accident/Manage
+        public async Task<IActionResult> Manage(int? id)
         {
             if (id == null)
-            {
-                return NotFound();
-            }
-
-            var tableAccident = await _context.TableAccident
-                .Include(t => t.Inspectorate)
-                .Include(t => t.Insurance)
-                .Include(t => t.InsuranceAgency)
-                .Include(t => t.Place)
-                .FirstOrDefaultAsync(m => m.Id == id);
+                return View();
+            var tableAccident = await Manager.QueryManager.Accidents.FirstOrDefaultAsync(x => x.Id == id);
             if (tableAccident == null)
-            {
                 return NotFound();
-            }
-
             return View(tableAccident);
-        }
-
-        // GET: Accident/Create
-        public IActionResult Create()
-        {
-            ViewData["InspectorateId"] = new SelectList(_context.TableInspectorate, "Id", "Label");
-            ViewData["InsuranceId"] = new SelectList(_context.TableInsurance, "Id", "ExternalId");
-            ViewData["InsuranceAgencyId"] = new SelectList(_context.TableInsuranceAgency, "Id", "Label");
-            ViewData["PlaceId"] = Locations.Select(x => new DropdownItem() { Value = x.Id.ToString(), Group = x.City.Name, Label = x.Address });
-            return View();
         }
 
         // POST: Accident/Create
@@ -72,90 +39,34 @@ namespace Expertiser.Portal.Controllers
         [HttpPost]
         [ValidateAntiForgeryToken]
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Style", "IDE0037:Use inferred member name", Justification = "<Pending>")]
-        public async Task<IActionResult> Create([Bind("Id,PlaceId,InsuranceId,InsuranceAgencyId,InspectorateId,ExternalId,AccidentDate,DenunciationDate")] TableAccident tableAccident)
+        public async Task<IActionResult> Manage([Bind("Id,PlaceId,InsuranceId,InsuranceAgencyId,InspectorateId,ExternalId,AccidentDate,DenunciationDate")] TableAccident tableAccident)
         {
             if (ModelState.IsValid)
             {
-                _context.Add(tableAccident);
-                await _context.SaveChangesAsync();
-                TableExpertise tableExpertise = new TableExpertise()
+                if (tableAccident.Id == 0)
                 {
-                    AccidentId = tableAccident.Id,
-                    MemberId = HttpContext.User.Claims.FirstOrDefault(x => x.Type == ClaimTypes.NameIdentifier).Value,
-                    Status = 0,
-                    BranchId = 1,
-                    ExternalId = string.Empty
-                };
-                _context.TableExpertise.Add(tableExpertise);
-                await _context.SaveChangesAsync();
-                return RedirectToAction("Edit", "Experty", new { Id = tableExpertise.Id });
-            }
-            ViewData["InspectorateId"] = new SelectList(_context.TableInspectorate, "Id", "Label", tableAccident.InspectorateId);
-            ViewData["InsuranceId"] = new SelectList(_context.TableInsurance, "Id", "ExternalId", tableAccident.InsuranceId);
-            ViewData["InsuranceAgencyId"] = new SelectList(_context.TableInsuranceAgency, "Id", "Label", tableAccident.InsuranceAgencyId);
-            ViewData["PlaceId"] = new SelectList(_context.TableLocation, "Id", "Id", tableAccident.PlaceId);
-            return View(tableAccident);
-        }
-
-        // GET: Accident/Edit/5
-        public async Task<IActionResult> Edit(int? id)
-        {
-            if (id == null)
-            {
-                return NotFound();
-            }
-
-            var tableAccident = await _context.TableAccident.FindAsync(id);
-            if (tableAccident == null)
-            {
-                return NotFound();
-            }
-            ViewData["InspectorateId"] = new SelectList(_context.TableInspectorate, "Id", "Label", tableAccident.InspectorateId);
-            ViewData["InsuranceId"] = new SelectList(_context.TableInsurance, "Id", "ExternalId", tableAccident.InsuranceId);
-            ViewData["InsuranceAgencyId"] = new SelectList(_context.TableInsuranceAgency, "Id", "Label", tableAccident.InsuranceAgencyId);
-            ViewData["PlaceId"] = new SelectList(_context.TableLocation, "Id", "Id", tableAccident.PlaceId);
-            return View(tableAccident);
-        }
-
-        // POST: Accident/Edit/5
-        // To protect from overposting attacks, enable the specific properties you want to bind to, for 
-        // more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("Id,PlaceId,InsuranceId,InsuranceAgencyId,InspectorateId,ExternalId,AccidentDate,DenunciationDate")] TableAccident tableAccident)
-        {
-            if (id != tableAccident.Id)
-            {
-                return NotFound();
-            }
-
-            if (ModelState.IsValid)
-            {
-                try
-                {
-                    _context.Update(tableAccident);
-                    await _context.SaveChangesAsync();
-                }
-                catch (DbUpdateConcurrencyException)
-                {
-                    if (!TableAccidentExists(tableAccident.Id))
+                    Manager.Context.Add(tableAccident);
+                    await Manager.Context.SaveChangesAsync();
+                    TableExpertise tableExpertise = new TableExpertise()
                     {
-                        return NotFound();
-                    }
-                    else
-                    {
-                        throw;
-                    }
+                        AccidentId = tableAccident.Id,
+                        MemberId = HttpContext.User.Claims.FirstOrDefault(x => x.Type == ClaimTypes.NameIdentifier).Value,
+                        Status = 0,
+                        BranchId = 1,
+                        ExternalId = string.Empty
+                    };
+                    Manager.Context.TableExpertise.Add(tableExpertise);
+                    await Manager.Context.SaveChangesAsync();
+                    return RedirectToAction("Edit", "Experty", new { Id = tableExpertise.Id });
                 }
-                return RedirectToAction(nameof(Index));
+                else
+                {
+                    Manager.Context.Update(tableAccident);
+                    await Manager.Context.SaveChangesAsync();
+                }
             }
-            ViewData["InspectorateId"] = new SelectList(_context.TableInspectorate, "Id", "Label", tableAccident.InspectorateId);
-            ViewData["InsuranceId"] = new SelectList(_context.TableInsurance, "Id", "ExternalId", tableAccident.InsuranceId);
-            ViewData["InsuranceAgencyId"] = new SelectList(_context.TableInsuranceAgency, "Id", "Label", tableAccident.InsuranceAgencyId);
-            ViewData["PlaceId"] = new SelectList(_context.TableLocation, "Id", "Id", tableAccident.PlaceId);
             return View(tableAccident);
         }
-
         // GET: Accident/Delete/5
         public async Task<IActionResult> Delete(int? id)
         {
@@ -164,11 +75,7 @@ namespace Expertiser.Portal.Controllers
                 return NotFound();
             }
 
-            var tableAccident = await _context.TableAccident
-                .Include(t => t.Inspectorate)
-                .Include(t => t.Insurance)
-                .Include(t => t.InsuranceAgency)
-                .Include(t => t.Place)
+            var tableAccident = await Manager.QueryManager.Accidents
                 .FirstOrDefaultAsync(m => m.Id == id);
             if (tableAccident == null)
             {
@@ -183,15 +90,10 @@ namespace Expertiser.Portal.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
-            var tableAccident = await _context.TableAccident.FindAsync(id);
-            _context.TableAccident.Remove(tableAccident);
-            await _context.SaveChangesAsync();
+            var tableAccident = await Manager.Context.TableAccident.FindAsync(id);
+            Manager.Context.TableAccident.Remove(tableAccident);
+            await Manager.Context.SaveChangesAsync();
             return RedirectToAction(nameof(Index));
-        }
-
-        private bool TableAccidentExists(int id)
-        {
-            return _context.TableAccident.Any(e => e.Id == id);
         }
     }
 }

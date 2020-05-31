@@ -213,6 +213,9 @@
   <data name="Messages" xml:space="preserve">
     <value>Messages</value>
   </data>
+  <data name="Users" xml:space="preserve">
+    <value>Users</value>
+  </data>
   <data name="Utilities" xml:space="preserve">
     <value>Utilities</value>
   </data>

@@ -216,6 +216,9 @@
   <data name="Messages" xml:space="preserve">
     <value>Comunicazioni</value>
   </data>
+  <data name="Users" xml:space="preserve">
+    <value>Utenti</value>
+  </data>
   <data name="Utilities" xml:space="preserve">
     <value>Utilità</value>
   </data>

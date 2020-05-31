@@ -20,6 +20,8 @@ using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Localization;
 using System.Reflection;
 using Rystem.Web;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc.Authorization;
 
 namespace Expertiser.Portal
 {
@@ -38,15 +40,18 @@ namespace Expertiser.Portal
             services.AddDbContext<ApplicationDbContext>(options =>
                 options.UseSqlServer(Const.DatabaseConnectionString));
             services.AddDefaultIdentity<IdentityUser>(options => options.SignIn.RequireConfirmedAccount = true)
+                .AddRoles<IdentityRole>()
                 .AddEntityFrameworkStores<ApplicationDbContext>();
+            services.AddHttpContextAccessor();
             services.AddScoped<ContextExpertiser>();
             services.AddLocalization(options => options.ResourcesPath = "Resources");
-#if DEBUG
-            services.AddControllersWithViews();
-                //.AddRazorRuntimeCompilation();
-#else
-            services.AddControllersWithViews();
-#endif
+            services.AddControllersWithViews(config => 
+            {
+                var policy = new AuthorizationPolicyBuilder()
+                         .RequireAuthenticatedUser()
+                         .Build();
+                config.Filters.Add(new AuthorizeFilter(policy));
+            });
             services.AddRazorPages().AddViewLocalization(LanguageViewLocationExpanderFormat.Suffix)
                 .AddDataAnnotationsLocalization(options =>
                 {

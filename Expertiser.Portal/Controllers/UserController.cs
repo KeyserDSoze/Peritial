@@ -6,46 +6,33 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using Expertiser.Database.Models;
+using Microsoft.AspNetCore.Authorization;
+using Expertiser.Base.Constant;
 
 namespace Expertiser.Portal.Controllers
 {
-    public class UserController : Controller
+    [Authorize(Roles = (Roles.Admin))]
+    public class UserController : BaseController
     {
-        private readonly ContextExpertiser _context;
-
-        public UserController(ContextExpertiser context)
+        public UserController(Manager manager) : base(manager)
         {
-            _context = context;
+
         }
 
         // GET: User
-        public async Task<IActionResult> Index()
-        {
-            return View(await _context.AspNetUsers.ToListAsync());
-        }
+        public IActionResult Index()
+            => View(Manager.UserManager.Users);
 
-        // GET: User/Details/5
-        public async Task<IActionResult> Details(string id)
+        // GET: User/Manage
+        public async Task<IActionResult> Manage(string id)
         {
             if (id == null)
-            {
                 return NotFound();
-            }
-
-            var aspNetUsers = await _context.AspNetUsers
-                .FirstOrDefaultAsync(m => m.Id == id);
-            if (aspNetUsers == null)
-            {
+            var user = await Manager.UserManager.Users
+                .FirstOrDefaultAsync(x => x.Id == id);
+            if (user == null)
                 return NotFound();
-            }
-
-            return View(aspNetUsers);
-        }
-
-        // GET: User/Create
-        public IActionResult Create()
-        {
-            return View();
+            return View(user);
         }
 
         // POST: User/Create
@@ -53,84 +40,67 @@ namespace Expertiser.Portal.Controllers
         // more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([Bind("Id,UserName,NormalizedUserName,Email,NormalizedEmail,EmailConfirmed,PasswordHash,SecurityStamp,ConcurrencyStamp,PhoneNumber,PhoneNumberConfirmed,TwoFactorEnabled,LockoutEnd,LockoutEnabled,AccessFailedCount")] AspNetUsers aspNetUsers)
+        public async Task<IActionResult> Manage([Bind("Id,UserName,NormalizedUserName,Email,NormalizedEmail,EmailConfirmed,PasswordHash,SecurityStamp,ConcurrencyStamp,PhoneNumber,PhoneNumberConfirmed,TwoFactorEnabled,LockoutEnd,LockoutEnabled,AccessFailedCount")] AspNetUsers aspNetUsers)
         {
             if (ModelState.IsValid)
             {
-                _context.Add(aspNetUsers);
-                await _context.SaveChangesAsync();
-                return RedirectToAction(nameof(Index));
+                Manager.Context.Update(aspNetUsers);
+                await Manager.Context.SaveChangesAsync();
             }
             return View(aspNetUsers);
         }
-
-        // GET: User/Edit/5
-        public async Task<IActionResult> Edit(string id)
+        [HttpGet]
+        public async Task<IActionResult> UpdateRole(string id, [FromQuery] IEnumerable<string> roles)
         {
             if (id == null)
-            {
                 return NotFound();
-            }
-
-            var aspNetUsers = await _context.AspNetUsers.FindAsync(id);
-            if (aspNetUsers == null)
-            {
+            var user = await Manager.UserManager.Users
+                .FirstOrDefaultAsync(x => x.Id == id);
+            if (user == null)
                 return NotFound();
+            foreach (var role in await Manager.RoleManager.Roles.ToListAsync())
+            {
+                if (roles.Contains(role.Id))
+                {
+                    if (!await Manager.UserManager.IsInRoleAsync(user, role.Name))
+                        await Manager.UserManager.AddToRoleAsync(user, role.Name);
+                }
+                else
+                {
+                    if (await Manager.UserManager.IsInRoleAsync(user, role.Name))
+                        await Manager.UserManager.RemoveFromRoleAsync(user, role.Name);
+                }
             }
-            return View(aspNetUsers);
+            return Ok();
         }
 
-        // POST: User/Edit/5
-        // To protect from overposting attacks, enable the specific properties you want to bind to, for 
-        // more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(string id, [Bind("Id,UserName,NormalizedUserName,Email,NormalizedEmail,EmailConfirmed,PasswordHash,SecurityStamp,ConcurrencyStamp,PhoneNumber,PhoneNumberConfirmed,TwoFactorEnabled,LockoutEnd,LockoutEnabled,AccessFailedCount")] AspNetUsers aspNetUsers)
+        public async Task<IActionResult> CreateRoles()
         {
-            if (id != aspNetUsers.Id)
+            var r = await Manager.RoleManager.CreateAsync(new Microsoft.AspNetCore.Identity.IdentityRole()
             {
-                return NotFound();
-            }
-
-            if (ModelState.IsValid)
+                Name = Roles.Admin
+            });
+            await Manager.RoleManager.CreateAsync(new Microsoft.AspNetCore.Identity.IdentityRole()
             {
-                try
-                {
-                    _context.Update(aspNetUsers);
-                    await _context.SaveChangesAsync();
-                }
-                catch (DbUpdateConcurrencyException)
-                {
-                    if (!AspNetUsersExists(aspNetUsers.Id))
-                    {
-                        return NotFound();
-                    }
-                    else
-                    {
-                        throw;
-                    }
-                }
-                return RedirectToAction(nameof(Index));
-            }
-            return View(aspNetUsers);
+                Name = Roles.Contributor
+            });
+            await Manager.RoleManager.CreateAsync(new Microsoft.AspNetCore.Identity.IdentityRole()
+            {
+                Name = Roles.Reader
+            });
+            return Ok();
         }
 
         // GET: User/Delete/5
         public async Task<IActionResult> Delete(string id)
         {
             if (id == null)
-            {
                 return NotFound();
-            }
-
-            var aspNetUsers = await _context.AspNetUsers
+            var aspNetUser = await Manager.Context.AspNetUsers
                 .FirstOrDefaultAsync(m => m.Id == id);
-            if (aspNetUsers == null)
-            {
+            if (aspNetUser == null)
                 return NotFound();
-            }
-
-            return View(aspNetUsers);
+            return View(aspNetUser);
         }
 
         // POST: User/Delete/5
@@ -138,15 +108,10 @@ namespace Expertiser.Portal.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(string id)
         {
-            var aspNetUsers = await _context.AspNetUsers.FindAsync(id);
-            _context.AspNetUsers.Remove(aspNetUsers);
-            await _context.SaveChangesAsync();
+            var aspNetUser = await Manager.Context.AspNetUsers.FindAsync(id);
+            Manager.Context.AspNetUsers.Remove(aspNetUser);
+            await Manager.Context.SaveChangesAsync();
             return RedirectToAction(nameof(Index));
-        }
-
-        private bool AspNetUsersExists(string id)
-        {
-            return _context.AspNetUsers.Any(e => e.Id == id);
         }
     }
 }
