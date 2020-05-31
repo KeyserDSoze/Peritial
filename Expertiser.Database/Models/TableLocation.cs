@@ -19,9 +19,13 @@ namespace Expertiser.Database.Models
 
         [Key]
         public int Id { get; set; }
+        [Required]
         [StringLength(100)]
         public string Address { get; set; }
         public int CityId { get; set; }
+        [Required]
+        [StringLength(10)]
+        public string PostalCode { get; set; }
 
         [ForeignKey(nameof(CityId))]
         [InverseProperty(nameof(TableCity.TableLocation))]

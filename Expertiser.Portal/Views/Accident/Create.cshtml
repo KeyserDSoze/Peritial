@@ -9,24 +9,29 @@
 <h4>@SharedLocalizer["Accident"]</h4>
 <hr />
 <div class="row">
-    <div class="col-md-4">
+    <div class="col-md-6">
         <form asp-action="Create">
             <div asp-validation-summary="ModelOnly" class="text-danger"></div>
             <div class="form-group">
                 <label asp-for="PlaceId" class="control-label"></label>
-                <rystem-dropdown rystem-data="ViewBag.PlaceId"></rystem-dropdown>
+                <div id="accidentLocation">
+                    <partial name="_GetLocations" model="0" />
+                </div>
+                <rystem-ajax-modal rystem-request-context="Manager.ModalManager.CreateNewLocation" rystem-size="Large">
+                    <div>@SharedLocalizer["Create"]</div>
+                </rystem-ajax-modal>
             </div>
             <div class="form-group">
                 <label asp-for="InsuranceId" class="control-label"></label>
-                <select asp-for="InsuranceId" class ="form-control" asp-items="ViewBag.InsuranceId"></select>
+                <select asp-for="InsuranceId" class="form-control" asp-items="ViewBag.InsuranceId"></select>
             </div>
             <div class="form-group">
                 <label asp-for="InsuranceAgencyId" class="control-label"></label>
-                <select asp-for="InsuranceAgencyId" class ="form-control" asp-items="ViewBag.InsuranceAgencyId"></select>
+                <select asp-for="InsuranceAgencyId" class="form-control" asp-items="ViewBag.InsuranceAgencyId"></select>
             </div>
             <div class="form-group">
                 <label asp-for="InspectorateId" class="control-label"></label>
-                <select asp-for="InspectorateId" class ="form-control" asp-items="ViewBag.InspectorateId"></select>
+                <select asp-for="InspectorateId" class="form-control" asp-items="ViewBag.InspectorateId"></select>
             </div>
             <div class="form-group">
                 <label asp-for="ExternalId" class="control-label"></label>

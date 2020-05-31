@@ -17,10 +17,14 @@ namespace Expertiser.Portal.Controllers
     {
         private readonly ContextExpertiser _context;
         private readonly IQueryable<TableLocation> Locations;
+        private readonly IQueryable<TableInsurance> InsuranceAgencies;
         public AccidentController(ContextExpertiser context)
         {
             _context = context;
             Locations = _context.TableLocation.Include(x => x.City);
+            InsuranceAgencies = _context.TableInsurance
+                    .Include(x => x.InsuranceCompany)
+                    .ThenInclude(x => x.Address);
         }
 
         // GET: Accident

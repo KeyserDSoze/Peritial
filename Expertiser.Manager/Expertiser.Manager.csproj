@@ -10,6 +10,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\Rystem\Rystem.Web\Rystem.Web.csproj" />
     <ProjectReference Include="..\Expertiser.Database\Expertiser.Database.csproj" />
     <ProjectReference Include="..\Expertiser.Interfaces\Expertiser.Interfaces.csproj" />
   </ItemGroup>

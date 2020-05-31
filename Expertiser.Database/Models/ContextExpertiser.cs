@@ -277,6 +277,8 @@ namespace Expertiser.Database.Models
             {
                 entity.Property(e => e.Address).IsUnicode(false);
 
+                entity.Property(e => e.PostalCode).IsUnicode(false);
+
                 entity.HasOne(d => d.City)
                     .WithMany(p => p.TableLocation)
                     .HasForeignKey(d => d.CityId)

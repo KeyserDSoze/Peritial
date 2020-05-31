@@ -1,0 +1,35 @@
+﻿@model Expertiser.Database.Models.TableLocation
+
+@{
+    Layout = null;
+}
+
+<h4>TableLocation</h4>
+<hr />
+<div class="row">
+    <div class="col-md-12">
+        <rystem-ajax-form rystem-modal-close="true" rystem-request-context="Manager.ModalManager.GetLocations">
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            @Html.AntiForgeryToken()
+            <div class="form-group">
+                <label asp-for="Address" class="control-label"></label>
+                <input asp-for="Address" class="form-control" />
+                <span asp-validation-for="Address" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label asp-for="CityId" class="control-label"></label>
+                <rystem-dropdown name="CityId" rystem-size="ExtraLarge" rystem-data="Manager.DropdownManager.GetCities()" rystem-request-context="Manager.ModalManager.UpdatePostalCodes"></rystem-dropdown>
+            </div>
+            <div class="form-group">
+                <label asp-for="PostalCode" class="control-label"></label>
+                <div id="updatePostalCodes">
+
+                </div>
+                <span asp-validation-for="PostalCode" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <input type="submit" value="Create" class="btn btn-primary" />
+            </div>
+        </rystem-ajax-form>
+    </div>
+</div>

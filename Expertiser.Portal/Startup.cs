@@ -56,7 +56,7 @@ namespace Expertiser.Portal
                         return factory.Create(nameof(DatabaseShared), assemblyName.Name);
                     };
                 });
-
+            services.AddScoped<Manager>();
             services.Configure<RequestLocalizationOptions>(options =>
             {
                 var supportedCultures = new List<CultureInfo>
