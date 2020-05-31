@@ -18,11 +18,13 @@ namespace Expertiser
         public IHttpContextAccessor HttpContextAccessor { get; }
         public UserManager<IdentityUser> UserManager { get; }
         public RoleManager<IdentityRole> RoleManager { get; }
-        public Manager(IHttpContextAccessor httpContextAccessor, UserManager<IdentityUser> userManager, RoleManager<IdentityRole> roleManager)
+        public SignInManager<IdentityUser> SignInManager { get; }
+        public Manager(IHttpContextAccessor httpContextAccessor, SignInManager<IdentityUser> signInManager, UserManager<IdentityUser> userManager, RoleManager<IdentityRole> roleManager)
         {
             this.HttpContextAccessor = httpContextAccessor;
             this.UserManager = userManager;
             this.RoleManager = roleManager;
+            this.SignInManager = signInManager;
         }
 
         private string ConnectionString => Const.DatabaseConnectionString;
