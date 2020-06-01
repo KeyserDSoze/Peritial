@@ -9,10 +9,11 @@ using Expertiser.Database.Models;
 using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
 using Rystem.Web;
+using Expertiser.Base.Constant;
 
 namespace Expertiser.Portal.Controllers
 {
-    [Authorize]
+    [Authorize(Roles = Roles.Contributor)]
     public class AccidentController : BaseController
     {
         public AccidentController(Manager manager) : base(manager)

@@ -8,6 +8,7 @@ namespace Expertiser.Base.Constant
     {
         public const string Admin = "Admin";
         public const string Contributor = "Contributor";
+        public const string AdminContributor = "Admin,Contributor";
         public const string Reader = "Reader";
     }
 }

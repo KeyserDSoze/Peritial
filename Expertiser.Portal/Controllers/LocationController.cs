@@ -44,16 +44,13 @@ namespace Expertiser.Portal.Controllers
         }
 
         // GET: Location/Create
-        public IActionResult Create()
-        {
-            ViewData["CityId"] = new SelectList(_context.TableCity, "Id", "Name");
-            return View();
-        }
+        public IActionResult Create() 
+            => View();
         private readonly static string Empty = null;
         public IActionResult GetPostalCodes([FromQuery] IEnumerable<string> selectedItems)
             => PartialView("_PostalCode", (int.Parse(selectedItems.First()), Empty));
-        public IActionResult GetLocations([FromQuery] int locationId)
-            => PartialView("_GetLocations", locationId);
+        //public IActionResult GetLocations([FromQuery] int locationId)
+        //    => PartialView("_GetLocations", locationId);
 
         // POST: Location/Create
         // To protect from overposting attacks, enable the specific properties you want to bind to, for 

@@ -1,4 +1,4 @@
-﻿@model Expertiser.Database.Models.TableAccident
+﻿@model TableAccident
 
 @{
     ViewData["Title"] = "Create";
@@ -12,25 +12,26 @@
     <div class="col-md-6">
         <form asp-action="Create">
             <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <input type="hidden" asp-for="Id" />
             <div class="form-group">
                 <label asp-for="PlaceId" class="control-label"></label>
-                <div id="accidentLocation">
-                    <partial name="_GetLocations" model="0" />
-                </div>
-                <rystem-ajax-modal rystem-request-context="Manager.ModalManager.CreateNewLocation" rystem-size="Large">
-                    <div class="btn btn-primary">@Localizer["Create New Address"]</div>
-                </rystem-ajax-modal>
+                <partial name="_GetDropdownLocations" model='("PlaceId", Model?.PlaceId ?? 0)' />
+                <span asp-validation-for="PlaceId" class="text-danger"></span>
             </div>
             <div class="form-group">
                 <label asp-for="InsuranceId" class="control-label"></label>
-                <select asp-for="InsuranceId" class="form-control" asp-items="ViewBag.InsuranceId"></select>
-                <rystem-ajax-modal rystem-request-context="Manager.ModalManager.CreateNewLocation" rystem-size="Large">
+                <div id="insurances">
+                    <partial name="_GetInsurances" model="Model?.InsuranceId ?? 0" />
+                </div>
+                <rystem-ajax-modal rystem-request-context="Manager.ModalManager.CreateNewInsurance" rystem-size="Large">
                     <div class="btn btn-primary">@Localizer["Create New Insurance"]</div>
                 </rystem-ajax-modal>
+                <span asp-validation-for="InsuranceId" class="text-danger"></span>
             </div>
             <div class="form-group">
                 <label asp-for="InsuranceAgencyId" class="control-label"></label>
                 <rystem-dropdown name="InsuranceAgencyId" rystem-data="Manager.DropdownManager.GetInsuranceAgencies()"></rystem-dropdown>
+                <span asp-validation-for="InsuranceAgencyId" class="text-danger"></span>
             </div>
             <div class="form-group">
                 <label asp-for="InspectorateId" class="control-label"></label>

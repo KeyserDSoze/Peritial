@@ -7,83 +7,34 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using Expertiser.Database.Models;
 using Microsoft.AspNetCore.Authorization;
+using Expertiser.Base.Constant;
 
 namespace Expertiser.Portal.Controllers
 {
-    [Authorize]
-    public class InsuranceCompanyController : Controller
+    [Authorize(Roles = Roles.AdminContributor)]
+    public class InsuranceCompanyController : BaseController
     {
-        private readonly ContextExpertiser _context;
-
-        public InsuranceCompanyController(ContextExpertiser context)
+        public InsuranceCompanyController(Manager manager) : base(manager)
         {
-            _context = context;
         }
 
         // GET: InsuranceCompany
-        public async Task<IActionResult> Index()
-        {
-            var contextExpertiser = _context.TableInsuranceCompany.Include(t => t.Address);
-            return View(await contextExpertiser.ToListAsync());
-        }
-
-        // GET: InsuranceCompany/Details/5
-        public async Task<IActionResult> Details(int? id)
-        {
-            if (id == null)
-            {
-                return NotFound();
-            }
-
-            var tableInsuranceCompany = await _context.TableInsuranceCompany
-                .Include(t => t.Address)
-                .FirstOrDefaultAsync(m => m.Id == id);
-            if (tableInsuranceCompany == null)
-            {
-                return NotFound();
-            }
-
-            return View(tableInsuranceCompany);
-        }
-
-        // GET: InsuranceCompany/Create
-        public IActionResult Create()
-        {
-            ViewData["AddressId"] = new SelectList(_context.TableLocation, "Id", "City");
-            return View();
-        }
-
-        // POST: InsuranceCompany/Create
-        // To protect from overposting attacks, please enable the specific properties you want to bind to, for 
-        // more details see http://go.microsoft.com/fwlink/?LinkId=317598.
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([Bind("Id,Label,AddressId,ExternalId,IsActive")] TableInsuranceCompany tableInsuranceCompany)
-        {
-            if (ModelState.IsValid)
-            {
-                _context.Add(tableInsuranceCompany);
-                await _context.SaveChangesAsync();
-                return RedirectToAction(nameof(Index));
-            }
-            ViewData["AddressId"] = new SelectList(_context.TableLocation, "Id", "City", tableInsuranceCompany.AddressId);
-            return View(tableInsuranceCompany);
-        }
+        public IActionResult Index()
+            => View(Manager.QueryManager.InsuranceCompanies);
 
         // GET: InsuranceCompany/Edit/5
-        public async Task<IActionResult> Edit(int? id)
+        public async Task<IActionResult> Manage(int? id)
         {
             if (id == null)
             {
-                return NotFound();
+                return View();
             }
 
-            var tableInsuranceCompany = await _context.TableInsuranceCompany.FindAsync(id);
+            var tableInsuranceCompany = await Manager.Context.TableInsuranceCompany.FindAsync(id);
             if (tableInsuranceCompany == null)
             {
                 return NotFound();
             }
-            ViewData["AddressId"] = new SelectList(_context.TableLocation, "Id", "City", tableInsuranceCompany.AddressId);
             return View(tableInsuranceCompany);
         }
 
@@ -92,34 +43,23 @@ namespace Expertiser.Portal.Controllers
         // more details see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("Id,Label,AddressId,ExternalId,IsActive")] TableInsuranceCompany tableInsuranceCompany)
+        public async Task<IActionResult> Manage(int id, [Bind("Id,Label,AddressId,ExternalId,IsActive")] TableInsuranceCompany tableInsuranceCompany)
         {
-            if (id != tableInsuranceCompany.Id)
-            {
-                return NotFound();
-            }
-
             if (ModelState.IsValid)
             {
-                try
+                if (tableInsuranceCompany.Id == 0)
                 {
-                    _context.Update(tableInsuranceCompany);
-                    await _context.SaveChangesAsync();
+                    Manager.Context.Add(tableInsuranceCompany);
+                    await Manager.Context.SaveChangesAsync();
+                    return RedirectToAction(nameof(Index));
                 }
-                catch (DbUpdateConcurrencyException)
+                else
                 {
-                    if (!TableInsuranceCompanyExists(tableInsuranceCompany.Id))
-                    {
-                        return NotFound();
-                    }
-                    else
-                    {
-                        throw;
-                    }
+                    Manager.Context.Update(tableInsuranceCompany);
+                    await Manager.Context.SaveChangesAsync();
                 }
                 return RedirectToAction(nameof(Index));
             }
-            ViewData["AddressId"] = new SelectList(_context.TableLocation, "Id", "City", tableInsuranceCompany.AddressId);
             return View(tableInsuranceCompany);
         }
 
@@ -131,8 +71,7 @@ namespace Expertiser.Portal.Controllers
                 return NotFound();
             }
 
-            var tableInsuranceCompany = await _context.TableInsuranceCompany
-                .Include(t => t.Address)
+            var tableInsuranceCompany = await Manager.QueryManager.InsuranceCompanies
                 .FirstOrDefaultAsync(m => m.Id == id);
             if (tableInsuranceCompany == null)
             {
@@ -147,15 +86,10 @@ namespace Expertiser.Portal.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
-            var tableInsuranceCompany = await _context.TableInsuranceCompany.FindAsync(id);
-            _context.TableInsuranceCompany.Remove(tableInsuranceCompany);
-            await _context.SaveChangesAsync();
+            var tableInsuranceCompany = await Manager.QueryManager.InsuranceCompanies.FirstOrDefaultAsync(x => x.Id == id);
+            Manager.Context.TableInsuranceCompany.Remove(tableInsuranceCompany);
+            await Manager.Context.SaveChangesAsync();
             return RedirectToAction(nameof(Index));
-        }
-
-        private bool TableInsuranceCompanyExists(int id)
-        {
-            return _context.TableInsuranceCompany.Any(e => e.Id == id);
         }
     }
 }

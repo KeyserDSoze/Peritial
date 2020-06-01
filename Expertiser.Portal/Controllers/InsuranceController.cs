@@ -11,106 +11,56 @@ using Microsoft.AspNetCore.Authorization;
 namespace Expertiser.Portal.Controllers
 {
     [Authorize]
-    public class InsuranceController : Controller
+    public class InsuranceController : BaseController
     {
-        private readonly ContextExpertiser _context;
-
-        public InsuranceController(ContextExpertiser context)
+        public InsuranceController(Manager manager) : base(manager)
         {
-            _context = context;
         }
-
         // GET: Insurance
-        public async Task<IActionResult> Index()
-        {
-            var contextExpertiser = _context.TableInsurance.Include(t => t.Customer).Include(t => t.InsuranceCompany);
-            return View(await contextExpertiser.ToListAsync());
-        }
+        public IActionResult Index()
+            => View(Manager.QueryManager.Insurances);
 
         // GET: Insurance/Create
-        public IActionResult Manage(int? id)
+        public async Task<IActionResult> Manage(int? id)
         {
-            //if (id == null)
-            //    await _context.TableInsurance.FindAsync(id);
-            return View();
+            if (id == null)
+                return View();
+            return View(await Manager.QueryManager.Insurances.FirstOrDefaultAsync(x => x.Id == id));
         }
-        public IActionResult PartialManage()
-        {
-            ViewData["CustomerId"] = new SelectList(_context.TableCustomer, "Id", "Name");
-            ViewData["InsuranceCompanyId"] = new SelectList(_context.TableInsuranceCompany, "Id", "Label");
-            return View();
-        }
-
-        // POST: Insurance/Create
-        // To protect from overposting attacks, please enable the specific properties you want to bind to, for 
-        // more details see http://go.microsoft.com/fwlink/?LinkId=317598.
+        public IActionResult Create()
+            => View();
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([Bind("Id,CustomerId,ExternalId,InsuranceCompanyId")] TableInsurance tableInsurance)
+        public async Task<IActionResult> Create([Bind("CustomerId,ExternalId,InsuranceCompanyId")] TableInsurance tableInsurance)
         {
             if (ModelState.IsValid)
             {
-                _context.Add(tableInsurance);
-                await _context.SaveChangesAsync();
-                return RedirectToAction(nameof(Index));
+                Manager.Context.Add(tableInsurance);
+                await Manager.Context.SaveChangesAsync();
+                return PartialView("_GetInsurances", tableInsurance.Id);
             }
-            ViewData["CustomerId"] = new SelectList(_context.TableCustomer, "Id", "Name", tableInsurance.CustomerId);
-            ViewData["InsuranceCompanyId"] = new SelectList(_context.TableInsuranceCompany, "Id", "Label", tableInsurance.InsuranceCompanyId);
             return View(tableInsurance);
         }
-
-        // GET: Insurance/Edit/5
-        public async Task<IActionResult> Edit(int? id)
-        {
-            if (id == null)
-            {
-                return NotFound();
-            }
-
-            var tableInsurance = await _context.TableInsurance.FindAsync(id);
-            if (tableInsurance == null)
-            {
-                return NotFound();
-            }
-            ViewData["CustomerId"] = new SelectList(_context.TableCustomer, "Id", "Name", tableInsurance.CustomerId);
-            ViewData["InsuranceCompanyId"] = new SelectList(_context.TableInsuranceCompany, "Id", "Label", tableInsurance.InsuranceCompanyId);
-            return View(tableInsurance);
-        }
-
         // POST: Insurance/Edit/5
         // To protect from overposting attacks, please enable the specific properties you want to bind to, for 
         // more details see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("Id,CustomerId,ExternalId,InsuranceCompanyId")] TableInsurance tableInsurance)
+        public async Task<IActionResult> Manage(int id, [Bind("Id,CustomerId,ExternalId,InsuranceCompanyId")] TableInsurance tableInsurance)
         {
-            if (id != tableInsurance.Id)
-            {
-                return NotFound();
-            }
-
             if (ModelState.IsValid)
             {
-                try
+                if (tableInsurance.Id == 0)
                 {
-                    _context.Update(tableInsurance);
-                    await _context.SaveChangesAsync();
+                    Manager.Context.Add(tableInsurance);
+                    await Manager.Context.SaveChangesAsync();
                 }
-                catch (DbUpdateConcurrencyException)
+                else
                 {
-                    if (!TableInsuranceExists(tableInsurance.Id))
-                    {
-                        return NotFound();
-                    }
-                    else
-                    {
-                        throw;
-                    }
+                    Manager.Context.Update(tableInsurance);
+                    await Manager.Context.SaveChangesAsync();
                 }
-                return RedirectToAction(nameof(Index));
             }
-            ViewData["CustomerId"] = new SelectList(_context.TableCustomer, "Id", "Name", tableInsurance.CustomerId);
-            ViewData["InsuranceCompanyId"] = new SelectList(_context.TableInsuranceCompany, "Id", "Label", tableInsurance.InsuranceCompanyId);
             return View(tableInsurance);
         }
 
@@ -122,9 +72,7 @@ namespace Expertiser.Portal.Controllers
                 return NotFound();
             }
 
-            var tableInsurance = await _context.TableInsurance
-                .Include(t => t.Customer)
-                .Include(t => t.InsuranceCompany)
+            var tableInsurance = await Manager.QueryManager.Insurances
                 .FirstOrDefaultAsync(m => m.Id == id);
             if (tableInsurance == null)
             {
@@ -139,15 +87,10 @@ namespace Expertiser.Portal.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
-            var tableInsurance = await _context.TableInsurance.FindAsync(id);
-            _context.TableInsurance.Remove(tableInsurance);
-            await _context.SaveChangesAsync();
+            var tableInsurance = await Manager.Context.TableInsurance.FindAsync(id);
+            Manager.Context.TableInsurance.Remove(tableInsurance);
+            await Manager.Context.SaveChangesAsync();
             return RedirectToAction(nameof(Index));
-        }
-
-        private bool TableInsuranceExists(int id)
-        {
-            return _context.TableInsurance.Any(e => e.Id == id);
         }
     }
 }

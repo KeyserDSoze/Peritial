@@ -1,25 +1,28 @@
-﻿@model Expertiser.Database.Models.TableInsurance
+﻿@model TableInsurance
 
 @{
-    ViewData["Title"] = "Create";
+    ViewData["Title"] = "Edit";
 }
 
-<h1>@SharedLocalizer["Create"]</h1>
+<h1>@SharedLocalizer["Edit"]</h1>
 
 <h4>TableInsurance</h4>
 <hr />
 <div class="row">
     <div class="col-md-4">
-        <form asp-action="Create">
+        <rystem-ajax-form rystem-modal-close="true" rystem-request-context="Manager.ModalManager.SetInsurance">
             <div asp-validation-summary="ModelOnly" class="text-danger"></div>
-            <div class="form-group">
-                <label asp-for="Id" class="control-label"></label>
-                <input asp-for="Id" class="form-control" />
-                <span asp-validation-for="Id" class="text-danger"></span>
-            </div>
+            @Html.AntiForgeryToken()
             <div class="form-group">
                 <label asp-for="CustomerId" class="control-label"></label>
-                <select asp-for="CustomerId" class ="form-control" asp-items="ViewBag.CustomerId"></select>
+                <div id="customers">
+                    <partial name="_GetCustomers" model="0" />
+                </div>
+                <rystem-ajax-modal rystem-request-context="Manager.ModalManager.CreateNewCustomer" rystem-size="Large">
+                    <div class="btn btn-primary">@Localizer["Create New Address"]</div>
+                </rystem-ajax-modal>
+
+                <span asp-validation-for="CustomerId" class="text-danger"></span>
             </div>
             <div class="form-group">
                 <label asp-for="ExternalId" class="control-label"></label>
@@ -28,15 +31,12 @@
             </div>
             <div class="form-group">
                 <label asp-for="InsuranceCompanyId" class="control-label"></label>
-                <select asp-for="InsuranceCompanyId" class ="form-control" asp-items="ViewBag.InsuranceCompanyId"></select>
+                <rystem-dropdown name="InsuranceCompanyId" rystem-data="Manager.DropdownManager.GetInsuranceCompanies()"></rystem-dropdown>
+                <span asp-validation-for="InsuranceCompanyId" class="text-danger"></span>
             </div>
             <div class="form-group">
-                <input type="submit" value="Create" class="btn btn-primary" />
+                <input type="submit" value="Save" class="btn btn-primary" />
             </div>
-        </form>
+        </rystem-ajax-form>
     </div>
-</div>
-
-<div>
-    <a asp-action="Index">Back to List</a>
 </div>

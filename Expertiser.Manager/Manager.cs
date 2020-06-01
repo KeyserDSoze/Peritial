@@ -49,6 +49,15 @@ namespace Expertiser
         public IQueryable<TableInspectorate> Inspectorates => Manager.Context.TableInspectorate
                     .Include(x => x.InsuranceCompany)
                     .Include(x => x.Address);
+        public IQueryable<TableInsuranceCompany> InsuranceCompanies => Manager.Context.TableInsuranceCompany
+                    .Include(x => x.Address);
+        public IQueryable<TableInsurance> Insurances => Manager.Context.TableInsurance
+                    .Include(x => x.InsuranceCompany)
+                    .Include(x => x.TableAccident)
+                    .Include(x => x.Customer);
+        public IQueryable<TableCustomer> Customers => Manager.Context.TableCustomer
+                    .Include(x => x.Address)
+                        .Include(x => x.TableInsurance);
     }
     public class DropdownManager
     {
@@ -68,6 +77,16 @@ namespace Expertiser
         public IEnumerable<DropdownItem> GetInsuranceAgencies()
         {
             return this.Manager.QueryManager.InsuranceAgencies
+                .Select(x => new DropdownItem()
+                {
+                    Label = x.Label,
+                    Value = x.Id.ToString(),
+                    Group = x.AddressId != null ? x.Address.City.Name : string.Empty
+                });
+        }
+        public IEnumerable<DropdownItem> GetInsuranceCompanies()
+        {
+            return this.Manager.QueryManager.InsuranceCompanies
                 .Select(x => new DropdownItem()
                 {
                     Label = x.Label,
@@ -121,6 +140,28 @@ namespace Expertiser
                    Selected = Manager.UserManager.IsInRoleAsync(user, role.Name).ToResult()
                });
         }
+        public IEnumerable<DropdownItem> GetCustomers(int customerId)
+        {
+            return Manager.QueryManager.Customers.Select(
+                   customer =>
+               new DropdownItem()
+               {
+                   Label = customer.Name,
+                   Value = customer.Id.ToString(),
+                   Selected = customer.Id == customerId
+               });
+        }
+        public IEnumerable<DropdownItem> GetInsurances(int insuranceId)
+        {
+            return this.Manager.QueryManager.Insurances
+                .Select(x => new DropdownItem()
+                {
+                    Value = x.Id.ToString(),
+                    Group = x.InsuranceCompany.Label,
+                    Label = $"{x.Customer.Name} - {x.ExternalId}",
+                    Selected = x.Id == insuranceId
+                });
+        }
     }
     public class ModalManager
     {
@@ -128,8 +169,11 @@ namespace Expertiser
         public ModalManager(Manager manager)
             => this.Manager = manager;
         public RequestContext CreateNewLocation => new RequestContext() { Action = "Create", Controller = "Location" };
+        public RequestContext CreateNewCustomer => new RequestContext() { Action = "Create", Controller = "Customer" };
         public RequestContext UpdatePostalCodes => new RequestContext() { Action = "GetPostalCodes", Controller = "Location", Selector = "#updatePostalCodes", QueryString = new Dictionary<object, object>() { { "cityId", 1 } } };
-        public RequestContext GetLocations => new RequestContext() { Action = "Create", Controller = "Location", RequestType = RequestType.Post, Selector = "#accidentLocation" };
+        public RequestContext SetLocation => new RequestContext() { Action = "Create", Controller = "Location", RequestType = RequestType.Post, Selector = "#accidentLocation" };
+        public RequestContext SetCustomer => new RequestContext() { Action = "Create", Controller = "Customer", RequestType = RequestType.Post, Selector = "#customers" };
+        public RequestContext SetInsurance => new RequestContext() { Action = "Create", Controller = "Insurance", RequestType = RequestType.Post, Selector = "#insurances" };
         public RequestContext CreateNewInsurance => new RequestContext() { Action = "PartialCreate", Controller = "Insurance" };
         public RequestContext UpdateUserRole(string userId) => new RequestContext() { Action = "UpdateRole", Controller = "User", QueryString = new Dictionary<object, object>() { { "id", userId } } };
     }

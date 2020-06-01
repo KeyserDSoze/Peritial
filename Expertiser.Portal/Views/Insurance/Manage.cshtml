@@ -1,4 +1,4 @@
-﻿@model Expertiser.Database.Models.TableInsurance
+﻿@model TableInsurance
 
 @{
     ViewData["Title"] = "Edit";
@@ -15,7 +15,13 @@
             <input type="hidden" asp-for="Id" />
             <div class="form-group">
                 <label asp-for="CustomerId" class="control-label"></label>
-                <select asp-for="CustomerId" class="form-control" asp-items="ViewBag.CustomerId"></select>
+                <div id="customer">
+                    <partial name="_GetCustomers" model="Model?.Id ?? 0" />
+                </div>
+                <rystem-ajax-modal rystem-request-context="Manager.ModalManager.CreateNewCustomer" rystem-size="Large">
+                    <div class="btn btn-primary">@Localizer["Create New Address"]</div>
+                </rystem-ajax-modal>
+
                 <span asp-validation-for="CustomerId" class="text-danger"></span>
             </div>
             <div class="form-group">
@@ -25,7 +31,7 @@
             </div>
             <div class="form-group">
                 <label asp-for="InsuranceCompanyId" class="control-label"></label>
-                <select asp-for="InsuranceCompanyId" class="form-control" asp-items="ViewBag.InsuranceCompanyId"></select>
+                <rystem-dropdown name="InsuranceCompanyId" rystem-data="Manager.DropdownManager.GetInsuranceCompanies()"></rystem-dropdown>
                 <span asp-validation-for="InsuranceCompanyId" class="text-danger"></span>
             </div>
             <div class="form-group">
