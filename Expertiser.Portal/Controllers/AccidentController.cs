@@ -13,7 +13,7 @@ using Expertiser.Base.Constant;
 
 namespace Expertiser.Portal.Controllers
 {
-    [Authorize(Roles = Roles.Contributor)]
+    [Authorize(Roles = Roles.AdminContributor)]
     public class AccidentController : BaseController
     {
         public AccidentController(Manager manager) : base(manager)
