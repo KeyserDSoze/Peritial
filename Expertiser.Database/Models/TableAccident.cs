@@ -15,7 +15,7 @@ namespace Expertiser.Database.Models
 
         [Key]
         public int Id { get; set; }
-        public int PlaceId { get; set; }
+        public int AddressId { get; set; }
         public int InsuranceId { get; set; }
         public int InsuranceAgencyId { get; set; }
         public int InspectorateId { get; set; }
@@ -27,6 +27,9 @@ namespace Expertiser.Database.Models
         [Column(TypeName = "datetime")]
         public DateTime? DenunciationDate { get; set; }
 
+        [ForeignKey(nameof(AddressId))]
+        [InverseProperty(nameof(TableLocation.TableAccident))]
+        public virtual TableLocation Address { get; set; }
         [ForeignKey(nameof(InspectorateId))]
         [InverseProperty(nameof(TableInspectorate.TableAccident))]
         public virtual TableInspectorate Inspectorate { get; set; }
@@ -36,9 +39,6 @@ namespace Expertiser.Database.Models
         [ForeignKey(nameof(InsuranceAgencyId))]
         [InverseProperty(nameof(TableInsuranceAgency.TableAccident))]
         public virtual TableInsuranceAgency InsuranceAgency { get; set; }
-        [ForeignKey(nameof(PlaceId))]
-        [InverseProperty(nameof(TableLocation.TableAccident))]
-        public virtual TableLocation Place { get; set; }
         [InverseProperty("Accident")]
         public virtual ICollection<TableExpertise> TableExpertise { get; set; }
     }

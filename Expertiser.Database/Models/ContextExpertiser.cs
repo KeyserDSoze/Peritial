@@ -91,6 +91,12 @@ namespace Expertiser.Database.Models
             {
                 entity.Property(e => e.ExternalId).IsUnicode(false);
 
+                entity.HasOne(d => d.Address)
+                    .WithMany(p => p.TableAccident)
+                    .HasForeignKey(d => d.AddressId)
+                    .OnDelete(DeleteBehavior.ClientSetNull)
+                    .HasConstraintName("FK_Table_Accident_Table_Location");
+
                 entity.HasOne(d => d.Inspectorate)
                     .WithMany(p => p.TableAccident)
                     .HasForeignKey(d => d.InspectorateId)
@@ -108,12 +114,6 @@ namespace Expertiser.Database.Models
                     .HasForeignKey(d => d.InsuranceId)
                     .OnDelete(DeleteBehavior.ClientSetNull)
                     .HasConstraintName("FK_Table_Accident_Table_Insurance");
-
-                entity.HasOne(d => d.Place)
-                    .WithMany(p => p.TableAccident)
-                    .HasForeignKey(d => d.PlaceId)
-                    .OnDelete(DeleteBehavior.ClientSetNull)
-                    .HasConstraintName("FK_Table_Accident_Table_Location");
             });
 
             modelBuilder.Entity<TableBill>(entity =>

@@ -41,7 +41,7 @@ namespace Expertiser
         private readonly Manager Manager;
         public QueryManager(Manager manager)
             => this.Manager = manager;
-        public IQueryable<TableAccident> Accidents => Manager.Context.TableAccident.Include(t => t.Inspectorate).Include(t => t.Insurance).Include(t => t.InsuranceAgency).Include(t => t.Place);
+        public IQueryable<TableAccident> Accidents => Manager.Context.TableAccident.Include(t => t.Inspectorate).Include(t => t.Insurance).Include(t => t.InsuranceAgency).Include(t => t.Address);
         public IQueryable<TableLocation> Locations => Manager.Context.TableLocation.Include(x => x.City);
         public IQueryable<TableInsuranceAgency> InsuranceAgencies => Manager.Context.TableInsuranceAgency
                     .Include(x => x.InsuranceCompany)
@@ -64,24 +64,26 @@ namespace Expertiser
         private readonly Manager Manager;
         public DropdownManager(Manager manager)
             => this.Manager = manager;
-        public IEnumerable<DropdownItem> GetInspectorates()
+#warning da mettere la parte di controllo che se quel tizio ha quella insurance company, può avere solo cose inerenti a quella compagnia o strettamente legate
+        public IEnumerable<DropdownItem> GetInspectorates(int insuranceId = 0)
         {
             return this.Manager.QueryManager.Inspectorates
                 .Select(x => new DropdownItem()
                 {
                     Label = x.Label,
                     Value = x.Id.ToString(),
-                    Group = x.AddressId != null ? x.Address.City.Name : string.Empty
+                    Group = x.InsuranceCompany != null ? x.InsuranceCompany.Label : string.Empty
                 });
         }
-        public IEnumerable<DropdownItem> GetInsuranceAgencies()
+        public IEnumerable<DropdownItem> GetInsuranceAgencies(int insuranceId = 0)
         {
+            //TableInsurance insurance = await this.Manager.QueryManager.Insurances.FirstOrDefaultAsync(x => x.Id == insuranceId);
             return this.Manager.QueryManager.InsuranceAgencies
                 .Select(x => new DropdownItem()
                 {
                     Label = x.Label,
                     Value = x.Id.ToString(),
-                    Group = x.AddressId != null ? x.Address.City.Name : string.Empty
+                    Group = x.InsuranceCompany != null ? x.InsuranceCompany.Label : string.Empty
                 });
         }
         public IEnumerable<DropdownItem> GetInsuranceCompanies()
@@ -148,7 +150,8 @@ namespace Expertiser
                {
                    Label = customer.Name,
                    Value = customer.Id.ToString(),
-                   Selected = customer.Id == customerId
+                   Selected = customer.Id == customerId,
+                   Group = customer.Name[0].ToString()
                });
         }
         public IEnumerable<DropdownItem> GetInsurances(int insuranceId)
@@ -170,11 +173,11 @@ namespace Expertiser
             => this.Manager = manager;
         public RequestContext CreateNewLocation => new RequestContext() { Action = "Create", Controller = "Location" };
         public RequestContext CreateNewCustomer => new RequestContext() { Action = "Create", Controller = "Customer" };
-        public RequestContext UpdatePostalCodes => new RequestContext() { Action = "GetPostalCodes", Controller = "Location", Selector = "#updatePostalCodes", QueryString = new Dictionary<object, object>() { { "cityId", 1 } } };
-        public RequestContext SetLocation => new RequestContext() { Action = "Create", Controller = "Location", RequestType = RequestType.Post, Selector = "#accidentLocation" };
+        public RequestContext UpdatePostalCodes => new RequestContext() { Action = "UpdatePostalCodes", Controller = "Location", Selector = "#updatePostalCodes" };
+        public RequestContext SetLocation => new RequestContext() { Action = "Create", Controller = "Location", RequestType = RequestType.Post, Selector = ".location-address" };
         public RequestContext SetCustomer => new RequestContext() { Action = "Create", Controller = "Customer", RequestType = RequestType.Post, Selector = "#customers" };
         public RequestContext SetInsurance => new RequestContext() { Action = "Create", Controller = "Insurance", RequestType = RequestType.Post, Selector = "#insurances" };
-        public RequestContext CreateNewInsurance => new RequestContext() { Action = "PartialCreate", Controller = "Insurance" };
+        public RequestContext CreateNewInsurance => new RequestContext() { Action = "Create", Controller = "Insurance" };
         public RequestContext UpdateUserRole(string userId) => new RequestContext() { Action = "UpdateRole", Controller = "User", QueryString = new Dictionary<object, object>() { { "id", userId } } };
     }
 }

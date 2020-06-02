@@ -15,8 +15,8 @@ namespace Expertiser.Database.Models
     }
     public class TableAccidentMetadata
     {
-        [Display(Name = nameof(PlaceId))]
-        public int PlaceId { get; set; }
+        [Display(Name = nameof(AddressId))]
+        public int AddressId { get; set; }
 
         [Display(Name = nameof(InsuranceId))]
         public int InsuranceId { get; set; }

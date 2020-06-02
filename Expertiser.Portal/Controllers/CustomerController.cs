@@ -23,15 +23,14 @@ namespace Expertiser.Portal.Controllers
             => View(Manager.QueryManager.Customers);
 
         // GET: Customer/Create
-        public IActionResult Create() 
+        public IActionResult Create()
             => PartialView();
-
         // POST: Customer/Create
         // To protect from overposting attacks, please enable the specific properties you want to bind to, for 
         // more details see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([Bind("Id,Name,FiscalCode,AddressId")] TableCustomer tableCustomer)
+        public async Task<IActionResult> Create([Bind("Name,FiscalCode,AddressId")] TableCustomer tableCustomer)
         {
             if (ModelState.IsValid)
             {
@@ -39,7 +38,7 @@ namespace Expertiser.Portal.Controllers
                 await Manager.Context.SaveChangesAsync();
                 return PartialView("_GetCustomers", tableCustomer.Id);
             }
-            return View(tableCustomer);
+            return NotOkMessage(ModelState);
         }
 
         // GET: Customer/Edit/5

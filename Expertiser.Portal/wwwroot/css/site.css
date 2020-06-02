@@ -17,6 +17,7 @@ a {
     background-color: #4E7385 !important;
     border-color: #224A63 !important;
 }
+
 .btn-link {
     color: #4E7385 !important;
 }
@@ -81,3 +82,13 @@ body {
     background-color: #224A63 !important;
     background-image: linear-gradient(180deg,#4E7374 30%,#224A63 100%) !important;
 }
+
+.ui-widget-header {
+    border: 1px solid #4E7385 !important;
+    background: #4E7385 !important;
+}
+
+    .ui-state-hover, .ui-widget-content .ui-state-hover, .ui-widget-header .ui-state-hover, .ui-state-focus, .ui-widget-content .ui-state-focus, .ui-widget-header .ui-state-focus {
+        background: #4f7e9b !important;
+        border: 1px solid #224A63 !important;
+    }

@@ -180,7 +180,7 @@
   <data name="Place" xml:space="preserve">
     <value>Indirizzo</value>
   </data>
-  <data name="PlaceId" xml:space="preserve">
+  <data name="AddressId" xml:space="preserve">
     <value>Indirizzo</value>
   </data>
   <data name="Status" xml:space="preserve">

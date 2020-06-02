@@ -3,7 +3,7 @@
 <h1>@Localizer["Create Customer"]</h1>
 <hr />
 <div class="row">
-    <div class="col-md-4">
+    <div class="col-md-12">
         <rystem-ajax-form rystem-modal-close="true" rystem-request-context="Manager.ModalManager.SetCustomer">
             <div asp-validation-summary="ModelOnly" class="text-danger"></div>
             @Html.AntiForgeryToken()
@@ -20,7 +20,7 @@
             </div>
             <div class="form-group">
                 <label asp-for="AddressId" class="control-label"></label>
-                <partial name="_GetDropdownLocations" model='(" AddressId", Model?.AddressId ?? 0)' />
+                <partial name="_GetDropdownLocations" model="Model?.AddressId ?? 0" />
                 <span asp-validation-for="AddressId" class="text-danger"></span>
             </div>
             <div class="form-group">

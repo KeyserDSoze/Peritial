@@ -28,7 +28,7 @@ namespace Expertiser.Portal.Controllers
             return View(await Manager.QueryManager.Insurances.FirstOrDefaultAsync(x => x.Id == id));
         }
         public IActionResult Create()
-            => View();
+            => PartialView();
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create([Bind("CustomerId,ExternalId,InsuranceCompanyId")] TableInsurance tableInsurance)
@@ -39,7 +39,7 @@ namespace Expertiser.Portal.Controllers
                 await Manager.Context.SaveChangesAsync();
                 return PartialView("_GetInsurances", tableInsurance.Id);
             }
-            return View(tableInsurance);
+            return PartialView(tableInsurance);
         }
         // POST: Insurance/Edit/5
         // To protect from overposting attacks, please enable the specific properties you want to bind to, for 

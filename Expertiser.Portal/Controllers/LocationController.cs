@@ -9,67 +9,35 @@ using Expertiser.Database.Models;
 
 namespace Expertiser.Portal.Controllers
 {
-    public class LocationController : Controller
+    public class LocationController : BaseController
     {
-        private readonly ContextExpertiser _context;
-
-        public LocationController(ContextExpertiser context)
+        public LocationController(Manager manager) : base(manager)
         {
-            _context = context;
         }
-
         // GET: Location
-        public async Task<IActionResult> Index()
-        {
-            var contextExpertiser = _context.TableLocation.Include(t => t.City);
-            return View(await contextExpertiser.ToListAsync());
-        }
+        public IActionResult Index() 
+            => View(Manager.QueryManager.Locations);
 
-        // GET: Location/Details/5
-        public async Task<IActionResult> Details(int? id)
-        {
-            if (id == null)
-            {
-                return NotFound();
-            }
-            var tableLocation = await _context.TableLocation
-                .Include(t => t.City)
-                .FirstOrDefaultAsync(m => m.Id == id);
-            if (tableLocation == null)
-            {
-                return NotFound();
-            }
-
-            return View(tableLocation);
-        }
-
-        // GET: Location/Create
-        public IActionResult Create() 
-            => View();
+        public IActionResult Create()
+            => PartialView();
         private readonly static string Empty = null;
-        public IActionResult GetPostalCodes([FromQuery] IEnumerable<string> selectedItems)
-            => PartialView("_PostalCode", (int.Parse(selectedItems.First()), Empty));
-        //public IActionResult GetLocations([FromQuery] int locationId)
-        //    => PartialView("_GetLocations", locationId);
 
-        // POST: Location/Create
-        // To protect from overposting attacks, enable the specific properties you want to bind to, for 
-        // more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
+        public IActionResult UpdatePostalCodes([FromQuery] IEnumerable<string> selectedItems)
+            => PartialView("_PostalCode", (int.Parse(selectedItems.First()), Empty));
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([Bind("Id,Address,CityId,PostalCode")] TableLocation tableLocation)
+        public async Task<IActionResult> Create([Bind("Address,CityId,PostalCode")] TableLocation tableLocation)
         {
             if (ModelState.IsValid)
             {
-                _context.Add(tableLocation);
-                await _context.SaveChangesAsync();
+                Manager.Context.Add(tableLocation);
+                await Manager.Context.SaveChangesAsync();
                 return PartialView("_GetLocations", tableLocation.Id);
             }
-            return View(tableLocation);
+            return NotOkMessage(ModelState);
         }
 
-        // GET: Location/Edit/5
-        public async Task<IActionResult> Edit(int? id)
+        public async Task<IActionResult> Manage(int? id)
         {
             if (id == null)
             {
@@ -90,7 +58,7 @@ namespace Expertiser.Portal.Controllers
         // more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("Id,Address,CityId,PostalCode")] TableLocation tableLocation)
+        public async Task<IActionResult> Manage(int id, [Bind("Id,Address,CityId,PostalCode")] TableLocation tableLocation)
         {
             if (id != tableLocation.Id)
             {

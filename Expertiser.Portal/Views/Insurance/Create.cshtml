@@ -9,7 +9,7 @@
 <h4>TableInsurance</h4>
 <hr />
 <div class="row">
-    <div class="col-md-4">
+    <div class="col-md-12">
         <rystem-ajax-form rystem-modal-close="true" rystem-request-context="Manager.ModalManager.SetInsurance">
             <div asp-validation-summary="ModelOnly" class="text-danger"></div>
             @Html.AntiForgeryToken()
@@ -19,7 +19,7 @@
                     <partial name="_GetCustomers" model="0" />
                 </div>
                 <rystem-ajax-modal rystem-request-context="Manager.ModalManager.CreateNewCustomer" rystem-size="Large">
-                    <div class="btn btn-primary">@Localizer["Create New Address"]</div>
+                    <div class="btn btn-primary mt-2">@Localizer["Create New Customer"]</div>
                 </rystem-ajax-modal>
 
                 <span asp-validation-for="CustomerId" class="text-danger"></span>

@@ -40,7 +40,7 @@ namespace Expertiser.Portal.Controllers
         [HttpPost]
         [ValidateAntiForgeryToken]
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Style", "IDE0037:Use inferred member name", Justification = "<Pending>")]
-        public async Task<IActionResult> Manage([Bind("Id,PlaceId,InsuranceId,InsuranceAgencyId,InspectorateId,ExternalId,AccidentDate,DenunciationDate")] TableAccident tableAccident)
+        public async Task<IActionResult> Manage([Bind("Id,AddressId,InsuranceId,InsuranceAgencyId,InspectorateId,ExternalId,AccidentDate,DenunciationDate")] TableAccident tableAccident)
         {
             if (ModelState.IsValid)
             {

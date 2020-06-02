@@ -30,7 +30,7 @@ namespace Expertiser.Database.Models
         [ForeignKey(nameof(CityId))]
         [InverseProperty(nameof(TableCity.TableLocation))]
         public virtual TableCity City { get; set; }
-        [InverseProperty("Place")]
+        [InverseProperty("Address")]
         public virtual ICollection<TableAccident> TableAccident { get; set; }
         [InverseProperty("Address")]
         public virtual ICollection<TableCustomer> TableCustomer { get; set; }

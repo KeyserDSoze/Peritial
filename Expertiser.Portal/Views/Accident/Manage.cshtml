@@ -10,13 +10,13 @@
 <hr />
 <div class="row">
     <div class="col-md-6">
-        <form asp-action="Create">
+        <form asp-action="Manage">
             <div asp-validation-summary="ModelOnly" class="text-danger"></div>
             <input type="hidden" asp-for="Id" />
             <div class="form-group">
-                <label asp-for="PlaceId" class="control-label"></label>
-                <partial name="_GetDropdownLocations" model='("PlaceId", Model?.PlaceId ?? 0)' />
-                <span asp-validation-for="PlaceId" class="text-danger"></span>
+                <label asp-for="AddressId" class="control-label"></label>
+                <partial name="_GetDropdownLocations" model="Model?.AddressId ?? 0" />
+                <span asp-validation-for="AddressId" class="text-danger"></span>
             </div>
             <div class="form-group">
                 <label asp-for="InsuranceId" class="control-label"></label>
@@ -24,13 +24,13 @@
                     <partial name="_GetInsurances" model="Model?.InsuranceId ?? 0" />
                 </div>
                 <rystem-ajax-modal rystem-request-context="Manager.ModalManager.CreateNewInsurance" rystem-size="Large">
-                    <div class="btn btn-primary">@Localizer["Create New Insurance"]</div>
+                    <div class="btn btn-primary mt-2">@Localizer["Create New Insurance"]</div>
                 </rystem-ajax-modal>
                 <span asp-validation-for="InsuranceId" class="text-danger"></span>
             </div>
             <div class="form-group">
                 <label asp-for="InsuranceAgencyId" class="control-label"></label>
-                <rystem-dropdown name="InsuranceAgencyId" rystem-data="Manager.DropdownManager.GetInsuranceAgencies()"></rystem-dropdown>
+                <rystem-dropdown name="InsuranceAgencyId" rystem-data="Manager.DropdownManager.GetInsuranceAgencies()" class="form-control"></rystem-dropdown>
                 <span asp-validation-for="InsuranceAgencyId" class="text-danger"></span>
             </div>
             <div class="form-group">
@@ -42,15 +42,17 @@
                 <input asp-for="ExternalId" class="form-control" />
                 <span asp-validation-for="ExternalId" class="text-danger"></span>
             </div>
-            <div class="form-group">
-                <label asp-for="AccidentDate" class="control-label"></label>
-                <input asp-for="AccidentDate" class="form-control" />
-                <span asp-validation-for="AccidentDate" class="text-danger"></span>
-            </div>
-            <div class="form-group">
-                <label asp-for="DenunciationDate" class="control-label"></label>
-                <input asp-for="DenunciationDate" class="form-control" />
-                <span asp-validation-for="DenunciationDate" class="text-danger"></span>
+            <div class="form-row">
+                <div class="form-group col-md-6">
+                    <label asp-for="AccidentDate" class="control-label"></label>
+                    <rystem-date name="AccidentDate" class="form-control"></rystem-date>
+                    <span asp-validation-for="AccidentDate" class="text-danger"></span>
+                </div>
+                <div class="form-group col-md-6">
+                    <label asp-for="DenunciationDate" class="control-label"></label>
+                    <rystem-date name="DenunciationDate" class="form-control"></rystem-date>
+                    <span asp-validation-for="DenunciationDate" class="text-danger"></span>
+                </div>
             </div>
             <div class="form-group">
                 <input type="submit" value="@SharedLocalizer["Create"]" class="btn btn-primary" />
@@ -62,4 +64,3 @@
 <div>
     <a asp-action="Index">Back to List</a>
 </div>
-
