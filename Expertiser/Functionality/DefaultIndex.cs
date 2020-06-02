@@ -21,6 +21,8 @@ namespace Expertiser.Functionality
                         .ThenInclude(x => x.De);
             foreach (string val in q.Headers())
                 Console.WriteLine(val);
+            foreach (string val in q.Values(new Alo()))
+                Console.WriteLine(val);
             return Task.FromResult(true);
         }
         public class Alo
@@ -32,11 +34,12 @@ namespace Expertiser.Functionality
         public class Flo
         {
             public string Olzo { get; set; } = "dsds";
-            public IEnumerable<Flo2> Flo2 { get; set; } = new List<Flo2>();
+            public IEnumerable<Flo2> Flo2 { get; set; } = new List<Flo2>() { new Flo2("dsdaaaaaas"), new Flo2("kukkaraccia") };
         }
         public class Flo2
         {
-            public string De { get; set; } = "dsdaaaaaas";
+            public string De { get; set; }
+            public Flo2(string de) => this.De = de;
         }
     }
 }
