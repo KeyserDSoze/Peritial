@@ -41,7 +41,8 @@ namespace Expertiser
         private readonly Manager Manager;
         public QueryManager(Manager manager)
             => this.Manager = manager;
-        public IQueryable<TableAccident> Accidents => Manager.Context.TableAccident.Include(t => t.Inspectorate).Include(t => t.Insurance).Include(t => t.InsuranceAgency).Include(t => t.Address);
+        public IQueryable<TableAccident> Accidents => Manager.Context.TableAccident
+            .Include(t => t.Inspectorate).Include(t => t.Insurance).ThenInclude(t => t.Customer).Include(t => t.InsuranceAgency).Include(t => t.Address);
         public IQueryable<TableLocation> Locations => Manager.Context.TableLocation.Include(x => x.City);
         public IQueryable<TableInsuranceAgency> InsuranceAgencies => Manager.Context.TableInsuranceAgency
                     .Include(x => x.InsuranceCompany)

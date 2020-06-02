@@ -6,18 +6,26 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using Expertiser.Database.Models;
+using Rystem.Web.Backoffice;
 
 namespace Expertiser.Portal.Controllers
 {
-    public class LocationController : BaseController
+    public class LocationController : BaseController<TableLocation>
     {
         public LocationController(Manager manager) : base(manager)
         {
+            
         }
-        // GET: Location
-        public IActionResult Index() 
-            => View(Manager.QueryManager.Locations);
 
+        public override NavigationIndex<TableLocation> GetNavigationIndex()
+            => new NavigationManager<TableLocation>()
+                .Create(Manager.QueryManager.Locations, NavigationOptions.CanDoneAll("Index"))
+                .Include(x => x.Address)
+                .Include(x => x.City)
+                    .ThenInclude(x => x.Name)
+                .Include(x => x.PostalCode)
+                .Include(x => x.Id, PropertyOptions.Key)
+            .ToIndex();
         public IActionResult Create()
             => PartialView();
         private readonly static string Empty = null;
@@ -44,12 +52,12 @@ namespace Expertiser.Portal.Controllers
                 return NotFound();
             }
 
-            var tableLocation = await _context.TableLocation.FindAsync(id);
+            var tableLocation = await Manager.Context.TableLocation.FindAsync(id);
             if (tableLocation == null)
             {
                 return NotFound();
             }
-            ViewData["CityId"] = new SelectList(_context.TableCity, "Id", "Name", tableLocation.CityId);
+            ViewData["CityId"] = new SelectList(Manager.Context.TableCity, "Id", "Name", tableLocation.CityId);
             return View(tableLocation);
         }
 
@@ -69,8 +77,8 @@ namespace Expertiser.Portal.Controllers
             {
                 try
                 {
-                    _context.Update(tableLocation);
-                    await _context.SaveChangesAsync();
+                    Manager.Context.Update(tableLocation);
+                    await Manager.Context.SaveChangesAsync();
                 }
                 catch (DbUpdateConcurrencyException)
                 {
@@ -85,7 +93,7 @@ namespace Expertiser.Portal.Controllers
                 }
                 return RedirectToAction(nameof(Index));
             }
-            ViewData["CityId"] = new SelectList(_context.TableCity, "Id", "Name", tableLocation.CityId);
+            ViewData["CityId"] = new SelectList(Manager.Context.TableCity, "Id", "Name", tableLocation.CityId);
             return View(tableLocation);
         }
 
@@ -97,7 +105,7 @@ namespace Expertiser.Portal.Controllers
                 return NotFound();
             }
 
-            var tableLocation = await _context.TableLocation
+            var tableLocation = await Manager.Context.TableLocation
                 .Include(t => t.City)
                 .FirstOrDefaultAsync(m => m.Id == id);
             if (tableLocation == null)
@@ -113,15 +121,17 @@ namespace Expertiser.Portal.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
-            var tableLocation = await _context.TableLocation.FindAsync(id);
-            _context.TableLocation.Remove(tableLocation);
-            await _context.SaveChangesAsync();
+            var tableLocation = await Manager.Context.TableLocation.FindAsync(id);
+            Manager.Context.TableLocation.Remove(tableLocation);
+            await Manager.Context.SaveChangesAsync();
             return RedirectToAction(nameof(Index));
         }
 
         private bool TableLocationExists(int id)
         {
-            return _context.TableLocation.Any(e => e.Id == id);
+            return Manager.Context.TableLocation.Any(e => e.Id == id);
         }
+
+
     }
 }

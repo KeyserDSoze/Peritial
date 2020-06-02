@@ -10,19 +10,37 @@ using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
 using Rystem.Web;
 using Expertiser.Base.Constant;
+using Rystem.Web.Backoffice;
 
 namespace Expertiser.Portal.Controllers
 {
     [Authorize(Roles = Roles.AdminContributor)]
-    public class AccidentController : BaseController
+    public class AccidentController : BaseController<TableAccident>
     {
         public AccidentController(Manager manager) : base(manager)
         {
         }
-        // GET: Accident
-        public ActionResult Index()
-            => View(Manager.QueryManager.Accidents);
-
+        public override NavigationIndex<TableAccident> GetNavigationIndex()
+        {
+            return new NavigationManager<TableAccident>()
+                .Create(Manager.QueryManager.Accidents, NavigationOptions.CanDoneAll("Index"))
+                .Include(x => x.Id, PropertyOptions.Key)
+                .Include(x => x.ExternalId)
+                .Include(x => x.AccidentDate)
+                .Include(x => x.DenunciationDate)
+                .Include(x => x.Inspectorate)
+                    .ThenInclude(x => x.Label)
+                .Include(x => x.Insurance)
+                    .ThenInclude(x => x.Customer)
+                        .ThenInclude(x => x.Name)
+                .Include(x => x.InsuranceAgency)
+                    .ThenInclude(x => x.Label)
+                .Include(x => x.Address)
+                        .ThenInclude(x => x.Address)
+                .Include(x => x.TableExpertise, new PropertyOptions(OutputType.Count))
+                .ToIndex();
+        }
+        //
         // GET: Accident/Manage
         public async Task<IActionResult> Manage(int? id)
         {
