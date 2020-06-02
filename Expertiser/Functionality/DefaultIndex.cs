@@ -11,7 +11,7 @@ namespace Expertiser.Functionality
     {
         public Task<bool> DoWorkAsync(Action<object> action, params string[] args)
         {
-            var q = new DefaultIndex<Alo>(new Alo())
+            var q = new DefaultIndex<Alo>()
                 .Include(x => x.Val)
                 .Include(x => x.Qq)
                 .Include(x => x.Flo)
@@ -19,6 +19,8 @@ namespace Expertiser.Functionality
                 .Include(x => x.Flo)
                     .ThenInclude(x => x.Flo2)
                         .ThenInclude(x => x.De);
+            foreach (string val in q.Headers())
+                Console.WriteLine(val);
             return Task.FromResult(true);
         }
         public class Alo
@@ -30,7 +32,7 @@ namespace Expertiser.Functionality
         public class Flo
         {
             public string Olzo { get; set; } = "dsds";
-            public Flo2 Flo2 { get; set; } = new Flo2();
+            public IEnumerable<Flo2> Flo2 { get; set; } = new List<Flo2>();
         }
         public class Flo2
         {
