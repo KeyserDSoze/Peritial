@@ -7,18 +7,19 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using Expertiser.Database.Models;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.Localization;
+using Rystem.Web.Backoffice;
+using Expertiser.Base.Constant;
+using System.Runtime.InteropServices.WindowsRuntime;
 
 namespace Expertiser.Portal.Controllers
 {
-    [Authorize]
-    public class InsuranceController : BaseController
+    [Authorize(Roles = Roles.AdminContributor)]
+    public class InsuranceController : BaseController<TableInsurance>
     {
-        public InsuranceController(Manager manager) : base(manager)
+        public InsuranceController(Manager manager, IStringLocalizer<DatabaseShared> stringLocalizer) : base(manager, stringLocalizer)
         {
         }
-        // GET: Insurance
-        public IActionResult Index()
-            => View(Manager.QueryManager.Insurances);
 
         // GET: Insurance/Create
         public async Task<IActionResult> Manage(int? id)
@@ -64,33 +65,28 @@ namespace Expertiser.Portal.Controllers
             return View(tableInsurance);
         }
 
-        // GET: Insurance/Delete/5
-        public async Task<IActionResult> Delete(int? id)
+        public override INavigation<TableInsurance> GetNavigation()
+            => NavigationStarter<TableInsurance>
+                .Create(NavigationOptions.CanDoneAll("Index", this.StringLocalizer))
+                .Include(x => x.Id, PropertyOptions.Key)
+                .Include(x => x.Customer)
+                    .ThenInclude(x => x.Name)
+                .Include(x => x.InsuranceCompany)
+                    .ThenInclude(x => x.Label)
+                .Include(x => x.TableAccident, PropertyOptions.Count);
+
+        public override async Task<IEnumerable<TableInsurance>> GetList()
+            => await Manager.QueryManager.Insurances.ToListAsync();
+
+        public override async Task<TableInsurance> GetModel(object id)
+            => await Manager.QueryManager.Insurances.FirstOrDefaultAsync(x => x.Id == (int)id);
+
+        public override async Task<bool> Remove(object id)
         {
-            if (id == null)
-            {
-                return NotFound();
-            }
-
-            var tableInsurance = await Manager.QueryManager.Insurances
-                .FirstOrDefaultAsync(m => m.Id == id);
-            if (tableInsurance == null)
-            {
-                return NotFound();
-            }
-
-            return View(tableInsurance);
-        }
-
-        // POST: Insurance/Delete/5
-        [HttpPost, ActionName("Delete")]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> DeleteConfirmed(int id)
-        {
-            var tableInsurance = await Manager.Context.TableInsurance.FindAsync(id);
+            var tableInsurance = await Manager.Context.TableInsurance.FindAsync((int)id);
             Manager.Context.TableInsurance.Remove(tableInsurance);
             await Manager.Context.SaveChangesAsync();
-            return RedirectToAction(nameof(Index));
+            return true;
         }
     }
 }

@@ -12,24 +12,19 @@ using Rystem.Web;
 using System.Net;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Rystem.Web.Backoffice;
+using Microsoft.Extensions.Localization;
 
 namespace Expertiser.Portal.Controllers
 {
-    public abstract class BaseController : Controller
-    {
-        private protected readonly Manager Manager;
-        public BaseController(Manager manager)
-            => this.Manager = manager;
-        private protected IActionResult NotOkMessage(ModelStateDictionary modelState)
-            => Conflict(string.Join(",", modelState.Values.SelectMany(x => x.Errors).Select(x => x.ErrorMessage)));
-        private protected IActionResult NotOkMessage(string message)
-            => Conflict(message);
-    }
     public abstract class BaseController<T> : BackOfficeController<T>
         where T : class
     {
         private protected readonly Manager Manager;
-        public BaseController(Manager manager)
-            => this.Manager = manager;
+        private protected readonly IStringLocalizer<DatabaseShared> StringLocalizer;
+        public BaseController(Manager manager, IStringLocalizer<DatabaseShared> stringLocalizer)
+        {
+            this.Manager = manager;
+            this.StringLocalizer = stringLocalizer;
+        }
     }
 }

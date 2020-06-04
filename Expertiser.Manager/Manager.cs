@@ -45,7 +45,7 @@ namespace Expertiser
             .AddSuperGroup("Manage Experty", null, null, Roles.AdminContributor)
                 .AddGroup("Expertises", "fa-cog")
                     .AddItem("Accidents", null, new NavigationUrl("Accident"))
-                    .AddItem("Experties", null, new NavigationUrl("Experty"))
+                    .AddItem("Expertises", null, new NavigationUrl("Experty"))
             .AddSuperGroup("Manage", null, null, Roles.Admin)
                 .AddGroup("Manage Members", "fa-user-check")
                     .AddItem("Members", null, new NavigationUrl("User"))

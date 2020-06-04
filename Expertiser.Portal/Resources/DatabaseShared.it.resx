@@ -195,4 +195,31 @@
   <data name="TableMessages" xml:space="preserve">
     <value>Comunicazioni</value>
   </data>
+  <data name="Address.Address" xml:space="preserve">
+    <value>Luogo accadimento</value>
+  </data>
+  <data name="Create" xml:space="preserve">
+    <value>Crea nuovo</value>
+  </data>
+  <data name="Create New" xml:space="preserve">
+    <value>Crea nuovo</value>
+  </data>
+  <data name="Delete" xml:space="preserve">
+    <value>Cancella</value>
+  </data>
+  <data name="Edit" xml:space="preserve">
+    <value>Modifica</value>
+  </data>
+  <data name="Index" xml:space="preserve">
+    <value>Lista</value>
+  </data>
+  <data name="Inspectorate.Label" xml:space="preserve">
+    <value>Ispettorato</value>
+  </data>
+  <data name="Insurance.Customer.Name" xml:space="preserve">
+    <value>Assicurato</value>
+  </data>
+  <data name="InsuranceAgency.Label" xml:space="preserve">
+    <value>Agenzia assicurativa</value>
+  </data>
 </root>

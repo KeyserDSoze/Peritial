@@ -9,13 +9,14 @@ using Expertiser.Database.Models;
 using Microsoft.AspNetCore.Authorization;
 using Expertiser.Base.Constant;
 using Rystem.Web.Backoffice;
+using Microsoft.Extensions.Localization;
 
 namespace Expertiser.Portal.Controllers
 {
     [Authorize(Roles = Roles.AdminContributor)]
     public class CustomerController : BaseController<TableCustomer>
     {
-        public CustomerController(Manager manager) : base(manager)
+        public CustomerController(Manager manager, IStringLocalizer<DatabaseShared> stringLocalizer) : base(manager, stringLocalizer)
         {
         }
         public override async Task<IEnumerable<TableCustomer>> GetList()

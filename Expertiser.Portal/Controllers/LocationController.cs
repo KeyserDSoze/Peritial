@@ -7,12 +7,13 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using Expertiser.Database.Models;
 using Rystem.Web.Backoffice;
+using Microsoft.Extensions.Localization;
 
 namespace Expertiser.Portal.Controllers
 {
     public class LocationController : BaseController<TableLocation>
     {
-        public LocationController(Manager manager) : base(manager)
+        public LocationController(Manager manager, IStringLocalizer<DatabaseShared> stringLocalizer) : base(manager, stringLocalizer)
         {
 
         }

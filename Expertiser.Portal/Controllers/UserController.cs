@@ -10,14 +10,16 @@ using Microsoft.AspNetCore.Authorization;
 using Expertiser.Base.Constant;
 using Microsoft.AspNetCore.Identity;
 using Rystem.Web.Backoffice;
+using Microsoft.Extensions.Localization;
 
 namespace Expertiser.Portal.Controllers
 {
     [Authorize(Roles = (Roles.Admin))]
     public class UserController : BaseController<AspNetUsers>
     {
-        public UserController(Manager manager) : base(manager)
+        public UserController(Manager manager, IStringLocalizer<DatabaseShared> stringLocalizer) : base(manager, stringLocalizer)
         {
+
         }
         public override INavigation<AspNetUsers> GetNavigation()
             => NavigationStarter<AspNetUsers>

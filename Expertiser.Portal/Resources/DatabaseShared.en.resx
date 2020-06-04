@@ -195,4 +195,16 @@
   <data name="TableMessages" xml:space="preserve">
     <value>Messages</value>
   </data>
+  <data name="Address.Address" xml:space="preserve">
+    <value>Accident Address</value>
+  </data>
+  <data name="Inspectorate.Label" xml:space="preserve">
+    <value>Inspectorate</value>
+  </data>
+  <data name="Insurance.Customer.Name" xml:space="preserve">
+    <value>Insurance</value>
+  </data>
+  <data name="InsuranceAgency.Label" xml:space="preserve">
+    <value>Insurance Agency</value>
+  </data>
 </root>

@@ -11,13 +11,14 @@ using System.Security.Claims;
 using Rystem.Web;
 using Expertiser.Base.Constant;
 using Rystem.Web.Backoffice;
+using Microsoft.Extensions.Localization;
 
 namespace Expertiser.Portal.Controllers
 {
     [Authorize(Roles = Roles.AdminContributor)]
     public class AccidentController : BaseController<TableAccident>
     {
-        public AccidentController(Manager manager) : base(manager)
+        public AccidentController(Manager manager, IStringLocalizer<DatabaseShared> stringLocalizer) : base(manager, stringLocalizer)
         {
         }
 
@@ -27,12 +28,12 @@ namespace Expertiser.Portal.Controllers
             return Manager.QueryManager.Accidents;
         }
 
-        public override async Task<TableAccident> GetModel(object id) 
+        public override async Task<TableAccident> GetModel(object id)
             => await Manager.Context.TableAccident.FindAsync((int)id);
 
         public override INavigation<TableAccident> GetNavigation()
             => NavigationStarter<TableAccident>
-                .Create(NavigationOptions.CanDoneAll("Index"))
+                .Create(NavigationOptions.CanDoneAll("Index", this.StringLocalizer))
                 .Include(x => x.Id, PropertyOptions.Key)
                 .Include(x => x.ExternalId)
                 .Include(x => x.AccidentDate, new PropertyOptions() { Format = "dd-MM-yyyy" })
@@ -45,7 +46,7 @@ namespace Expertiser.Portal.Controllers
                 .Include(x => x.InsuranceAgency)
                     .ThenInclude(x => x.Label)
                 .Include(x => x.Address)
-                        .ThenInclude(x => x.Address)
+                    .ThenInclude(x => x.Address)
                 .Include(x => x.TableExpertise, new PropertyOptions(OutputType.Count));
         //
         // GET: Accident/Manage
