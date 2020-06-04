@@ -14,18 +14,31 @@ namespace Expertiser.Portal.Controllers
     {
         public LocationController(Manager manager) : base(manager)
         {
-            
-        }
 
-        public override NavigationIndex<TableLocation> GetNavigationIndex()
-            => new NavigationManager<TableLocation>()
-                .Create(Manager.QueryManager.Locations, NavigationOptions.CanDoneAll("Index"))
+        }
+        public override async Task<IEnumerable<TableLocation>> GetList()
+        {
+            await Task.Delay(0);
+            return Manager.QueryManager.Locations;
+        }
+        public override async Task<TableLocation> GetModel(object id)
+            => await Manager.Context.TableLocation.FindAsync((int)id);
+        public override async Task<bool> Remove(object id)
+        {
+            var tableLocation = await Manager.Context.TableLocation.FindAsync((int)id);
+            Manager.Context.TableLocation.Remove(tableLocation);
+            await Manager.Context.SaveChangesAsync();
+            return true;
+        }
+        public override INavigation<TableLocation> GetNavigation()
+            => NavigationStarter<TableLocation>
+                .Create(NavigationOptions.CanDoneAll("Index"))
                 .Include(x => x.Address)
                 .Include(x => x.City)
                     .ThenInclude(x => x.Name)
                 .Include(x => x.PostalCode)
-                .Include(x => x.Id, PropertyOptions.Key)
-            .ToIndex();
+                .Include(x => x.Id, PropertyOptions.Key);
+
         public IActionResult Create()
             => PartialView();
         private readonly static string Empty = null;
@@ -48,16 +61,11 @@ namespace Expertiser.Portal.Controllers
         public async Task<IActionResult> Manage(int? id)
         {
             if (id == null)
-            {
-                return NotFound();
-            }
+                return View();
 
             var tableLocation = await Manager.Context.TableLocation.FindAsync(id);
             if (tableLocation == null)
-            {
                 return NotFound();
-            }
-            ViewData["CityId"] = new SelectList(Manager.Context.TableCity, "Id", "Name", tableLocation.CityId);
             return View(tableLocation);
         }
 
@@ -68,70 +76,20 @@ namespace Expertiser.Portal.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Manage(int id, [Bind("Id,Address,CityId,PostalCode")] TableLocation tableLocation)
         {
-            if (id != tableLocation.Id)
-            {
-                return NotFound();
-            }
-
             if (ModelState.IsValid)
             {
-                try
+                if (tableLocation.Id == 0)
+                {
+                    Manager.Context.Add(tableLocation);
+                    await Manager.Context.SaveChangesAsync();
+                }
+                else
                 {
                     Manager.Context.Update(tableLocation);
                     await Manager.Context.SaveChangesAsync();
                 }
-                catch (DbUpdateConcurrencyException)
-                {
-                    if (!TableLocationExists(tableLocation.Id))
-                    {
-                        return NotFound();
-                    }
-                    else
-                    {
-                        throw;
-                    }
-                }
-                return RedirectToAction(nameof(Index));
             }
-            ViewData["CityId"] = new SelectList(Manager.Context.TableCity, "Id", "Name", tableLocation.CityId);
             return View(tableLocation);
         }
-
-        // GET: Location/Delete/5
-        public async Task<IActionResult> Delete(int? id)
-        {
-            if (id == null)
-            {
-                return NotFound();
-            }
-
-            var tableLocation = await Manager.Context.TableLocation
-                .Include(t => t.City)
-                .FirstOrDefaultAsync(m => m.Id == id);
-            if (tableLocation == null)
-            {
-                return NotFound();
-            }
-
-            return View(tableLocation);
-        }
-
-        // POST: Location/Delete/5
-        [HttpPost, ActionName("Delete")]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> DeleteConfirmed(int id)
-        {
-            var tableLocation = await Manager.Context.TableLocation.FindAsync(id);
-            Manager.Context.TableLocation.Remove(tableLocation);
-            await Manager.Context.SaveChangesAsync();
-            return RedirectToAction(nameof(Index));
-        }
-
-        private bool TableLocationExists(int id)
-        {
-            return Manager.Context.TableLocation.Any(e => e.Id == id);
-        }
-
-
     }
 }

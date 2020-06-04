@@ -8,33 +8,43 @@ using Microsoft.EntityFrameworkCore;
 using Expertiser.Database.Models;
 using Microsoft.AspNetCore.Authorization;
 using Expertiser.Base.Constant;
+using Rystem.Web.Backoffice;
 
 namespace Expertiser.Portal.Controllers
 {
     [Authorize(Roles = Roles.AdminContributor)]
-    public class InsuranceCompanyController : BaseController
+    public class InsuranceCompanyController : BaseController<TableInsuranceCompany>
     {
         public InsuranceCompanyController(Manager manager) : base(manager)
         {
         }
-
-        // GET: InsuranceCompany
-        public IActionResult Index()
-            => View(Manager.QueryManager.InsuranceCompanies);
-
+        public override INavigation<TableInsuranceCompany> GetNavigation()
+            => NavigationStarter<TableInsuranceCompany>
+                .Create()
+                .Include(x => x.Id, PropertyOptions.Key)
+                .Include(x => x.Label)
+                .Include(x => x.IsActive)
+                .Include(x => x.TableInsuranceAgency, PropertyOptions.Count)
+                .Include(x => x.TableInspectorate, PropertyOptions.Count);
+        public override async Task<IEnumerable<TableInsuranceCompany>> GetList()
+            => await Manager.QueryManager.InsuranceCompanies.ToListAsync();
+        public override async Task<TableInsuranceCompany> GetModel(object id)
+        => await Manager.QueryManager.InsuranceCompanies.FirstOrDefaultAsync(x => x.Id == (int)id);
+        public override async Task<bool> Remove(object id)
+        {
+            var tableInsuranceCompany = await Manager.QueryManager.InsuranceCompanies.FirstOrDefaultAsync(x => x.Id == (int)id);
+            Manager.Context.TableInsuranceCompany.Remove(tableInsuranceCompany);
+            await Manager.Context.SaveChangesAsync();
+            return true;
+        }
         // GET: InsuranceCompany/Edit/5
         public async Task<IActionResult> Manage(int? id)
         {
             if (id == null)
-            {
                 return View();
-            }
-
             var tableInsuranceCompany = await Manager.Context.TableInsuranceCompany.FindAsync(id);
             if (tableInsuranceCompany == null)
-            {
                 return NotFound();
-            }
             return View(tableInsuranceCompany);
         }
 
@@ -61,35 +71,6 @@ namespace Expertiser.Portal.Controllers
                 return RedirectToAction(nameof(Index));
             }
             return View(tableInsuranceCompany);
-        }
-
-        // GET: InsuranceCompany/Delete/5
-        public async Task<IActionResult> Delete(int? id)
-        {
-            if (id == null)
-            {
-                return NotFound();
-            }
-
-            var tableInsuranceCompany = await Manager.QueryManager.InsuranceCompanies
-                .FirstOrDefaultAsync(m => m.Id == id);
-            if (tableInsuranceCompany == null)
-            {
-                return NotFound();
-            }
-
-            return View(tableInsuranceCompany);
-        }
-
-        // POST: InsuranceCompany/Delete/5
-        [HttpPost, ActionName("Delete")]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> DeleteConfirmed(int id)
-        {
-            var tableInsuranceCompany = await Manager.QueryManager.InsuranceCompanies.FirstOrDefaultAsync(x => x.Id == id);
-            Manager.Context.TableInsuranceCompany.Remove(tableInsuranceCompany);
-            await Manager.Context.SaveChangesAsync();
-            return RedirectToAction(nameof(Index));
         }
     }
 }

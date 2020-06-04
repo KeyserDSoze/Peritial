@@ -8,21 +8,38 @@ using Microsoft.EntityFrameworkCore;
 using Expertiser.Database.Models;
 using Microsoft.AspNetCore.Authorization;
 using Expertiser.Base.Constant;
+using Microsoft.AspNetCore.Identity;
+using Rystem.Web.Backoffice;
 
 namespace Expertiser.Portal.Controllers
 {
     [Authorize(Roles = (Roles.Admin))]
-    public class UserController : BaseController
+    public class UserController : BaseController<AspNetUsers>
     {
         public UserController(Manager manager) : base(manager)
         {
-
         }
-
-        // GET: User
-        public IActionResult Index()
-            => View(Manager.UserManager.Users);
-
+        public override INavigation<AspNetUsers> GetNavigation()
+            => NavigationStarter<AspNetUsers>
+                .Create()
+                .Include(x => x.Id, PropertyOptions.Key)
+                .Include(x => x.UserName)
+                .Include(x => x.EmailConfirmed)
+                .Include(x => x.AspNetUserRoles)
+                    .ThenInclude(x => x.Role)
+                        .ThenInclude(x => x.Name);
+        public override async Task<IEnumerable<AspNetUsers>> GetList()
+            => await Manager.QueryManager.Users.ToListAsync();
+        public override async Task<AspNetUsers> GetModel(object id)
+            => await Manager.QueryManager.Users
+                .FirstOrDefaultAsync(m => m.Id == id.ToString());
+        public override async Task<bool> Remove(object id)
+        {
+            var aspNetUser = await Manager.Context.AspNetUsers.FindAsync(id.ToString());
+            Manager.Context.AspNetUsers.Remove(aspNetUser);
+            await Manager.Context.SaveChangesAsync();
+            return true;
+        }
         // GET: User/Manage
         public async Task<IActionResult> Manage(string id)
         {
@@ -89,29 +106,6 @@ namespace Expertiser.Portal.Controllers
                 Name = Roles.Reader
             });
             return Ok();
-        }
-
-        // GET: User/Delete/5
-        public async Task<IActionResult> Delete(string id)
-        {
-            if (id == null)
-                return NotFound();
-            var aspNetUser = await Manager.Context.AspNetUsers
-                .FirstOrDefaultAsync(m => m.Id == id);
-            if (aspNetUser == null)
-                return NotFound();
-            return View(aspNetUser);
-        }
-
-        // POST: User/Delete/5
-        [HttpPost, ActionName("Delete")]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> DeleteConfirmed(string id)
-        {
-            var aspNetUser = await Manager.Context.AspNetUsers.FindAsync(id);
-            Manager.Context.AspNetUsers.Remove(aspNetUser);
-            await Manager.Context.SaveChangesAsync();
-            return RedirectToAction(nameof(Index));
         }
     }
 }

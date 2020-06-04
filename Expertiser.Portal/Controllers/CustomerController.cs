@@ -8,19 +8,39 @@ using Microsoft.EntityFrameworkCore;
 using Expertiser.Database.Models;
 using Microsoft.AspNetCore.Authorization;
 using Expertiser.Base.Constant;
+using Rystem.Web.Backoffice;
 
 namespace Expertiser.Portal.Controllers
 {
     [Authorize(Roles = Roles.AdminContributor)]
-    public class CustomerController : BaseController
+    public class CustomerController : BaseController<TableCustomer>
     {
         public CustomerController(Manager manager) : base(manager)
         {
         }
+        public override async Task<IEnumerable<TableCustomer>> GetList()
+        {
+            await Task.Delay(0);
+            return Manager.QueryManager.Customers;
+        }
 
-        // GET: Customer
-        public IActionResult Index()
-            => View(Manager.QueryManager.Customers);
+        public override async Task<TableCustomer> GetModel(object id)
+            => await Manager.Context.TableCustomer.FindAsync((int)id);
+        public override async Task<bool> Remove(object id)
+        {
+            var tableCustomer = await Manager.QueryManager.Customers.FirstOrDefaultAsync(x => x.Id == (int)id);
+            Manager.Context.TableCustomer.Remove(tableCustomer);
+            await Manager.Context.SaveChangesAsync();
+            return true;
+        }
+        public override INavigation<TableCustomer> GetNavigation()
+            => NavigationStarter<TableCustomer>.Create()
+                .Include(x => x.Id, PropertyOptions.Key)
+                .Include(x => x.Name)
+                .Include(x => x.FiscalCode)
+                .Include(x => x.TableInsurance, PropertyOptions.Count)
+                .Include(x => x.Address)
+                    .ThenInclude(x => x.Address);
 
         // GET: Customer/Create
         public IActionResult Create()
@@ -73,35 +93,6 @@ namespace Expertiser.Portal.Controllers
                 }
             }
             return View(tableCustomer);
-        }
-
-        // GET: Customer/Delete/5
-        public async Task<IActionResult> Delete(int? id)
-        {
-            if (id == null)
-            {
-                return NotFound();
-            }
-
-            var tableCustomer = await Manager.QueryManager.Customers
-                .FirstOrDefaultAsync(m => m.Id == id);
-            if (tableCustomer == null)
-            {
-                return NotFound();
-            }
-
-            return View(tableCustomer);
-        }
-
-        // POST: Customer/Delete/5
-        [HttpPost, ActionName("Delete")]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> DeleteConfirmed(int id)
-        {
-            var tableCustomer = await Manager.QueryManager.Customers.FirstOrDefaultAsync(x => x.Id == id);
-            Manager.Context.TableCustomer.Remove(tableCustomer);
-            await Manager.Context.SaveChangesAsync();
-            return RedirectToAction(nameof(Index));
         }
     }
 }

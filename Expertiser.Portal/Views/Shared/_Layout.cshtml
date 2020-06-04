@@ -5,19 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>@ViewData["Title"] - Experty</title>
     <partial name="_Metatag" />
+    <rystem bootstrap-cdn="true" jquery-ui-cdn="Light" rystem-default-ui="DefaultUI.Default"></rystem>
+    <link href="https://fonts.googleapis.com/css?family=Nunito:200,200i,300,300i,400,400i,600,600i,700,700i,800,800i,900,900i" rel="stylesheet" />
+    <link rel="stylesheet" href="~/css/site.css" />
 </head>
 <body>
-    <div>
-        <rystem bootstrap-cdn="true" jquery-ui-cdn="Light" rystem-default-ui="DefaultUI.Default" ></rystem>
-        <link href="https://fonts.googleapis.com/css?family=Nunito:200,200i,300,300i,400,400i,600,600i,700,700i,800,800i,900,900i" rel="stylesheet" />
-        <link rel="stylesheet" href="~/css/site.css" />
-
-        <script src="~/lib/jquery-easing/jquery.easing.min.js"></script>
-        <script src="~/lib/jquery-validation/dist/jquery.validate.min.js"></script>
-        <script src="~/lib/jquery-validation-unobtrusive/jquery.validate.unobtrusive.min.js"></script>
-    </div>
     <div id="wrapper">
-        <partial name="_Navigation" />
+        <rystem-navigation rystem-data="Manager.NavigationBuilder" rystem-user="User.IsInRole"></rystem-navigation>
         <div id="content-wrapper" class="d-flex flex-column">
             <partial name="_UserNavigation" />
             <main role="main" class="container-fluid">
@@ -30,7 +24,11 @@
             &copy; 2020 - Experty - <a asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
         </div>
     </footer>
-    <script src="~/js/site.js"></script>
-    @RenderSection("Scripts", required: false)
+    <div>
+        <script src="~/lib/jquery-easing/jquery.easing.min.js"></script>
+        <script src="~/lib/jquery-validation/dist/jquery.validate.min.js"></script>
+        <script src="~/lib/jquery-validation-unobtrusive/jquery.validate.unobtrusive.min.js"></script>
+        <script src="~/js/site.js"></script>
+    </div>
 </body>
 </html>

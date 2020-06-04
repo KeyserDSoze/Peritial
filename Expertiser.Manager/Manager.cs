@@ -1,11 +1,15 @@
-﻿using Expertiser.Database.Models;
+﻿using Expertiser.Base.Constant;
+using Expertiser.Database.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Localization;
 using Rystem.Web;
+using Rystem.Web.Backoffice;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Claims;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 
@@ -34,6 +38,30 @@ namespace Expertiser
         public ModalManager ModalManager => modalManager ??= new ModalManager(this);
         private DropdownManager dropdownManager;
         public DropdownManager DropdownManager => dropdownManager ??= new DropdownManager(this);
+
+        private static NavigationBuilder navigationBar = new NavigationBar("Experty", "fa-institution")
+            .AddSuperGroup()
+                .AddGroup("Home", "fa-business-time", new NavigationUrl())
+            .AddSuperGroup("Manage Experty", null, null, Roles.AdminContributor)
+                .AddGroup("Expertises", "fa-cog")
+                    .AddItem("Accidents", null, new NavigationUrl("Accident"))
+                    .AddItem("Experties", null, new NavigationUrl("Experty"))
+            .AddSuperGroup("Manage", null, null, Roles.Admin)
+                .AddGroup("Manage Members", "fa-user-check")
+                    .AddItem("Members", null, new NavigationUrl("User"))
+                .AddGroup("Companies", "fa-memory", null)
+                    .AddItem("Inspectorates", null, new NavigationUrl("Inspectorate"))
+                    .AddItem("Insurance Agencies", null, new NavigationUrl("InsuranceAgency"))
+                    .AddItem("Insurance Companies", null, new NavigationUrl("InsuranceCompany"))
+            .AddSuperGroup("Customer and Utility", null, null, Roles.AdminContributor)
+                .AddGroup("Customers", "fa-user")
+                    .AddItem("Insurances", null, new NavigationUrl("Insurance"))
+                    .AddItem("Customers", null, new NavigationUrl("Customer"))
+                .AddGroup("Companies", "fa-tools")
+                    .AddItem("Countries", null, new NavigationUrl("Country"))
+                    .AddItem("Locations", null, new NavigationUrl("Location"))
+            .Build();
+        public NavigationBuilder NavigationBuilder => navigationBar;
     }
 
     public class QueryManager
@@ -59,6 +87,9 @@ namespace Expertiser
         public IQueryable<TableCustomer> Customers => Manager.Context.TableCustomer
                     .Include(x => x.Address)
                         .Include(x => x.TableInsurance);
+        public IQueryable<AspNetUsers> Users => Manager.Context.AspNetUsers
+            .Include(x => x.AspNetUserRoles)
+                .ThenInclude(x => x.Role);
     }
     public class DropdownManager
     {
@@ -87,14 +118,15 @@ namespace Expertiser
                     Group = x.InsuranceCompany != null ? x.InsuranceCompany.Label : string.Empty
                 });
         }
-        public IEnumerable<DropdownItem> GetInsuranceCompanies()
+        public IEnumerable<DropdownItem> GetInsuranceCompanies(int insuranceCompanyId = 0)
         {
             return this.Manager.QueryManager.InsuranceCompanies
                 .Select(x => new DropdownItem()
                 {
                     Label = x.Label,
                     Value = x.Id.ToString(),
-                    Group = x.AddressId != null ? x.Address.City.Name : string.Empty
+                    Group = x.AddressId != null ? x.Address.City.Name : string.Empty,
+                    Selected = x.Id == insuranceCompanyId
                 });
         }
         public IEnumerable<DropdownItem> GetLocations(int locationId = 0)
@@ -174,6 +206,7 @@ namespace Expertiser
             => this.Manager = manager;
         public RequestContext CreateNewLocation => new RequestContext() { Action = "Create", Controller = "Location" };
         public RequestContext CreateNewCustomer => new RequestContext() { Action = "Create", Controller = "Customer" };
+        public RequestContext CreateNewInsuranceCompany => new RequestContext() { Action = "Create", Controller = "InsuranceCompany" };
         public RequestContext UpdatePostalCodes => new RequestContext() { Action = "UpdatePostalCodes", Controller = "Location", Selector = "#updatePostalCodes" };
         public RequestContext SetLocation => new RequestContext() { Action = "Create", Controller = "Location", RequestType = RequestType.Post, Selector = ".location-address" };
         public RequestContext SetCustomer => new RequestContext() { Action = "Create", Controller = "Customer", RequestType = RequestType.Post, Selector = "#customers" };

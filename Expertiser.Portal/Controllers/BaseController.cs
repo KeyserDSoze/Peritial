@@ -25,7 +25,7 @@ namespace Expertiser.Portal.Controllers
         private protected IActionResult NotOkMessage(string message)
             => Conflict(message);
     }
-    public abstract class BaseController<T> : RystemController<T>
+    public abstract class BaseController<T> : BackOfficeController<T>
         where T : class
     {
         private protected readonly Manager Manager;

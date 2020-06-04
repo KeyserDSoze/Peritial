@@ -20,10 +20,19 @@ namespace Expertiser.Portal.Controllers
         public AccidentController(Manager manager) : base(manager)
         {
         }
-        public override NavigationIndex<TableAccident> GetNavigationIndex()
+
+        public override async Task<IEnumerable<TableAccident>> GetList()
         {
-            return new NavigationManager<TableAccident>()
-                .Create(Manager.QueryManager.Accidents, NavigationOptions.CanDoneAll("Index"))
+            await Task.Delay(0);
+            return Manager.QueryManager.Accidents;
+        }
+
+        public override async Task<TableAccident> GetModel(object id) 
+            => await Manager.Context.TableAccident.FindAsync((int)id);
+
+        public override INavigation<TableAccident> GetNavigation()
+            => NavigationStarter<TableAccident>
+                .Create(NavigationOptions.CanDoneAll("Index"))
                 .Include(x => x.Id, PropertyOptions.Key)
                 .Include(x => x.ExternalId)
                 .Include(x => x.AccidentDate, new PropertyOptions() { Format = "dd-MM-yyyy" })
@@ -37,9 +46,7 @@ namespace Expertiser.Portal.Controllers
                     .ThenInclude(x => x.Label)
                 .Include(x => x.Address)
                         .ThenInclude(x => x.Address)
-                .Include(x => x.TableExpertise, new PropertyOptions(OutputType.Count))
-                .ToIndex();
-        }
+                .Include(x => x.TableExpertise, new PropertyOptions(OutputType.Count));
         //
         // GET: Accident/Manage
         public async Task<IActionResult> Manage(int? id)
@@ -86,33 +93,13 @@ namespace Expertiser.Portal.Controllers
             }
             return View(tableAccident);
         }
-        // GET: Accident/Delete/5
-        public async Task<IActionResult> Delete(int? id)
+
+        public override async Task<bool> Remove(object id)
         {
-            if (id == null)
-            {
-                return NotFound();
-            }
-
-            var tableAccident = await Manager.QueryManager.Accidents
-                .FirstOrDefaultAsync(m => m.Id == id);
-            if (tableAccident == null)
-            {
-                return NotFound();
-            }
-
-            return View(tableAccident);
-        }
-
-        // POST: Accident/Delete/5
-        [HttpPost, ActionName("Delete")]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> DeleteConfirmed(int id)
-        {
-            var tableAccident = await Manager.Context.TableAccident.FindAsync(id);
+            var tableAccident = await Manager.Context.TableAccident.FindAsync((int)id);
             Manager.Context.TableAccident.Remove(tableAccident);
             await Manager.Context.SaveChangesAsync();
-            return RedirectToAction(nameof(Index));
+            return true;
         }
     }
 }
