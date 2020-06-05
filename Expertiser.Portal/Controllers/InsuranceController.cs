@@ -78,12 +78,12 @@ namespace Expertiser.Portal.Controllers
         public override async Task<IEnumerable<TableInsurance>> GetList()
             => await Manager.QueryManager.Insurances.ToListAsync();
 
-        public override async Task<TableInsurance> GetModel(object id)
-            => await Manager.QueryManager.Insurances.FirstOrDefaultAsync(x => x.Id == (int)id);
+        public override async Task<TableInsurance> GetModel(string id)
+            => await Manager.QueryManager.Insurances.FirstOrDefaultAsync(x => x.Id == int.Parse(id));
 
-        public override async Task<bool> Remove(object id)
+        public override async Task<bool> Remove(string id)
         {
-            var tableInsurance = await Manager.Context.TableInsurance.FindAsync((int)id);
+            var tableInsurance = await Manager.Context.TableInsurance.FindAsync(int.Parse(id));
             Manager.Context.TableInsurance.Remove(tableInsurance);
             await Manager.Context.SaveChangesAsync();
             return true;

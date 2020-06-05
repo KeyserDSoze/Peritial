@@ -7,95 +7,59 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using Expertiser.Database.Models;
 using Microsoft.AspNetCore.Authorization;
+using Rystem.Web.Backoffice;
+using Microsoft.Extensions.Localization;
+using Expertiser.Base.Constant;
 
 namespace Expertiser.Portal.Controllers
 {
-    [Authorize]
-    public class ExpertyController : Controller
+    [Authorize(Roles = Roles.AdminContributor)]
+    public class ExpertyController : BaseController<TableExpertise>
     {
-        private readonly ContextExpertiser _context;
-
-        public ExpertyController(ContextExpertiser context)
+        public ExpertyController(Manager manager, IStringLocalizer<DatabaseShared> stringLocalizer) : base(manager, stringLocalizer)
         {
-            _context = context;
         }
 
-        // GET: Experty
-        public async Task<IActionResult> Index()
+        public override INavigation<TableExpertise> GetNavigation()
         {
-            var contextExpertiser = _context.TableExpertise.Include(t => t.Accident).Include(t => t.Branch).Include(t => t.Contributor).Include(t => t.Member);
-            return View(await contextExpertiser.ToListAsync());
+            return NavigationStarter<TableExpertise>
+                .Create(NavigationOptions.CanDone(User.IsInRole(Roles.AdminContributor), true, User.IsInRole(Roles.Admin),
+                            "Index", this.StringLocalizer))
+                .Include(x => x.Id, PropertyOptions.Key)
+                .Include(x => x.Branch)
+                    .ThenInclude(x => x.BranchType)
+                        .ThenInclude(x => x.Label)
+                .Include(x => x.Contributor)
+                    .ThenInclude(x => x.UserName)
+                .Include(x => x.Status)
+                .Include(x => x.Member)
+                    .ThenInclude(x => x.UserName)
+                .Include(x => x.TableBill)
+                    .ThenInclude(x => x.Amount)
+                .Include(x => x.TableMessages, PropertyOptions.Count)
+                .Include(x => x.Liquidated)
+                .Include(x => x.AssignmentDate)
+                .Include(x => x.InspectionDate);
         }
 
-        // GET: Experty/Details/5
-        public async Task<IActionResult> Details(int? id)
+        public override async Task<IEnumerable<TableExpertise>> GetList()
+            => await this.Manager.QueryManager.Expertises.OrderByDescending(x => x.Id).ToListAsync();
+
+        public override async Task<TableExpertise> GetModel(string id)
+            => await Manager.QueryManager.Expertises.FirstOrDefaultAsync(x => x.Id == int.Parse(id));
+
+        public override Task<bool> Remove(string id)
         {
-            if (id == null)
-            {
-                return NotFound();
-            }
-
-            var tableExpertise = await _context.TableExpertise
-                .Include(t => t.Accident)
-                .Include(t => t.Branch)
-                .Include(t => t.Contributor)
-                .Include(t => t.Member)
-                .FirstOrDefaultAsync(m => m.Id == id);
-            if (tableExpertise == null)
-            {
-                return NotFound();
-            }
-
-            return View(tableExpertise);
+            throw new NotImplementedException();
         }
-
-        // GET: Experty/Create
-        public IActionResult Create()
-        {
-            ViewData["AccidentId"] = new SelectList(_context.TableAccident, "Id", "ExternalId");
-            ViewData["BranchId"] = new SelectList(_context.TableBranch, "Id", "Label");
-            ViewData["ContributorId"] = new SelectList(_context.AspNetUsers, "Id", "UserName");
-            ViewData["MemberId"] = new SelectList(_context.AspNetUsers, "Id", "UserName");
-            return View();
-        }
-
-        // POST: Experty/Create
-        // To protect from overposting attacks, enable the specific properties you want to bind to, for 
-        // more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([Bind("Id,MemberId,ContributorId,Status,BranchId,ExternalId,AssignmentDate,InspectionDate,Liquidated,AccidentId")] TableExpertise tableExpertise)
-        {
-            if (ModelState.IsValid)
-            {
-                _context.Add(tableExpertise);
-                await _context.SaveChangesAsync();
-                return RedirectToAction(nameof(Index));
-            }
-            ViewData["AccidentId"] = new SelectList(_context.TableAccident, "Id", "ExternalId", tableExpertise.AccidentId);
-            ViewData["BranchId"] = new SelectList(_context.TableBranch, "Id", "Label", tableExpertise.BranchId);
-            ViewData["ContributorId"] = new SelectList(_context.AspNetUsers, "Id", "UserName", tableExpertise.ContributorId);
-            ViewData["MemberId"] = new SelectList(_context.AspNetUsers, "Id", "UserName", tableExpertise.MemberId);
-            return View(tableExpertise);
-        }
-
         // GET: Experty/Edit/5
-        public async Task<IActionResult> Edit(int? id)
+        public async Task<IActionResult> Manage(int? id)
         {
             if (id == null)
-            {
-                return NotFound();
-            }
-
-            var tableExpertise = await _context.TableExpertise.FindAsync(id);
+                return View();
+            var tableExpertise = await Manager.QueryManager.Expertises.FirstOrDefaultAsync(x => x.Id == id);
             if (tableExpertise == null)
-            {
                 return NotFound();
-            }
-            ViewData["AccidentId"] = new SelectList(_context.TableAccident, "Id", "ExternalId", tableExpertise.AccidentId);
-            ViewData["BranchId"] = new SelectList(_context.TableBranch, "Id", "Label", tableExpertise.BranchId);
-            ViewData["ContributorId"] = new SelectList(_context.AspNetUsers, "Id", "UserName", tableExpertise.ContributorId);
-            ViewData["MemberId"] = new SelectList(_context.AspNetUsers, "Id", "UserName", tableExpertise.MemberId);
             return View(tableExpertise);
         }
 
@@ -104,76 +68,23 @@ namespace Expertiser.Portal.Controllers
         // more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("Id,MemberId,ContributorId,Status,BranchId,ExternalId,AssignmentDate,InspectionDate,Liquidated,AccidentId")] TableExpertise tableExpertise)
+        public async Task<IActionResult> Manage(int id, [Bind("Id,MemberId,ContributorId,Status,BranchId,ExternalId,AssignmentDate,InspectionDate,Liquidated,AccidentId")] TableExpertise tableExpertise)
         {
-            if (id != tableExpertise.Id)
-            {
-                return NotFound();
-            }
-
             if (ModelState.IsValid)
             {
-                try
+                if (tableExpertise.Id == 0)
                 {
-                    _context.Update(tableExpertise);
-                    await _context.SaveChangesAsync();
+                    Manager.Context.Add(tableExpertise);
+                    await Manager.Context.SaveChangesAsync();
                 }
-                catch (DbUpdateConcurrencyException)
+                else
                 {
-                    if (!TableExpertiseExists(tableExpertise.Id))
-                    {
-                        return NotFound();
-                    }
-                    else
-                    {
-                        throw;
-                    }
+                    Manager.Context.Update(tableExpertise);
+                    await Manager.Context.SaveChangesAsync();
                 }
                 return RedirectToAction(nameof(Index));
             }
-            ViewData["AccidentId"] = new SelectList(_context.TableAccident, "Id", "ExternalId", tableExpertise.AccidentId);
-            ViewData["BranchId"] = new SelectList(_context.TableBranch, "Id", "Label", tableExpertise.BranchId);
-            ViewData["ContributorId"] = new SelectList(_context.AspNetUsers, "Id", "UserName", tableExpertise.ContributorId);
-            ViewData["MemberId"] = new SelectList(_context.AspNetUsers, "Id", "UserName", tableExpertise.MemberId);
             return View(tableExpertise);
-        }
-
-        // GET: Experty/Delete/5
-        public async Task<IActionResult> Delete(int? id)
-        {
-            if (id == null)
-            {
-                return NotFound();
-            }
-
-            var tableExpertise = await _context.TableExpertise
-                .Include(t => t.Accident)
-                .Include(t => t.Branch)
-                .Include(t => t.Contributor)
-                .Include(t => t.Member)
-                .FirstOrDefaultAsync(m => m.Id == id);
-            if (tableExpertise == null)
-            {
-                return NotFound();
-            }
-
-            return View(tableExpertise);
-        }
-
-        // POST: Experty/Delete/5
-        [HttpPost, ActionName("Delete")]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> DeleteConfirmed(int id)
-        {
-            var tableExpertise = await _context.TableExpertise.FindAsync(id);
-            _context.TableExpertise.Remove(tableExpertise);
-            await _context.SaveChangesAsync();
-            return RedirectToAction(nameof(Index));
-        }
-
-        private bool TableExpertiseExists(int id)
-        {
-            return _context.TableExpertise.Any(e => e.Id == id);
         }
     }
 }

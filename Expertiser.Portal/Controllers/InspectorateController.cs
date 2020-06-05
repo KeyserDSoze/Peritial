@@ -24,18 +24,18 @@ namespace Expertiser.Portal.Controllers
             await Task.Delay(0);
             return Manager.QueryManager.Inspectorates;
         }
-        public override async Task<TableInspectorate> GetModel(object id)
-            => await Manager.Context.TableInspectorate.FindAsync((int)id);
-        public override async Task<bool> Remove(object id)
+        public override async Task<TableInspectorate> GetModel(string id)
+            => await Manager.Context.TableInspectorate.FindAsync(int.Parse(id));
+        public override async Task<bool> Remove(string id)
         {
-            var tableInspectorate = await Manager.Context.TableInspectorate.FindAsync((int)id);
+            var tableInspectorate = await Manager.Context.TableInspectorate.FindAsync(int.Parse(id));
             Manager.Context.TableInspectorate.Remove(tableInspectorate);
             await Manager.Context.SaveChangesAsync();
             return true;
         }
         public override INavigation<TableInspectorate> GetNavigation()
             => NavigationStarter<TableInspectorate>
-                .Create(NavigationOptions.CanDoneAll("Index"))
+                .Create(NavigationOptions.CanDoneAll("Index", this.StringLocalizer))
                .Include(x => x.Label)
                .Include(x => x.InsuranceCompany)
                     .ThenInclude(x => x.Label)

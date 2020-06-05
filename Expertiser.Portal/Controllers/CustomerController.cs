@@ -25,17 +25,17 @@ namespace Expertiser.Portal.Controllers
             return Manager.QueryManager.Customers;
         }
 
-        public override async Task<TableCustomer> GetModel(object id)
-            => await Manager.Context.TableCustomer.FindAsync((int)id);
-        public override async Task<bool> Remove(object id)
+        public override async Task<TableCustomer> GetModel(string id)
+            => await Manager.Context.TableCustomer.FindAsync(int.Parse(id));
+        public override async Task<bool> Remove(string id)
         {
-            var tableCustomer = await Manager.QueryManager.Customers.FirstOrDefaultAsync(x => x.Id == (int)id);
+            var tableCustomer = await Manager.QueryManager.Customers.FirstOrDefaultAsync(x => x.Id == int.Parse(id));
             Manager.Context.TableCustomer.Remove(tableCustomer);
             await Manager.Context.SaveChangesAsync();
             return true;
         }
         public override INavigation<TableCustomer> GetNavigation()
-            => NavigationStarter<TableCustomer>.Create()
+            => NavigationStarter<TableCustomer>.Create(NavigationOptions.CanDoneAll("Index", this.StringLocalizer))
                 .Include(x => x.Id, PropertyOptions.Key)
                 .Include(x => x.Name)
                 .Include(x => x.FiscalCode)

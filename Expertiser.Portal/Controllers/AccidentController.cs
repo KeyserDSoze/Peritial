@@ -23,13 +23,10 @@ namespace Expertiser.Portal.Controllers
         }
 
         public override async Task<IEnumerable<TableAccident>> GetList()
-        {
-            await Task.Delay(0);
-            return Manager.QueryManager.Accidents;
-        }
+            => await Manager.QueryManager.Accidents.OrderByDescending(x => x.AccidentDate).ToListAsync();
 
-        public override async Task<TableAccident> GetModel(object id)
-            => await Manager.Context.TableAccident.FindAsync((int)id);
+        public override async Task<TableAccident> GetModel(string id)
+            => await Manager.Context.TableAccident.FindAsync(int.Parse(id));
 
         public override INavigation<TableAccident> GetNavigation()
             => NavigationStarter<TableAccident>
@@ -95,9 +92,9 @@ namespace Expertiser.Portal.Controllers
             return View(tableAccident);
         }
 
-        public override async Task<bool> Remove(object id)
+        public override async Task<bool> Remove(string id)
         {
-            var tableAccident = await Manager.Context.TableAccident.FindAsync((int)id);
+            var tableAccident = await Manager.Context.TableAccident.FindAsync(int.Parse(id));
             Manager.Context.TableAccident.Remove(tableAccident);
             await Manager.Context.SaveChangesAsync();
             return true;

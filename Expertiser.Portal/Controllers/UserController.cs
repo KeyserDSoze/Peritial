@@ -23,7 +23,7 @@ namespace Expertiser.Portal.Controllers
         }
         public override INavigation<AspNetUsers> GetNavigation()
             => NavigationStarter<AspNetUsers>
-                .Create()
+                .Create(NavigationOptions.CanDoneAll("Index", this.StringLocalizer))
                 .Include(x => x.Id, PropertyOptions.Key)
                 .Include(x => x.UserName)
                 .Include(x => x.EmailConfirmed)
@@ -32,12 +32,12 @@ namespace Expertiser.Portal.Controllers
                         .ThenInclude(x => x.Name);
         public override async Task<IEnumerable<AspNetUsers>> GetList()
             => await Manager.QueryManager.Users.ToListAsync();
-        public override async Task<AspNetUsers> GetModel(object id)
+        public override async Task<AspNetUsers> GetModel(string id)
             => await Manager.QueryManager.Users
-                .FirstOrDefaultAsync(m => m.Id == id.ToString());
-        public override async Task<bool> Remove(object id)
+                .FirstOrDefaultAsync(m => m.Id == id);
+        public override async Task<bool> Remove(string id)
         {
-            var aspNetUser = await Manager.Context.AspNetUsers.FindAsync(id.ToString());
+            var aspNetUser = await Manager.Context.AspNetUsers.FindAsync(id);
             Manager.Context.AspNetUsers.Remove(aspNetUser);
             await Manager.Context.SaveChangesAsync();
             return true;

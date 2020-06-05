@@ -22,18 +22,18 @@ namespace Expertiser.Portal.Controllers
             await Task.Delay(0);
             return Manager.QueryManager.Locations;
         }
-        public override async Task<TableLocation> GetModel(object id)
-            => await Manager.Context.TableLocation.FindAsync((int)id);
-        public override async Task<bool> Remove(object id)
+        public override async Task<TableLocation> GetModel(string id)
+            => await Manager.Context.TableLocation.FindAsync(int.Parse(id));
+        public override async Task<bool> Remove(string id)
         {
-            var tableLocation = await Manager.Context.TableLocation.FindAsync((int)id);
+            var tableLocation = await Manager.Context.TableLocation.FindAsync(int.Parse(id));
             Manager.Context.TableLocation.Remove(tableLocation);
             await Manager.Context.SaveChangesAsync();
             return true;
         }
         public override INavigation<TableLocation> GetNavigation()
             => NavigationStarter<TableLocation>
-                .Create(NavigationOptions.CanDoneAll("Index"))
+                .Create(NavigationOptions.CanDoneAll("Index", this.StringLocalizer))
                 .Include(x => x.Address)
                 .Include(x => x.City)
                     .ThenInclude(x => x.Name)

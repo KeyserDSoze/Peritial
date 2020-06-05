@@ -57,7 +57,7 @@ namespace Expertiser.Portal.Controllers
 
         public override INavigation<TableInsuranceAgency> GetNavigation()
             => NavigationStarter<TableInsuranceAgency>
-                .Create()
+                .Create(NavigationOptions.CanDoneAll("Index", this.StringLocalizer))
                 .Include(x => x.Id, PropertyOptions.Key)
                 .Include(x => x.Label)
                 .Include(x => x.IsActive)
@@ -66,12 +66,12 @@ namespace Expertiser.Portal.Controllers
         public override async Task<IEnumerable<TableInsuranceAgency>> GetList()
             => await Manager.QueryManager.InsuranceAgencies.ToListAsync();
 
-        public override async Task<TableInsuranceAgency> GetModel(object id)
-            => await Manager.QueryManager.InsuranceAgencies.FirstOrDefaultAsync(x => x.Id == (int)id);
+        public override async Task<TableInsuranceAgency> GetModel(string id)
+            => await Manager.QueryManager.InsuranceAgencies.FirstOrDefaultAsync(x => x.Id == int.Parse(id));
 
-        public override async Task<bool> Remove(object id)
+        public override async Task<bool> Remove(string id)
         {
-            var tableInsuranceAgency = await Manager.Context.TableInsuranceAgency.FindAsync((int)id);
+            var tableInsuranceAgency = await Manager.Context.TableInsuranceAgency.FindAsync(int.Parse(id));
             Manager.Context.TableInsuranceAgency.Remove(tableInsuranceAgency);
             await Manager.Context.SaveChangesAsync();
             return true;
