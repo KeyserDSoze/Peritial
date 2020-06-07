@@ -1,5 +1,6 @@
 ﻿using Expertiser.Base.Constant;
 using Expertiser.Database.Models;
+using Expertiser.Interfaces;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -162,6 +163,55 @@ namespace Expertiser
                     Value = x.Id.ToString(),
                     Selected = x.Id == selectedCity
                 });
+        }
+        public IEnumerable<DropdownItem> GetMembers(string id)
+        {
+            return this.Manager.Context.AspNetUsers
+                .Select(x => new DropdownItem()
+                {
+                    Label = x.UserName,
+                    Value = x.Id,
+                    Selected = x.Id == id
+                });
+        }
+        public IEnumerable<DropdownItem> GetContributors(string id)
+        {
+            return this.Manager.Context.AspNetUsers
+                .Select(x => new DropdownItem()
+                {
+                    Label = x.UserName,
+                    Value = x.Id,
+                    Selected = x.Id == id
+                });
+        }
+        public IEnumerable<DropdownItem> GetBranches(int branchId)
+        {
+            return this.Manager.Context.TableBranch
+                .Include(x => x.BranchType)
+                .Select(x => new DropdownItem()
+                {
+                    Label = $"{x.Label} - {x.BranchType.Label}",
+                    Value = x.Id.ToString(),
+                    Selected = x.Id == branchId
+                });
+        }
+        public IEnumerable<DropdownItem> GetStatus(int statusId, IStringLocalizer stringLocalizer)
+        {
+            return Status()
+                .Select(x => new DropdownItem()
+                {
+                    Label = stringLocalizer[$"{x}"],
+                    Value = ((int)x).ToString(),
+                    Selected = (int)x == statusId
+                });
+            IEnumerable<StatusType> Status()
+            {
+                yield return StatusType.Presented;
+                yield return StatusType.Registered;
+                yield return StatusType.Duplicated;
+                yield return StatusType.Cancelled;
+                yield return StatusType.Billed;
+            }
         }
         public IEnumerable<DropdownItem> GetPostalCodes(int cityId, string selectedPostalCode = null)
         {

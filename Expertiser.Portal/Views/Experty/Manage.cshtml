@@ -15,38 +15,40 @@
             <input type="hidden" asp-for="Id" />
             <div class="form-group">
                 <label asp-for="MemberId" class="control-label"></label>
-                <select asp-for="MemberId" class="form-control" asp-items="ViewBag.MemberId"></select>
+                <rystem-dropdown name="MemberId" rystem-data="Manager.DropdownManager.GetMembers(Model?.MemberId)"></rystem-dropdown>
                 <span asp-validation-for="MemberId" class="text-danger"></span>
             </div>
             <div class="form-group">
                 <label asp-for="ContributorId" class="control-label"></label>
-                <select asp-for="ContributorId" class="form-control" asp-items="ViewBag.ContributorId"></select>
+                <rystem-dropdown name="ContributorId" rystem-data="Manager.DropdownManager.GetContributors(Model?.ContributorId)"></rystem-dropdown>
                 <span asp-validation-for="ContributorId" class="text-danger"></span>
             </div>
             <div class="form-group">
                 <label asp-for="Status" class="control-label"></label>
-                <input asp-for="Status" class="form-control" />
+                <rystem-dropdown name="Status" rystem-data="Manager.DropdownManager.GetStatus(Model?.Status ?? 0, SharedLocalizer)"></rystem-dropdown>
                 <span asp-validation-for="Status" class="text-danger"></span>
             </div>
             <div class="form-group">
                 <label asp-for="BranchId" class="control-label"></label>
-                <select asp-for="BranchId" class="form-control" asp-items="ViewBag.BranchId"></select>
+                <rystem-dropdown name="BranchId" rystem-data="Manager.DropdownManager.GetBranches(Model?.BranchId ?? 0)"></rystem-dropdown>
                 <span asp-validation-for="BranchId" class="text-danger"></span>
             </div>
-            @*<div class="form-group">
+            <div class="form-group">
                 <label asp-for="ExternalId" class="control-label"></label>
                 <input asp-for="ExternalId" class="form-control" />
                 <span asp-validation-for="ExternalId" class="text-danger"></span>
-            </div>*@
-            <div class="form-group">
-                <label asp-for="AssignmentDate" class="control-label"></label>
-                <input asp-for="AssignmentDate" class="form-control" />
-                <span asp-validation-for="AssignmentDate" class="text-danger"></span>
             </div>
-            <div class="form-group">
-                <label asp-for="InspectionDate" class="control-label"></label>
-                <input asp-for="InspectionDate" class="form-control" />
-                <span asp-validation-for="InspectionDate" class="text-danger"></span>
+            <div class="form-row">
+                <div class="form-group col-md-6">
+                    <label asp-for="AssignmentDate" class="control-label"></label>
+                    <rystem-date name="AssignmentDate" class="form-control"></rystem-date>
+                    <span asp-validation-for="AssignmentDate" class="text-danger"></span>
+                </div>
+                <div class="form-group col-md-6">
+                    <label asp-for="InspectionDate" class="control-label"></label>
+                    <rystem-date name="InspectionDate" class="form-control"></rystem-date>
+                    <span asp-validation-for="InspectionDate" class="text-danger"></span>
+                </div>
             </div>
             <div class="form-group">
                 <label asp-for="Liquidated" class="control-label"></label>
@@ -54,13 +56,13 @@
                 <span asp-validation-for="Liquidated" class="text-danger"></span>
             </div>
             <div class="form-group">
-                <input type="submit" value="Save" class="btn btn-primary" />
+                <input type="submit" value="@SharedLocalizer["Save"]" class="btn btn-primary" />
             </div>
         </form>
     </div>
 </div>
 
 <div>
-    <a asp-action="Index">Back to List</a>
+    <a asp-action="Index">@SharedLocalizer["Back to List"]</a>
 </div>
 
