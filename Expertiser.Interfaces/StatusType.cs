@@ -3,10 +3,10 @@
     public enum StatusType
     {
         Registered,
+        Presented,
         Billed,
         Duplicated,
         Cancelled,
-        Presented,
         //todo: Relazione allegata che roba è?
     }
 }

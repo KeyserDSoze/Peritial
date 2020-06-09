@@ -33,9 +33,13 @@ namespace Expertiser.Portal.Controllers
             await Manager.Context.SaveChangesAsync();
             return true;
         }
-        public override INavigation<TableInspectorate> GetNavigation()
-            => NavigationStarter<TableInspectorate>
-                .Create(NavigationOptions.CanDoneAll("Index", this.StringLocalizer))
+        public override INavigation<TableInspectorate> GetIndexNavigation()
+           => GetNavigation("Index");
+        public override INavigation<TableInspectorate> GetDeleteNavigation()
+            => GetNavigation("Delete");
+        public INavigation<TableInspectorate> GetNavigation(string title)
+            => INavigation<TableInspectorate>
+                .Create(NavigationOptions.CanDoneAll(title, this.StringLocalizer))
                .Include(x => x.Label)
                .Include(x => x.InsuranceCompany)
                     .ThenInclude(x => x.Label)

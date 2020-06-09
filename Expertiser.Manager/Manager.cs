@@ -39,6 +39,8 @@ namespace Expertiser
         public ModalManager ModalManager => modalManager ??= new ModalManager(this);
         private DropdownManager dropdownManager;
         public DropdownManager DropdownManager => dropdownManager ??= new DropdownManager(this);
+        private static readonly NavigationManager navigationManager = new NavigationManager();
+        public NavigationManager NavigationManager => navigationManager;
 
         private static NavigationBuilder navigationBar = new NavigationBar("Experty", "fa-institution")
             .AddSuperGroup()
@@ -64,7 +66,26 @@ namespace Expertiser
             .Build();
         public NavigationBuilder NavigationBuilder => navigationBar;
     }
-
+    public class NavigationManager
+    {
+        public INavigation<TableAccident> GetAccidentNavigation(string title, IStringLocalizer localizer)
+           => INavigation<TableAccident>
+               .Create(NavigationOptions.CanDoneAll(title, localizer))
+               .Include(x => x.Id, PropertyOptions.Key)
+               .Include(x => x.ExternalId)
+               .Include(x => x.AccidentDate, new PropertyOptions() { Format = "dd-MM-yyyy" })
+               .Include(x => x.DenunciationDate, new PropertyOptions() { Format = "dd-MM-yyyy" })
+               .Include(x => x.Inspectorate)
+                   .ThenInclude(x => x.Label)
+               .Include(x => x.Insurance)
+                   .ThenInclude(x => x.Customer)
+                       .ThenInclude(x => x.Name)
+               .Include(x => x.InsuranceAgency)
+                   .ThenInclude(x => x.Label)
+               .Include(x => x.Address)
+                   .ThenInclude(x => x.Address)
+               .Include(x => x.TableExpertise, new PropertyOptions(OutputType.Count));
+    }
     public class QueryManager
     {
         private readonly Manager Manager;
@@ -75,7 +96,9 @@ namespace Expertiser
             .Include(t => t.Insurance)
                 .ThenInclude(t => t.Customer)
             .Include(t => t.InsuranceAgency)
-            .Include(t => t.Address);
+            .Include(t => t.Address)
+            .Include(t => t.TableExpertise)
+                .ThenInclude(t => t.Contributor);
         public IQueryable<TableExpertise> Expertises => Manager.Context.TableExpertise
             .Include(x => x.TableBill)
             .Include(x => x.TableMessages)

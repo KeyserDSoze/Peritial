@@ -19,9 +19,13 @@ namespace Expertiser.Portal.Controllers
         public InsuranceCompanyController(Manager manager, IStringLocalizer<DatabaseShared> stringLocalizer) : base(manager, stringLocalizer)
         {
         }
-        public override INavigation<TableInsuranceCompany> GetNavigation()
-            => NavigationStarter<TableInsuranceCompany>
-                .Create(NavigationOptions.CanDoneAll("Index", this.StringLocalizer))
+        public override INavigation<TableInsuranceCompany> GetIndexNavigation()
+           => GetNavigation("Index");
+        public override INavigation<TableInsuranceCompany> GetDeleteNavigation()
+            => GetNavigation("Delete");
+        public INavigation<TableInsuranceCompany> GetNavigation(string title)
+            => INavigation<TableInsuranceCompany>
+                .Create(NavigationOptions.CanDoneAll(title, this.StringLocalizer))
                 .Include(x => x.Id, PropertyOptions.Key)
                 .Include(x => x.Label)
                 .Include(x => x.IsActive)

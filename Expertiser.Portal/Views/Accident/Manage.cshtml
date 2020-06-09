@@ -45,13 +45,21 @@
             <div class="form-row">
                 <div class="form-group col-md-6">
                     <label asp-for="AccidentDate" class="control-label"></label>
-                    <rystem-date name="AccidentDate" class="form-control"></rystem-date>
+                    <rystem-date name="AccidentDate" value="Model.AccidentDate" class="form-control"></rystem-date>
                     <span asp-validation-for="AccidentDate" class="text-danger"></span>
                 </div>
                 <div class="form-group col-md-6">
                     <label asp-for="DenunciationDate" class="control-label"></label>
-                    <rystem-date name="DenunciationDate" class="form-control"></rystem-date>
+                    <rystem-date name="DenunciationDate" value="Model.DenunciationDate" class="form-control"></rystem-date>
                     <span asp-validation-for="DenunciationDate" class="text-danger"></span>
+                </div>
+                <div class="form-group col-md-6">
+                    @foreach (var expertise in Model.TableExpertise)
+                    {
+                        <a asp-action="Manage" asp-controller="Experty" asp-route-id="@expertise.Id">
+                            @SharedLocalizer["Expertise"] - @expertise.Id - @expertise.Member?.UserName - @expertise.Contributor?.UserName - @expertise.AssignmentDate - @expertise.InspectionDate
+                        </a>
+                    }
                 </div>
             </div>
             <div class="form-group">
@@ -60,7 +68,6 @@
         </form>
     </div>
 </div>
-
 <div>
     <a asp-action="Index">@SharedLocalizer["Back to List"]</a>
 </div>

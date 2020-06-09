@@ -12,6 +12,7 @@ using Rystem.Web;
 using Expertiser.Base.Constant;
 using Rystem.Web.Backoffice;
 using Microsoft.Extensions.Localization;
+using Expertiser.Interfaces;
 
 namespace Expertiser.Portal.Controllers
 {
@@ -23,28 +24,16 @@ namespace Expertiser.Portal.Controllers
         }
 
         public override async Task<IEnumerable<TableAccident>> GetList()
-            => await Manager.QueryManager.Accidents.OrderByDescending(x => x.AccidentDate).ToListAsync();
+            => await Manager.QueryManager.Accidents
+            .Where(x => x.TableExpertise.Any(t => t.Status <= (int)StatusType.Presented)).OrderByDescending(x => x.AccidentDate).ToListAsync();
 
         public override async Task<TableAccident> GetModel(string id)
             => await Manager.Context.TableAccident.FindAsync(int.Parse(id));
-
-        public override INavigation<TableAccident> GetNavigation()
-            => NavigationStarter<TableAccident>
-                .Create(NavigationOptions.CanDoneAll("Index", this.StringLocalizer))
-                .Include(x => x.Id, PropertyOptions.Key)
-                .Include(x => x.ExternalId)
-                .Include(x => x.AccidentDate, new PropertyOptions() { Format = "dd-MM-yyyy" })
-                .Include(x => x.DenunciationDate, new PropertyOptions() { Format = "dd-MM-yyyy" })
-                .Include(x => x.Inspectorate)
-                    .ThenInclude(x => x.Label)
-                .Include(x => x.Insurance)
-                    .ThenInclude(x => x.Customer)
-                        .ThenInclude(x => x.Name)
-                .Include(x => x.InsuranceAgency)
-                    .ThenInclude(x => x.Label)
-                .Include(x => x.Address)
-                    .ThenInclude(x => x.Address)
-                .Include(x => x.TableExpertise, new PropertyOptions(OutputType.Count));
+        public override INavigation<TableAccident> GetIndexNavigation()
+            => Manager.NavigationManager.GetAccidentNavigation("Index", this.StringLocalizer);
+        public override INavigation<TableAccident> GetDeleteNavigation()
+            => Manager.NavigationManager.GetAccidentNavigation("Delete", this.StringLocalizer);
+       
         //
         // GET: Accident/Manage
         public async Task<IActionResult> Manage(int? id)

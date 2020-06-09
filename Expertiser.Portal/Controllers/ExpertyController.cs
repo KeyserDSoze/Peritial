@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Authorization;
 using Rystem.Web.Backoffice;
 using Microsoft.Extensions.Localization;
 using Expertiser.Base.Constant;
+using Expertiser.Interfaces;
 
 namespace Expertiser.Portal.Controllers
 {
@@ -19,12 +20,14 @@ namespace Expertiser.Portal.Controllers
         public ExpertyController(Manager manager, IStringLocalizer<DatabaseShared> stringLocalizer) : base(manager, stringLocalizer)
         {
         }
-
-        public override INavigation<TableExpertise> GetNavigation()
-        {
-            return NavigationStarter<TableExpertise>
+        public override INavigation<TableExpertise> GetIndexNavigation()
+           => GetNavigation("Index");
+        public override INavigation<TableExpertise> GetDeleteNavigation()
+            => GetNavigation("Delete");
+        public INavigation<TableExpertise> GetNavigation(string title)
+            => INavigation<TableExpertise>
                 .Create(NavigationOptions.CanDone(User.IsInRole(Roles.AdminContributor), true, User.IsInRole(Roles.Admin),
-                            "Index", this.StringLocalizer))
+                            title, this.StringLocalizer))
                 .Include(x => x.Id, PropertyOptions.Key)
                 .Include(x => x.Branch)
                     .ThenInclude(x => x.BranchType)
@@ -40,13 +43,16 @@ namespace Expertiser.Portal.Controllers
                 .Include(x => x.Liquidated)
                 .Include(x => x.AssignmentDate)
                 .Include(x => x.InspectionDate);
-        }
 
         public override async Task<IEnumerable<TableExpertise>> GetList()
-            => await this.Manager.QueryManager.Expertises.OrderByDescending(x => x.Id).ToListAsync();
+            => await this.Manager.QueryManager.Expertises
+                .Where(t => t.Status <= (int)StatusType.Presented)
+                .OrderByDescending(x => x.Id)
+                .ToListAsync();
 
         public override async Task<TableExpertise> GetModel(string id)
-            => await Manager.QueryManager.Expertises.FirstOrDefaultAsync(x => x.Id == int.Parse(id));
+            => await Manager.QueryManager.Expertises
+                .FirstOrDefaultAsync(x => x.Id == int.Parse(id));
 
         public override Task<bool> Remove(string id)
         {

@@ -64,10 +64,13 @@ namespace Expertiser.Portal.Controllers
             }
             return View(tableInsurance);
         }
-
-        public override INavigation<TableInsurance> GetNavigation()
-            => NavigationStarter<TableInsurance>
-                .Create(NavigationOptions.CanDoneAll("Index", this.StringLocalizer))
+        public override INavigation<TableInsurance> GetIndexNavigation()
+           => GetNavigation("Index");
+        public override INavigation<TableInsurance> GetDeleteNavigation()
+            => GetNavigation("Delete");
+        public INavigation<TableInsurance> GetNavigation(string title)
+            => INavigation<TableInsurance>
+                .Create(NavigationOptions.CanDoneAll(title, this.StringLocalizer))
                 .Include(x => x.Id, PropertyOptions.Key)
                 .Include(x => x.Customer)
                     .ThenInclude(x => x.Name)

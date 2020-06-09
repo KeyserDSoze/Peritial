@@ -21,9 +21,13 @@ namespace Expertiser.Portal.Controllers
         {
 
         }
-        public override INavigation<AspNetUsers> GetNavigation()
-            => NavigationStarter<AspNetUsers>
-                .Create(NavigationOptions.CanDoneAll("Index", this.StringLocalizer))
+        public override INavigation<AspNetUsers> GetIndexNavigation()
+           => GetNavigation("Index");
+        public override INavigation<AspNetUsers> GetDeleteNavigation()
+            => GetNavigation("Delete");
+        public INavigation<AspNetUsers> GetNavigation(string title)
+            => INavigation<AspNetUsers>
+                .Create(NavigationOptions.CanDoneAll(title, this.StringLocalizer))
                 .Include(x => x.Id, PropertyOptions.Key)
                 .Include(x => x.UserName)
                 .Include(x => x.EmailConfirmed)
