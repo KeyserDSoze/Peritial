@@ -13,6 +13,7 @@
         <form asp-action="Manage">
             <div asp-validation-summary="ModelOnly" class="text-danger"></div>
             <input type="hidden" asp-for="Id" />
+            <input type="hidden" asp-for="AccidentId" />
             <div class="form-group">
                 <label asp-for="MemberId" class="control-label"></label>
                 <rystem-dropdown name="MemberId" rystem-data="Manager.DropdownManager.GetMembers(Model?.MemberId)"></rystem-dropdown>
@@ -41,18 +42,18 @@
             <div class="form-row">
                 <div class="form-group col-md-6">
                     <label asp-for="AssignmentDate" class="control-label"></label>
-                    <rystem-date name="AssignmentDate" class="form-control"></rystem-date>
+                    <rystem-date name="AssignmentDate" value="Model.AssignmentDate" class="form-control"></rystem-date>
                     <span asp-validation-for="AssignmentDate" class="text-danger"></span>
                 </div>
                 <div class="form-group col-md-6">
                     <label asp-for="InspectionDate" class="control-label"></label>
-                    <rystem-date name="InspectionDate" class="form-control"></rystem-date>
+                    <rystem-date name="InspectionDate" value="Model.InspectionDate" class="form-control"></rystem-date>
                     <span asp-validation-for="InspectionDate" class="text-danger"></span>
                 </div>
             </div>
             <div class="form-group">
                 <label asp-for="Liquidated" class="control-label"></label>
-                <input asp-for="Liquidated" class="form-control" />
+                <input type="number" step="any" name="Liquidated" class="form-control" value="@Model.Liquidated.ToString()" />
                 <span asp-validation-for="Liquidated" class="text-danger"></span>
             </div>
             <div class="form-group">

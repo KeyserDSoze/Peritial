@@ -35,6 +35,13 @@ namespace Expertiser.Portal.Controllers
            => GetNavigation("Index");
         public override INavigation<TableLocation> GetDeleteNavigation()
             => GetNavigation("Delete");
+        public override INavigation<TableLocation> GetManageNavigation()
+            => INavigation<TableLocation>
+                .Create(NavigationOptions.CanDoneAll("Manage", this.StringLocalizer))
+                .Include(x => x.Address)
+                .Include(x => x.City, new DropdownPropertyOptions() { DropdownHelper = new Rystem.Web.DropdownHelper() { } })
+                .Include(x => x.PostalCode)
+                .Include(x => x.Id, PropertyOptions.Key);
         public INavigation<TableLocation> GetNavigation(string title)
             => INavigation<TableLocation>
                 .Create(NavigationOptions.CanDoneAll(title, this.StringLocalizer))
