@@ -36,7 +36,7 @@ namespace Expertiser.Portal.Controllers
        
         //
         // GET: Accident/Manage
-        public async Task<IActionResult> Manage(int? id)
+        public async Task<IActionResult> Edit(int? id)
         {
             if (id == null)
                 return View();
@@ -52,7 +52,7 @@ namespace Expertiser.Portal.Controllers
         [HttpPost]
         [ValidateAntiForgeryToken]
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Style", "IDE0037:Use inferred member name", Justification = "<Pending>")]
-        public async Task<IActionResult> Manage([Bind("Id,AddressId,InsuranceId,InsuranceAgencyId,InspectorateId,ExternalId,AccidentDate,DenunciationDate")] TableAccident tableAccident)
+        public async Task<IActionResult> Edit([Bind("Id,AddressId,InsuranceId,InsuranceAgencyId,InspectorateId,ExternalId,AccidentDate,DenunciationDate")] TableAccident tableAccident)
         {
             if (ModelState.IsValid)
             {

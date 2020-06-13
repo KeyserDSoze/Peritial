@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Expertiser.Database.Binders;
+using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -40,6 +41,7 @@ namespace Expertiser.Database.Models
         public DateTime? InspectionDate { get; set; }
 
         [Display(Name = nameof(Liquidated))]
+        [ModelBinder(BinderType = typeof(DecimalModelBinder))]
         public decimal? Liquidated { get; set; }
 
         [Display(Name = nameof(AccidentId))]

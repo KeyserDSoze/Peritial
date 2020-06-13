@@ -35,17 +35,9 @@ namespace Expertiser.Portal.Controllers
             return true;
         }
         public override INavigation<TableCustomer> GetIndexNavigation()
-           => GetNavigation("Index");
+           => Manager.NavigationManager.GetCustomerNavigation("Index", this.StringLocalizer);
         public override INavigation<TableCustomer> GetDeleteNavigation()
-            => GetNavigation("Delete");
-        public INavigation<TableCustomer> GetNavigation(string title)
-            => INavigation<TableCustomer>.Create(NavigationOptions.CanDoneAll(title, this.StringLocalizer))
-                .Include(x => x.Id, PropertyOptions.Key)
-                .Include(x => x.Name)
-                .Include(x => x.FiscalCode)
-                .Include(x => x.TableInsurance, PropertyOptions.Count)
-                .Include(x => x.Address)
-                    .ThenInclude(x => x.Address);
+            => Manager.NavigationManager.GetCustomerNavigation("Delete", this.StringLocalizer);
 
         // GET: Customer/Create
         public IActionResult Create()
@@ -67,7 +59,7 @@ namespace Expertiser.Portal.Controllers
         }
 
         // GET: Customer/Edit/5
-        public async Task<IActionResult> Manage(int? id)
+        public async Task<IActionResult> Edit(int? id)
         {
             if (id == null)
                 return View();
@@ -82,7 +74,7 @@ namespace Expertiser.Portal.Controllers
         // more details see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Manage(int id, [Bind("Id,Name,FiscalCode,AddressId")] TableCustomer tableCustomer)
+        public async Task<IActionResult> Edit(int id, [Bind("Id,Name,FiscalCode,AddressId")] TableCustomer tableCustomer)
         {
             if (ModelState.IsValid)
             {

@@ -10,7 +10,7 @@
 <hr />
 <div class="row">
     <div class="col-md-6">
-        <form asp-action="Manage">
+        <form asp-action="Edit">
             <div asp-validation-summary="ModelOnly" class="text-danger"></div>
             <input type="hidden" asp-for="Id" />
             <div class="form-group">
@@ -53,14 +53,15 @@
                     <rystem-date name="DenunciationDate" value="Model.DenunciationDate" class="form-control"></rystem-date>
                     <span asp-validation-for="DenunciationDate" class="text-danger"></span>
                 </div>
-                <div class="form-group col-md-6">
-                    @foreach (var expertise in Model.TableExpertise)
-                    {
-                        <a asp-action="Manage" asp-controller="Experty" asp-route-id="@expertise.Id">
-                            @SharedLocalizer["Expertise"] - @expertise.Id - @expertise.Member?.UserName - @expertise.Contributor?.UserName - @expertise.AssignmentDate - @expertise.InspectionDate
-                        </a>
-                    }
-                </div>
+            </div>
+            <div class="form-group">
+                <label>@SharedLocalizer["Connected Expertises"]</label>
+                @foreach (var expertise in Model.TableExpertise)
+                {
+                    <a asp-action="Edit" asp-controller="Experty" asp-route-id="@expertise.Id" class="page-link">
+                        @expertise.Id - @expertise.Member?.UserName - @expertise.Contributor?.UserName - @expertise.AssignmentDate - @expertise.InspectionDate
+                    </a>
+                }
             </div>
             <div class="form-group">
                 <input type="submit" value="@SharedLocalizer["Save"]" class="btn btn-primary" />

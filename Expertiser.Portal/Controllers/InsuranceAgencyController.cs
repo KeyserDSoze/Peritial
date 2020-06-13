@@ -21,7 +21,7 @@ namespace Expertiser.Portal.Controllers
         }
 
         // GET: InsuranceAgency/Edit/5
-        public async Task<IActionResult> Manage(int? id)
+        public async Task<IActionResult> Edit(int? id)
         {
             if (id == null)
                 return View();
@@ -36,7 +36,7 @@ namespace Expertiser.Portal.Controllers
         // more details see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Manage(int id, [Bind("Id,Label,ExternalId,InsuranceCompanyId,AddressId,IsActive")] TableInsuranceAgency tableInsuranceAgency)
+        public async Task<IActionResult> Edit(int id, [Bind("Id,Label,ExternalId,InsuranceCompanyId,AddressId,IsActive")] TableInsuranceAgency tableInsuranceAgency)
         {
             if (ModelState.IsValid)
             {
@@ -55,16 +55,9 @@ namespace Expertiser.Portal.Controllers
             return View(tableInsuranceAgency);
         }
         public override INavigation<TableInsuranceAgency> GetIndexNavigation()
-           => GetNavigation("Index");
+           => Manager.NavigationManager.GetInsuranceAgencyNavigation("Index", this.StringLocalizer);
         public override INavigation<TableInsuranceAgency> GetDeleteNavigation()
-            => GetNavigation("Delete");
-        public INavigation<TableInsuranceAgency> GetNavigation(string title)
-            => INavigation<TableInsuranceAgency>
-                .Create(NavigationOptions.CanDoneAll(title, this.StringLocalizer))
-                .Include(x => x.Id, PropertyOptions.Key)
-                .Include(x => x.Label)
-                .Include(x => x.IsActive)
-                .Include(x => x.TableAccident, PropertyOptions.Count);
+           => Manager.NavigationManager.GetInsuranceAgencyNavigation("Delete", this.StringLocalizer);
 
         public override async Task<IEnumerable<TableInsuranceAgency>> GetList()
             => await Manager.QueryManager.InsuranceAgencies.ToListAsync();

@@ -21,28 +21,9 @@ namespace Expertiser.Portal.Controllers
         {
         }
         public override INavigation<TableExpertise> GetIndexNavigation()
-           => GetNavigation("Index");
+           => Manager.NavigationManager.GetExpertiseNavigation("Index", this.StringLocalizer, this.User);
         public override INavigation<TableExpertise> GetDeleteNavigation()
-            => GetNavigation("Delete");
-        public INavigation<TableExpertise> GetNavigation(string title)
-            => INavigation<TableExpertise>
-                .Create(NavigationOptions.CanDone(User.IsInRole(Roles.AdminContributor), true, User.IsInRole(Roles.Admin),
-                            title, this.StringLocalizer))
-                .Include(x => x.Id, PropertyOptions.Key)
-                .Include(x => x.Branch)
-                    .ThenInclude(x => x.BranchType)
-                        .ThenInclude(x => x.Label)
-                .Include(x => x.Contributor)
-                    .ThenInclude(x => x.UserName)
-                .Include(x => x.Status)
-                .Include(x => x.Member)
-                    .ThenInclude(x => x.UserName)
-                .Include(x => x.TableBill)
-                    .ThenInclude(x => x.Amount)
-                .Include(x => x.TableMessages, PropertyOptions.Count)
-                .Include(x => x.Liquidated)
-                .Include(x => x.AssignmentDate)
-                .Include(x => x.InspectionDate);
+           => Manager.NavigationManager.GetExpertiseNavigation("Delete", this.StringLocalizer, this.User);
 
         public override async Task<IEnumerable<TableExpertise>> GetList()
             => await this.Manager.QueryManager.Expertises
@@ -59,7 +40,7 @@ namespace Expertiser.Portal.Controllers
             throw new NotImplementedException();
         }
         // GET: Experty/Edit/5
-        public async Task<IActionResult> Manage(int? id)
+        public async Task<IActionResult> Edit(int? id)
         {
             if (id == null)
                 return View();
@@ -74,7 +55,7 @@ namespace Expertiser.Portal.Controllers
         // more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Manage(int id, [Bind("Id,MemberId,ContributorId,Status,BranchId,ExternalId,AssignmentDate,InspectionDate,Liquidated,AccidentId")] TableExpertise tableExpertise)
+        public async Task<IActionResult> Edit(int id, [Bind("Id,MemberId,ContributorId,Status,BranchId,ExternalId,AssignmentDate,InspectionDate,Liquidated,AccidentId")] TableExpertise tableExpertise)
         {
             if (ModelState.IsValid)
             {

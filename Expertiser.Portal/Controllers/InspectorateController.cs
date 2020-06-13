@@ -34,23 +34,12 @@ namespace Expertiser.Portal.Controllers
             return true;
         }
         public override INavigation<TableInspectorate> GetIndexNavigation()
-           => GetNavigation("Index");
+           => Manager.NavigationManager.GetInspectorateNavigation("Index", this.StringLocalizer);
         public override INavigation<TableInspectorate> GetDeleteNavigation()
-            => GetNavigation("Delete");
-        public INavigation<TableInspectorate> GetNavigation(string title)
-            => INavigation<TableInspectorate>
-                .Create(NavigationOptions.CanDoneAll(title, this.StringLocalizer))
-               .Include(x => x.Label)
-               .Include(x => x.InsuranceCompany)
-                    .ThenInclude(x => x.Label)
-               .Include(x => x.IsActive)
-               .Include(x => x.TableAccident, PropertyOptions.Count)
-               .Include(x => x.Address)
-                    .ThenInclude(x => x.City)
-               .Include(x => x.Id, PropertyOptions.Key);
+           => Manager.NavigationManager.GetInspectorateNavigation("Delete", this.StringLocalizer);
 
         // GET: Inspectorate/Edit/5
-        public async Task<IActionResult> Manage(int? id)
+        public async Task<IActionResult> Edit(int? id)
         {
             if (id == null)
                 return View();
@@ -65,7 +54,7 @@ namespace Expertiser.Portal.Controllers
         // more details see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Manage(int id, [Bind("Id,Label,ExternalId,AddressId,InsuranceCompanyId")] TableInspectorate tableInspectorate)
+        public async Task<IActionResult> Edit(int id, [Bind("Id,Label,ExternalId,AddressId,InsuranceCompanyId")] TableInspectorate tableInspectorate)
         {
             if (ModelState.IsValid)
             {

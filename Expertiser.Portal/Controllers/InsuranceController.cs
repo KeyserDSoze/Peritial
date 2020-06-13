@@ -32,7 +32,7 @@ namespace Expertiser.Portal.Controllers
             => PartialView();
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([Bind("CustomerId,ExternalId,InsuranceCompanyId")] TableInsurance tableInsurance)
+        public async Task<IActionResult> Edit([Bind("CustomerId,ExternalId,InsuranceCompanyId")] TableInsurance tableInsurance)
         {
             if (ModelState.IsValid)
             {
@@ -47,7 +47,7 @@ namespace Expertiser.Portal.Controllers
         // more details see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Manage(int id, [Bind("Id,CustomerId,ExternalId,InsuranceCompanyId")] TableInsurance tableInsurance)
+        public async Task<IActionResult> Edit(int id, [Bind("Id,CustomerId,ExternalId,InsuranceCompanyId")] TableInsurance tableInsurance)
         {
             if (ModelState.IsValid)
             {
@@ -65,18 +65,9 @@ namespace Expertiser.Portal.Controllers
             return View(tableInsurance);
         }
         public override INavigation<TableInsurance> GetIndexNavigation()
-           => GetNavigation("Index");
+           => Manager.NavigationManager.GetInsuranceNavigation("Index", this.StringLocalizer);
         public override INavigation<TableInsurance> GetDeleteNavigation()
-            => GetNavigation("Delete");
-        public INavigation<TableInsurance> GetNavigation(string title)
-            => INavigation<TableInsurance>
-                .Create(NavigationOptions.CanDoneAll(title, this.StringLocalizer))
-                .Include(x => x.Id, PropertyOptions.Key)
-                .Include(x => x.Customer)
-                    .ThenInclude(x => x.Name)
-                .Include(x => x.InsuranceCompany)
-                    .ThenInclude(x => x.Label)
-                .Include(x => x.TableAccident, PropertyOptions.Count);
+           => Manager.NavigationManager.GetInsuranceNavigation("Delete", this.StringLocalizer);
 
         public override async Task<IEnumerable<TableInsurance>> GetList()
             => await Manager.QueryManager.Insurances.ToListAsync();

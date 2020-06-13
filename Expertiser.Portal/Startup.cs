@@ -44,13 +44,17 @@ namespace Expertiser.Portal
             services.AddHttpContextAccessor();
             services.AddScoped<ContextExpertiser>();
             services.AddLocalization(options => options.ResourcesPath = "Resources");
-            services.AddControllersWithViews(config => 
+            services.AddControllersWithViews(config =>
             {
                 var policy = new AuthorizationPolicyBuilder()
                          .RequireAuthenticatedUser()
                          .Build();
                 config.Filters.Add(new AuthorizeFilter(policy));
-            });
+            })
+#if DEBUG
+                .AddRazorRuntimeCompilation();
+#endif
+            ;
             services.AddRazorPages().AddViewLocalization(LanguageViewLocationExpanderFormat.Suffix)
                 .AddDataAnnotationsLocalization(options =>
                 {

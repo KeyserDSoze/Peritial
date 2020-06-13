@@ -20,17 +20,10 @@ namespace Expertiser.Portal.Controllers
         {
         }
         public override INavigation<TableInsuranceCompany> GetIndexNavigation()
-           => GetNavigation("Index");
+           => Manager.NavigationManager.GetInsuranceCompanyNavigation("Index", this.StringLocalizer);
         public override INavigation<TableInsuranceCompany> GetDeleteNavigation()
-            => GetNavigation("Delete");
-        public INavigation<TableInsuranceCompany> GetNavigation(string title)
-            => INavigation<TableInsuranceCompany>
-                .Create(NavigationOptions.CanDoneAll(title, this.StringLocalizer))
-                .Include(x => x.Id, PropertyOptions.Key)
-                .Include(x => x.Label)
-                .Include(x => x.IsActive)
-                .Include(x => x.TableInsuranceAgency, PropertyOptions.Count)
-                .Include(x => x.TableInspectorate, PropertyOptions.Count);
+           => Manager.NavigationManager.GetInsuranceCompanyNavigation("Delete", this.StringLocalizer);
+
         public override async Task<IEnumerable<TableInsuranceCompany>> GetList()
             => await Manager.QueryManager.InsuranceCompanies.ToListAsync();
         public override async Task<TableInsuranceCompany> GetModel(string id)
@@ -43,7 +36,7 @@ namespace Expertiser.Portal.Controllers
             return true;
         }
         // GET: InsuranceCompany/Edit/5
-        public async Task<IActionResult> Manage(int? id)
+        public async Task<IActionResult> Edit(int? id)
         {
             if (id == null)
                 return View();
@@ -58,7 +51,7 @@ namespace Expertiser.Portal.Controllers
         // more details see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Manage(int id, [Bind("Id,Label,AddressId,ExternalId,IsActive")] TableInsuranceCompany tableInsuranceCompany)
+        public async Task<IActionResult> Edit(int id, [Bind("Id,Label,AddressId,ExternalId,IsActive")] TableInsuranceCompany tableInsuranceCompany)
         {
             if (ModelState.IsValid)
             {

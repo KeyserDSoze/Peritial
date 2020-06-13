@@ -32,24 +32,10 @@ namespace Expertiser.Portal.Controllers
             return true;
         }
         public override INavigation<TableLocation> GetIndexNavigation()
-           => GetNavigation("Index");
+           => Manager.NavigationManager.GetLocationNavigation("Index", this.StringLocalizer);
         public override INavigation<TableLocation> GetDeleteNavigation()
-            => GetNavigation("Delete");
-        public override INavigation<TableLocation> GetManageNavigation()
-            => INavigation<TableLocation>
-                .Create(NavigationOptions.CanDoneAll("Manage", this.StringLocalizer))
-                .Include(x => x.Address)
-                .Include(x => x.City, new DropdownPropertyOptions() { DropdownHelper = new Rystem.Web.DropdownHelper() { } })
-                .Include(x => x.PostalCode)
-                .Include(x => x.Id, PropertyOptions.Key);
-        public INavigation<TableLocation> GetNavigation(string title)
-            => INavigation<TableLocation>
-                .Create(NavigationOptions.CanDoneAll(title, this.StringLocalizer))
-                .Include(x => x.Address)
-                .Include(x => x.City)
-                    .ThenInclude(x => x.Name)
-                .Include(x => x.PostalCode)
-                .Include(x => x.Id, PropertyOptions.Key);
+           => Manager.NavigationManager.GetLocationNavigation("Delete", this.StringLocalizer);
+
 
         public IActionResult Create()
             => PartialView();
@@ -70,7 +56,7 @@ namespace Expertiser.Portal.Controllers
             return NotOkMessage(ModelState);
         }
 
-        public async Task<IActionResult> Manage(int? id)
+        public async Task<IActionResult> Edit(int? id)
         {
             if (id == null)
                 return View();
@@ -86,7 +72,7 @@ namespace Expertiser.Portal.Controllers
         // more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Manage(int id, [Bind("Id,Address,CityId,PostalCode")] TableLocation tableLocation)
+        public async Task<IActionResult> Edit(int id, [Bind("Id,Address,CityId,PostalCode")] TableLocation tableLocation)
         {
             if (ModelState.IsValid)
             {

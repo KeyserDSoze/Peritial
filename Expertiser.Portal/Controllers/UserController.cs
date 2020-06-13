@@ -22,18 +22,10 @@ namespace Expertiser.Portal.Controllers
 
         }
         public override INavigation<AspNetUsers> GetIndexNavigation()
-           => GetNavigation("Index");
+           => Manager.NavigationManager.GetUserNavigation("Index", this.StringLocalizer);
         public override INavigation<AspNetUsers> GetDeleteNavigation()
-            => GetNavigation("Delete");
-        public INavigation<AspNetUsers> GetNavigation(string title)
-            => INavigation<AspNetUsers>
-                .Create(NavigationOptions.CanDoneAll(title, this.StringLocalizer))
-                .Include(x => x.Id, PropertyOptions.Key)
-                .Include(x => x.UserName)
-                .Include(x => x.EmailConfirmed)
-                .Include(x => x.AspNetUserRoles)
-                    .ThenInclude(x => x.Role)
-                        .ThenInclude(x => x.Name);
+           => Manager.NavigationManager.GetUserNavigation("Delete", this.StringLocalizer);
+
         public override async Task<IEnumerable<AspNetUsers>> GetList()
             => await Manager.QueryManager.Users.ToListAsync();
         public override async Task<AspNetUsers> GetModel(string id)
@@ -47,7 +39,7 @@ namespace Expertiser.Portal.Controllers
             return true;
         }
         // GET: User/Manage
-        public async Task<IActionResult> Manage(string id)
+        public async Task<IActionResult> Edit(string id)
         {
             if (id == null)
                 return NotFound();
@@ -63,7 +55,7 @@ namespace Expertiser.Portal.Controllers
         // more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Manage([Bind("Id,UserName,NormalizedUserName,Email,NormalizedEmail,EmailConfirmed,PasswordHash,SecurityStamp,ConcurrencyStamp,PhoneNumber,PhoneNumberConfirmed,TwoFactorEnabled,LockoutEnd,LockoutEnabled,AccessFailedCount")] AspNetUsers aspNetUsers)
+        public async Task<IActionResult> Edit([Bind("Id,UserName,NormalizedUserName,Email,NormalizedEmail,EmailConfirmed,PasswordHash,SecurityStamp,ConcurrencyStamp,PhoneNumber,PhoneNumberConfirmed,TwoFactorEnabled,LockoutEnd,LockoutEnabled,AccessFailedCount")] AspNetUsers aspNetUsers)
         {
             if (ModelState.IsValid)
             {
