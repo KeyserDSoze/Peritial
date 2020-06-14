@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Localization;
+using Rystem.Azure.Data;
 using Rystem.Web;
 using Rystem.Web.Backoffice;
 using System;
@@ -39,6 +40,8 @@ namespace Expertiser
         public ModalManager ModalManager => modalManager ??= new ModalManager(this);
         private DropdownManager dropdownManager;
         public DropdownManager DropdownManager => dropdownManager ??= new DropdownManager(this);
+        private FileManager fileManager;
+        public FileManager FileManager => fileManager ??= new FileManager(this);
         private static readonly NavigationManager navigationManager = new NavigationManager();
         public NavigationManager NavigationManager => navigationManager;
 
@@ -68,6 +71,21 @@ namespace Expertiser
     }
     public class FileManager
     {
+        private readonly Manager Manager;
+        public FileManager(Manager manager)
+            => this.Manager = manager;
+        public async Task<IList<string>> GetUriFiles(int id, string name = null)
+            => await new File().SearchAsync($"{id}/{name}");
+        public async Task<bool> SaveFile(int id, IFormFile file, string name = null)
+            => await new File()
+            {
+                Name = $"{id}/{(name ?? Guid.NewGuid().ToString("N"))}.{file.FileName.Split('.').Last()}",
+                Properties = new BlobDataProperties()
+                {
+                    ContentType = file.ContentType
+                },
+                Stream = file.OpenReadStream()
+            }.WriteAsync();
 
     }
     public class NavigationManager

@@ -15,23 +15,14 @@ namespace Expertiser.Portal.Controllers
     [Authorize(Roles = (Roles.All))]
     public class FileController : Controller
     {
+        private readonly Manager Manager;
+        public FileController(Manager manager) 
+            => this.Manager = manager;
         [HttpPost]
         public async Task<IActionResult> Upload(int id, IFormFile file)
         {
-            MemoryStream ms = new MemoryStream();
-            file.OpenReadStream().CopyTo(ms);
-            ms.Position = 0;
-            string name = Request.Query["name"];
-            await new File()
-            {
-                Name = $"{id}/{(name ?? Guid.NewGuid().ToString("N"))}.{file.FileName.Split('.').Last()}",
-                Properties = new BlobDataProperties()
-                {
-                    ContentType = file.ContentType
-                },
-                Stream = ms
-            }.WriteAsync();
-            return View();
+            await this.Manager.FileManager.SaveFile(id, file, Request.Query["name"]);
+            return Ok();
         }
     }
 }

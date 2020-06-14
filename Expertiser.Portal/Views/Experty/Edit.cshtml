@@ -64,6 +64,7 @@
     <div class="col-md-6 m-lg-4">
         <div class="col-md-6">
             <label class="control-label">@SharedLocalizer["Completed Expertise"]</label>
+            <partial name="_Files" model='await Manager.FileManager.GetUriFiles(Model.Id, "expertise")' />
             <rystem-ajax-file rystem-request-context='new RoutingContext() { Action = "Upload", Controller = "File", QueryString = new Dictionary<object, object>() { { "name", "expertise" } } }'></rystem-ajax-file>
         </div>
         <div class="col-md-6">
