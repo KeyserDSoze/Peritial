@@ -15,6 +15,7 @@ namespace Expertiser.Database.Models
             AspNetUserTokens = new HashSet<AspNetUserTokens>();
             TableExpertiseContributor = new HashSet<TableExpertise>();
             TableExpertiseMember = new HashSet<TableExpertise>();
+            TableMessage = new HashSet<TableMessage>();
         }
 
         [Key]
@@ -50,5 +51,7 @@ namespace Expertiser.Database.Models
         public virtual ICollection<TableExpertise> TableExpertiseContributor { get; set; }
         [InverseProperty(nameof(TableExpertise.Member))]
         public virtual ICollection<TableExpertise> TableExpertiseMember { get; set; }
+        [InverseProperty("User")]
+        public virtual ICollection<TableMessage> TableMessage { get; set; }
     }
 }

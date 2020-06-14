@@ -35,7 +35,7 @@ namespace Expertiser.Database.Models
         public virtual DbSet<TableInsuranceAgency> TableInsuranceAgency { get; set; }
         public virtual DbSet<TableInsuranceCompany> TableInsuranceCompany { get; set; }
         public virtual DbSet<TableLocation> TableLocation { get; set; }
-        public virtual DbSet<TableMessages> TableMessages { get; set; }
+        public virtual DbSet<TableMessage> TableMessage { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -286,17 +286,20 @@ namespace Expertiser.Database.Models
                     .HasConstraintName("FK_Table_Location_Table_City");
             });
 
-            modelBuilder.Entity<TableMessages>(entity =>
+            modelBuilder.Entity<TableMessage>(entity =>
             {
-                entity.Property(e => e.Id).ValueGeneratedNever();
-
                 entity.Property(e => e.Value).IsUnicode(false);
 
                 entity.HasOne(d => d.Expertise)
-                    .WithMany(p => p.TableMessages)
+                    .WithMany(p => p.TableMessage)
                     .HasForeignKey(d => d.ExpertiseId)
                     .OnDelete(DeleteBehavior.ClientSetNull)
                     .HasConstraintName("FK_Table_Messages_Table_Expertise");
+
+                entity.HasOne(d => d.User)
+                    .WithMany(p => p.TableMessage)
+                    .HasForeignKey(d => d.UserId)
+                    .HasConstraintName("FK_Table_Messages_AspNetUsers");
             });
 
             OnModelCreatingPartial(modelBuilder);

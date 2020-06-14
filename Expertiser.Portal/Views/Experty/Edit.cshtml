@@ -9,7 +9,7 @@
 <h4>@SharedLocalizer["Expertise"]</h4>
 <hr />
 <div class="row">
-    <div class="col-md-4">
+    <div class="col-md-5">
         <form asp-action="Edit">
             <div asp-validation-summary="ModelOnly" class="text-danger"></div>
             <input type="hidden" asp-for="Id" />
@@ -61,9 +61,42 @@
             </div>
         </form>
     </div>
+    <div class="col-md-6 m-lg-4">
+        <div class="col-md-6">
+            <label class="control-label">@SharedLocalizer["Completed Expertise"]</label>
+            <rystem-ajax-file rystem-request-context='new RoutingContext() { Action = "Upload", Controller = "File", QueryString = new Dictionary<object, object>() { { "name", "expertise" } } }'></rystem-ajax-file>
+        </div>
+        <div class="col-md-6">
+            <label class="control-label">@SharedLocalizer["Reserved Note"]</label>
+            <rystem-ajax-file rystem-request-context='new RoutingContext() { Action = "Upload", Controller = "File", QueryString = new Dictionary<object, object>() { { "name", "reservednote" } } }'></rystem-ajax-file>
+        </div>
+        <div class="col-md-6">
+            <label class="control-label">@SharedLocalizer["Photos"]</label>
+            <rystem-ajax-file rystem-request-context='new RoutingContext() { Action = "Upload", Controller = "File"}'></rystem-ajax-file>
+        </div>
+    </div>
 </div>
-
 <div>
     <a asp-action="Index">@SharedLocalizer["Back to List"]</a>
 </div>
+<div class="row">
+    <div class="col-md-5">
+        <div id="updateMessage">
+            <partial name="_Messages" model="Model.TableMessage" />
+        </div>
+    </div>
+    <div class="col-md-6">
+        <rystem-ajax-form rystem-request-context='new RequestContext() { Action= "Create", Controller = "Message", RequestType = RequestType.Post, Selector="#updateMessage"}'>
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="UserId" value="@Manager.UserManager.GetUserId(User)" readonly />
+            <input type="hidden" name="ExpertiseId" value="@Model.Id" readonly />
+            <rystem-text-area name="Value" rystem-options="SummerNote.DefaultWithHeight(200)"></rystem-text-area>
+            <div class="form-group">
+                <input type="submit" value="@SharedLocalizer["Insert Message"]" class="btn btn-primary" />
+            </div>
+        </rystem-ajax-form>
+    </div>
+</div>
+
+
 

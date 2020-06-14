@@ -62,7 +62,7 @@ namespace Expertiser.Database.Models
         [Display(Name = nameof(TableBill))]
         public virtual ICollection<TableBill> TableBill { get; set; }
 
-        [Display(Name = nameof(TableMessages))]
-        public virtual ICollection<TableMessages> TableMessages { get; set; }
+        //[Display(Name = nameof(TableMessages))]
+        //public virtual ICollection<TableMessages> TableMessages { get; set; }
     }
 }

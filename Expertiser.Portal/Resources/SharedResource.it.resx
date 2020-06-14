@@ -138,6 +138,9 @@
   <data name="Companies" xml:space="preserve">
     <value>Compagnie</value>
   </data>
+  <data name="Completed Expertise" xml:space="preserve">
+    <value>Perizia Completa</value>
+  </data>
   <data name="Contributor" xml:space="preserve">
     <value>Perito</value>
   </data>
@@ -189,6 +192,9 @@
   <data name="Index" xml:space="preserve">
     <value>Lista</value>
   </data>
+  <data name="Insert Message" xml:space="preserve">
+    <value>Inserisci messaggio</value>
+  </data>
   <data name="Inspectorate" xml:space="preserve">
     <value>Ispettorato</value>
   </data>
@@ -228,11 +234,17 @@
   <data name="Messages" xml:space="preserve">
     <value>Comunicazioni</value>
   </data>
+  <data name="Photos" xml:space="preserve">
+    <value>Foto</value>
+  </data>
   <data name="Presented" xml:space="preserve">
     <value>Presentato</value>
   </data>
   <data name="Registered" xml:space="preserve">
     <value>Registrato</value>
+  </data>
+  <data name="Reserved Note" xml:space="preserve">
+    <value>Nota Riservata</value>
   </data>
   <data name="Save" xml:space="preserve">
     <value>Salva</value>

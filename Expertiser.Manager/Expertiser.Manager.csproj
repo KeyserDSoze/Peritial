@@ -18,8 +18,4 @@
     <ProjectReference Include="..\Expertiser.Interfaces\Expertiser.Interfaces.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Registry\" />
-  </ItemGroup>
-
 </Project>

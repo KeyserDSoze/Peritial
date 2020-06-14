@@ -64,7 +64,11 @@ namespace Expertiser
                     .AddItem("Countries", null, new NavigationUrl("Country"))
                     .AddItem("Locations", null, new NavigationUrl("Location"))
             .Build();
-        public NavigationBuilder NavigationBuilder => navigationBar;
+        public NavigationBuilder NavigationBar => navigationBar;
+    }
+    public class FileManager
+    {
+
     }
     public class NavigationManager
     {
@@ -108,7 +112,7 @@ namespace Expertiser
                     .ThenInclude(x => x.UserName)
                 .Include(x => x.TableBill)
                     .ThenInclude(x => x.Amount)
-                .Include(x => x.TableMessages, PropertyOptions.Count)
+                .Include(x => x.TableMessage, PropertyOptions.Count)
                 .Include(x => x.Liquidated)
                 .Include(x => x.AssignmentDate)
                 .Include(x => x.InspectionDate);
@@ -180,7 +184,8 @@ namespace Expertiser
                 .ThenInclude(t => t.Contributor);
         public IQueryable<TableExpertise> Expertises => Manager.Context.TableExpertise
             .Include(x => x.TableBill)
-            .Include(x => x.TableMessages)
+            .Include(x => x.TableMessage)
+                .ThenInclude(x => x.User)
             .Include(x => x.Branch)
                 .ThenInclude(x => x.BranchType)
             .Include(x => x.Contributor)

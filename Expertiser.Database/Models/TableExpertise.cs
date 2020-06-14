@@ -11,7 +11,7 @@ namespace Expertiser.Database.Models
         public TableExpertise()
         {
             TableBill = new HashSet<TableBill>();
-            TableMessages = new HashSet<TableMessages>();
+            TableMessage = new HashSet<TableMessage>();
         }
 
         [Key]
@@ -49,6 +49,6 @@ namespace Expertiser.Database.Models
         [InverseProperty("Expertise")]
         public virtual ICollection<TableBill> TableBill { get; set; }
         [InverseProperty("Expertise")]
-        public virtual ICollection<TableMessages> TableMessages { get; set; }
+        public virtual ICollection<TableMessage> TableMessage { get; set; }
     }
 }
