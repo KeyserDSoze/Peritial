@@ -77,16 +77,21 @@ namespace Expertiser
         public async Task<IList<string>> GetUriFiles(int id, string name = null)
             => await new File().SearchAsync($"{id}/{name}");
         public async Task<bool> SaveFile(int id, IFormFile file, string name = null)
-            => await new File()
+        {
+            if (name == null)
+                name = Guid.NewGuid().ToString("N");
+            else if(name.EndsWith("/"))
+                name = $"{name}{Guid.NewGuid():N}";
+            return await new File()
             {
-                Name = $"{id}/{(name ?? Guid.NewGuid().ToString("N"))}.{file.FileName.Split('.').Last()}",
+                Name = $"{id}/{name}.{file.FileName.Split('.').Last()}",
                 Properties = new BlobDataProperties()
                 {
                     ContentType = file.ContentType
                 },
                 Stream = file.OpenReadStream()
             }.WriteAsync();
-
+        }
     }
     public class NavigationManager
     {

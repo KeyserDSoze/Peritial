@@ -294,4 +294,7 @@
   <data name="UserName" xml:space="preserve">
     <value>Nome utente</value>
   </data>
+  <data name="CityId" xml:space="preserve">
+    <value>Città</value>
+  </data>
 </root>

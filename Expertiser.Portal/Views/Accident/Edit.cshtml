@@ -24,7 +24,7 @@
                     <partial name="_GetInsurances" model="Model?.InsuranceId ?? 0" />
                 </div>
                 <rystem-ajax-modal rystem-request-context="Manager.ModalManager.CreateNewInsurance" rystem-size="Large">
-                    <div class="btn btn-primary mt-2">@Localizer["Create New Insurance"]</div>
+                    <div class="btn btn-primary mt-2">@SharedLocalizer["Create New Insurance"]</div>
                 </rystem-ajax-modal>
                 <span asp-validation-for="InsuranceId" class="text-danger"></span>
             </div>
@@ -45,24 +45,27 @@
             <div class="form-row">
                 <div class="form-group col-md-6">
                     <label asp-for="AccidentDate" class="control-label"></label>
-                    <rystem-date name="AccidentDate" value="Model.AccidentDate" class="form-control"></rystem-date>
+                    <rystem-date name="AccidentDate" value="Model?.AccidentDate" class="form-control"></rystem-date>
                     <span asp-validation-for="AccidentDate" class="text-danger"></span>
                 </div>
                 <div class="form-group col-md-6">
                     <label asp-for="DenunciationDate" class="control-label"></label>
-                    <rystem-date name="DenunciationDate" value="Model.DenunciationDate" class="form-control"></rystem-date>
+                    <rystem-date name="DenunciationDate" value="Model?.DenunciationDate" class="form-control"></rystem-date>
                     <span asp-validation-for="DenunciationDate" class="text-danger"></span>
                 </div>
             </div>
-            <div class="form-group">
-                <label>@SharedLocalizer["Connected Expertises"]</label>
-                @foreach (var expertise in Model.TableExpertise)
-                {
-                    <a asp-action="Edit" asp-controller="Experty" asp-route-id="@expertise.Id" class="page-link">
-                        @expertise.Id - @expertise.Member?.UserName - @expertise.Contributor?.UserName - @expertise.AssignmentDate - @expertise.InspectionDate
-                    </a>
-                }
-            </div>
+            @if (Model != null)
+            {
+                <div class="form-group">
+                    <label>@SharedLocalizer["Connected Expertises"]</label>
+                    @foreach (var expertise in Model.TableExpertise)
+                    {
+                        <a asp-action="Edit" asp-controller="Experty" asp-route-id="@expertise.Id" class="page-link">
+                            @expertise.Id - @expertise.Member?.UserName - @expertise.Contributor?.UserName - @expertise.AssignmentDate - @expertise.InspectionDate
+                        </a>
+                    }
+                </div>
+            }
             <div class="form-group">
                 <input type="submit" value="@SharedLocalizer["Save"]" class="btn btn-primary" />
             </div>

@@ -123,6 +123,12 @@
   <data name="Accidents" xml:space="preserve">
     <value>Sinistri</value>
   </data>
+  <data name="Address" xml:space="preserve">
+    <value>Indirizzo</value>
+  </data>
+  <data name="AddressId" xml:space="preserve">
+    <value>Indirizzo</value>
+  </data>
   <data name="Are you sure you want to delete this?" xml:space="preserve">
     <value>Sei sicuro di voler cancellare questo?</value>
   </data>
@@ -134,6 +140,9 @@
   </data>
   <data name="Cancelled" xml:space="preserve">
     <value>Cancellato</value>
+  </data>
+  <data name="CityId" xml:space="preserve">
+    <value>Città</value>
   </data>
   <data name="Companies" xml:space="preserve">
     <value>Compagnie</value>
@@ -150,11 +159,29 @@
   <data name="Create" xml:space="preserve">
     <value>Crea nuovo</value>
   </data>
+  <data name="Create Customer" xml:space="preserve">
+    <value>Crea Cliente</value>
+  </data>
+  <data name="Create Insurance" xml:space="preserve">
+    <value>Inserisci Polizza</value>
+  </data>
   <data name="Create New" xml:space="preserve">
     <value>Crea Nuovo</value>
   </data>
+  <data name="Create New Address" xml:space="preserve">
+    <value>Inserisci un nuovo indirizzo</value>
+  </data>
+  <data name="Create New Customer" xml:space="preserve">
+    <value>Inserisci un nuovo cliente</value>
+  </data>
+  <data name="Create New Insurance" xml:space="preserve">
+    <value>Inserisci nuova polizza</value>
+  </data>
   <data name="Customer and Utility" xml:space="preserve">
     <value>Cliente e utilità</value>
+  </data>
+  <data name="CustomerId" xml:space="preserve">
+    <value>Cliente</value>
   </data>
   <data name="Customers" xml:space="preserve">
     <value>Clienti</value>
@@ -164,6 +191,9 @@
   </data>
   <data name="Details" xml:space="preserve">
     <value>Dettaglio</value>
+  </data>
+  <data name="Drag&amp;Drop or Click to Upload" xml:space="preserve">
+    <value>Sposta qui o clicca per caricare</value>
   </data>
   <data name="Duplicated" xml:space="preserve">
     <value>Duplicato</value>
@@ -182,6 +212,12 @@
   </data>
   <data name="External Account" xml:space="preserve">
     <value>Account esterni</value>
+  </data>
+  <data name="ExternalId" xml:space="preserve">
+    <value>Id esterno</value>
+  </data>
+  <data name="FiscalCode" xml:space="preserve">
+    <value>Codice Fiscale o P.IVA</value>
   </data>
   <data name="Hello" xml:space="preserve">
     <value>Ciao</value>
@@ -213,6 +249,9 @@
   <data name="Insurance Company" xml:space="preserve">
     <value>Compagnia assicurativa</value>
   </data>
+  <data name="InsuranceCompanyId" xml:space="preserve">
+    <value>Compagnia assicurativa</value>
+  </data>
   <data name="Insurances" xml:space="preserve">
     <value>Assicurazioni</value>
   </data>
@@ -234,8 +273,14 @@
   <data name="Messages" xml:space="preserve">
     <value>Comunicazioni</value>
   </data>
+  <data name="Name" xml:space="preserve">
+    <value>Nome</value>
+  </data>
   <data name="Photos" xml:space="preserve">
     <value>Foto</value>
+  </data>
+  <data name="PostalCode" xml:space="preserve">
+    <value>Codice postale</value>
   </data>
   <data name="Presented" xml:space="preserve">
     <value>Presentato</value>

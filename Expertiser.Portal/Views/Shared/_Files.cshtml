@@ -1,6 +1,22 @@
-﻿@model IList<string>
+﻿@model (string Label, IList<string> Files)
 
-@foreach (string value in Model)
-{
-    <div>@value</div>
-}
+<div class="mb-2 mt-2">
+    @if (Model.Files.Count == 0)
+    {
+        <div class="h2 mb-0"><i class="fas fa-file-alt"></i></div>
+    }
+    else
+    {
+        @foreach (string value in Model.Files)
+        {
+            @if (value.Contains(".jpg") || value.Contains(".png"))
+            {
+                <a href="@value" download><img src="@value" class="col-md-2" /></a>
+            }
+            else
+            {
+                <a href="@value" download class="h2"><i class="fas fa-file-download text-xl-left"></i></a>
+            }
+        }
+    }
+</div>

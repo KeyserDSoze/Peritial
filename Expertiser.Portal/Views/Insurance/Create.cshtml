@@ -1,12 +1,7 @@
 ﻿@model TableInsurance
 
-@{
-    ViewData["Title"] = "Edit";
-}
+<h1>@SharedLocalizer["Create Insurance"]</h1>
 
-<h1>@SharedLocalizer["Edit"]</h1>
-
-<h4>TableInsurance</h4>
 <hr />
 <div class="row">
     <div class="col-md-12">
@@ -14,28 +9,28 @@
             <div asp-validation-summary="ModelOnly" class="text-danger"></div>
             @Html.AntiForgeryToken()
             <div class="form-group">
-                <label asp-for="CustomerId" class="control-label"></label>
+                <label class="control-label">@SharedLocalizer["CustomerId"]</label>
                 <div id="customers">
                     <partial name="_GetCustomers" model="0" />
                 </div>
                 <rystem-ajax-modal rystem-request-context="Manager.ModalManager.CreateNewCustomer" rystem-size="Large">
-                    <div class="btn btn-primary mt-2">@Localizer["Create New Customer"]</div>
+                    <div class="btn btn-primary mt-2">@SharedLocalizer["Create New Customer"]</div>
                 </rystem-ajax-modal>
 
                 <span asp-validation-for="CustomerId" class="text-danger"></span>
             </div>
             <div class="form-group">
-                <label asp-for="ExternalId" class="control-label"></label>
+                <label class="control-label">@SharedLocalizer["ExternalId"]</label>
                 <input asp-for="ExternalId" class="form-control" />
                 <span asp-validation-for="ExternalId" class="text-danger"></span>
             </div>
             <div class="form-group">
-                <label asp-for="InsuranceCompanyId" class="control-label"></label>
+                <label class="control-label">@SharedLocalizer["InsuranceCompanyId"]</label>
                 <rystem-dropdown name="InsuranceCompanyId" rystem-data="Manager.DropdownManager.GetInsuranceCompanies()"></rystem-dropdown>
                 <span asp-validation-for="InsuranceCompanyId" class="text-danger"></span>
             </div>
             <div class="form-group">
-                <input type="submit" value="Save" class="btn btn-primary" />
+                <input type="submit" value="@SharedLocalizer["Save"]" class="btn btn-primary" />
             </div>
         </rystem-ajax-form>
     </div>
