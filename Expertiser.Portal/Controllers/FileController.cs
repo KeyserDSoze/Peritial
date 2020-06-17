@@ -7,8 +7,6 @@ using Expertiser.Base.Constant;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.WindowsAzure.Storage.Blob;
-using Rystem.Azure.Data;
 
 namespace Expertiser.Portal.Controllers
 {

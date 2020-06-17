@@ -23,10 +23,6 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Expertiser.Database", "Expe
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Expertiser.Web", "Expertiser.Web", "{7D4CF4D0-8230-4FD1-9A6A-68803CE18BE4}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Rystem.Web", "..\Rystem\Rystem.Web\Rystem.Web.csproj", "{B7D4BE3E-F411-4F26-9E05-B32F1F157854}"
-EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Rystem", "..\Rystem\Rystem\Rystem.csproj", "{56BB21AD-DE25-46A8-932E-844DAB8B94D8}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -57,14 +53,6 @@ Global
 		{7449FF85-37F8-4861-B26C-CA39576662A9}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{7449FF85-37F8-4861-B26C-CA39576662A9}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{7449FF85-37F8-4861-B26C-CA39576662A9}.Release|Any CPU.Build.0 = Release|Any CPU
-		{B7D4BE3E-F411-4F26-9E05-B32F1F157854}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{B7D4BE3E-F411-4F26-9E05-B32F1F157854}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{B7D4BE3E-F411-4F26-9E05-B32F1F157854}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{B7D4BE3E-F411-4F26-9E05-B32F1F157854}.Release|Any CPU.Build.0 = Release|Any CPU
-		{56BB21AD-DE25-46A8-932E-844DAB8B94D8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{56BB21AD-DE25-46A8-932E-844DAB8B94D8}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{56BB21AD-DE25-46A8-932E-844DAB8B94D8}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{56BB21AD-DE25-46A8-932E-844DAB8B94D8}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

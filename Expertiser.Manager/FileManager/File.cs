@@ -1,10 +1,10 @@
 ﻿using Rystem;
-using Rystem.Azure.Data;
-using Rystem.Azure.Data.Integration;
+using Rystem.Data;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using Rystem.Data.Integration;
 
 namespace Expertiser
 {
@@ -12,7 +12,7 @@ namespace Expertiser
     {
         public Stream Stream { get; set; }
         public string Name { get; set; }
-        public IDataProperties Properties { get; set; }
+        public DataProperties Properties { get; set; }
 
         public ConfigurationBuilder GetConfigurationBuilder()
             => new ConfigurationBuilder().WithData(Const.StorageConnectionString)

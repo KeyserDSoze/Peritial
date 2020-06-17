@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Localization;
-using Rystem.Azure.Data;
+using Rystem.Data;
 using Rystem.Web;
 using Rystem.Web.Backoffice;
 using System;
@@ -85,7 +85,7 @@ namespace Expertiser
             return await new File()
             {
                 Name = $"{id}/{name}.{file.FileName.Split('.').Last()}",
-                Properties = new BlobDataProperties()
+                Properties = new DataProperties()
                 {
                     ContentType = file.ContentType
                 },

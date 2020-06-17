@@ -27,9 +27,11 @@ namespace Expertiser.Portal
 {
     public class Startup
     {
-        public Startup(IConfiguration configuration)
+        private readonly IWebHostEnvironment WebHostEnvironment;
+        public Startup(IConfiguration configuration, IWebHostEnvironment webHostEnvironment)
         {
             Configuration = configuration;
+            WebHostEnvironment = webHostEnvironment;
         }
         public IConfiguration Configuration { get; }
 
@@ -44,6 +46,7 @@ namespace Expertiser.Portal
             services.AddHttpContextAccessor();
             services.AddScoped<ContextExpertiser>();
             services.AddLocalization(options => options.ResourcesPath = "Resources");
+            services.AddRystemViews();
             services.AddControllersWithViews(config =>
             {
                 var policy = new AuthorizationPolicyBuilder()
