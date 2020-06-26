@@ -124,7 +124,7 @@
     <value>Data Sinistro</value>
   </data>
   <data name="AccidentId" xml:space="preserve">
-    <value>Sinistro</value>
+    <value>N. Sinistro Compagnia</value>
   </data>
   <data name="AssignmentDate" xml:space="preserve">
     <value>Data Incarico</value>

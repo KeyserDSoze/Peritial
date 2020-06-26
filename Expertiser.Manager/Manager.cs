@@ -44,6 +44,8 @@ namespace Expertiser
         public FileManager FileManager => fileManager ??= new FileManager(this);
         private static readonly NavigationManager navigationManager = new NavigationManager();
         public NavigationManager NavigationManager => navigationManager;
+        private static readonly ServiceManager serviceManager = new ServiceManager();
+        public ServiceManager ServiceManager => serviceManager;
 
         private static NavigationBuilder navigationBar = new NavigationBar("Experty", "fa-institution")
             .AddSuperGroup()
@@ -80,7 +82,7 @@ namespace Expertiser
         {
             if (name == null)
                 name = Guid.NewGuid().ToString("N");
-            else if(name.EndsWith("/"))
+            else if (name.EndsWith("/"))
                 name = $"{name}{Guid.NewGuid():N}";
             return await new File()
             {
@@ -405,5 +407,10 @@ namespace Expertiser
         public RequestContext SetInsurance => new RequestContext() { Action = "Create", Controller = "Insurance", RequestType = RequestType.Post, Selector = "#insurances" };
         public RequestContext CreateNewInsurance => new RequestContext() { Action = "Create", Controller = "Insurance" };
         public RequestContext UpdateUserRole(string userId) => new RequestContext() { Action = "UpdateRole", Controller = "User", QueryString = new Dictionary<object, object>() { { "id", userId } } };
+    }
+    public class ServiceManager
+    {
+        private static readonly EmailSender emailSender = new EmailSender();
+        public EmailSender EmailSender => emailSender;
     }
 }

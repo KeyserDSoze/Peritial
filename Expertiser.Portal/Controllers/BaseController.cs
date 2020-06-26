@@ -26,5 +26,6 @@ namespace Expertiser.Portal.Controllers
             this.Manager = manager;
             this.StringLocalizer = stringLocalizer;
         }
+        private protected bool IsAValidModel(int id) => ModelState.IsValid || (id == 0 && ModelState.ErrorCount == 1);
     }
 }

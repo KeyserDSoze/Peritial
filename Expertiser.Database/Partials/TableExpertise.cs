@@ -5,13 +5,15 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Linq;
 
 namespace Expertiser.Database.Models
 {
     [ModelMetadataType(typeof(TableExpertiseMetadata))]
     public partial class TableExpertise
     {
-
+        [NotMapped]
+        public string ConcreteId => $"{this.Id}-{this.Accident?.InsuranceAgency?.Label.Substring(0, 3)}-{this.Accident?.AccidentDate:yyyy}-{this.Member?.UserName.First()}-{this.Contributor?.UserName.Substring(0, 2)}";
     }
     public class TableExpertiseMetadata
     {

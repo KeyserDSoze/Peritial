@@ -23,9 +23,6 @@ namespace Expertiser.Database.Models
         public string ContributorId { get; set; }
         public int Status { get; set; }
         public int BranchId { get; set; }
-        [Required]
-        [StringLength(128)]
-        public string ExternalId { get; set; }
         [Column(TypeName = "datetime")]
         public DateTime? AssignmentDate { get; set; }
         [Column(TypeName = "datetime")]

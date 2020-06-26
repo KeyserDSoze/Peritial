@@ -13,7 +13,7 @@ namespace Expertiser.Importer
     public class ImportCity : IImporter, IUnitTest
     {
         private const string Uri = "https://raw.githubusercontent.com/matteocontrini/comuni-json/master/comuni.json";
-        public async Task<bool> DoWorkAsync(Action<object> action, params string[] args)
+        public async Task DoWorkAsync(Action<object> action, UnitTestMetrics metrics, params string[] args)
         {
             List<City> cities = JsonConvert.DeserializeObject<List<City>>(Request.Make(Uri));
             using (ContextExpertiser context = new ContextExpertiser())
@@ -30,7 +30,6 @@ namespace Expertiser.Importer
                     });
                 await context.SaveChangesAsync();
             }
-            return true;
         }
     }
     public class City

@@ -18,6 +18,7 @@ namespace Expertiser.Database.Models
         [Column(TypeName = "decimal(18, 0)")]
         public decimal? Extra { get; set; }
         public int ExpertiseId { get; set; }
+        public double? Percentage { get; set; }
 
         [ForeignKey(nameof(ExpertiseId))]
         [InverseProperty(nameof(TableExpertise.TableBill))]

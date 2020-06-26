@@ -33,7 +33,7 @@ namespace Expertiser.Portal.Controllers
             => Manager.NavigationManager.GetAccidentNavigation("Index", this.StringLocalizer);
         public override INavigation<TableAccident> GetDeleteNavigation()
             => Manager.NavigationManager.GetAccidentNavigation("Delete", this.StringLocalizer);
-       
+
         //
         // GET: Accident/Manage
         public async Task<IActionResult> Edit(int? id)
@@ -52,9 +52,9 @@ namespace Expertiser.Portal.Controllers
         [HttpPost]
         [ValidateAntiForgeryToken]
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Style", "IDE0037:Use inferred member name", Justification = "<Pending>")]
-        public async Task<IActionResult> Edit([Bind("Id,AddressId,InsuranceId,InsuranceAgencyId,InspectorateId,ExternalId,AccidentDate,DenunciationDate")] TableAccident tableAccident)
+        public async Task<IActionResult> Edit([FromForm] TableAccident tableAccident)
         {
-            if (ModelState.IsValid)
+            if (this.IsAValidModel(tableAccident.Id))
             {
                 if (tableAccident.Id == 0)
                 {
@@ -66,7 +66,6 @@ namespace Expertiser.Portal.Controllers
                         MemberId = HttpContext.User.Claims.FirstOrDefault(x => x.Type == ClaimTypes.NameIdentifier).Value,
                         Status = 0,
                         BranchId = 1,
-                        ExternalId = string.Empty
                     };
                     Manager.Context.TableExpertise.Add(tableExpertise);
                     await Manager.Context.SaveChangesAsync();

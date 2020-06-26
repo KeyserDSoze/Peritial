@@ -150,6 +150,9 @@
   <data name="Completed Expertise" xml:space="preserve">
     <value>Perizia Completa</value>
   </data>
+  <data name="Connected Expertises" xml:space="preserve">
+    <value>Perizie connesse</value>
+  </data>
   <data name="Contributor" xml:space="preserve">
     <value>Perito</value>
   </data>
@@ -160,7 +163,7 @@
     <value>Crea nuovo</value>
   </data>
   <data name="Create Customer" xml:space="preserve">
-    <value>Crea Cliente</value>
+    <value>Crea Contraente</value>
   </data>
   <data name="Create Insurance" xml:space="preserve">
     <value>Inserisci Polizza</value>
@@ -178,13 +181,13 @@
     <value>Inserisci nuova polizza</value>
   </data>
   <data name="Customer and Utility" xml:space="preserve">
-    <value>Cliente e utilità</value>
+    <value>Contraente e utilità</value>
   </data>
   <data name="CustomerId" xml:space="preserve">
-    <value>Cliente</value>
+    <value>Contraente</value>
   </data>
   <data name="Customers" xml:space="preserve">
-    <value>Clienti</value>
+    <value>Contraenti</value>
   </data>
   <data name="Delete" xml:space="preserve">
     <value>Cancella</value>
