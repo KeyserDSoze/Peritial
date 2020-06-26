@@ -89,5 +89,26 @@ namespace Expertiser.Portal.Controllers
             }
             return View(tableExpertise);
         }
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Bill(int id, [Bind("Id", "Amount", "Extra", "ExpertiseId", "Percentage")] TableBill tableBill)
+        {
+            if (IsAValidModel(tableBill.ExpertiseId))
+            {
+                if (tableBill.ExpertiseId == 0)
+                {
+                    tableBill.ExpertiseId = id;
+                    Manager.Context.Add(tableBill);
+                    await Manager.Context.SaveChangesAsync();
+                }
+                else
+                {
+                    Manager.Context.Update(tableBill);
+                    await Manager.Context.SaveChangesAsync();
+                }
+                return PartialView("_EditListBill", await Manager.QueryManager.Expertises.FirstOrDefaultAsync(x => x.Id == id));
+            }
+            return NotOkMessage(ModelState);
+        }
     }
 }

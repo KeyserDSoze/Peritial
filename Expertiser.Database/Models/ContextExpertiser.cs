@@ -118,8 +118,6 @@ namespace Expertiser.Database.Models
 
             modelBuilder.Entity<TableBill>(entity =>
             {
-                entity.Property(e => e.ExternalId).IsUnicode(false);
-
                 entity.HasOne(d => d.Expertise)
                     .WithMany(p => p.TableBill)
                     .HasForeignKey(d => d.ExpertiseId)

@@ -1,0 +1,28 @@
+﻿@model Expertiser.Database.Models.TableBill
+
+<rystem-ajax-form rystem-request-context="Manager.ModalManager.ModifyNewBill">
+    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+    @Html.AntiForgeryToken()
+    <input type="hidden" asp-for="Id" />
+    <input type="hidden" asp-for="ExpertiseId" />
+    <div class="form-row">
+        <div class="form-group col-md-3">
+            <label asp-for="Amount" class="control-label"></label>
+            <input type="number" step="any" name="Amount" class="form-control" value='@Model?.Amount.ToString(CultureInfo.InvariantCulture)' />
+            <span asp-validation-for="Amount" class="text-danger"></span>
+        </div>
+        <div class="form-group col-md-3">
+            <label asp-for="Percentage" class="control-label"></label>
+            <input type="number" step="any" name="Liquidated" class="form-control" value='@Model?.Percentage?.ToString(CultureInfo.InvariantCulture)' />
+            <span asp-validation-for="Percentage" class="text-danger"></span>
+        </div>
+        <div class="form-group col-md-3">
+            <label asp-for="Extra" class="control-label"></label>
+            <input type="number" step="any" name="Liquidated" class="form-control" value='@Model?.Extra?.ToString(CultureInfo.InvariantCulture)' />
+            <span asp-validation-for="Extra" class="text-danger"></span>
+        </div>
+        <div class="form-group col-md-3 mt-4">
+            <input type="submit" value="@SharedLocalizer["Add"]" class="btn btn-primary" />
+        </div>
+    </div>
+</rystem-ajax-form>

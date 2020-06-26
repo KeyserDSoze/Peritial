@@ -1,0 +1,7 @@
+﻿@model Expertiser.Database.Models.TableExpertise
+
+@foreach (var tableBill in Model.TableBill)
+{
+    <partial name="_EditBill" model="tableBill" />
+}
+<partial name="_EditBill" model="null" />

@@ -12,9 +12,6 @@ namespace Expertiser.Database.Models
         public int Id { get; set; }
         [Column(TypeName = "decimal(18, 2)")]
         public decimal Amount { get; set; }
-        [Required]
-        [StringLength(100)]
-        public string ExternalId { get; set; }
         [Column(TypeName = "decimal(18, 0)")]
         public decimal? Extra { get; set; }
         public int ExpertiseId { get; set; }

@@ -404,6 +404,7 @@ namespace Expertiser
         public RequestContext CreateNewLocation => new RequestContext() { Action = "Create", Controller = "Location" };
         public RequestContext CreateNewCustomer => new RequestContext() { Action = "Create", Controller = "Customer" };
         public RequestContext CreateNewInsuranceCompany => new RequestContext() { Action = "Create", Controller = "InsuranceCompany" };
+        public RequestContext ModifyNewBill => new RequestContext() { Action = "Bill", Controller = "Experty", RequestType = RequestType.Post, Selector = "#billwrapper" };
         public RequestContext UpdatePostalCodes => new RequestContext() { Action = "UpdatePostalCodes", Controller = "Location", Selector = "#updatePostalCodes" };
         public RequestContext SetLocation => new RequestContext() { Action = "Create", Controller = "Location", RequestType = RequestType.Post, Selector = ".location-address" };
         public RequestContext SetCustomer => new RequestContext() { Action = "Create", Controller = "Customer", RequestType = RequestType.Post, Selector = "#customers" };

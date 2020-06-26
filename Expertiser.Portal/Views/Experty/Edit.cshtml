@@ -80,6 +80,11 @@
     <a asp-action="Index">@SharedLocalizer["Back to List"]</a>
 </div>
 <div class="row mt-3">
+    <div id="billwrapper">
+        <partial name="_EditListBill" model="Model" />
+    </div>
+</div>
+<div class="row mt-3">
     <div class="col-md-5">
         <div id="updateMessage">
             <partial name="_Messages" model="Model.TableMessage" />
@@ -97,6 +102,3 @@
         </rystem-ajax-form>
     </div>
 </div>
-
-
-
