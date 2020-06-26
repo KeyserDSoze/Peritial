@@ -10,7 +10,7 @@ namespace Expertiser.Functionality
 {
     public class DefaultIndex : IUnitTest
     {
-        public Task<bool> DoWorkAsync(Action<object> action, params string[] args)
+        public Task DoWorkAsync(Action<object> action, UnitTestMetrics metrics, params string[] args)
         {
             List<Alo> alos = new List<Alo>() { new Alo(), new Alo(), new Alo() };
             //var q = new DefaultIndex<Alo>(alos)
@@ -28,6 +28,7 @@ namespace Expertiser.Functionality
             //    Console.WriteLine(string.Join(" | ", vals));
             return Task.FromResult(true);
         }
+
         public class Alo
         {
             public string Val { get; set; } = "dd";

@@ -11,7 +11,7 @@ namespace Expertiser.Manage
 {
     public class FixInsurangeAgencyLocation : IUnitTest
     {
-        public async Task<bool> DoWorkAsync(Action<object> action, params string[] args)
+        public async Task DoWorkAsync(Action<object> action, UnitTestMetrics metrics, params string[] args)
         {
             using (ContextExpertiser context = new ContextExpertiser())
             {
@@ -64,7 +64,6 @@ namespace Expertiser.Manage
                 }
                 await context.SaveChangesAsync();
             }
-            return true;
         }
     }
 }

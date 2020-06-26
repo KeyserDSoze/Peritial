@@ -12,7 +12,7 @@ namespace Expertiser.Importer
 {
     public class ImportInsuranceAgency : IImporter, IUnitTest
     {
-        public async Task<bool> DoWorkAsync(Action<object> action, params string[] args)
+        public async Task DoWorkAsync(Action<object> action, UnitTestMetrics metrics, params string[] args)
         {
             using (ContextExpertiser context = new ContextExpertiser())
             {
@@ -20,7 +20,6 @@ namespace Expertiser.Importer
                     context.TableInsuranceAgency.Add(t);
                 await context.SaveChangesAsync();
             }
-            return true;
         }
     }
     public class InsuranceAgencyReader
