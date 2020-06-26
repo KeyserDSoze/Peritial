@@ -16,7 +16,7 @@ namespace Expertiser.Portal.Controllers
     [Authorize(Roles = (Roles.All))]
     public class MessageController : BaseController<TableMessage>
     {
-        public MessageController(Manager manager, IStringLocalizer<DatabaseShared> stringLocalizer) : base(manager, stringLocalizer)
+        public MessageController(Manager manager, IStringLocalizer<DatabaseShared> stringLocalizer, IStringLocalizer<SharedResource> sharedLocalizer) : base(manager, stringLocalizer, sharedLocalizer)
         {
         }
 

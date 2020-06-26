@@ -17,7 +17,7 @@ namespace Expertiser.Portal.Controllers
     [Authorize(Roles = Roles.AdminContributor)]
     public class ExpertyController : BaseController<TableExpertise>
     {
-        public ExpertyController(Manager manager, IStringLocalizer<DatabaseShared> stringLocalizer) : base(manager, stringLocalizer)
+        public ExpertyController(Manager manager, IStringLocalizer<DatabaseShared> stringLocalizer, IStringLocalizer<SharedResource> sharedLocalizer) : base(manager, stringLocalizer, sharedLocalizer)
         {
         }
         public override INavigation<TableExpertise> GetIndexNavigation()
@@ -63,11 +63,27 @@ namespace Expertiser.Portal.Controllers
                 {
                     Manager.Context.Add(tableExpertise);
                     await Manager.Context.SaveChangesAsync();
+                    var expertise = await Manager.Context.TableExpertise.Include(x => x.Contributor).FirstOrDefaultAsync(x => x.Id == tableExpertise.Id);
+                    if (expertise.Member != null)
+                        Manager.ServiceManager.EmailSender.Send(expertise.Member.Email, StringLocalizer["new experty"], string.Format(StringLocalizer["bodynewexperty"], $"{Manager.BaseUri}/Experty/Edit/{tableExpertise.Id}"));
                 }
                 else
                 {
+                    var expertise = await Manager.Context.TableExpertise.Include(x => x.Contributor).Include(x => x.Member).AsNoTracking().FirstOrDefaultAsync(x => x.Id == tableExpertise.Id);
+                    StatusType statusType = (StatusType)expertise.Status;
                     Manager.Context.Update(tableExpertise);
                     await Manager.Context.SaveChangesAsync();
+                    var newExpertise = await Manager.Context.TableExpertise.Include(x => x.Contributor).Include(x => x.Member).FirstOrDefaultAsync(x => x.Id == tableExpertise.Id);
+                    StatusType newStatusType = (StatusType)newExpertise.Status;
+                    if (statusType != newStatusType || newExpertise.ContributorId != expertise.ContributorId)
+                    {
+                        string subject = string.Format(StringLocalizer["modify experty"], SharedLocalizer[$"{newStatusType}"]);
+                        string message = string.Format(StringLocalizer["bodynewexperty"], $"{Manager.BaseUri}/Experty/Edit/{tableExpertise.Id}");
+                        if (newExpertise.Contributor.Email != User.Identity.Name)
+                            Manager.ServiceManager.EmailSender.Send(expertise.Contributor.Email, subject, message);
+                        if (newExpertise.Member.Email != User.Identity.Name)
+                            Manager.ServiceManager.EmailSender.Send(expertise.Member.Email, subject, message);
+                    }
                 }
                 return RedirectToAction(nameof(Index));
             }

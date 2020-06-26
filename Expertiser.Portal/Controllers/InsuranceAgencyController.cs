@@ -16,7 +16,7 @@ namespace Expertiser.Portal.Controllers
     [Authorize(Roles = Roles.AdminContributor)]
     public class InsuranceAgencyController : BaseController<TableInsuranceAgency>
     {
-        public InsuranceAgencyController(Manager manager, IStringLocalizer<DatabaseShared> stringLocalizer) : base(manager, stringLocalizer)
+        public InsuranceAgencyController(Manager manager, IStringLocalizer<DatabaseShared> stringLocalizer, IStringLocalizer<SharedResource> sharedLocalizer) : base(manager, stringLocalizer, sharedLocalizer)
         {
         }
 

@@ -22,6 +22,7 @@ namespace Expertiser
         private ContextExpertiser context;
         public ContextExpertiser Context => context ??= new ContextExpertiser(this.ConnectionString);
         public IHttpContextAccessor HttpContextAccessor { get; }
+        public string BaseUri => $"{HttpContextAccessor.HttpContext.Request.Scheme}://{HttpContextAccessor.HttpContext.Request.Host}";
         public UserManager<IdentityUser> UserManager { get; }
         public RoleManager<IdentityRole> RoleManager { get; }
         public SignInManager<IdentityUser> SignInManager { get; }
@@ -343,6 +344,8 @@ namespace Expertiser
                 yield return StatusType.Duplicated;
                 yield return StatusType.Cancelled;
                 yield return StatusType.Billed;
+                yield return StatusType.ToBeRevised;
+                yield return StatusType.ToSend;
             }
         }
         public IEnumerable<DropdownItem> GetPostalCodes(int cityId, string selectedPostalCode = null)

@@ -7,6 +7,8 @@
         Billed,
         Duplicated,
         Cancelled,
+        ToBeRevised,
+        ToSend
         //todo: Relazione allegata che roba è?
     }
 }

@@ -21,10 +21,12 @@ namespace Expertiser.Portal.Controllers
     {
         private protected readonly Manager Manager;
         private protected readonly IStringLocalizer<DatabaseShared> StringLocalizer;
-        public BaseController(Manager manager, IStringLocalizer<DatabaseShared> stringLocalizer)
+        private protected readonly IStringLocalizer<SharedResource> SharedLocalizer;
+        public BaseController(Manager manager, IStringLocalizer<DatabaseShared> stringLocalizer, IStringLocalizer<SharedResource> sharedLocalizer)
         {
             this.Manager = manager;
             this.StringLocalizer = stringLocalizer;
+            this.SharedLocalizer = sharedLocalizer;
         }
         private protected bool IsAValidModel(int id) => ModelState.IsValid || (id == 0 && ModelState.ErrorCount == 1);
     }

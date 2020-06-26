@@ -19,7 +19,7 @@ namespace Expertiser.Portal.Controllers
     [Authorize(Roles = Roles.AdminContributor)]
     public class AccidentController : BaseController<TableAccident>
     {
-        public AccidentController(Manager manager, IStringLocalizer<DatabaseShared> stringLocalizer) : base(manager, stringLocalizer)
+        public AccidentController(Manager manager, IStringLocalizer<DatabaseShared> stringLocalizer, IStringLocalizer<SharedResource> sharedLocalizer) : base(manager, stringLocalizer, sharedLocalizer)
         {
         }
 
@@ -64,7 +64,7 @@ namespace Expertiser.Portal.Controllers
                     {
                         AccidentId = tableAccident.Id,
                         MemberId = HttpContext.User.Claims.FirstOrDefault(x => x.Type == ClaimTypes.NameIdentifier).Value,
-                        Status = 0,
+                        Status = -1,
                         BranchId = 1,
                     };
                     Manager.Context.TableExpertise.Add(tableExpertise);

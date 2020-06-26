@@ -16,7 +16,7 @@ namespace Expertiser.Portal.Controllers
     [Authorize(Roles = Roles.AdminContributor)]
     public class CustomerController : BaseController<TableCustomer>
     {
-        public CustomerController(Manager manager, IStringLocalizer<DatabaseShared> stringLocalizer) : base(manager, stringLocalizer)
+        public CustomerController(Manager manager, IStringLocalizer<DatabaseShared> stringLocalizer, IStringLocalizer<SharedResource> sharedLocalizer) : base(manager, stringLocalizer, sharedLocalizer)
         {
         }
         public override async Task<IEnumerable<TableCustomer>> GetList()

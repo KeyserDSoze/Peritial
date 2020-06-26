@@ -13,7 +13,7 @@ namespace Expertiser.Portal.Controllers
 {
     public class LocationController : BaseController<TableLocation>
     {
-        public LocationController(Manager manager, IStringLocalizer<DatabaseShared> stringLocalizer) : base(manager, stringLocalizer)
+        public LocationController(Manager manager, IStringLocalizer<DatabaseShared> stringLocalizer, IStringLocalizer<SharedResource> sharedLocalizer) : base(manager, stringLocalizer, sharedLocalizer)
         {
 
         }

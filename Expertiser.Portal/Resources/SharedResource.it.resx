@@ -300,6 +300,12 @@
   <data name="String1" xml:space="preserve">
     <value>Perizie</value>
   </data>
+  <data name="ToBeRevised" xml:space="preserve">
+    <value>Da revisionare</value>
+  </data>
+  <data name="ToSend" xml:space="preserve">
+    <value>Da evadere</value>
+  </data>
   <data name="Users" xml:space="preserve">
     <value>Utenti</value>
   </data>

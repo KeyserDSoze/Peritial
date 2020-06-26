@@ -16,7 +16,7 @@ namespace Expertiser.Portal.Controllers
     [Authorize(Roles = Roles.AdminContributor)]
     public class InspectorateController : BaseController<TableInspectorate>
     {
-        public InspectorateController(Manager manager, IStringLocalizer<DatabaseShared> stringLocalizer) : base(manager, stringLocalizer)
+        public InspectorateController(Manager manager, IStringLocalizer<DatabaseShared> stringLocalizer, IStringLocalizer<SharedResource> sharedLocalizer) : base(manager, stringLocalizer, sharedLocalizer)
         {
         }
         public override async Task<IEnumerable<TableInspectorate>> GetList()

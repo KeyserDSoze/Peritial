@@ -126,6 +126,9 @@
   <data name="Are you sure you want to delete this?" xml:space="preserve">
     <value>Are you sure you want to delete this?</value>
   </data>
+  <data name="bodynewexperty" xml:space="preserve">
+    <value>You can check experty &lt;a href='{0}'&gt;here&lt;/a&gt;</value>
+  </data>
   <data name="Companies" xml:space="preserve">
     <value>Companies</value>
   </data>
@@ -212,6 +215,9 @@
   </data>
   <data name="Messages" xml:space="preserve">
     <value>Messages</value>
+  </data>
+  <data name="modify experty" xml:space="preserve">
+    <value>Experty {0}</value>
   </data>
   <data name="Users" xml:space="preserve">
     <value>Users</value>

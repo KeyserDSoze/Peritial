@@ -207,4 +207,10 @@
   <data name="InsuranceAgency.Label" xml:space="preserve">
     <value>Insurance Agency</value>
   </data>
+  <data name="bodynewexperty" xml:space="preserve">
+    <value>You can check experty &lt;a href='{0}'&gt;here&lt;/a&gt;</value>
+  </data>
+  <data name="modify experty" xml:space="preserve">
+    <value>Experty {0}</value>
+  </data>
 </root>
