@@ -297,13 +297,22 @@
   <data name="CityId" xml:space="preserve">
     <value>Città</value>
   </data>
+  <data name="Amount" xml:space="preserve">
+    <value>Totale</value>
+  </data>
   <data name="bodynewexperty" xml:space="preserve">
     <value>Puoi controllare la perizia &lt;a href='{0}'&gt;qui&lt;/a&gt;</value>
+  </data>
+  <data name="Extra" xml:space="preserve">
+    <value>Extra</value>
   </data>
   <data name="modify experty" xml:space="preserve">
     <value>Perizia {0}</value>
   </data>
   <data name="new experty" xml:space="preserve">
     <value>Nuova perizia</value>
+  </data>
+  <data name="Percentage" xml:space="preserve">
+    <value>Percentuale riconosciuta</value>
   </data>
 </root>

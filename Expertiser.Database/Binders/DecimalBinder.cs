@@ -16,20 +16,27 @@ namespace Expertiser.Database.Binders
                 .ValueProvider
                 .GetValue(bindingContext.ModelName);
             string value = valueProviderResult.FirstValue;
-            if (value.Contains(","))
-                value = value.Replace(",", ".");
+            if (value == null)
+            {
+                bindingContext.Result = ModelBindingResult.Success(0);
+            }
+            else
+            {
+                if (value.Contains(","))
+                    value = value.Replace(",", ".");
 
-            decimal.TryParse(
-                value,
-                NumberStyles.AllowDecimalPoint,
-                System.Globalization.CultureInfo.InvariantCulture,
-                out var model);
+                decimal.TryParse(
+                    value,
+                    NumberStyles.AllowDecimalPoint,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out var model);
 
-            bindingContext
-                .ModelState
-                .SetModelValue(bindingContext.ModelName, valueProviderResult);
+                bindingContext
+                    .ModelState
+                    .SetModelValue(bindingContext.ModelName, valueProviderResult);
 
-            bindingContext.Result = ModelBindingResult.Success(model);
+                bindingContext.Result = ModelBindingResult.Success(model);
+            }
             return Task.CompletedTask;
         }
     }

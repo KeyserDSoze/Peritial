@@ -123,17 +123,26 @@
   <data name="Accidents" xml:space="preserve">
     <value>Sinistri</value>
   </data>
+  <data name="Add" xml:space="preserve">
+    <value>Aggiungi</value>
+  </data>
   <data name="Address" xml:space="preserve">
     <value>Indirizzo</value>
   </data>
   <data name="AddressId" xml:space="preserve">
     <value>Indirizzo</value>
   </data>
+  <data name="Amount" xml:space="preserve">
+    <value>Totale</value>
+  </data>
   <data name="Are you sure you want to delete this?" xml:space="preserve">
     <value>Sei sicuro di voler cancellare questo?</value>
   </data>
   <data name="Back to List" xml:space="preserve">
     <value>Torna alla lista</value>
+  </data>
+  <data name="Bill" xml:space="preserve">
+    <value>Fatturato</value>
   </data>
   <data name="Billed" xml:space="preserve">
     <value>Fatturato</value>
@@ -219,6 +228,9 @@
   <data name="ExternalId" xml:space="preserve">
     <value>Id esterno</value>
   </data>
+  <data name="Extra" xml:space="preserve">
+    <value>Extra</value>
+  </data>
   <data name="FiscalCode" xml:space="preserve">
     <value>Codice Fiscale o P.IVA</value>
   </data>
@@ -276,8 +288,14 @@
   <data name="Messages" xml:space="preserve">
     <value>Comunicazioni</value>
   </data>
+  <data name="Modify" xml:space="preserve">
+    <value>Modifica</value>
+  </data>
   <data name="Name" xml:space="preserve">
     <value>Nome</value>
+  </data>
+  <data name="Percentage" xml:space="preserve">
+    <value>Percentuale riconosciuta</value>
   </data>
   <data name="Photos" xml:space="preserve">
     <value>Foto</value>

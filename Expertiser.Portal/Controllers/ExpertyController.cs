@@ -11,6 +11,8 @@ using Rystem.Web.Backoffice;
 using Microsoft.Extensions.Localization;
 using Expertiser.Base.Constant;
 using Expertiser.Interfaces;
+using System.Numerics;
+using Microsoft.EntityFrameworkCore.Metadata.Internal;
 
 namespace Expertiser.Portal.Controllers
 {
@@ -93,11 +95,10 @@ namespace Expertiser.Portal.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Bill(int id, [Bind("Id", "Amount", "Extra", "ExpertiseId", "Percentage")] TableBill tableBill)
         {
-            if (IsAValidModel(tableBill.ExpertiseId))
+            if (ModelState.IsValid)
             {
-                if (tableBill.ExpertiseId == 0)
+                if (tableBill.Id == 0)
                 {
-                    tableBill.ExpertiseId = id;
                     Manager.Context.Add(tableBill);
                     await Manager.Context.SaveChangesAsync();
                 }
@@ -106,9 +107,17 @@ namespace Expertiser.Portal.Controllers
                     Manager.Context.Update(tableBill);
                     await Manager.Context.SaveChangesAsync();
                 }
-                return PartialView("_EditListBill", await Manager.QueryManager.Expertises.FirstOrDefaultAsync(x => x.Id == id));
+                return PartialView("_EditListBill", await Manager.QueryManager.ExpertiseBills.FirstOrDefaultAsync(x => x.Id == tableBill.ExpertiseId));
             }
             return NotOkMessage(ModelState);
+        }
+        [HttpPost]
+        public async Task<IActionResult> DeleteBill(int id)
+        {
+            var bill = await Manager.Context.TableBill.FirstOrDefaultAsync(x => x.Id == id);
+            Manager.Context.Remove(bill);
+            await Manager.Context.SaveChangesAsync();
+            return PartialView("_EditListBill", await Manager.QueryManager.ExpertiseBills.FirstOrDefaultAsync(x => x.Id == bill.ExpertiseId));
         }
     }
 }

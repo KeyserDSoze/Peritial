@@ -72,6 +72,14 @@ namespace Expertiser
             .Build();
         public NavigationBuilder NavigationBar => navigationBar;
     }
+    public class UserHelperManager
+    {
+        private readonly Manager Manager;
+        public UserHelperManager(Manager manager)
+            => this.Manager = manager;
+        public bool IsManager => Manager.HttpContextAccessor.HttpContext.User.IsInRole(Roles.Admin) || Manager.HttpContextAccessor.HttpContext.User.IsInRole(Roles.Contributor);
+        public bool IsReader => Manager.HttpContextAccessor.HttpContext.User.IsInRole(Roles.Reader);
+    }
     public class FileManager
     {
         private readonly Manager Manager;
@@ -216,6 +224,8 @@ namespace Expertiser
                 .ThenInclude(x => x.BranchType)
             .Include(x => x.Contributor)
             .Include(x => x.Member);
+        public IQueryable<TableExpertise> ExpertiseBills => Manager.Context.TableExpertise
+            .Include(x => x.TableBill);
         public IQueryable<TableLocation> Locations => Manager.Context.TableLocation
             .Include(x => x.City);
         public IQueryable<TableInsuranceAgency> InsuranceAgencies => Manager.Context.TableInsuranceAgency
@@ -404,7 +414,8 @@ namespace Expertiser
         public RequestContext CreateNewLocation => new RequestContext() { Action = "Create", Controller = "Location" };
         public RequestContext CreateNewCustomer => new RequestContext() { Action = "Create", Controller = "Customer" };
         public RequestContext CreateNewInsuranceCompany => new RequestContext() { Action = "Create", Controller = "InsuranceCompany" };
-        public RequestContext ModifyNewBill => new RequestContext() { Action = "Bill", Controller = "Experty", RequestType = RequestType.Post, Selector = "#billwrapper" };
+        public RequestContext ModifyNewBill(int? id) => new RequestContext() { Action = "Bill", Controller = "Experty", FurtherPath = id?.ToString(), RequestType = RequestType.Post, Selector = "#billwrapper" };
+        public RequestContext DeleteBill(int id) => new RequestContext() { Action = "DeleteBill", Controller = "Experty", FurtherPath = id.ToString(), RequestType = RequestType.Post, Selector = "#billwrapper" };
         public RequestContext UpdatePostalCodes => new RequestContext() { Action = "UpdatePostalCodes", Controller = "Location", Selector = "#updatePostalCodes" };
         public RequestContext SetLocation => new RequestContext() { Action = "Create", Controller = "Location", RequestType = RequestType.Post, Selector = ".location-address" };
         public RequestContext SetCustomer => new RequestContext() { Action = "Create", Controller = "Customer", RequestType = RequestType.Post, Selector = "#customers" };

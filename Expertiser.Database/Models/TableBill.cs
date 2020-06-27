@@ -12,10 +12,11 @@ namespace Expertiser.Database.Models
         public int Id { get; set; }
         [Column(TypeName = "decimal(18, 2)")]
         public decimal Amount { get; set; }
-        [Column(TypeName = "decimal(18, 0)")]
+        [Column(TypeName = "decimal(18, 2)")]
         public decimal? Extra { get; set; }
         public int ExpertiseId { get; set; }
-        public double? Percentage { get; set; }
+        [Column(TypeName = "decimal(5, 2)")]
+        public decimal? Percentage { get; set; }
 
         [ForeignKey(nameof(ExpertiseId))]
         [InverseProperty(nameof(TableExpertise.TableBill))]

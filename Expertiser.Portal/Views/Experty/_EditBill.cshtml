@@ -1,28 +1,49 @@
 ﻿@model Expertiser.Database.Models.TableBill
 
-<rystem-ajax-form rystem-request-context="Manager.ModalManager.ModifyNewBill">
+<rystem-ajax-form rystem-request-context="Manager.ModalManager.ModifyNewBill(Model?.ExpertiseId)">
     <div asp-validation-summary="ModelOnly" class="text-danger"></div>
     @Html.AntiForgeryToken()
-    <input type="hidden" asp-for="Id" />
+    <input type="hidden" name="Id" value="@Model.Id" />
     <input type="hidden" asp-for="ExpertiseId" />
     <div class="form-row">
         <div class="form-group col-md-3">
-            <label asp-for="Amount" class="control-label"></label>
+            @if (Model.Id == 0)
+            {
+                <label asp-for="Amount" class="control-label text-truncate overflow-hidden w-100"></label>
+            }
             <input type="number" step="any" name="Amount" class="form-control" value='@Model?.Amount.ToString(CultureInfo.InvariantCulture)' />
             <span asp-validation-for="Amount" class="text-danger"></span>
         </div>
         <div class="form-group col-md-3">
-            <label asp-for="Percentage" class="control-label"></label>
-            <input type="number" step="any" name="Liquidated" class="form-control" value='@Model?.Percentage?.ToString(CultureInfo.InvariantCulture)' />
+            @if (Model.Id == 0)
+            {
+                <label asp-for="Percentage" class="control-label text-truncate overflow-hidden w-100"></label>
+            }
+            <input type="number" step="any" name="Percentage" class="form-control" value='@Model?.Percentage?.ToString(CultureInfo.InvariantCulture)' />
             <span asp-validation-for="Percentage" class="text-danger"></span>
         </div>
         <div class="form-group col-md-3">
-            <label asp-for="Extra" class="control-label"></label>
-            <input type="number" step="any" name="Liquidated" class="form-control" value='@Model?.Extra?.ToString(CultureInfo.InvariantCulture)' />
+            @if (Model.Id == 0)
+            {
+                <label asp-for="Extra" class="control-label text-truncate overflow-hidden w-100"></label>
+            }
+            <input type="number" step="any" name="Extra" class="form-control" value='@Model?.Extra?.ToString(CultureInfo.InvariantCulture)' />
             <span asp-validation-for="Extra" class="text-danger"></span>
         </div>
-        <div class="form-group col-md-3 mt-4">
-            <input type="submit" value="@SharedLocalizer["Add"]" class="btn btn-primary" />
+        <div class="form-group col-md-2">
+            @if (Model.Id == 0)
+            {
+                <label class="control-label">&nbsp;</label>
+            }
+            <input type="submit" value="@SharedLocalizer[Model.Id == 0 ? "Add" : "Modify"]" class="btn btn-primary form-control" />
+        </div>
+        <div class="form-group col-md-1">
+            @if (Model.Id != 0)
+            {
+                <rystem-ajax-button rystem-request-context="Manager.ModalManager.DeleteBill(Model.Id)" class="btn btn-primary form-control">
+                    <i class="fa fa-trash" aria-hidden="true"></i>
+                </rystem-ajax-button>
+            }
         </div>
     </div>
 </rystem-ajax-form>

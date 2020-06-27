@@ -14,10 +14,14 @@ namespace Expertiser.Database.Models
     }
     public class TableBillMetadata
     {
+        [Display(Name = nameof(Amount))]
         [ModelBinder(BinderType = typeof(DecimalModelBinder))]
         public decimal Amount { get; set; }
+        [Display(Name = nameof(Extra))]
         [ModelBinder(BinderType = typeof(DecimalModelBinder))]
         public decimal? Extra { get; set; }
-        public double? Percentage { get; set; }
+        [Display(Name = nameof(Percentage))]
+        [ModelBinder(BinderType = typeof(DecimalModelBinder))]
+        public decimal? Percentage { get; set; }
     }
 }
