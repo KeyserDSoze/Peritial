@@ -47,6 +47,8 @@ namespace Expertiser
         public NavigationManager NavigationManager => navigationManager;
         private static readonly ServiceManager serviceManager = new ServiceManager();
         public ServiceManager ServiceManager => serviceManager;
+        private UserHelperManager userHelperManager;
+        public UserHelperManager UserHelperManager => userHelperManager ??= new UserHelperManager(this);
 
         private static NavigationBuilder navigationBar = new NavigationBar("Experty", "fa-institution")
             .AddSuperGroup()
@@ -78,7 +80,10 @@ namespace Expertiser
         public UserHelperManager(Manager manager)
             => this.Manager = manager;
         public bool IsManager => Manager.HttpContextAccessor.HttpContext.User.IsInRole(Roles.Admin) || Manager.HttpContextAccessor.HttpContext.User.IsInRole(Roles.Contributor);
+        //public bool IsManager => false;
         public bool IsReader => Manager.HttpContextAccessor.HttpContext.User.IsInRole(Roles.Reader);
+        //public bool IsReader => true;
+        public string Id => Manager.HttpContextAccessor.HttpContext.User?.FindFirstValue(ClaimTypes.NameIdentifier);
     }
     public class FileManager
     {
@@ -144,8 +149,7 @@ namespace Expertiser
                 .Include(x => x.Status)
                 .Include(x => x.Member)
                     .ThenInclude(x => x.UserName)
-                .Include(x => x.TableBill)
-                    .ThenInclude(x => x.Amount)
+                .Include(x => x.TotalPercentage)
                 .Include(x => x.TableMessage, PropertyOptions.Count)
                 .Include(x => x.Liquidated)
                 .Include(x => x.AssignmentDate)

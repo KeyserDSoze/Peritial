@@ -315,4 +315,10 @@
   <data name="Percentage" xml:space="preserve">
     <value>Percentuale riconosciuta</value>
   </data>
+  <data name="TableMessage" xml:space="preserve">
+    <value>Messaggi</value>
+  </data>
+  <data name="TotalPercentage" xml:space="preserve">
+    <value>Fatturato riconosciuto</value>
+  </data>
 </root>

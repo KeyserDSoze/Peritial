@@ -24,8 +24,24 @@ namespace Expertiser.Portal.Controllers
         }
 
         public override async Task<IEnumerable<TableAccident>> GetList()
-            => await Manager.QueryManager.Accidents
-            .Where(x => x.TableExpertise.Any(t => t.Status <= (int)StatusType.Presented)).OrderByDescending(x => x.AccidentDate).ToListAsync();
+        {
+            if (Manager.UserHelperManager.IsManager)
+            {
+                return await Manager.QueryManager.Accidents
+                           .Where(x => x.TableExpertise.Any(t => t.Status <= (int)StatusType.ToSend))
+                           .OrderByDescending(x => x.AccidentDate)
+                           .ToListAsync();
+            }
+            else if (Manager.UserHelperManager.IsReader)
+            {
+                return await Manager.QueryManager.Accidents
+                           .Where(x => x.TableExpertise.Any(t => t.Status <= (int)StatusType.ToSend) && x.TableExpertise.Any(c => c.ContributorId == Manager.UserHelperManager.Id))
+                           .OrderByDescending(x => x.AccidentDate)
+                           .ToListAsync();
+            }
+            else
+                return new List<TableAccident>();
+        }
 
         public override async Task<TableAccident> GetModel(string id)
             => await Manager.Context.TableAccident.FindAsync(int.Parse(id));

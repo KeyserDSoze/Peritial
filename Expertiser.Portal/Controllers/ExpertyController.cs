@@ -28,14 +28,35 @@ namespace Expertiser.Portal.Controllers
            => Manager.NavigationManager.GetExpertiseNavigation("Delete", this.StringLocalizer, this.User);
 
         public override async Task<IEnumerable<TableExpertise>> GetList()
-            => await this.Manager.QueryManager.Expertises
-                .Where(t => t.Status <= (int)StatusType.Presented)
-                .OrderByDescending(x => x.Id)
-                .ToListAsync();
+        {
+            if (Manager.UserHelperManager.IsManager)
+            {
+                return await this.Manager.QueryManager.Expertises
+                           .OrderBy(t => t.Status)
+                           .ThenByDescending(x => x.Id)
+                           .ToListAsync();
+            }
+            else if (Manager.UserHelperManager.IsReader)
+            {
+                return await this.Manager.QueryManager.Expertises
+                           .Where(t => t.ContributorId == Manager.UserHelperManager.Id)
+                           .OrderBy(x => x.Id)
+                           .ThenByDescending(x => x.Id)
+                           .ToListAsync();
+            }
+            else
+                return new List<TableExpertise>();
+        }
 
         public override async Task<TableExpertise> GetModel(string id)
-            => await Manager.QueryManager.Expertises
-                .FirstOrDefaultAsync(x => x.Id == int.Parse(id));
+        {
+            var experty = await Manager.QueryManager.Expertises
+                           .FirstOrDefaultAsync(x => x.Id == int.Parse(id));
+            if (Manager.UserHelperManager.IsReader && experty.ContributorId != Manager.UserHelperManager.Id)
+                throw new UnauthorizedAccessException($"{Manager.HttpContextAccessor.HttpContext.User.Identity.Name} not authorized");
+            else
+                return experty;
+        }
 
         public override Task<bool> Remove(string id)
         {
