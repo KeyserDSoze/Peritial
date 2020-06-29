@@ -10,7 +10,7 @@
     <PackageReference Include="Microsoft.Extensions.Identity.Stores" Version="3.1.5" />
     <PackageReference Include="Rystem" Version="7.0.9" />
     <PackageReference Include="Rystem.Interfaces" Version="7.0.9" />
-    <PackageReference Include="Rystem.Web" Version="1.1.4" />
+    <PackageReference Include="Rystem.Web" Version="1.1.5" />
   </ItemGroup>
 
   <ItemGroup>
