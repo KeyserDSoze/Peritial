@@ -32,6 +32,18 @@ namespace Expertiser.Portal.Controllers
             => PartialView();
         [HttpPost]
         [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Create([Bind("CustomerId,ExternalId,InsuranceCompanyId")] TableInsurance tableInsurance)
+        {
+            if (ModelState.IsValid)
+            {
+                Manager.Context.Add(tableInsurance);
+                await Manager.Context.SaveChangesAsync();
+                return PartialView("_GetInsurances", tableInsurance.Id);
+            }
+            return NotOkMessage(ModelState);
+        }
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> Edit([Bind("CustomerId,ExternalId,InsuranceCompanyId")] TableInsurance tableInsurance)
         {
             if (ModelState.IsValid)

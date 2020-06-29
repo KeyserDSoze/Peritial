@@ -20,7 +20,7 @@
             </div>
             <div class="form-group">
                 <label asp-for="CityId" class="control-label"></label>
-                <rystem-dropdown name="CityId" rystem-size="ExtraLarge" rystem-data="Manager.DropdownManager.GetCities()" rystem-request-context="Manager.AjaxRequestManager.UpdatePostalCodes"></rystem-dropdown>
+                <rystem-dropdown name="CityId" rystem-size="ExtraLarge" rystem-data="Manager.DropdownManager.GetCities(Model?.CityId)" rystem-request-context="Manager.AjaxRequestManager.UpdatePostalCodes"></rystem-dropdown>
             </div>
             <div class="form-group">
                 <label asp-for="PostalCode" class="control-label"></label>

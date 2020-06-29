@@ -26,6 +26,7 @@ namespace Expertiser.Database.Models
         public DateTime AccidentDate { get; set; }
         [Column(TypeName = "datetime")]
         public DateTime? DenunciationDate { get; set; }
+        public int? InsuranceAdjusterId { get; set; }
 
         [ForeignKey(nameof(AddressId))]
         [InverseProperty(nameof(TableLocation.TableAccident))]
@@ -36,6 +37,9 @@ namespace Expertiser.Database.Models
         [ForeignKey(nameof(InsuranceId))]
         [InverseProperty(nameof(TableInsurance.TableAccident))]
         public virtual TableInsurance Insurance { get; set; }
+        [ForeignKey(nameof(InsuranceAdjusterId))]
+        [InverseProperty(nameof(TableInsuranceAdjuster.TableAccident))]
+        public virtual TableInsuranceAdjuster InsuranceAdjuster { get; set; }
         [ForeignKey(nameof(InsuranceAgencyId))]
         [InverseProperty(nameof(TableInsuranceAgency.TableAccident))]
         public virtual TableInsuranceAgency InsuranceAgency { get; set; }

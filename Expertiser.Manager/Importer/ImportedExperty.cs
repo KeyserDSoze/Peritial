@@ -15,6 +15,7 @@ namespace Expertiser
         public TableAccident Accident { get; set; }
         public TableInsurance Insurance { get; set; }
         public TableCustomer Customer { get; set; }
+        public TableInsuranceAdjuster InsuranceAdjuster { get; set; }
         public IEnumerable<ImportedFile> Files { get; set; }
     }
 }

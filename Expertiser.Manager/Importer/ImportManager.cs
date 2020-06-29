@@ -64,12 +64,23 @@ namespace Expertiser
                     Manager.Context.TableInsurance.Add(insurance);
                     await Manager.Context.SaveChangesAsync();
                 }
+                var insuranceAdjuster = await Manager.Context.TableInsuranceAdjuster.FirstOrDefaultAsync(x => x.Name == importValue.InsuranceAdjuster.Name);
+                if (insuranceAdjuster == null)
+                {
+                    insuranceAdjuster = new TableInsuranceAdjuster()
+                    {
+                        Name = importValue.InsuranceAdjuster.Name
+                    };
+                    Manager.Context.TableInsuranceAdjuster.Add(insuranceAdjuster);
+                    await Manager.Context.SaveChangesAsync();
+                }
                 accident = new TableAccident()
                 {
                     ExternalId = importValue.Accident.ExternalId,
                     DenunciationDate = importValue.Accident.DenunciationDate,
                     AccidentDate = importValue.Accident.AccidentDate,
                     InsuranceId = insurance.Id,
+                    InsuranceAdjusterId = insuranceAdjuster.Id
                 };
                 Manager.Context.TableAccident.Add(accident);
                 await Manager.Context.SaveChangesAsync();

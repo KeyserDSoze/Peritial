@@ -69,6 +69,7 @@ namespace Expertiser
                 .AddGroup("Manage Members", "fa-user-check")
                     .AddItem("Members", null, new NavigationUrl("User"))
                 .AddGroup("Companies", "fa-memory", null)
+                    .AddItem("Insurance Adjusters", null, new NavigationUrl("InsuranceAdjuster"))
                     .AddItem("Inspectorates", null, new NavigationUrl("Inspectorate"))
                     .AddItem("Insurance Agencies", null, new NavigationUrl("InsuranceAgency"))
                     .AddItem("Insurance Companies", null, new NavigationUrl("InsuranceCompany"))
@@ -191,6 +192,8 @@ namespace Expertiser
                .Include(x => x.Insurance)
                    .ThenInclude(x => x.Customer)
                        .ThenInclude(x => x.Name)
+                .Include(x => x.InsuranceAdjuster)
+                    .ThenInclude(x => x.Name)
                .Include(x => x.InsuranceAgency)
                    .ThenInclude(x => x.Label)
                .Include(x => x.Address)
@@ -240,6 +243,11 @@ namespace Expertiser
                .Include(x => x.Label)
                .Include(x => x.IsActive)
                .Include(x => x.TableAccident, PropertyOptions.Count);
+        public INavigation<TableInsuranceAdjuster> GetInsuranceAdjusterNavigation(string title, IStringLocalizer localizer)
+           => INavigation<TableInsuranceAdjuster>
+               .Create(NavigationOptions.CanDoneAll(title, localizer, "Edit"))
+               .Include(x => x.Id, PropertyOptions.Key)
+               .Include(x => x.Name);
         public INavigation<TableInsuranceCompany> GetInsuranceCompanyNavigation(string title, IStringLocalizer localizer)
            => INavigation<TableInsuranceCompany>
                .Create(NavigationOptions.CanDoneAll(title, localizer, "Edit"))
@@ -286,6 +294,7 @@ namespace Expertiser
                 .ThenInclude(t => t.Customer)
             .Include(t => t.InsuranceAgency)
             .Include(t => t.Address)
+            .Include(t => t.InsuranceAdjuster)
             .Include(t => t.TableExpertise)
                 .ThenInclude(t => t.Contributor);
         public IQueryable<TableExpertise> Expertises => Manager.Context.TableExpertise
@@ -303,6 +312,7 @@ namespace Expertiser
         public IQueryable<TableInsuranceAgency> InsuranceAgencies => Manager.Context.TableInsuranceAgency
                     .Include(x => x.InsuranceCompany)
                     .Include(x => x.Address);
+        public IQueryable<TableInsuranceAdjuster> InsuranceAdjusters => Manager.Context.TableInsuranceAdjuster;
         public IQueryable<TableInspectorate> Inspectorates => Manager.Context.TableInspectorate
                     .Include(x => x.InsuranceCompany)
                     .Include(x => x.Address);
@@ -329,17 +339,18 @@ namespace Expertiser
         public DropdownManager(Manager manager)
             => this.Manager = manager;
 #warning da mettere la parte di controllo che se quel tizio ha quella insurance company, può avere solo cose inerenti a quella compagnia o strettamente legate
-        public IEnumerable<DropdownItem> GetInspectorates(int insuranceId = 0)
+        public IEnumerable<DropdownItem> GetInspectorates(int? inspectorateId)
         {
             return this.Manager.QueryManager.Inspectorates
                 .Select(x => new DropdownItem()
                 {
                     Label = x.Label,
                     Value = x.Id.ToString(),
-                    Group = x.InsuranceCompany != null ? x.InsuranceCompany.Label : string.Empty
+                    Group = x.InsuranceCompany != null ? x.InsuranceCompany.Label : string.Empty,
+                    Selected = x.Id == inspectorateId
                 });
         }
-        public IEnumerable<DropdownItem> GetInsuranceAgencies(int insuranceId = 0)
+        public IEnumerable<DropdownItem> GetInsuranceAgencies(int? insuranceAgencyId)
         {
             //TableInsurance insurance = await this.Manager.QueryManager.Insurances.FirstOrDefaultAsync(x => x.Id == insuranceId);
             return this.Manager.QueryManager.InsuranceAgencies
@@ -347,10 +358,11 @@ namespace Expertiser
                 {
                     Label = x.Label,
                     Value = x.Id.ToString(),
-                    Group = x.InsuranceCompany != null ? x.InsuranceCompany.Label : string.Empty
+                    Group = x.InsuranceCompany != null ? x.InsuranceCompany.Label : string.Empty,
+                    Selected = x.Id == insuranceAgencyId
                 });
         }
-        public IEnumerable<DropdownItem> GetInsuranceCompanies(int insuranceCompanyId = 0)
+        public IEnumerable<DropdownItem> GetInsuranceCompanies(int? insuranceCompanyId)
         {
             return this.Manager.QueryManager.InsuranceCompanies
                 .Select(x => new DropdownItem()
@@ -361,7 +373,17 @@ namespace Expertiser
                     Selected = x.Id == insuranceCompanyId
                 });
         }
-        public IEnumerable<DropdownItem> GetLocations(int locationId = 0)
+        public IEnumerable<DropdownItem> GetInsuranceAdjusters(int? adjusterId)
+        {
+            return this.Manager.QueryManager.InsuranceAdjusters
+                .Select(x => new DropdownItem()
+                {
+                    Label = x.Name,
+                    Value = x.Id.ToString(),
+                    Selected = x.Id == adjusterId
+                });
+        }
+        public IEnumerable<DropdownItem> GetLocations(int? locationId)
         {
             return this.Manager.QueryManager.Locations
                 .Where(x => !string.IsNullOrWhiteSpace(x.Address))
@@ -373,7 +395,7 @@ namespace Expertiser
                     Selected = x.Id == locationId
                 });
         }
-        public IEnumerable<DropdownItem> GetCities(int selectedCity = 0)
+        public IEnumerable<DropdownItem> GetCities(int? selectedCity)
         {
             return this.Manager.Context.TableCity
                 .Select(x => new DropdownItem()
@@ -458,7 +480,7 @@ namespace Expertiser
                    Selected = Manager.UserManager.IsInRoleAsync(user, role.Name).ToResult()
                });
         }
-        public IEnumerable<DropdownItem> GetCustomers(int customerId)
+        public IEnumerable<DropdownItem> GetCustomers(int? customerId)
         {
             return Manager.QueryManager.Customers.Select(
                    customer =>
@@ -470,7 +492,7 @@ namespace Expertiser
                    Group = customer.Name[0].ToString()
                });
         }
-        public IEnumerable<DropdownItem> GetInsurances(int insuranceId)
+        public IEnumerable<DropdownItem> GetInsurances(int? insuranceId)
         {
             return this.Manager.QueryManager.Insurances
                 .Select(x => new DropdownItem()
@@ -496,7 +518,9 @@ namespace Expertiser
         public RequestContext SetLocation => new RequestContext() { Action = "Create", Controller = "Location", RequestType = RequestType.Post, Selector = ".location-address" };
         public RequestContext SetCustomer => new RequestContext() { Action = "Create", Controller = "Customer", RequestType = RequestType.Post, Selector = "#customers" };
         public RequestContext SetInsurance => new RequestContext() { Action = "Create", Controller = "Insurance", RequestType = RequestType.Post, Selector = "#insurances" };
+        public RequestContext SetInsuranceAdjuster => new RequestContext() { Action = "Create", Controller = "InsuranceAdjuster", RequestType = RequestType.Post, Selector = "#insurance-adjusters" };
         public RequestContext CreateNewInsurance => new RequestContext() { Action = "Create", Controller = "Insurance" };
+        public RequestContext CreateNewInsuranceAdjuster => new RequestContext() { Action = "Create", Controller = "InsuranceAdjuster" };
         public RequestContext UpdateUserRole(string userId) => new RequestContext() { Action = "UpdateRole", Controller = "User", QueryString = new Dictionary<object, object>() { { "id", userId } } };
         public RequestContext ShowStats => new RequestContext() { Action = "Stats", Controller = "Home", RequestType = RequestType.Post, Selector = "#stats-update" };
     }

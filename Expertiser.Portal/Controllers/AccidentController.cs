@@ -65,7 +65,7 @@ namespace Expertiser.Portal.Controllers
         public IActionResult Import()
             => View();
         [HttpPost]
-        public async Task<IActionResult> Import(int importType, IFormFile file) 
+        public async Task<IActionResult> Import(int importType, IFormFile file)
             => Ok(await Manager.ImportManager.FinalizeAsync(file, (ImporterType)importType));
         // POST: Accident/Create
         // To protect from overposting attacks, enable the specific properties you want to bind to, for 
@@ -103,7 +103,20 @@ namespace Expertiser.Portal.Controllers
 
         public override async Task<bool> Remove(string id)
         {
-            var tableAccident = await Manager.Context.TableAccident.FindAsync(int.Parse(id));
+            var tableAccident = await Manager.Context.TableAccident
+                .Include(x => x.TableExpertise)
+                .ThenInclude(x => x.TableBill)
+                .Include(x => x.TableExpertise)
+                .ThenInclude(x => x.TableMessage)
+                .FirstOrDefaultAsync(x => x.Id == int.Parse(id));
+            foreach (var expertise in tableAccident.TableExpertise)
+            {
+                foreach (var bill in expertise.TableBill)
+                    Manager.Context.TableBill.Remove(bill);
+                foreach (var message in expertise.TableMessage)
+                    Manager.Context.TableMessage.Remove(message);
+                Manager.Context.TableExpertise.Remove(expertise);
+            }
             Manager.Context.TableAccident.Remove(tableAccident);
             await Manager.Context.SaveChangesAsync();
             return true;

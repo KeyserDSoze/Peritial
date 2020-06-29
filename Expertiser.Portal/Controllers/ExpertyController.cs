@@ -59,9 +59,19 @@ namespace Expertiser.Portal.Controllers
                 return experty;
         }
 
-        public override Task<bool> Remove(string id)
+        public override async Task<bool> Remove(string id)
         {
-            throw new NotImplementedException();
+            var expertise = await Manager.Context.TableExpertise
+                .Include(x => x.TableBill)
+                .Include(x => x.TableMessage)
+                .FirstOrDefaultAsync(x => x.Id == int.Parse(id));
+            foreach (var bill in expertise.TableBill)
+                Manager.Context.TableBill.Remove(bill);
+            foreach (var message in expertise.TableMessage)
+                Manager.Context.TableMessage.Remove(message);
+            Manager.Context.TableExpertise.Remove(expertise);
+            await Manager.Context.SaveChangesAsync();
+            return true;
         }
         // GET: Experty/Edit/5
         public async Task<IActionResult> Edit(int? id)

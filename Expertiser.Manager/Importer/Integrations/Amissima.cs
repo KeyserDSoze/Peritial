@@ -29,11 +29,15 @@ namespace Expertiser
                     Status = -1,
                     BranchId = 1
                 },
+                InsuranceAdjuster = new TableInsuranceAdjuster()
+                {
+                    Name = string.Join(" ", amissimaXml.InsuranceAdjuster.Split('-').Select(x => x.Trim().Substring(0, 1).ToUpper() + x.Trim().Substring(1).ToLower()).Reverse())
+                },
                 Files = amissimaXml.Files.Select(x => new ImportedFile() { Name = x.Name, Content = Convert.FromBase64String(x.Value), ContentType = "application/pdf" }),
                 Insurance = new TableInsurance()
                 {
                     InsuranceCompanyId = 33,
-                    ExternalId = amissimaXml.Customer.Insurance.Id
+                    ExternalId = amissimaXml.Customer.Insurance.Id,
                 },
                 Location = new TableLocation()
                 {
@@ -58,7 +62,7 @@ namespace Expertiser
             [XmlElement(ElementName = "DataOraSinistro")]
             public string DenunciationDate { get; set; }
             [XmlElement(ElementName = "NomeLiquidatore")]
-            public string Liquidator { get; set; }
+            public string InsuranceAdjuster { get; set; }
             [XmlElement(ElementName = "Contraente")]
             public AmissimaCustomer Customer { get; set; }
             [XmlArray("allegati")]

@@ -32,6 +32,7 @@ namespace Expertiser.Database.Models
         public virtual DbSet<TableExpertise> TableExpertise { get; set; }
         public virtual DbSet<TableInspectorate> TableInspectorate { get; set; }
         public virtual DbSet<TableInsurance> TableInsurance { get; set; }
+        public virtual DbSet<TableInsuranceAdjuster> TableInsuranceAdjuster { get; set; }
         public virtual DbSet<TableInsuranceAgency> TableInsuranceAgency { get; set; }
         public virtual DbSet<TableInsuranceCompany> TableInsuranceCompany { get; set; }
         public virtual DbSet<TableLocation> TableLocation { get; set; }
@@ -100,6 +101,11 @@ namespace Expertiser.Database.Models
                     .WithMany(p => p.TableAccident)
                     .HasForeignKey(d => d.InspectorateId)
                     .HasConstraintName("FK_Table_Accident_Table_Inspectorate");
+
+                entity.HasOne(d => d.InsuranceAdjuster)
+                    .WithMany(p => p.TableAccident)
+                    .HasForeignKey(d => d.InsuranceAdjusterId)
+                    .HasConstraintName("FK_Table_Accident_Table_InsuranceAdjuster");
 
                 entity.HasOne(d => d.InsuranceAgency)
                     .WithMany(p => p.TableAccident)
@@ -233,6 +239,11 @@ namespace Expertiser.Database.Models
                     .HasForeignKey(d => d.InsuranceCompanyId)
                     .OnDelete(DeleteBehavior.ClientSetNull)
                     .HasConstraintName("FK_Table_Insurance_Table_InsuranceCompany");
+            });
+
+            modelBuilder.Entity<TableInsuranceAdjuster>(entity =>
+            {
+                entity.Property(e => e.Name).IsUnicode(false);
             });
 
             modelBuilder.Entity<TableInsuranceAgency>(entity =>

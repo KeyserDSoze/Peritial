@@ -47,7 +47,7 @@
                 <label asp-for="InsuranceAgencyId" class="control-label"></label>
                 @if (Manager.UserHelperManager.IsManager)
                 {
-                    <rystem-dropdown name="InsuranceAgencyId" rystem-data="Manager.DropdownManager.GetInsuranceAgencies()" class="form-control"></rystem-dropdown>
+                    <rystem-dropdown name="InsuranceAgencyId" rystem-data="Manager.DropdownManager.GetInsuranceAgencies(Model?.InsuranceAgencyId)" class="form-control"></rystem-dropdown>
                 }
                 else
                 {
@@ -57,10 +57,28 @@
                 <span asp-validation-for="InsuranceAgencyId" class="text-danger"></span>
             </div>
             <div class="form-group">
+                <label asp-for="InsuranceAdjusterId" class="control-label"></label>
+                @if (Manager.UserHelperManager.IsManager)
+                {
+                    <div id="insurance-adjusters">
+                        <partial name="_GetInsuranceAdjusters" model="Model?.InsuranceAdjusterId" />
+                    </div>
+                    <rystem-ajax-modal rystem-request-context="Manager.AjaxRequestManager.CreateNewInsuranceAdjuster" rystem-size="Large">
+                        <div class="btn btn-primary mt-2">@SharedLocalizer["Create New Insurance Adjuster"]</div>
+                    </rystem-ajax-modal>
+                }
+                else
+                {
+                    <input type="hidden" asp-for="InsuranceAgencyId" />
+                    <div class="form-control">@Model?.InsuranceAdjuster?.Name</div>
+                }
+                <span asp-validation-for="InsuranceAgencyId" class="text-danger"></span>
+            </div>
+            <div class="form-group">
                 <label asp-for="InspectorateId" class="control-label"></label>
                 @if (Manager.UserHelperManager.IsManager)
                 {
-                    <rystem-dropdown name="InspectorateId" rystem-data="Manager.DropdownManager.GetInspectorates()"></rystem-dropdown>
+                    <rystem-dropdown name="InspectorateId" rystem-data="Manager.DropdownManager.GetInspectorates(Model?.InspectorateId)"></rystem-dropdown>
                 }
                 else
                 {
