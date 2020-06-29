@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Localization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Localization;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.OData.Edm;
 
 namespace Expertiser.Portal.Controllers
 {
@@ -17,7 +18,16 @@ namespace Expertiser.Portal.Controllers
     public class HomeController : Controller
     {
         public IActionResult Index()
-            => View();
+            => View(new DateStats()
+            {
+                From = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1),
+                To = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1).AddMonths(1),
+            });
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult Stats([FromForm] DateStats dateStats)
+            => PartialView("_Stats", dateStats);
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "SCS0027:Open redirect: possibly unvalidated input in {1} argument passed to '{0}'", Justification = "<Pending>")]
         public IActionResult SetLanguage(string culture, string returnUrl)

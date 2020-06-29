@@ -1,6 +1,6 @@
 ﻿@model Expertiser.Database.Models.TableBill
 
-<rystem-ajax-form rystem-request-context="Manager.ModalManager.ModifyNewBill(Model?.ExpertiseId)">
+<rystem-ajax-form rystem-request-context="Manager.AjaxRequestManager.ModifyNewBill(Model?.ExpertiseId)">
     <div asp-validation-summary="ModelOnly" class="text-danger"></div>
     @Html.AntiForgeryToken()
     <input type="hidden" name="Id" value="@Model.Id" />
@@ -40,7 +40,7 @@
         <div class="form-group col-md-1">
             @if (Model.Id != 0)
             {
-                <rystem-ajax-button rystem-request-context="Manager.ModalManager.DeleteBill(Model.Id)" class="btn btn-primary form-control">
+                <rystem-ajax-button rystem-request-context="Manager.AjaxRequestManager.DeleteBill(Model.Id)" class="btn btn-primary form-control">
                     <i class="fa fa-trash" aria-hidden="true"></i>
                 </rystem-ajax-button>
             }

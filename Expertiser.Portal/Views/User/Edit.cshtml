@@ -26,7 +26,7 @@
                 <input asp-for="Email" class="form-control" readonly="readonly" />
             </div>
             <div class="form-group">
-                <rystem-dropdown name="" rystem-data="await Manager.DropdownManager.GetRoles(Model.Id)" rystem-item-name="roles" rystem-data-multiple="true" rystem-request-context="Manager.ModalManager.UpdateUserRole(Model.Id)"></rystem-dropdown>
+                <rystem-dropdown name="" rystem-data="await Manager.DropdownManager.GetRoles(Model.Id)" rystem-item-name="roles" rystem-data-multiple="true" rystem-request-context="Manager.AjaxRequestManager.UpdateUserRole(Model.Id)"></rystem-dropdown>
             </div>
             <div class="form-group">
                 <input asp-for="NormalizedEmail" class="form-control" type="hidden" />

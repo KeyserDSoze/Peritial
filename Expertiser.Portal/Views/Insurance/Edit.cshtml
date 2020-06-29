@@ -19,7 +19,7 @@
                 <div id="customer">
                     <partial name="_GetCustomers" model="Model?.Id ?? 0" />
                 </div>
-                <rystem-ajax-modal rystem-request-context="Manager.ModalManager.CreateNewCustomer" rystem-size="Large">
+                <rystem-ajax-modal rystem-request-context="Manager.AjaxRequestManager.CreateNewCustomer" rystem-size="Large">
                     <div class="btn btn-primary">@Localizer["Create New Address"]</div>
                 </rystem-ajax-modal>
 

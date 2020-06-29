@@ -153,6 +153,9 @@
   <data name="Cancelled" xml:space="preserve">
     <value>Cancellato</value>
   </data>
+  <data name="Check" xml:space="preserve">
+    <value>Mostra</value>
+  </data>
   <data name="CityId" xml:space="preserve">
     <value>Città</value>
   </data>

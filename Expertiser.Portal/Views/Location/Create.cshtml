@@ -4,7 +4,7 @@
 <hr />
 <div class="row">
     <div class="col-md-12">
-        <rystem-ajax-form rystem-modal-close="true" rystem-request-context="Manager.ModalManager.SetLocation">
+        <rystem-ajax-form rystem-modal-close="true" rystem-request-context="Manager.AjaxRequestManager.SetLocation">
             <div asp-validation-summary="ModelOnly" class="text-danger"></div>
             @Html.AntiForgeryToken()
             <div class="form-group">
@@ -14,7 +14,7 @@
             </div>
             <div class="form-group">
                 <label class="control-label">@SharedLocalizer["CityId"]</label>
-                <rystem-dropdown name="CityId" rystem-size="ExtraLarge" rystem-data="Manager.DropdownManager.GetCities()" rystem-request-context="Manager.ModalManager.UpdatePostalCodes"></rystem-dropdown>
+                <rystem-dropdown name="CityId" rystem-size="ExtraLarge" rystem-data="Manager.DropdownManager.GetCities()" rystem-request-context="Manager.AjaxRequestManager.UpdatePostalCodes"></rystem-dropdown>
             </div>
             <div class="form-group">
                 <label class="control-label">@SharedLocalizer["PostalCode"]</label>

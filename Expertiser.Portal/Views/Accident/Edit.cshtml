@@ -32,7 +32,7 @@
                     <div id="insurances">
                         <partial name="_GetInsurances" model="Model?.InsuranceId ?? 0" />
                     </div>
-                    <rystem-ajax-modal rystem-request-context="Manager.ModalManager.CreateNewInsurance" rystem-size="Large">
+                    <rystem-ajax-modal rystem-request-context="Manager.AjaxRequestManager.CreateNewInsurance" rystem-size="Large">
                         <div class="btn btn-primary mt-2">@SharedLocalizer["Create New Insurance"]</div>
                     </rystem-ajax-modal>
                 }

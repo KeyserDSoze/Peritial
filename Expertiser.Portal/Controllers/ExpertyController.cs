@@ -13,6 +13,7 @@ using Expertiser.Base.Constant;
 using Expertiser.Interfaces;
 using System.Numerics;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
+using Microsoft.OData.Edm;
 
 namespace Expertiser.Portal.Controllers
 {
@@ -94,10 +95,14 @@ namespace Expertiser.Portal.Controllers
                 {
                     var expertise = await Manager.Context.TableExpertise.Include(x => x.Contributor).Include(x => x.Member).AsNoTracking().FirstOrDefaultAsync(x => x.Id == tableExpertise.Id);
                     StatusType statusType = (StatusType)expertise.Status;
+                    StatusType newStatusType = (StatusType)tableExpertise.Status;
+                    if (newStatusType == StatusType.Billed)
+                        tableExpertise.CloseDate = DateTime.UtcNow;
+                    else
+                        tableExpertise.CloseDate = null;
                     Manager.Context.Update(tableExpertise);
                     await Manager.Context.SaveChangesAsync();
                     var newExpertise = await Manager.Context.TableExpertise.Include(x => x.Contributor).Include(x => x.Member).FirstOrDefaultAsync(x => x.Id == tableExpertise.Id);
-                    StatusType newStatusType = (StatusType)newExpertise.Status;
                     if (statusType != newStatusType || newExpertise.ContributorId != expertise.ContributorId)
                     {
                         string subject = string.Format(StringLocalizer["modify experty"], SharedLocalizer[$"{newStatusType}"]);

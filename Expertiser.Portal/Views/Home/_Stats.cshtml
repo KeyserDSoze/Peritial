@@ -1,0 +1,12 @@
+﻿@model DateStats
+
+<div class="w-100">
+    <rystem-chart rystem-data="await Manager.ChartManager.GetExpertisesStatus(SharedLocalizer, Model?.From ?? default, Model?.To ?? default)"></rystem-chart>
+</div>
+<hr />
+@foreach (var contributor in Manager.QueryManager.AllContributors)
+{
+    <div class="w-50">
+        <rystem-chart rystem-data="await Manager.ChartManager.GetContributorStatus(SharedLocalizer, contributor.Id, Model?.From?? default, Model?.To ?? default)"></rystem-chart>
+    </div>
+}

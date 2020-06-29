@@ -321,4 +321,10 @@
   <data name="TotalPercentage" xml:space="preserve">
     <value>Fatturato riconosciuto</value>
   </data>
+  <data name="From" xml:space="preserve">
+    <value>Da</value>
+  </data>
+  <data name="To" xml:space="preserve">
+    <value>A</value>
+  </data>
 </root>

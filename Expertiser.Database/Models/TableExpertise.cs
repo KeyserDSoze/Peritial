@@ -30,6 +30,8 @@ namespace Expertiser.Database.Models
         [Column(TypeName = "decimal(18, 2)")]
         public decimal? Liquidated { get; set; }
         public int AccidentId { get; set; }
+        [Column(TypeName = "datetime")]
+        public DateTime? CloseDate { get; set; }
 
         [ForeignKey(nameof(AccidentId))]
         [InverseProperty(nameof(TableAccident.TableExpertise))]

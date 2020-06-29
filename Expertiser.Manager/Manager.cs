@@ -3,8 +3,10 @@ using Expertiser.Database.Models;
 using Expertiser.Interfaces;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Azure.Amqp.Framing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Localization;
+using Microsoft.OData.Edm;
 using Rystem.Data;
 using Rystem.Web;
 using Rystem.Web.Backoffice;
@@ -37,8 +39,10 @@ namespace Expertiser
         private string ConnectionString => Const.DatabaseConnectionString;
         private QueryManager queryManager;
         public QueryManager QueryManager => queryManager ??= new QueryManager(this);
-        private ModalManager modalManager;
-        public ModalManager ModalManager => modalManager ??= new ModalManager(this);
+        private ChartManager chartManager;
+        public ChartManager ChartManager => chartManager ??= new ChartManager(this);
+        private AjaxRequestManager ajaxRequestManager;
+        public AjaxRequestManager AjaxRequestManager => ajaxRequestManager ??= new AjaxRequestManager(this);
         private DropdownManager dropdownManager;
         public DropdownManager DropdownManager => dropdownManager ??= new DropdownManager(this);
         private FileManager fileManager;
@@ -84,6 +88,66 @@ namespace Expertiser
         public bool IsReader => Manager.HttpContextAccessor.HttpContext.User.IsInRole(Roles.Reader);
         //public bool IsReader => true;
         public string Id => Manager.HttpContextAccessor.HttpContext.User?.FindFirstValue(ClaimTypes.NameIdentifier);
+    }
+    public class ChartManager
+    {
+        private readonly Manager Manager;
+        public ChartManager(Manager manager)
+            => this.Manager = manager;
+        public async Task<DataChart> GetExpertisesStatus(IStringLocalizer localizer, DateTime from = default, DateTime to = default)
+        {
+            var status = (await ExpertisesByDate(from, to).ToListAsync()).GroupBy(x => x.Status);
+            return new MyChart(localizer["Status"], status.ToDictionary(x => localizer[$"{(StatusType)x.Key}"].Value, x => new DataModel() { Data = new List<decimal> { (decimal)x.Count() } })).ToDataChart(ChartType.Pie);
+        }
+        public async Task<DataChart> GetContributorStatus(IStringLocalizer localizer, string contributorId, DateTime from = default, DateTime to = default)
+        {
+            var status = (await ExpertisesByDate(from, to).Where(x => x.ContributorId == contributorId).ToListAsync()).GroupBy(x => x.Status);
+            var contributor = await Manager.Context.AspNetUsers.FirstOrDefaultAsync(x => x.Id == contributorId);
+            return new MyChart($"{localizer["Status"]} {contributor.UserName}", status.ToDictionary(x => localizer[$"{(StatusType)x.Key}"].Value, x => new DataModel() { Data = new List<decimal> { (decimal)x.Count() } })).ToDataChart(ChartType.Pie);
+        }
+        public async Task<DataChart> GetClosingDay(IStringLocalizer localizer, DateTime from = default, DateTime to = default)
+        {
+            var status = (await ExpertisesByDate(from, to).ToListAsync()).GroupBy(x => x.Status);
+            var dictionary = new Dictionary<int, Dictionary<string, int>>();
+            //foreach (var s in status)
+            //{
+            //    if (!dictionary.ContainsKey(s.Key))
+            //        dictionary.Add(s.Key, new Dictionary<string, int>());
+            //    foreach (var g in s.Where(y => y.CloseDate.HasValue).GroupBy(y => $"{y.CloseDate.Value.Month}{y.CloseDate.Value.Day}"))
+            //    {
+
+            //    }
+            //}
+            //return new MyChart(localizer["Trend"], status.ToDictionary(x => localizer[$"{(StatusType)x.Key}"].Value,
+            //    x => new DataModel() { Data = x.Where(y => y.CloseDate.HasValue).GroupBy(y => $"{y.CloseDate.Value.Month}{y.CloseDate.Value.Day}").Select(y => y.Count()) })).ToDataChart();
+            return default;
+        }
+        //public async Task<DataChart> GetClosingDistance(IStringLocalizer localizer, DateTime from = default, DateTime to = default)
+        //{
+        //}
+        private IQueryable<TableExpertise> ExpertisesByDate(DateTime from, DateTime to)
+        {
+            if (from == default)
+                from = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
+            if (to == default)
+                to = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1).AddMonths(1);
+            return Manager.Context.TableExpertise.Where(x => !x.AssignmentDate.HasValue || (x.AssignmentDate.Value >= from && x.AssignmentDate.Value <= to));
+        }
+        private class MyChart : IChart
+        {
+            public string X { get; }
+            public string Y { get; }
+            public string Title { get; }
+            public Dictionary<string, DataModel> Datasets { get; }
+            public MyChart(string title, Dictionary<string, DataModel> datasets) : this(title, datasets, null, null) { }
+            public MyChart(string title, Dictionary<string, DataModel> datasets, string x, string y)
+            {
+                this.Title = title;
+                this.Datasets = datasets;
+                this.X = x;
+                this.Y = y;
+            }
+        }
     }
     public class FileManager
     {
@@ -250,6 +314,10 @@ namespace Expertiser
         public IQueryable<AspNetUsers> Users => Manager.Context.AspNetUsers
             .Include(x => x.AspNetUserRoles)
                 .ThenInclude(x => x.Role);
+        public IQueryable<AspNetUsers> AllContributors => Manager.Context.AspNetUsers
+            .Include(x => x.AspNetUserRoles)
+                .ThenInclude(x => x.Role)
+                    .Where(x => x.AspNetUserRoles.Any(x => x.Role.Name == Roles.Reader));
     }
     public class DropdownManager
     {
@@ -410,10 +478,10 @@ namespace Expertiser
                 });
         }
     }
-    public class ModalManager
+    public class AjaxRequestManager
     {
         private readonly Manager Manager;
-        public ModalManager(Manager manager)
+        public AjaxRequestManager(Manager manager)
             => this.Manager = manager;
         public RequestContext CreateNewLocation => new RequestContext() { Action = "Create", Controller = "Location" };
         public RequestContext CreateNewCustomer => new RequestContext() { Action = "Create", Controller = "Customer" };
@@ -426,6 +494,7 @@ namespace Expertiser
         public RequestContext SetInsurance => new RequestContext() { Action = "Create", Controller = "Insurance", RequestType = RequestType.Post, Selector = "#insurances" };
         public RequestContext CreateNewInsurance => new RequestContext() { Action = "Create", Controller = "Insurance" };
         public RequestContext UpdateUserRole(string userId) => new RequestContext() { Action = "UpdateRole", Controller = "User", QueryString = new Dictionary<object, object>() { { "id", userId } } };
+        public RequestContext ShowStats => new RequestContext() { Action = "Stats", Controller = "Home", RequestType = RequestType.Post, Selector = "#stats-update" };
     }
     public class ServiceManager
     {
