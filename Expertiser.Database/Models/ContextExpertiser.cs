@@ -94,19 +94,16 @@ namespace Expertiser.Database.Models
                 entity.HasOne(d => d.Address)
                     .WithMany(p => p.TableAccident)
                     .HasForeignKey(d => d.AddressId)
-                    .OnDelete(DeleteBehavior.ClientSetNull)
                     .HasConstraintName("FK_Table_Accident_Table_Location");
 
                 entity.HasOne(d => d.Inspectorate)
                     .WithMany(p => p.TableAccident)
                     .HasForeignKey(d => d.InspectorateId)
-                    .OnDelete(DeleteBehavior.ClientSetNull)
                     .HasConstraintName("FK_Table_Accident_Table_Inspectorate");
 
                 entity.HasOne(d => d.InsuranceAgency)
                     .WithMany(p => p.TableAccident)
                     .HasForeignKey(d => d.InsuranceAgencyId)
-                    .OnDelete(DeleteBehavior.ClientSetNull)
                     .HasConstraintName("FK_Table_Accident_Table_InsuranceAgency");
 
                 entity.HasOne(d => d.Insurance)
@@ -200,7 +197,6 @@ namespace Expertiser.Database.Models
                 entity.HasOne(d => d.Member)
                     .WithMany(p => p.TableExpertiseMember)
                     .HasForeignKey(d => d.MemberId)
-                    .OnDelete(DeleteBehavior.ClientSetNull)
                     .HasConstraintName("FK_Table_Expertise_AspNetUsers");
             });
 

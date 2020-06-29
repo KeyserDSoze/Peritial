@@ -105,6 +105,10 @@
         </div>
         <div class="row">
             <div class="col-md-6">
+                <partial name="_Files" model='("Insurance Company Files", await Manager.FileManager.GetUriFiles(Model.Id, "insurancecompany/"))' />
+                <rystem-ajax-file rystem-message='@SharedLocalizer["Drag&Drop or Click to Upload"] @SharedLocalizer["Accident Files"]' rystem-request-context='new RoutingContext() { Action = "Upload", Controller = "File", QueryString = new Dictionary<object, object>() { { "name", "insurancecompany/" } }}'></rystem-ajax-file>
+            </div>
+            <div class="col-md-6">
                 <partial name="_Files" model='("Photos", await Manager.FileManager.GetUriFiles(Model.Id, "photos/"))' />
                 <rystem-ajax-file rystem-message='@SharedLocalizer["Drag&Drop or Click to Upload"] @SharedLocalizer["Photos"]' rystem-request-context='new RoutingContext() { Action = "Upload", Controller = "File", QueryString = new Dictionary<object, object>() { { "name", "photos/" } }}'></rystem-ajax-file>
             </div>

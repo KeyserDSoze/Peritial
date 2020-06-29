@@ -14,12 +14,12 @@ namespace Expertiser.Portal.Controllers
     public class FileController : Controller
     {
         private readonly Manager Manager;
-        public FileController(Manager manager) 
+        public FileController(Manager manager)
             => this.Manager = manager;
         [HttpPost]
         public async Task<IActionResult> Upload(int id, IFormFile file)
         {
-            await this.Manager.FileManager.SaveFile(id, file, Request.Query["name"]);
+            await this.Manager.FileManager.SaveFile(id, file.OpenReadStream(), file.FileName, file.ContentType, Request.Query["name"]);
             return Ok();
         }
     }

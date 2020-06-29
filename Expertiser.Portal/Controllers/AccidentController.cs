@@ -13,6 +13,7 @@ using Expertiser.Base.Constant;
 using Rystem.Web.Backoffice;
 using Microsoft.Extensions.Localization;
 using Expertiser.Interfaces;
+using Microsoft.AspNetCore.Http;
 
 namespace Expertiser.Portal.Controllers
 {
@@ -61,7 +62,11 @@ namespace Expertiser.Portal.Controllers
                 return NotFound();
             return View(tableAccident);
         }
-
+        public IActionResult Import()
+            => View();
+        [HttpPost]
+        public async Task<IActionResult> Import(int importType, IFormFile file) 
+            => Ok(await Manager.ImportManager.FinalizeAsync(file, (ImporterType)importType));
         // POST: Accident/Create
         // To protect from overposting attacks, enable the specific properties you want to bind to, for 
         // more details, see http://go.microsoft.com/fwlink/?LinkId=317598.

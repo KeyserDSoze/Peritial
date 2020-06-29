@@ -16,7 +16,6 @@ namespace Expertiser.Database.Models
 
         [Key]
         public int Id { get; set; }
-        [Required]
         [StringLength(450)]
         public string MemberId { get; set; }
         [StringLength(450)]

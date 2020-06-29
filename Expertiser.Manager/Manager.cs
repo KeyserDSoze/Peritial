@@ -12,6 +12,7 @@ using Rystem.Web;
 using Rystem.Web.Backoffice;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Security.Claims;
 using System.Security.Cryptography.X509Certificates;
@@ -41,6 +42,8 @@ namespace Expertiser
         public QueryManager QueryManager => queryManager ??= new QueryManager(this);
         private ChartManager chartManager;
         public ChartManager ChartManager => chartManager ??= new ChartManager(this);
+        private ImportManager importManager;
+        public ImportManager ImportManager => importManager ??= new ImportManager(this);
         private AjaxRequestManager ajaxRequestManager;
         public AjaxRequestManager AjaxRequestManager => ajaxRequestManager ??= new AjaxRequestManager(this);
         private DropdownManager dropdownManager;
@@ -59,6 +62,7 @@ namespace Expertiser
                 .AddGroup("Home", "fa-business-time", new NavigationUrl())
             .AddSuperGroup("Manage Experty", null, null, Roles.AdminContributor)
                 .AddGroup("Expertises", "fa-cog")
+                    .AddItem("Import New Accident", null, new NavigationUrl("Accident", "Import"))
                     .AddItem("Accidents", null, new NavigationUrl("Accident"))
                     .AddItem("Expertises", null, new NavigationUrl("Experty"))
             .AddSuperGroup("Manage", null, null, Roles.Admin)
@@ -156,7 +160,7 @@ namespace Expertiser
             => this.Manager = manager;
         public async Task<IList<string>> GetUriFiles(int id, string name = null)
             => await new File().SearchAsync($"{id}/{name}");
-        public async Task<bool> SaveFile(int id, IFormFile file, string name = null)
+        public async Task<bool> SaveFile(int id, Stream stream, string fileName, string contentType, string name = null)
         {
             if (name == null)
                 name = Guid.NewGuid().ToString("N");
@@ -164,12 +168,12 @@ namespace Expertiser
                 name = $"{name}{Guid.NewGuid():N}";
             return await new File()
             {
-                Name = $"{id}/{name}.{file.FileName.Split('.').Last()}",
+                Name = $"{id}/{name}.{fileName.Split('.').Last()}",
                 Properties = new DataProperties()
                 {
-                    ContentType = file.ContentType
+                    ContentType = contentType
                 },
-                Stream = file.OpenReadStream()
+                Stream = stream
             }.WriteAsync();
         }
     }
