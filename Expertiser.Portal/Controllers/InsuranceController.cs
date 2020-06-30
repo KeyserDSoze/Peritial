@@ -21,13 +21,6 @@ namespace Expertiser.Portal.Controllers
         {
         }
 
-        // GET: Insurance/Create
-        public async Task<IActionResult> Manage(int? id)
-        {
-            if (id == null)
-                return View();
-            return View(await Manager.QueryManager.Insurances.FirstOrDefaultAsync(x => x.Id == id));
-        }
         public IActionResult Create()
             => PartialView();
         [HttpPost]
@@ -42,17 +35,14 @@ namespace Expertiser.Portal.Controllers
             }
             return NotOkMessage(ModelState);
         }
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit([Bind("CustomerId,ExternalId,InsuranceCompanyId")] TableInsurance tableInsurance)
+        public async Task<IActionResult> Edit(int? id)
         {
-            if (ModelState.IsValid)
-            {
-                Manager.Context.Add(tableInsurance);
-                await Manager.Context.SaveChangesAsync();
-                return PartialView("_GetInsurances", tableInsurance.Id);
-            }
-            return PartialView(tableInsurance);
+            if (id == null)
+                return View();
+            var tableInsurance = await Manager.Context.TableInsurance.FindAsync(id);
+            if (tableInsurance == null)
+                return NotFound();
+            return View(tableInsurance);
         }
         // POST: Insurance/Edit/5
         // To protect from overposting attacks, please enable the specific properties you want to bind to, for 

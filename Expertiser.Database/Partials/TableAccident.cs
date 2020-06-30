@@ -24,6 +24,9 @@ namespace Expertiser.Database.Models
         [Display(Name = nameof(InsuranceAgencyId))]
         public int InsuranceAgencyId { get; set; }
 
+        [Display(Name = nameof(InsuranceAdjusterId))]
+        public int InsuranceAdjusterId { get; set; }
+
         [Display(Name = nameof(InspectorateId))]
         public int InspectorateId { get; set; }
 

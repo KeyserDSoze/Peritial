@@ -327,4 +327,40 @@
   <data name="To" xml:space="preserve">
     <value>A</value>
   </data>
+  <data name="Assigned" xml:space="preserve">
+    <value>Assegnato</value>
+  </data>
+  <data name="Billed" xml:space="preserve">
+    <value>Fatturato</value>
+  </data>
+  <data name="Cancelled" xml:space="preserve">
+    <value>Cancellato</value>
+  </data>
+  <data name="Duplicated" xml:space="preserve">
+    <value>Duplicato</value>
+  </data>
+  <data name="InsuranceAdjuster.Name" xml:space="preserve">
+    <value>Liquidatore</value>
+  </data>
+  <data name="InsuranceAdjusterId" xml:space="preserve">
+    <value>Liquidatore</value>
+  </data>
+  <data name="InsuranceCompanyId" xml:space="preserve">
+    <value>Compagnia Assicurativa</value>
+  </data>
+  <data name="Presented" xml:space="preserve">
+    <value>Presentato</value>
+  </data>
+  <data name="Registered" xml:space="preserve">
+    <value>Registrato</value>
+  </data>
+  <data name="StatusType" xml:space="preserve">
+    <value>Status</value>
+  </data>
+  <data name="ToBeRevised" xml:space="preserve">
+    <value>Da revisionare</value>
+  </data>
+  <data name="ToSend" xml:space="preserve">
+    <value>Da evadere</value>
+  </data>
 </root>

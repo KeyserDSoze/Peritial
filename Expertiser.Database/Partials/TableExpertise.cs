@@ -1,4 +1,5 @@
 ﻿using Expertiser.Database.Binders;
+using Expertiser.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
@@ -12,6 +13,8 @@ namespace Expertiser.Database.Models
     [ModelMetadataType(typeof(TableExpertiseMetadata))]
     public partial class TableExpertise
     {
+        [NotMapped]
+        public StatusType StatusType => (StatusType)this.Status;
         [NotMapped]
         public string ConcreteId => $"{this.Id}-{this.Accident?.InsuranceAgency?.Label.Substring(0, 3)}-{this.Accident?.AccidentDate:yyyy}-{this.Member?.UserName.First()}-{this.Contributor?.UserName.Substring(0, 2)}";
         [NotMapped]

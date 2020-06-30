@@ -26,11 +26,11 @@
             </div>
             <div class="form-group">
                 <label asp-for="AddressId" class="control-label"></label>
-                <partial name="_GetDropdownLocations" model="Model?.AddressId ?? 0" />
+                <partial name="_GetDropdownLocations" model="Model?.AddressId" />
                 <span asp-validation-for="AddressId" class="text-danger"></span>
             </div>
             <div class="form-group">
-                <input type="submit" value="Save" class="btn btn-primary" />
+                <input type="submit" value="@SharedLocalizer["Save"]" class="btn btn-primary" />
             </div>
         </form>
     </div>

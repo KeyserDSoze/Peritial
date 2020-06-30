@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Expertiser.Base\Expertiser.Base.csproj" />
+    <ProjectReference Include="..\Expertiser.Interfaces\Expertiser.Interfaces.csproj" />
   </ItemGroup>
 
 </Project>

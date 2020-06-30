@@ -2,14 +2,14 @@
 {
     public enum StatusType
     {
-        Registered,
+        Registered = -1,
+        Assigned,
         Presented,
         ToBeRevised,
         ToSend,
         Billed,
         Duplicated,
         Cancelled,
-        
         //todo: Relazione allegata che roba è?
     }
 }
