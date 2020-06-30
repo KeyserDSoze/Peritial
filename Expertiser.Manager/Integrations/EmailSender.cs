@@ -4,15 +4,16 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Net;
 using System.Net.Mail;
+using Microsoft.AspNetCore.Identity.UI.Services;
 
 namespace Expertiser
 {
-    public class EmailSender
+    public class EmailSender : IEmailSender
     {
-        public void Send(string to, string subject, string body)
+        public Task SendEmailAsync(string email, string subject, string htmlMessage)
         {
             var fromAddress = new MailAddress(Const.Email.Username, "Experty");
-            var toAddress = new MailAddress(to);
+            var toAddress = new MailAddress(email);
             var smtp = new SmtpClient
             {
                 Host = "smtp.gmail.com",
@@ -25,11 +26,13 @@ namespace Expertiser
             using (var message = new MailMessage(fromAddress, toAddress)
             {
                 Subject = subject,
-                Body = body
+                Body = htmlMessage,
+                IsBodyHtml = true
             })
             {
                 smtp.Send(message);
             }
+            return Task.CompletedTask;
         }
     }
 }

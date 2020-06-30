@@ -22,6 +22,7 @@ using System.Reflection;
 using Rystem.Web;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc.Authorization;
+using Microsoft.AspNetCore.Identity.UI.Services;
 
 namespace Expertiser.Portal
 {
@@ -43,6 +44,7 @@ namespace Expertiser.Portal
             services.AddDefaultIdentity<IdentityUser>(options => options.SignIn.RequireConfirmedAccount = true)
                 .AddRoles<IdentityRole>()
                 .AddEntityFrameworkStores<ApplicationDbContext>();
+            services.AddTransient<IEmailSender, EmailSender>();
             services.AddHttpContextAccessor();
             services.AddScoped<ContextExpertiser>();
             services.AddLocalization(options => options.ResourcesPath = "Resources");

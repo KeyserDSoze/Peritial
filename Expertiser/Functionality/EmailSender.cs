@@ -10,7 +10,7 @@ namespace Expertiser.Functionality
     {
         public async Task DoWorkAsync(Action<object> action, UnitTestMetrics metrics, params string[] args)
         {
-            new Manager(null, null, null, null).ServiceManager.EmailSender.Send("a.rapiti@vetrya.com", "as good as you", "as good as you");
+            await new Manager(null, null, null, null).ServiceManager.EmailSender.SendEmailAsync("a.rapiti@vetrya.com", "as good as you", "as good as you");
         }
     }
 }

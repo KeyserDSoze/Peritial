@@ -99,7 +99,7 @@ namespace Expertiser.Portal.Controllers
                     await Manager.Context.SaveChangesAsync();
                     var expertise = await Manager.Context.TableExpertise.Include(x => x.Contributor).FirstOrDefaultAsync(x => x.Id == tableExpertise.Id);
                     if (expertise.Member != null)
-                        Manager.ServiceManager.EmailSender.Send(expertise.Member.Email, StringLocalizer["new experty"], string.Format(StringLocalizer["bodynewexperty"], $"{Manager.BaseUri}/Experty/Edit/{tableExpertise.Id}"));
+                        await Manager.ServiceManager.EmailSender.SendEmailAsync(expertise.Member.Email, StringLocalizer["new experty"], string.Format(StringLocalizer["bodynewexperty"], $"{Manager.BaseUri}/Experty/Edit/{tableExpertise.Id}"));
                 }
                 else
                 {
@@ -118,9 +118,9 @@ namespace Expertiser.Portal.Controllers
                         string subject = string.Format(StringLocalizer["modify experty"], SharedLocalizer[$"{newStatusType}"]);
                         string message = string.Format(StringLocalizer["bodynewexperty"], $"{Manager.BaseUri}/Experty/Edit/{tableExpertise.Id}");
                         if (newExpertise.Contributor.Email != User.Identity.Name)
-                            Manager.ServiceManager.EmailSender.Send(expertise.Contributor.Email, subject, message);
+                            await Manager.ServiceManager.EmailSender.SendEmailAsync(expertise.Contributor.Email, subject, message);
                         if (newExpertise.Member.Email != User.Identity.Name)
-                            Manager.ServiceManager.EmailSender.Send(expertise.Member.Email, subject, message);
+                            await Manager.ServiceManager.EmailSender.SendEmailAsync(expertise.Member.Email, subject, message);
                     }
                 }
                 return RedirectToAction(nameof(Index));
