@@ -3,3 +3,9 @@
         $("#sidebarToggleTop").click();
     }
 });
+
+var experty = {
+    setDamaged: function (data) {
+        $("[name=Damageds]").append(data);
+    }
+}

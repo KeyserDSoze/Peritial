@@ -8,6 +8,21 @@
 <div>
     <a asp-action="Index">@SharedLocalizer["Back to List"]</a>
 </div>
+@if (Model != null)
+{
+    <div class="form-group mt-3">
+        <label>@SharedLocalizer["Manage Expertises"]</label>
+        @foreach (var expertise in Model.TableExpertise)
+        {
+            if (Manager.UserHelperManager.IsManager || expertise.ContributorId == Manager.UserHelperManager.Id)
+            {
+                <a asp-action="Edit" asp-controller="Experty" asp-route-id="@expertise.Id" class="page-link bg-secondary text-white">
+                    @expertise.Id - @expertise.Member?.UserName - @expertise.Contributor?.UserName - @expertise.AssignmentDate - @expertise.InspectionDate
+                </a>
+            }
+        }
+    </div>
+}
 <hr />
 <div class="row">
     <div class="col-md-6">
@@ -50,7 +65,12 @@
                 <label asp-for="InsuranceAgencyId" class="control-label"></label>
                 @if (Manager.UserHelperManager.IsManager)
                 {
-                    <rystem-dropdown name="InsuranceAgencyId" rystem-data="Manager.DropdownManager.GetInsuranceAgencies(Model?.InsuranceAgencyId)" class="form-control"></rystem-dropdown>
+                    <div id="insurance-agencies">
+                        <partial name="_GetInsuranceAgencies" model="Model?.InsuranceAgencyId" />
+                    </div>
+                    <rystem-ajax-modal rystem-request-context="Manager.AjaxRequestManager.CreateNewInsuranceAgency" rystem-size="Large">
+                        <div class="btn btn-primary mt-2">@SharedLocalizer["Create New Insurance Agency"]</div>
+                    </rystem-ajax-modal>
                 }
                 else
                 {
@@ -81,11 +101,31 @@
                 <label asp-for="InspectorateId" class="control-label"></label>
                 @if (Manager.UserHelperManager.IsManager)
                 {
-                    <rystem-dropdown name="InspectorateId" rystem-data="Manager.DropdownManager.GetInspectorates(Model?.InspectorateId)"></rystem-dropdown>
+                    <div id="inspectorates">
+                        <partial name="_GetInspectorates" model="Model?.InspectorateId" />
+                    </div>
+                    <rystem-ajax-modal rystem-request-context="Manager.AjaxRequestManager.CreateNewInspectorate" rystem-size="Large">
+                        <div class="btn btn-primary mt-2">@SharedLocalizer["Create New Inspectorate"]</div>
+                    </rystem-ajax-modal>
                 }
                 else
                 {
                     <input type="hidden" asp-for="InspectorateId" />
+                    <div class="form-control">@Model?.Inspectorate?.Label</div>
+                }
+            </div>
+            <div class="form-group">
+                <label asp-for="TableDamaged" class="control-label"></label>
+                @if (Manager.UserHelperManager.IsManager)
+                {
+                    <rystem-dropdown name="Damageds" rystem-data="Manager.DropdownManager.GetDamagedCustomers(Model?.TableDamaged.Select(x => x.CustomerId))" rystem-data-multiple="true"></rystem-dropdown>
+                    <rystem-ajax-modal rystem-request-context="Manager.AjaxRequestManager.CreateNewDamaged" rystem-size="Large">
+                        <div class="btn btn-primary mt-2">@SharedLocalizer["Create New Damaged"]</div>
+                    </rystem-ajax-modal>
+                }
+                else
+                {
+                    <input type="hidden" asp-for="TableDamaged" />
                     <div class="form-control">@Model?.Inspectorate?.Label</div>
                 }
             </div>
@@ -130,21 +170,6 @@
                     <span asp-validation-for="DenunciationDate" class="text-danger"></span>
                 </div>
             </div>
-            @if (Model != null)
-            {
-                <div class="form-group">
-                    <label>@SharedLocalizer["Connected Expertises"]</label>
-                    @foreach (var expertise in Model.TableExpertise)
-                    {
-                        if (Manager.UserHelperManager.IsManager || expertise.ContributorId == Manager.UserHelperManager.Id)
-                        {
-                            <a asp-action="Edit" asp-controller="Experty" asp-route-id="@expertise.Id" class="page-link">
-                                @expertise.Id - @expertise.Member?.UserName - @expertise.Contributor?.UserName - @expertise.AssignmentDate - @expertise.InspectionDate
-                            </a>
-                        }
-                    }
-                </div>
-            }
             @if (Manager.UserHelperManager.IsManager)
             {
                 <div class="form-group">

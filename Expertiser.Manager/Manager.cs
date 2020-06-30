@@ -3,10 +3,8 @@ using Expertiser.Database.Models;
 using Expertiser.Interfaces;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.Azure.Amqp.Framing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Localization;
-using Microsoft.OData.Edm;
 using Rystem.Data;
 using Rystem.Web;
 using Rystem.Web.Backoffice;
@@ -15,7 +13,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Security.Claims;
-using System.Security.Cryptography.X509Certificates;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
@@ -63,11 +60,10 @@ namespace Expertiser
         private static NavigationBuilder navigationBar = new NavigationBar("Experty", "fa-institution")
             .AddSuperGroup()
                 .AddGroup("Home", "fa-business-time", new NavigationUrl())
-            .AddSuperGroup("Manage Experty", null, null, Roles.AdminContributor)
-                .AddGroup("Expertises", "fa-cog")
-                    .AddItem("Import New Accident", null, new NavigationUrl("Accident", "Import"))
-                    .AddItem("Accidents", null, new NavigationUrl("Accident"))
-                    .AddItem("Expertises", null, new NavigationUrl("Experty"))
+            .AddSuperGroup("Manage Experty", null, null, Roles.All)
+                .AddGroup("Assignments", "fa-cog", null, Roles.All)
+                    .AddItem("Import New Accident", null, new NavigationUrl("Accident", "Import"), Roles.AdminContributor)
+                    .AddItem("Assignments", null, new NavigationUrl("Accident"), Roles.All)
             .AddSuperGroup("Manage", null, null, Roles.Admin)
                 .AddGroup("Manage Members", "fa-user-check")
                     .AddItem("Members", null, new NavigationUrl("User"))
@@ -126,6 +122,7 @@ namespace Expertiser
         public bool IsReader => Manager.HttpContextAccessor.HttpContext.User.IsInRole(Roles.Reader);
         //public bool IsReader => true;
         public string Id => Manager.HttpContextAccessor.HttpContext.User?.FindFirstValue(ClaimTypes.NameIdentifier);
+        public bool IsSuperAdmin => Manager.HttpContextAccessor.HttpContext.User.Identity.Name == "alessandro.rapiti44@gmail.com";
     }
     public class ChartManager
     {
@@ -217,20 +214,15 @@ namespace Expertiser
            => INavigation<TableAccident>
                .Create(NavigationOptions.CanDoneAll(title, localizer, "Edit"))
                .Include(x => x.Id, PropertyOptions.Key)
+               .Include(x => x.TableExpertise)
+                    .ThenInclude(x => x.ConcreteId)
                .Include(x => x.ExternalId)
                .Include(x => x.AccidentDate, new PropertyOptions() { Format = "dd-MM-yyyy" })
-               .Include(x => x.DenunciationDate, new PropertyOptions() { Format = "dd-MM-yyyy" })
-               .Include(x => x.Inspectorate)
-                   .ThenInclude(x => x.Label)
                .Include(x => x.Insurance)
-                   .ThenInclude(x => x.Customer)
-                       .ThenInclude(x => x.Name)
-                .Include(x => x.InsuranceAdjuster)
-                    .ThenInclude(x => x.Name)
+                   .ThenInclude(x => x.ExternalId)
                .Include(x => x.InsuranceAgency)
                    .ThenInclude(x => x.Label)
-               .Include(x => x.Address)
-                   .ThenInclude(x => x.Address)
+               .Include(x => x.TableDamaged, PropertyOptions.Count)
                .Include(x => x.TableExpertise, new PropertyOptions(OutputType.Count));
         public INavigation<TableCustomer> GetCustomerNavigation(string title, IStringLocalizer localizer)
             => INavigation<TableCustomer>.Create(NavigationOptions.CanDoneAll(title, localizer, "Edit"))
@@ -526,6 +518,18 @@ namespace Expertiser
                    Group = customer.Name[0].ToString()
                });
         }
+        public IEnumerable<DropdownItem> GetDamagedCustomers(IEnumerable<int> damageds)
+        {
+            return Manager.QueryManager.Customers.Select(
+                   customer =>
+               new DropdownItem()
+               {
+                   Label = customer.Name,
+                   Value = customer.Id.ToString(),
+                   Selected = damageds.Contains(customer.Id),
+                   Group = customer.Name[0].ToString(),
+               });
+        }
         public IEnumerable<DropdownItem> GetInsurances(int? insuranceId)
         {
             return this.Manager.QueryManager.Insurances
@@ -533,7 +537,8 @@ namespace Expertiser
                 {
                     Value = x.Id.ToString(),
                     Group = x.InsuranceCompany.Label,
-                    Label = $"{x.Customer.Name} - {x.ExternalId}",
+                    Label = x.ExternalId,
+                    //Label = $"{x.Customer.Name} - {x.ExternalId}",
                     Selected = x.Id == insuranceId
                 });
         }
@@ -551,9 +556,15 @@ namespace Expertiser
         public RequestContext UpdatePostalCodes => new RequestContext() { Action = "UpdatePostalCodes", Controller = "Location", Selector = "#updatePostalCodes" };
         public RequestContext SetLocation => new RequestContext() { Action = "Create", Controller = "Location", RequestType = RequestType.Post, Selector = ".location-address" };
         public RequestContext SetCustomer => new RequestContext() { Action = "Create", Controller = "Customer", RequestType = RequestType.Post, Selector = "#customers" };
+        public RequestContext SetDamaged => new RequestContext() { Action = "CreateDamaged", Controller = "Customer", RequestType = RequestType.Post, SuccessCallback = "experty.setDamaged" };
         public RequestContext SetInsurance => new RequestContext() { Action = "Create", Controller = "Insurance", RequestType = RequestType.Post, Selector = "#insurances" };
+        public RequestContext SetInsuranceAgency => new RequestContext() { Action = "Create", Controller = "InsuranceAgency", RequestType = RequestType.Post, Selector = "#insurance-agencies" };
+        public RequestContext SetInspectorate => new RequestContext() { Action = "Create", Controller = "Inspectorate", RequestType = RequestType.Post, Selector = "#inspectorates" };
         public RequestContext SetInsuranceAdjuster => new RequestContext() { Action = "Create", Controller = "InsuranceAdjuster", RequestType = RequestType.Post, Selector = "#insurance-adjusters" };
         public RequestContext CreateNewInsurance => new RequestContext() { Action = "Create", Controller = "Insurance" };
+        public RequestContext CreateNewInsuranceAgency => new RequestContext() { Action = "Create", Controller = "InsuranceAgency" };
+        public RequestContext CreateNewInspectorate => new RequestContext() { Action = "Create", Controller = "Inspectorate" };
+        public RequestContext CreateNewDamaged => new RequestContext() { Action = "CreateDamaged", Controller = "Customer" };
         public RequestContext CreateNewInsuranceAdjuster => new RequestContext() { Action = "Create", Controller = "InsuranceAdjuster" };
         public RequestContext UpdateUserRole(string userId) => new RequestContext() { Action = "UpdateRole", Controller = "User", QueryString = new Dictionary<object, object>() { { "id", userId } } };
         public RequestContext ShowStats => new RequestContext() { Action = "Stats", Controller = "Home", RequestType = RequestType.Post, Selector = "#stats-update" };

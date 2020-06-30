@@ -20,7 +20,7 @@ namespace Expertiser.Portal.Controllers
     [Authorize(Roles = Roles.AdminContributor)]
     public class AccidentController : BaseController<TableAccident>
     {
-        public AccidentController(Manager manager, IStringLocalizer<DatabaseShared> stringLocalizer, IStringLocalizer<SharedResource> sharedLocalizer) : base(manager, stringLocalizer, sharedLocalizer)
+        public AccidentController(Manager manager, IStringLocalizer<SharedResource> stringLocalizer, IStringLocalizer<SharedResource> sharedLocalizer) : base(manager, stringLocalizer, sharedLocalizer)
         {
         }
 
@@ -47,7 +47,7 @@ namespace Expertiser.Portal.Controllers
         public override async Task<TableAccident> GetModel(string id)
             => await Manager.Context.TableAccident.FindAsync(int.Parse(id));
         public override INavigation<TableAccident> GetIndexNavigation()
-            => Manager.NavigationManager.GetAccidentNavigation("Index", this.StringLocalizer);
+            => Manager.NavigationManager.GetAccidentNavigation("Assignment", this.StringLocalizer);
         public override INavigation<TableAccident> GetDeleteNavigation()
             => Manager.NavigationManager.GetAccidentNavigation("Delete", this.StringLocalizer);
 
@@ -90,11 +90,29 @@ namespace Expertiser.Portal.Controllers
                     };
                     Manager.Context.TableExpertise.Add(tableExpertise);
                     await Manager.Context.SaveChangesAsync();
+                    await ManageDamageds(tableAccident.Id);
                     return RedirectToAction("Edit", "Experty", new { Id = tableExpertise.Id });
                 }
                 else
                 {
                     Manager.Context.Update(tableAccident);
+                    await Manager.Context.SaveChangesAsync();
+                    await ManageDamageds(tableAccident.Id);
+                }
+                async Task ManageDamageds(int accidentId)
+                {
+                    var damageds = await Manager.Context.TableDamaged.Where(x => x.AccidentId == accidentId).ToListAsync();
+                    foreach (var damaged in damageds)
+                        Manager.Context.Remove(damaged);
+                    if (tableAccident.Damageds != null)
+                        for (int i = 0; i < tableAccident.Damageds.Length; i++)
+                        {
+                            Manager.Context.Add(new TableDamaged()
+                            {
+                                AccidentId = accidentId,
+                                CustomerId = tableAccident.Damageds[i]
+                            });
+                        }
                     await Manager.Context.SaveChangesAsync();
                 }
             }

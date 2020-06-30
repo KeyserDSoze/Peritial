@@ -16,10 +16,23 @@ namespace Expertiser.Portal.Controllers
     [Authorize(Roles = Roles.AdminContributor)]
     public class InsuranceAgencyController : BaseController<TableInsuranceAgency>
     {
-        public InsuranceAgencyController(Manager manager, IStringLocalizer<DatabaseShared> stringLocalizer, IStringLocalizer<SharedResource> sharedLocalizer) : base(manager, stringLocalizer, sharedLocalizer)
+        public InsuranceAgencyController(Manager manager, IStringLocalizer<SharedResource> stringLocalizer, IStringLocalizer<SharedResource> sharedLocalizer) : base(manager, stringLocalizer, sharedLocalizer)
         {
         }
-
+        public IActionResult Create()
+            => PartialView();
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Create([Bind("Label,ExternalId,InsuranceCompanyId,AddressId,IsActive")] TableInsuranceAgency tableInsuranceAgency)
+        {
+            if (ModelState.IsValid)
+            {
+                Manager.Context.Add(tableInsuranceAgency);
+                await Manager.Context.SaveChangesAsync();
+                return PartialView("_GetInsuranceAgencies", tableInsuranceAgency.Id);
+            }
+            return NotOkMessage(ModelState);
+        }
         // GET: InsuranceAgency/Edit/5
         public async Task<IActionResult> Edit(int? id)
         {

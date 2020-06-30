@@ -16,7 +16,7 @@ namespace Expertiser.Portal.Controllers
     [Authorize(Roles = Roles.AdminContributor)]
     public class CustomerController : BaseController<TableCustomer>
     {
-        public CustomerController(Manager manager, IStringLocalizer<DatabaseShared> stringLocalizer, IStringLocalizer<SharedResource> sharedLocalizer) : base(manager, stringLocalizer, sharedLocalizer)
+        public CustomerController(Manager manager, IStringLocalizer<SharedResource> stringLocalizer, IStringLocalizer<SharedResource> sharedLocalizer) : base(manager, stringLocalizer, sharedLocalizer)
         {
         }
         public override async Task<IEnumerable<TableCustomer>> GetList()
@@ -54,6 +54,23 @@ namespace Expertiser.Portal.Controllers
                 Manager.Context.Add(tableCustomer);
                 await Manager.Context.SaveChangesAsync();
                 return PartialView("_GetCustomers", tableCustomer.Id);
+            }
+            return NotOkMessage(ModelState);
+        }
+        public IActionResult CreateDamaged()
+           => PartialView();
+        // POST: Customer/Create
+        // To protect from overposting attacks, please enable the specific properties you want to bind to, for 
+        // more details see http://go.microsoft.com/fwlink/?LinkId=317598.
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> CreateDamaged([Bind("Name,FiscalCode,AddressId")] TableCustomer tableCustomer)
+        {
+            if (ModelState.IsValid)
+            {
+                Manager.Context.Add(tableCustomer);
+                await Manager.Context.SaveChangesAsync();
+                return Ok($"<option selected=selected value={tableCustomer.Id}>{tableCustomer.Name}</option>");
             }
             return NotOkMessage(ModelState);
         }

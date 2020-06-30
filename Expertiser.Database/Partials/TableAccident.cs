@@ -12,6 +12,8 @@ namespace Expertiser.Database.Models
     [BindProperties]
     public partial class TableAccident
     {
+        [NotMapped]
+        public int[] Damageds { get; set; }
     }
     public class TableAccidentMetadata
     {

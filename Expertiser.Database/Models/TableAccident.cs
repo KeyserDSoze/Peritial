@@ -10,6 +10,7 @@ namespace Expertiser.Database.Models
     {
         public TableAccident()
         {
+            TableDamaged = new HashSet<TableDamaged>();
             TableExpertise = new HashSet<TableExpertise>();
         }
 
@@ -43,6 +44,8 @@ namespace Expertiser.Database.Models
         [ForeignKey(nameof(InsuranceAgencyId))]
         [InverseProperty(nameof(TableInsuranceAgency.TableAccident))]
         public virtual TableInsuranceAgency InsuranceAgency { get; set; }
+        [InverseProperty("Accident")]
+        public virtual ICollection<TableDamaged> TableDamaged { get; set; }
         [InverseProperty("Accident")]
         public virtual ICollection<TableExpertise> TableExpertise { get; set; }
     }

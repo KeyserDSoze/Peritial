@@ -29,6 +29,7 @@ namespace Expertiser.Database.Models
         public virtual DbSet<TableCity> TableCity { get; set; }
         public virtual DbSet<TableCountry> TableCountry { get; set; }
         public virtual DbSet<TableCustomer> TableCustomer { get; set; }
+        public virtual DbSet<TableDamaged> TableDamaged { get; set; }
         public virtual DbSet<TableExpertise> TableExpertise { get; set; }
         public virtual DbSet<TableInspectorate> TableInspectorate { get; set; }
         public virtual DbSet<TableInsurance> TableInsurance { get; set; }
@@ -179,6 +180,23 @@ namespace Expertiser.Database.Models
                     .HasForeignKey(d => d.AddressId)
                     .OnDelete(DeleteBehavior.ClientSetNull)
                     .HasConstraintName("FK_Table_Customer_Table_Location");
+            });
+
+            modelBuilder.Entity<TableDamaged>(entity =>
+            {
+                entity.HasKey(e => new { e.AccidentId, e.CustomerId });
+
+                entity.HasOne(d => d.Accident)
+                    .WithMany(p => p.TableDamaged)
+                    .HasForeignKey(d => d.AccidentId)
+                    .OnDelete(DeleteBehavior.ClientSetNull)
+                    .HasConstraintName("FK_Table_Damaged_Table_Accident");
+
+                entity.HasOne(d => d.Customer)
+                    .WithMany(p => p.TableDamaged)
+                    .HasForeignKey(d => d.CustomerId)
+                    .OnDelete(DeleteBehavior.ClientSetNull)
+                    .HasConstraintName("FK_Table_Damaged_Table_Customer");
             });
 
             modelBuilder.Entity<TableExpertise>(entity =>

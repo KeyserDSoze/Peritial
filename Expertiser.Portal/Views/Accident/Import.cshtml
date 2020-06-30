@@ -6,6 +6,8 @@
 
 <h1>@SharedLocalizer["Import Accident"]</h1>
 <hr />
+    <a asp-action="Edit" asp-controller="Accident">@SharedLocalizer["Create new assignment"]</a>
+<hr />
 <div class="row">
     <div class="col-md-6">
         <rystem-ajax-file rystem-message='@SharedLocalizer["Drag&Drop or Click to Upload"] @SharedLocalizer["Accident"]' rystem-request-context='new RoutingContext() { Action = "Import", Controller = "Accident", QueryString = new Dictionary<object, object>() { { "id", 0 } } }'></rystem-ajax-file>

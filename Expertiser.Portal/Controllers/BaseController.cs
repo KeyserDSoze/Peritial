@@ -20,9 +20,9 @@ namespace Expertiser.Portal.Controllers
         where T : class
     {
         private protected readonly Manager Manager;
-        private protected readonly IStringLocalizer<DatabaseShared> StringLocalizer;
+        private protected readonly IStringLocalizer<SharedResource> StringLocalizer;
         private protected readonly IStringLocalizer<SharedResource> SharedLocalizer;
-        public BaseController(Manager manager, IStringLocalizer<DatabaseShared> stringLocalizer, IStringLocalizer<SharedResource> sharedLocalizer)
+        public BaseController(Manager manager, IStringLocalizer<SharedResource> stringLocalizer, IStringLocalizer<SharedResource> sharedLocalizer)
         {
             this.Manager = manager;
             this.StringLocalizer = stringLocalizer;

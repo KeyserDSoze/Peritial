@@ -16,7 +16,7 @@ namespace Expertiser.Portal.Controllers
     [Authorize(Roles = Roles.AdminContributor)]
     public class InspectorateController : BaseController<TableInspectorate>
     {
-        public InspectorateController(Manager manager, IStringLocalizer<DatabaseShared> stringLocalizer, IStringLocalizer<SharedResource> sharedLocalizer) : base(manager, stringLocalizer, sharedLocalizer)
+        public InspectorateController(Manager manager, IStringLocalizer<SharedResource> stringLocalizer, IStringLocalizer<SharedResource> sharedLocalizer) : base(manager, stringLocalizer, sharedLocalizer)
         {
         }
         public override async Task<IEnumerable<TableInspectorate>> GetList()
@@ -37,7 +37,20 @@ namespace Expertiser.Portal.Controllers
            => Manager.NavigationManager.GetInspectorateNavigation("Index", this.StringLocalizer);
         public override INavigation<TableInspectorate> GetDeleteNavigation()
            => Manager.NavigationManager.GetInspectorateNavigation("Delete", this.StringLocalizer);
-
+        public IActionResult Create()
+           => PartialView();
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Create([Bind("Label,ExternalId,AddressId,InsuranceCompanyId")] TableInspectorate tableInspectorate)
+        {
+            if (ModelState.IsValid)
+            {
+                Manager.Context.Add(tableInspectorate);
+                await Manager.Context.SaveChangesAsync();
+                return PartialView("_GetInspectorates", tableInspectorate.Id);
+            }
+            return NotOkMessage(ModelState);
+        }
         // GET: Inspectorate/Edit/5
         public async Task<IActionResult> Edit(int? id)
         {

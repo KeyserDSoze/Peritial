@@ -65,8 +65,8 @@ namespace Expertiser.Portal
                 {
                     options.DataAnnotationLocalizerProvider = (type, factory) =>
                     {
-                        var assemblyName = new AssemblyName(typeof(DatabaseShared).GetTypeInfo().Assembly.FullName);
-                        return factory.Create(nameof(DatabaseShared), assemblyName.Name);
+                        var assemblyName = new AssemblyName(typeof(SharedResource).GetTypeInfo().Assembly.FullName);
+                        return factory.Create(nameof(SharedResource), assemblyName.Name);
                     };
                 });
             services.AddScoped<Manager>();

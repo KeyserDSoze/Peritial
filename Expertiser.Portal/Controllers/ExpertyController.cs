@@ -20,11 +20,11 @@ namespace Expertiser.Portal.Controllers
     [Authorize(Roles = Roles.AdminContributor)]
     public class ExpertyController : BaseController<TableExpertise>
     {
-        public ExpertyController(Manager manager, IStringLocalizer<DatabaseShared> stringLocalizer, IStringLocalizer<SharedResource> sharedLocalizer) : base(manager, stringLocalizer, sharedLocalizer)
+        public ExpertyController(Manager manager, IStringLocalizer<SharedResource> stringLocalizer, IStringLocalizer<SharedResource> sharedLocalizer) : base(manager, stringLocalizer, sharedLocalizer)
         {
         }
         public override INavigation<TableExpertise> GetIndexNavigation()
-           => Manager.NavigationManager.GetExpertiseNavigation("Index", this.StringLocalizer, this.User);
+           => Manager.NavigationManager.GetExpertiseNavigation("Expertise", this.StringLocalizer, this.User);
         public override INavigation<TableExpertise> GetDeleteNavigation()
            => Manager.NavigationManager.GetExpertiseNavigation("Delete", this.StringLocalizer, this.User);
 
