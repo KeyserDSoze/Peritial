@@ -17,7 +17,7 @@ using Microsoft.AspNetCore.Http;
 
 namespace Expertiser.Portal.Controllers
 {
-    [Authorize(Roles = Roles.AdminContributor)]
+    [Authorize(Roles = Roles.All)]
     public class AccidentController : BaseController<TableAccident>
     {
         public AccidentController(Manager manager, IStringLocalizer<SharedResource> stringLocalizer, IStringLocalizer<SharedResource> sharedLocalizer) : base(manager, stringLocalizer, sharedLocalizer)
@@ -47,9 +47,9 @@ namespace Expertiser.Portal.Controllers
         public override async Task<TableAccident> GetModel(string id)
             => await Manager.Context.TableAccident.FindAsync(int.Parse(id));
         public override INavigation<TableAccident> GetIndexNavigation()
-            => Manager.NavigationManager.GetAccidentNavigation("Assignment", this.StringLocalizer);
+            => Manager.NavigationManager.GetAccidentNavigation("Assignment", this.StringLocalizer, this.Manager);
         public override INavigation<TableAccident> GetDeleteNavigation()
-            => Manager.NavigationManager.GetAccidentNavigation("Delete", this.StringLocalizer);
+            => Manager.NavigationManager.GetAccidentNavigation("Delete", this.StringLocalizer, this.Manager);
 
         //
         // GET: Accident/Manage

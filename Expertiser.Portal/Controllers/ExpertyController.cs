@@ -137,9 +137,9 @@ namespace Expertiser.Portal.Controllers
                         string subject = string.Format(StringLocalizer["modify experty"], SharedLocalizer[$"{newStatusType}"]);
                         string message = string.Format(StringLocalizer["bodynewexperty"], $"{Manager.BaseUri}/Experty/Edit/{tableExpertise.Id}");
                         if (newExpertise.Contributor.Email != User.Identity.Name)
-                            await Manager.ServiceManager.EmailSender.SendEmailAsync(expertise.Contributor.Email, subject, message);
+                            await Manager.ServiceManager.EmailSender.SendEmailAsync(newExpertise.Contributor.Email, subject, message);
                         if (newExpertise.Member.Email != User.Identity.Name)
-                            await Manager.ServiceManager.EmailSender.SendEmailAsync(expertise.Member.Email, subject, message);
+                            await Manager.ServiceManager.EmailSender.SendEmailAsync(newExpertise.Member.Email, subject, message);
                     }
                 }
             }

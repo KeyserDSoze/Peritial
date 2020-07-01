@@ -210,9 +210,9 @@ namespace Expertiser
     }
     public class NavigationManager
     {
-        public INavigation<TableAccident> GetAccidentNavigation(string title, IStringLocalizer localizer)
+        public INavigation<TableAccident> GetAccidentNavigation(string title, IStringLocalizer localizer, Manager manager)
            => INavigation<TableAccident>
-               .Create(NavigationOptions.CanDoneAll(title, localizer, "Edit"))
+               .Create(NavigationOptions.CanDone(manager.UserHelperManager.IsManager, true, manager.UserHelperManager.IsManager, title, localizer, "Edit"))
                .Include(x => x.Id, PropertyOptions.Key)
                .Include(x => x.TableExpertise)
                     .ThenInclude(x => x.ConcreteId)
@@ -528,7 +528,7 @@ namespace Expertiser
                {
                    Label = customer.Name,
                    Value = customer.Id.ToString(),
-                   Selected = damageds.Contains(customer.Id),
+                   Selected = damageds != null && damageds.Contains(customer.Id),
                    Group = customer.Name[0].ToString(),
                });
         }

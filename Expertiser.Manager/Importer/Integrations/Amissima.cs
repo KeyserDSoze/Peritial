@@ -86,7 +86,7 @@ namespace Expertiser
         [Serializable, XmlRoot("it.autosoftws.ReIncaricoRecord")]
         public class AmissimaXml
         {
-            [XmlElement(ElementName = "IDIncarico")]
+            [XmlElement(ElementName = "NumeroSinistro")]
             public string Id { get; set; }
             [XmlElement(ElementName = "DataIncarico")]
             public string AccidentDate { get; set; }
