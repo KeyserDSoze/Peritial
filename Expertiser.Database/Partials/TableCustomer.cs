@@ -13,7 +13,12 @@ namespace Expertiser.Database.Models
     }
     public partial class TableCustomerMetadata
     {
+        [Display(Name = nameof(FiscalCode))]
         [RegularExpression("^([A-Za-z]{6}[0-9lmnpqrstuvLMNPQRSTUV]{2}[abcdehlmprstABCDEHLMPRST]{1}[0-9lmnpqrstuvLMNPQRSTUV]{2}[A-Za-z]{1}[0-9lmnpqrstuvLMNPQRSTUV]{3}[A-Za-z]{1})|([0-9]{11})$", ErrorMessage = "Invalid Fiscal Code")]
         public string FiscalCode { get; set; }
+        [Display(Name = nameof(Name))]
+        public string Name { get; set; }
+        [Display(Name = nameof(AddressId))]
+        public int AddressId { get; set; }
     }
 }

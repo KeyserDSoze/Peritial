@@ -1,3 +1,3 @@
-﻿@model int?
+﻿@model (string Name, int? Value)
 
-<rystem-dropdown name="CustomerId" rystem-data="Manager.DropdownManager.GetCustomers(Model)" class="form-control" rystem-data-sorting="Ascending"></rystem-dropdown>
+<rystem-dropdown name="@Model.Name" rystem-data="Manager.DropdownManager.GetCustomers(Model.Value)" class="form-control" rystem-data-sorting="Ascending"></rystem-dropdown>

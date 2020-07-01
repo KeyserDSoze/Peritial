@@ -18,7 +18,7 @@ using System.Security.Claims;
 
 namespace Expertiser.Portal.Controllers
 {
-    [Authorize(Roles = Roles.AdminContributor)]
+    [Authorize(Roles = Roles.All)]
     public class ExpertyController : BaseController<TableExpertise>
     {
         public ExpertyController(Manager manager, IStringLocalizer<SharedResource> stringLocalizer, IStringLocalizer<SharedResource> sharedLocalizer) : base(manager, stringLocalizer, sharedLocalizer)

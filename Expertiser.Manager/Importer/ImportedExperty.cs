@@ -15,6 +15,7 @@ namespace Expertiser
         public TableAccident Accident { get; set; }
         public TableInsurance Insurance { get; set; }
         public TableCustomer Customer { get; set; }
+        public TableCustomer Contractor { get; set; }
         public TableInsuranceAdjuster InsuranceAdjuster { get; set; }
         public TableInsuranceCompany InsuranceCompany { get; set; }
         public TableInspectorate Inspectorate { get; set; }

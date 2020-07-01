@@ -24,6 +24,8 @@ namespace Expertiser.Database.Models
         [StringLength(64)]
         public string ExternalId { get; set; }
         public bool IsActive { get; set; }
+        [StringLength(10)]
+        public string Alias { get; set; }
 
         [ForeignKey(nameof(AddressId))]
         [InverseProperty(nameof(TableLocation.TableInsuranceCompany))]

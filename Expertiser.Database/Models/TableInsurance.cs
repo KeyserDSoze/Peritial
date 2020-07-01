@@ -20,9 +20,13 @@ namespace Expertiser.Database.Models
         [StringLength(50)]
         public string ExternalId { get; set; }
         public int InsuranceCompanyId { get; set; }
+        public int? ContractorId { get; set; }
 
+        [ForeignKey(nameof(ContractorId))]
+        [InverseProperty(nameof(TableCustomer.TableInsuranceContractor))]
+        public virtual TableCustomer Contractor { get; set; }
         [ForeignKey(nameof(CustomerId))]
-        [InverseProperty(nameof(TableCustomer.TableInsurance))]
+        [InverseProperty(nameof(TableCustomer.TableInsuranceCustomer))]
         public virtual TableCustomer Customer { get; set; }
         [ForeignKey(nameof(InsuranceCompanyId))]
         [InverseProperty(nameof(TableInsuranceCompany.TableInsurance))]

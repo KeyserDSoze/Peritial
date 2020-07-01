@@ -52,6 +52,16 @@ namespace Expertiser
                         PostalCode = amissimaXml.Customer.Address.PostalCode,
                     }
                 },
+                Contractor = new TableCustomer()
+                {
+                    Name = $"{amissimaXml.Customer.Name} {amissimaXml.Customer.Surname}".Trim(),
+                    FiscalCode = !string.IsNullOrWhiteSpace(amissimaXml.Customer.FiscalCode) ? amissimaXml.Customer.FiscalCode : amissimaXml.Customer.PIVA,
+                    Address = new TableLocation()
+                    {
+                        Address = $"{amissimaXml.Customer.Address.Address} {amissimaXml.Customer.Address.CivicNumber}",
+                        PostalCode = amissimaXml.Customer.Address.PostalCode,
+                    }
+                },
                 Damageds = amissimaXml.Damageds.Select(x => new TableCustomer()
                 {
                     Name = $"{x.Name} {x.Surname}".Trim(),
@@ -79,6 +89,8 @@ namespace Expertiser
             {
                 if (damaged.Name == importedExperty.Customer.Name)
                     importedExperty.Customer.Address = damaged.Address;
+                if (damaged.Name == importedExperty.Contractor.Name)
+                    importedExperty.Contractor.Address = damaged.Address;
             }
             return importedExperty;
         }

@@ -28,6 +28,7 @@ namespace Expertiser.Database.Models
         [Column(TypeName = "datetime")]
         public DateTime? DenunciationDate { get; set; }
         public int? InsuranceAdjusterId { get; set; }
+        public int YearlyId { get; set; }
 
         [ForeignKey(nameof(AddressId))]
         [InverseProperty(nameof(TableLocation.TableAccident))]

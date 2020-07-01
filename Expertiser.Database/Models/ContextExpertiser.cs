@@ -87,6 +87,12 @@ namespace Expertiser.Database.Models
                     .HasName("UserNameIndex")
                     .IsUnique()
                     .HasFilter("([NormalizedUserName] IS NOT NULL)");
+
+                entity.Property(e => e.Alias).IsUnicode(false);
+
+                entity.Property(e => e.Name).IsUnicode(false);
+
+                entity.Property(e => e.Surname).IsUnicode(false);
             });
 
             modelBuilder.Entity<TableAccident>(entity =>
@@ -246,8 +252,13 @@ namespace Expertiser.Database.Models
             {
                 entity.Property(e => e.ExternalId).IsUnicode(false);
 
+                entity.HasOne(d => d.Contractor)
+                    .WithMany(p => p.TableInsuranceContractor)
+                    .HasForeignKey(d => d.ContractorId)
+                    .HasConstraintName("FK_Table_Insurance_Table_Customer1");
+
                 entity.HasOne(d => d.Customer)
-                    .WithMany(p => p.TableInsurance)
+                    .WithMany(p => p.TableInsuranceCustomer)
                     .HasForeignKey(d => d.CustomerId)
                     .OnDelete(DeleteBehavior.ClientSetNull)
                     .HasConstraintName("FK_Table_Insurance_Table_Customer");
@@ -284,6 +295,8 @@ namespace Expertiser.Database.Models
 
             modelBuilder.Entity<TableInsuranceCompany>(entity =>
             {
+                entity.Property(e => e.Alias).IsUnicode(false);
+
                 entity.Property(e => e.ExternalId).IsUnicode(false);
 
                 entity.Property(e => e.Label).IsUnicode(false);

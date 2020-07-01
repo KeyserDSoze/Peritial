@@ -222,6 +222,9 @@
   <data name="Connected Expertises" xml:space="preserve">
     <value>Perizie connesse</value>
   </data>
+  <data name="Contractor" xml:space="preserve">
+    <value>Contraente</value>
+  </data>
   <data name="Contributor" xml:space="preserve">
     <value>Perito</value>
   </data>
@@ -252,8 +255,11 @@
   <data name="Create new assignment" xml:space="preserve">
     <value>Inserisci nuovo incarico</value>
   </data>
+  <data name="Create New Contractor" xml:space="preserve">
+    <value>Inserisci nuovo contraente</value>
+  </data>
   <data name="Create New Customer" xml:space="preserve">
-    <value>Inserisci un nuovo cliente</value>
+    <value>Inserisci un nuovo assicurato</value>
   </data>
   <data name="Create New Damaged" xml:space="preserve">
     <value>Inserisci nuovo danneggiato</value>
@@ -286,10 +292,10 @@
     <value>Nome Assicurato</value>
   </data>
   <data name="CustomerId" xml:space="preserve">
-    <value>Contraente</value>
+    <value>Assicurato</value>
   </data>
   <data name="Customers" xml:space="preserve">
-    <value>Contraenti</value>
+    <value>Assicurati</value>
   </data>
   <data name="Damaged" xml:space="preserve">
     <value>Danneggiato</value>
@@ -328,7 +334,7 @@
     <value>Account esterni</value>
   </data>
   <data name="ExternalId" xml:space="preserve">
-    <value>Id esterno</value>
+    <value>N. Sinistro</value>
   </data>
   <data name="Extra" xml:space="preserve">
     <value>Extra</value>
@@ -363,6 +369,9 @@
   <data name="Inspectorate" xml:space="preserve">
     <value>Ispettorato</value>
   </data>
+  <data name="Inspectorate Id" xml:space="preserve">
+    <value>Id Ispettorato</value>
+  </data>
   <data name="Inspectorate.Label" xml:space="preserve">
     <value>Ispettorato</value>
   </data>
@@ -387,11 +396,23 @@
   <data name="Insurance Agency" xml:space="preserve">
     <value>Agenzia assicurativa</value>
   </data>
+  <data name="Insurance Agency Id" xml:space="preserve">
+    <value>Id Agenzia Assicurativa</value>
+  </data>
   <data name="Insurance Companies" xml:space="preserve">
     <value>Compagnie assicurative</value>
   </data>
   <data name="Insurance Company" xml:space="preserve">
     <value>Compagnia assicurativa</value>
+  </data>
+  <data name="Insurance Company Id" xml:space="preserve">
+    <value>Id Compagnia Assicurativa</value>
+  </data>
+  <data name="Insurance Id" xml:space="preserve">
+    <value>N. Polizza</value>
+  </data>
+  <data name="Insurance.Contractor.Name" xml:space="preserve">
+    <value>Contraente</value>
   </data>
   <data name="Insurance.Customer.Name" xml:space="preserve">
     <value>Assicurato</value>
@@ -407,6 +428,9 @@
   </data>
   <data name="InsuranceAgency" xml:space="preserve">
     <value>Agenzia Assicurativa</value>
+  </data>
+  <data name="InsuranceAgency.InsuranceCompany.Label" xml:space="preserve">
+    <value>Compagnia assicurativa</value>
   </data>
   <data name="InsuranceAgency.Label" xml:space="preserve">
     <value>Agenzia assicurativa</value>
@@ -525,11 +549,17 @@
   <data name="TableDamaged" xml:space="preserve">
     <value>Danneggiati</value>
   </data>
+  <data name="TableDamaged.Customer.Name" xml:space="preserve">
+    <value>Danneggiati</value>
+  </data>
   <data name="TableExpertise" xml:space="preserve">
     <value>Perizia</value>
   </data>
   <data name="TableExpertise.ConcreteId" xml:space="preserve">
     <value>Id Studio</value>
+  </data>
+  <data name="TableExpertise.StatusType" xml:space="preserve">
+    <value>Stato</value>
   </data>
   <data name="TableInspectorate" xml:space="preserve">
     <value>Numero Ispettorati</value>

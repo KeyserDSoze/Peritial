@@ -53,7 +53,24 @@ namespace Expertiser.Portal.Controllers
             {
                 Manager.Context.Add(tableCustomer);
                 await Manager.Context.SaveChangesAsync();
-                return PartialView("_GetCustomers", tableCustomer.Id);
+                return PartialView("_GetCustomers", ("CustomerId", tableCustomer.Id));
+            }
+            return NotOkMessage(ModelState);
+        }
+        public IActionResult CreateContractor()
+           => PartialView();
+        // POST: Customer/Create
+        // To protect from overposting attacks, please enable the specific properties you want to bind to, for 
+        // more details see http://go.microsoft.com/fwlink/?LinkId=317598.
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> CreateContractor([Bind("Name,FiscalCode,AddressId")] TableCustomer tableCustomer)
+        {
+            if (ModelState.IsValid)
+            {
+                Manager.Context.Add(tableCustomer);
+                await Manager.Context.SaveChangesAsync();
+                return PartialView("_GetCustomers", ("ContractorId", tableCustomer.Id));
             }
             return NotOkMessage(ModelState);
         }

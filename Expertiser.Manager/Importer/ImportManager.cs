@@ -24,6 +24,7 @@ namespace Expertiser
             //Create customer of insurance
             ImportedExperty importValue = importer.Import(file.OpenReadStream());
             int customerId = await GetCustomerId(importValue.Customer);
+            int contractorId = await GetCustomerId(importValue.Contractor);
 
             //Create insurance agency
             var insuranceAgency = await Manager.Context.TableInsuranceAgency.FirstOrDefaultAsync(x => x.ExternalId == importValue.InsuranceAgency.ExternalId);
@@ -59,6 +60,7 @@ namespace Expertiser
                 {
                     CustomerId = customerId,
                     ExternalId = importValue.Insurance.ExternalId,
+                    ContractorId = contractorId,
                     InsuranceCompanyId = importValue.Insurance.InsuranceCompanyId,
                 };
                 Manager.Context.TableInsurance.Add(insurance);
@@ -89,8 +91,7 @@ namespace Expertiser
                     InspectorateId = inspectorate.Id,
                     InsuranceAgencyId = insuranceAgency.Id,
                 };
-                Manager.Context.TableAccident.Add(accident);
-                await Manager.Context.SaveChangesAsync();
+                await Manager.QueryManager.InsertAccidentAsync(accident);
             }
             foreach (var damaged in importValue.Damageds)
             {

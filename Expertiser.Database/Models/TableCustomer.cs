@@ -11,7 +11,8 @@ namespace Expertiser.Database.Models
         public TableCustomer()
         {
             TableDamaged = new HashSet<TableDamaged>();
-            TableInsurance = new HashSet<TableInsurance>();
+            TableInsuranceContractor = new HashSet<TableInsurance>();
+            TableInsuranceCustomer = new HashSet<TableInsurance>();
         }
 
         [Key]
@@ -28,7 +29,9 @@ namespace Expertiser.Database.Models
         public virtual TableLocation Address { get; set; }
         [InverseProperty("Customer")]
         public virtual ICollection<TableDamaged> TableDamaged { get; set; }
-        [InverseProperty("Customer")]
-        public virtual ICollection<TableInsurance> TableInsurance { get; set; }
+        [InverseProperty(nameof(TableInsurance.Contractor))]
+        public virtual ICollection<TableInsurance> TableInsuranceContractor { get; set; }
+        [InverseProperty(nameof(TableInsurance.Customer))]
+        public virtual ICollection<TableInsurance> TableInsuranceCustomer { get; set; }
     }
 }

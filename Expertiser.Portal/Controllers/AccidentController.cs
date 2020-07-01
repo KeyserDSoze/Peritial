@@ -14,6 +14,7 @@ using Rystem.Web.Backoffice;
 using Microsoft.Extensions.Localization;
 using Expertiser.Interfaces;
 using Microsoft.AspNetCore.Http;
+using Microsoft.OData.Edm;
 
 namespace Expertiser.Portal.Controllers
 {
@@ -79,8 +80,7 @@ namespace Expertiser.Portal.Controllers
             {
                 if (tableAccident.Id == 0)
                 {
-                    Manager.Context.Add(tableAccident);
-                    await Manager.Context.SaveChangesAsync();
+                    await Manager.QueryManager.InsertAccidentAsync(tableAccident);
                     TableExpertise tableExpertise = new TableExpertise()
                     {
                         AccidentId = tableAccident.Id,

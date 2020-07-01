@@ -3,6 +3,7 @@ using Expertiser.Database.Models;
 using Expertiser.Interfaces;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Localization;
 using Rystem.Data;
@@ -34,7 +35,7 @@ namespace Expertiser
             this.RoleManager = roleManager;
             this.SignInManager = signInManager;
         }
-
+        public string Title { get; } = "Quantum";
         private string ConnectionString => Const.DatabaseConnectionString;
         private QueryManager queryManager;
         public QueryManager QueryManager => queryManager ??= new QueryManager(this);
@@ -56,8 +57,23 @@ namespace Expertiser
         public ServiceManager ServiceManager => serviceManager;
         private UserHelperManager userHelperManager;
         public UserHelperManager UserHelperManager => userHelperManager ??= new UserHelperManager(this);
-
-        private static NavigationBuilder navigationBar = new NavigationBar("Experty", "fa-institution")
+        private static DefaultUI defaultUI = new DefaultUI()
+        {
+            Primary = "#ED5C24",
+            Secondary = "#ED1C24",
+            Danger = DefaultUI.Default.Danger,
+            Dark = DefaultUI.Default.Dark,
+            Info = DefaultUI.Default.Info,
+            Light = DefaultUI.Default.Light,
+            SelectedPrimary = "#CD5C24",
+            SelectedSecondary = "#CD1C24",
+            Success = DefaultUI.Default.Success,
+            Warning = DefaultUI.Default.Warning,
+            White = DefaultUI.Default.White
+        };
+        public DefaultUI DefaultUI => defaultUI;
+        private static NavigationBuilder navigationBar;
+        public NavigationBuilder NavigationBar => navigationBar ??= new NavigationBar(this.Title, "fa-institution")
             .AddSuperGroup()
                 .AddGroup("Home", "fa-business-time", new NavigationUrl())
             .AddSuperGroup("Manage Experty", null, null, Roles.All)
@@ -79,7 +95,6 @@ namespace Expertiser
                 .AddGroup("Companies", "fa-tools")
                     .AddItem("Locations", null, new NavigationUrl("Location"))
             .Build();
-        public NavigationBuilder NavigationBar => navigationBar;
     }
     public class HttpHelperManager
     {
@@ -216,20 +231,31 @@ namespace Expertiser
                .Include(x => x.Id, PropertyOptions.Key)
                .Include(x => x.TableExpertise)
                     .ThenInclude(x => x.ConcreteId)
-               .Include(x => x.ExternalId)
-               .Include(x => x.AccidentDate, new PropertyOptions() { Format = "dd-MM-yyyy" })
-               .Include(x => x.Insurance)
+                .Include(x => x.InsuranceAgency)
+                    .ThenInclude(x => x.InsuranceCompany)
+                        .ThenInclude(x => x.Label)
+                .Include(x => x.Insurance)
+                   .ThenInclude(x => x.Customer)
+                        .ThenInclude(x => x.Name)
+                .Include(x => x.Insurance)
+                   .ThenInclude(x => x.Contractor)
+                        .ThenInclude(x => x.Name)
+               .Include(x => x.TableDamaged)
+                    .ThenInclude(x => x.Customer)
+                        .ThenInclude(x => x.Name)
+                .Include(x => x.Insurance)
                    .ThenInclude(x => x.ExternalId)
-               .Include(x => x.InsuranceAgency)
-                   .ThenInclude(x => x.Label)
-               .Include(x => x.TableDamaged, PropertyOptions.Count)
-               .Include(x => x.TableExpertise, new PropertyOptions(OutputType.Count));
+                .Include(x => x.AccidentDate, new PropertyOptions() { Format = "dd-MM-yyyy" })
+                .Include(x => x.ExternalId)
+                .Include(x => x.TableExpertise)
+                    .ThenInclude(x => x.StatusType, new PropertyOptions { IsLocalized = true });
         public INavigation<TableCustomer> GetCustomerNavigation(string title, IStringLocalizer localizer)
             => INavigation<TableCustomer>.Create(NavigationOptions.CanDoneAll(title, localizer, "Edit"))
                 .Include(x => x.Id, PropertyOptions.Key)
                 .Include(x => x.Name)
                 .Include(x => x.FiscalCode)
-                .Include(x => x.TableInsurance, PropertyOptions.Count)
+                .Include(x => x.TableInsuranceContractor, PropertyOptions.Count)
+                .Include(x => x.TableInsuranceCustomer, PropertyOptions.Count)
                 .Include(x => x.Address)
                     .ThenInclude(x => x.Address);
         public INavigation<TableExpertise> GetExpertiseNavigation(string title, IStringLocalizer localizer, ClaimsPrincipal user)
@@ -313,17 +339,44 @@ namespace Expertiser
         private readonly Manager Manager;
         public QueryManager(Manager manager)
             => this.Manager = manager;
+#warning Quando aumenteranno le istanze ricordarsi di metterlo con il blob
+        private static readonly TrafficLight TrafficLight = new TrafficLight();
+        public async Task InsertAccidentAsync(TableAccident tableAccident)
+        {
+            if (tableAccident.Id == 0)
+            {
+                var startCurrentYear = new DateTime(DateTime.UtcNow.Year, 1, 1);
+                using (var locked = await TrafficLight.CreateAsync())
+                {
+                    var previousAccident = await Manager.Context.TableAccident
+                        .Where(x => x.AccidentDate >= startCurrentYear)
+                        .OrderByDescending(x => x.YearlyId)
+                        .FirstOrDefaultAsync();
+                    int id = 1;
+                    if (previousAccident != null)
+                        id = previousAccident.YearlyId + 1;
+                    tableAccident.YearlyId = id;
+                    Manager.Context.Add(tableAccident);
+                    await Manager.Context.SaveChangesAsync();
+                }
+            }
+        }
         public IQueryable<TableAccident> Accidents => Manager.Context.TableAccident
             .Include(t => t.Inspectorate)
             .Include(t => t.Insurance)
                 .ThenInclude(t => t.Customer)
+            .Include(t => t.Insurance)
+                .ThenInclude(t => t.Contractor)
             .Include(t => t.InsuranceAgency)
+                .ThenInclude(t => t.InsuranceCompany)
             .Include(t => t.Address)
             .Include(t => t.TableDamaged)
                 .ThenInclude(t => t.Customer)
             .Include(t => t.InsuranceAdjuster)
             .Include(t => t.TableExpertise)
-                .ThenInclude(t => t.Contributor);
+                .ThenInclude(t => t.Contributor)
+            .Include(t => t.TableExpertise)
+                .ThenInclude(t => t.Member);
         public IQueryable<TableExpertise> Expertises => Manager.Context.TableExpertise
             .Include(x => x.TableBill)
             .Include(x => x.TableMessage)
@@ -351,7 +404,8 @@ namespace Expertiser
                     .Include(x => x.Customer);
         public IQueryable<TableCustomer> Customers => Manager.Context.TableCustomer
                     .Include(x => x.Address)
-                        .Include(x => x.TableInsurance);
+                    .Include(x => x.TableInsuranceCustomer)
+                    .Include(x => x.TableInsuranceContractor);
         public IQueryable<AspNetUsers> Users => Manager.Context.AspNetUsers
             .Include(x => x.AspNetUserRoles)
                 .ThenInclude(x => x.Role);
@@ -552,11 +606,13 @@ namespace Expertiser
             => this.Manager = manager;
         public RequestContext CreateNewLocation => new RequestContext() { Action = "Create", Controller = "Location" };
         public RequestContext CreateNewCustomer => new RequestContext() { Action = "Create", Controller = "Customer" };
+        public RequestContext CreateNewContractor => new RequestContext() { Action = "CreateContractor", Controller = "Customer" };
         public RequestContext ModifyNewBill(int? id) => new RequestContext() { Action = "Bill", Controller = "Experty", FurtherPath = id?.ToString(), RequestType = RequestType.Post, Selector = "#billwrapper" };
         public RequestContext DeleteBill(int id) => new RequestContext() { Action = "DeleteBill", Controller = "Experty", FurtherPath = id.ToString(), RequestType = RequestType.Post, Selector = "#billwrapper" };
         public RequestContext UpdatePostalCodes => new RequestContext() { Action = "UpdatePostalCodes", Controller = "Location", Selector = "#updatePostalCodes" };
         public RequestContext SetLocation => new RequestContext() { Action = "Create", Controller = "Location", RequestType = RequestType.Post, Selector = ".location-address" };
         public RequestContext SetCustomer => new RequestContext() { Action = "Create", Controller = "Customer", RequestType = RequestType.Post, Selector = "#customers" };
+        public RequestContext SetContractor => new RequestContext() { Action = "CreateContractor", Controller = "Customer", RequestType = RequestType.Post, Selector = "#contractors" };
         public RequestContext SetDamaged => new RequestContext() { Action = "CreateDamaged", Controller = "Customer", RequestType = RequestType.Post, SuccessCallback = "experty.setDamaged" };
         public RequestContext SetInsurance => new RequestContext() { Action = "Create", Controller = "Insurance", RequestType = RequestType.Post, Selector = "#insurances" };
         public RequestContext SetInsuranceCompany => new RequestContext() { Action = "Create", Controller = "InsuranceCompany", RequestType = RequestType.Post, Selector = "#insurance-companies" };

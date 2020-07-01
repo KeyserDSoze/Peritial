@@ -43,7 +43,9 @@ namespace Expertiser.Portal.Controllers
         {
             if (id == null)
                 return NotFound();
-            var user = await Manager.UserManager.Users
+            var user = await Manager.Context.AspNetUsers
+                .Include(x => x.AspNetUserRoles)
+                    .ThenInclude(x => x.Role)
                 .FirstOrDefaultAsync(x => x.Id == id);
             if (user == null)
                 return NotFound();
@@ -55,7 +57,7 @@ namespace Expertiser.Portal.Controllers
         // more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit([Bind("Id,UserName,NormalizedUserName,Email,NormalizedEmail,EmailConfirmed,PasswordHash,SecurityStamp,ConcurrencyStamp,PhoneNumber,PhoneNumberConfirmed,TwoFactorEnabled,LockoutEnd,LockoutEnabled,AccessFailedCount")] AspNetUsers aspNetUsers)
+        public async Task<IActionResult> Edit(AspNetUsers aspNetUsers)
         {
             if (ModelState.IsValid)
             {
