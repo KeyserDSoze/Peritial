@@ -81,7 +81,6 @@ namespace Expertiser.Portal.Controllers
                     Manager.Context.Update(tableInspectorate);
                     await Manager.Context.SaveChangesAsync();
                 }
-                return RedirectToAction(nameof(Index));
             }
             return View(tableInspectorate);
         }

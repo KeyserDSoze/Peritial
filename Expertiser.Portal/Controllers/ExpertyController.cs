@@ -142,7 +142,6 @@ namespace Expertiser.Portal.Controllers
                             await Manager.ServiceManager.EmailSender.SendEmailAsync(expertise.Member.Email, subject, message);
                     }
                 }
-                return RedirectToAction(nameof(Index));
             }
             return View(tableExpertise);
         }

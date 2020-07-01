@@ -63,7 +63,6 @@ namespace Expertiser.Portal.Controllers
                     Manager.Context.Update(tableInsuranceAgency);
                     await Manager.Context.SaveChangesAsync();
                 }
-                return RedirectToAction(nameof(Index));
             }
             return View(tableInsuranceAgency);
         }

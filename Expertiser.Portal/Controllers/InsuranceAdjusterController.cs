@@ -50,7 +50,6 @@ namespace Expertiser.Portal.Controllers
                     Manager.Context.Update(tableInsuranceAdjuster);
                     await Manager.Context.SaveChangesAsync();
                 }
-                return RedirectToAction(nameof(Index));
             }
             return View(tableInsuranceAdjuster);
         }

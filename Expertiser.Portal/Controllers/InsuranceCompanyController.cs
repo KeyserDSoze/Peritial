@@ -80,7 +80,6 @@ namespace Expertiser.Portal.Controllers
                     Manager.Context.Update(tableInsuranceCompany);
                     await Manager.Context.SaveChangesAsync();
                 }
-                return RedirectToAction(nameof(Index));
             }
             return View(tableInsuranceCompany);
         }
