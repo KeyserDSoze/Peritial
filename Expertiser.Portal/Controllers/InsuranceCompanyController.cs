@@ -35,6 +35,20 @@ namespace Expertiser.Portal.Controllers
             await Manager.Context.SaveChangesAsync();
             return true;
         }
+        public IActionResult Create()
+            => PartialView();
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Create([Bind("Label,AddressId,ExternalId,IsActive")] TableInsuranceCompany tableInsuranceCompany)
+        {
+            if (ModelState.IsValid)
+            {
+                Manager.Context.Add(tableInsuranceCompany);
+                await Manager.Context.SaveChangesAsync();
+                return PartialView("_GetInsuranceCompanies", tableInsuranceCompany.Id);
+            }
+            return NotOkMessage(ModelState);
+        }
         // GET: InsuranceCompany/Edit/5
         public async Task<IActionResult> Edit(int? id)
         {

@@ -319,6 +319,8 @@ namespace Expertiser
                 .ThenInclude(t => t.Customer)
             .Include(t => t.InsuranceAgency)
             .Include(t => t.Address)
+            .Include(t => t.TableDamaged)
+                .ThenInclude(t => t.Customer)
             .Include(t => t.InsuranceAdjuster)
             .Include(t => t.TableExpertise)
                 .ThenInclude(t => t.Contributor);
@@ -550,7 +552,6 @@ namespace Expertiser
             => this.Manager = manager;
         public RequestContext CreateNewLocation => new RequestContext() { Action = "Create", Controller = "Location" };
         public RequestContext CreateNewCustomer => new RequestContext() { Action = "Create", Controller = "Customer" };
-        public RequestContext CreateNewInsuranceCompany => new RequestContext() { Action = "Create", Controller = "InsuranceCompany" };
         public RequestContext ModifyNewBill(int? id) => new RequestContext() { Action = "Bill", Controller = "Experty", FurtherPath = id?.ToString(), RequestType = RequestType.Post, Selector = "#billwrapper" };
         public RequestContext DeleteBill(int id) => new RequestContext() { Action = "DeleteBill", Controller = "Experty", FurtherPath = id.ToString(), RequestType = RequestType.Post, Selector = "#billwrapper" };
         public RequestContext UpdatePostalCodes => new RequestContext() { Action = "UpdatePostalCodes", Controller = "Location", Selector = "#updatePostalCodes" };
@@ -558,10 +559,12 @@ namespace Expertiser
         public RequestContext SetCustomer => new RequestContext() { Action = "Create", Controller = "Customer", RequestType = RequestType.Post, Selector = "#customers" };
         public RequestContext SetDamaged => new RequestContext() { Action = "CreateDamaged", Controller = "Customer", RequestType = RequestType.Post, SuccessCallback = "experty.setDamaged" };
         public RequestContext SetInsurance => new RequestContext() { Action = "Create", Controller = "Insurance", RequestType = RequestType.Post, Selector = "#insurances" };
+        public RequestContext SetInsuranceCompany => new RequestContext() { Action = "Create", Controller = "InsuranceCompany", RequestType = RequestType.Post, Selector = "#insurance-companies" };
         public RequestContext SetInsuranceAgency => new RequestContext() { Action = "Create", Controller = "InsuranceAgency", RequestType = RequestType.Post, Selector = "#insurance-agencies" };
         public RequestContext SetInspectorate => new RequestContext() { Action = "Create", Controller = "Inspectorate", RequestType = RequestType.Post, Selector = "#inspectorates" };
         public RequestContext SetInsuranceAdjuster => new RequestContext() { Action = "Create", Controller = "InsuranceAdjuster", RequestType = RequestType.Post, Selector = "#insurance-adjusters" };
         public RequestContext CreateNewInsurance => new RequestContext() { Action = "Create", Controller = "Insurance" };
+        public RequestContext CreateNewInsuranceCompany => new RequestContext() { Action = "Create", Controller = "InsuranceCompany" };
         public RequestContext CreateNewInsuranceAgency => new RequestContext() { Action = "Create", Controller = "InsuranceAgency" };
         public RequestContext CreateNewInspectorate => new RequestContext() { Action = "Create", Controller = "Inspectorate" };
         public RequestContext CreateNewDamaged => new RequestContext() { Action = "CreateDamaged", Controller = "Customer" };

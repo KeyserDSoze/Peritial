@@ -59,5 +59,7 @@ namespace Expertiser.Database.Models
 
         [Display(Name = nameof(TableExpertise))]
         public virtual ICollection<TableExpertise> TableExpertise { get; set; }
+        [Display(Name = nameof(TableDamaged))]
+        public virtual ICollection<TableDamaged> TableDamaged { get; set; }
     }
 }

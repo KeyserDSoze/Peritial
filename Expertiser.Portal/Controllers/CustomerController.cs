@@ -70,7 +70,7 @@ namespace Expertiser.Portal.Controllers
             {
                 Manager.Context.Add(tableCustomer);
                 await Manager.Context.SaveChangesAsync();
-                return Ok($"<option selected=selected value={tableCustomer.Id}>{tableCustomer.Name}</option>");
+                return Ok($"<optgroup label=''><option selected=selected value={tableCustomer.Id}>{tableCustomer.Name}</option></optgroup>");
             }
             return NotOkMessage(ModelState);
         }

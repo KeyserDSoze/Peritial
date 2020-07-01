@@ -210,6 +210,9 @@
   <data name="CityId" xml:space="preserve">
     <value>Città</value>
   </data>
+  <data name="Click here to manage dossier" xml:space="preserve">
+    <value>Clicca qui per gestire la pratica</value>
+  </data>
   <data name="Companies" xml:space="preserve">
     <value>Compagnie</value>
   </data>
@@ -255,6 +258,9 @@
   <data name="Create New Damaged" xml:space="preserve">
     <value>Inserisci nuovo danneggiato</value>
   </data>
+  <data name="Create New Expertise" xml:space="preserve">
+    <value>Collega una nuova pratica</value>
+  </data>
   <data name="Create New Inspectorate" xml:space="preserve">
     <value>Inserisci nuovo ispettorato</value>
   </data>
@@ -266,6 +272,9 @@
   </data>
   <data name="Create New Insurance Agency" xml:space="preserve">
     <value>Inserisci nuova agenzia assicurativa</value>
+  </data>
+  <data name="Create New Insurance Company" xml:space="preserve">
+    <value>Inserisci nuova compagnia assicurativa</value>
   </data>
   <data name="Customer" xml:space="preserve">
     <value>Assicurato</value>

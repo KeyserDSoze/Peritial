@@ -1,0 +1,27 @@
+﻿@model Expertiser.Database.Models.TableLocation
+
+@Html.AntiForgeryToken()
+<div asp-validation-summary="ModelOnly" class="text-danger"></div>
+<input type="hidden" asp-for="Id" />
+<div class="form-group">
+    <label asp-for="Address" class="control-label"></label>
+    <input asp-for="Address" class="form-control" />
+    <span asp-validation-for="Address" class="text-danger"></span>
+</div>
+<div class="form-group">
+    <label asp-for="CityId" class="control-label"></label>
+    <rystem-dropdown name="CityId" rystem-size="ExtraLarge" rystem-data="Manager.DropdownManager.GetCities(Model?.CityId)" rystem-request-context="Manager.AjaxRequestManager.UpdatePostalCodes"></rystem-dropdown>
+</div>
+<div class="form-group">
+    <label asp-for="PostalCode" class="control-label"></label>
+    <div id="updatePostalCodes">
+        @if (Model?.CityId > 0)
+        {
+            <partial name="_PostalCode" model="(Model.CityId, string.Empty)" />
+        }
+    </div>
+    <span asp-validation-for="PostalCode" class="text-danger"></span>
+</div>
+<div class="form-group">
+    <input type="submit" value="@SharedLocalizer["Save"]" class="btn btn-primary" />
+</div>

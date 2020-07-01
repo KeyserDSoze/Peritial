@@ -14,6 +14,7 @@ using Expertiser.Interfaces;
 using System.Numerics;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.OData.Edm;
+using System.Security.Claims;
 
 namespace Expertiser.Portal.Controllers
 {
@@ -72,6 +73,24 @@ namespace Expertiser.Portal.Controllers
             Manager.Context.TableExpertise.Remove(expertise);
             await Manager.Context.SaveChangesAsync();
             return true;
+        }
+        public async Task<IActionResult> CreateNew(int? id)
+        {
+            if (Manager.UserHelperManager.IsManager && id.HasValue)
+            {
+                TableExpertise tableExpertise = new TableExpertise()
+                {
+                    AccidentId = id.Value,
+                    MemberId = HttpContext.User.Claims.FirstOrDefault(x => x.Type == ClaimTypes.NameIdentifier).Value,
+                    Status = -1,
+                    BranchId = 1,
+                };
+                Manager.Context.Add(tableExpertise);
+                await Manager.Context.SaveChangesAsync();
+                return View("Edit", tableExpertise);
+            }
+            else
+                throw new UnauthorizedAccessException($"{Manager.HttpContextAccessor.HttpContext.User.Identity.Name} not authorized");
         }
         // GET: Experty/Edit/5
         public async Task<IActionResult> Edit(int? id)

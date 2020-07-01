@@ -1,0 +1,28 @@
+﻿@model Expertiser.Database.Models.TableInsuranceCompany
+
+@Html.AntiForgeryToken()
+<div asp-validation-summary="ModelOnly" class="text-danger"></div>
+<input type="hidden" asp-for="Id" />
+<div class="form-group">
+    <label asp-for="Label" class="control-label"></label>
+    <input asp-for="Label" class="form-control" />
+    <span asp-validation-for="Label" class="text-danger"></span>
+</div>
+<div class="form-group">
+    <label asp-for="AddressId" class="control-label"></label>
+    <partial name="_GetDropdownLocations" model="Model?.AddressId" />
+    <span asp-validation-for="AddressId" class="text-danger"></span>
+</div>
+<div class="form-group">
+    <label asp-for="ExternalId" class="control-label"></label>
+    <input asp-for="ExternalId" class="form-control" />
+    <span asp-validation-for="ExternalId" class="text-danger"></span>
+</div>
+<div class="form-group form-check">
+    <label class="form-check-label">
+        <input class="form-check-input" asp-for="IsActive" /> @Html.DisplayNameFor(model => model.IsActive)
+    </label>
+</div>
+<div class="form-group">
+    <input type="submit" value="@SharedLocalizer["Save"]" class="btn btn-primary" />
+</div>

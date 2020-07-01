@@ -1,0 +1,8 @@
+﻿@model int?
+
+<div id="insurance-agencies">
+    <partial name="_GetInsuranceAgencies" model="Model" />
+</div>
+<rystem-ajax-modal rystem-request-context="Manager.AjaxRequestManager.CreateNewInsuranceAgency" rystem-size="Large">
+    <div class="btn btn-primary mt-2">@SharedLocalizer["Create New Insurance Agency"]</div>
+</rystem-ajax-modal>

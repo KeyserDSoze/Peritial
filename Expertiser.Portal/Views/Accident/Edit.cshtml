@@ -4,22 +4,29 @@
     ViewData["Title"] = "Create";
 }
 
-<h1>@SharedLocalizer["Accident"]</h1>
+<h1>@SharedLocalizer["Assignment"]</h1>
 <div>
     <a asp-action="Index">@SharedLocalizer["Back to List"]</a>
 </div>
 @if (Model != null)
 {
-    <div class="form-group mt-3">
-        <label>@SharedLocalizer["Manage Expertises"]</label>
+    <div class="mt-3">
         @foreach (var expertise in Model.TableExpertise)
         {
             if (Manager.UserHelperManager.IsManager || expertise.ContributorId == Manager.UserHelperManager.Id)
             {
-                <a asp-action="Edit" asp-controller="Experty" asp-route-id="@expertise.Id" class="page-link bg-secondary text-white">
-                    @expertise.Id - @expertise.Member?.UserName - @expertise.Contributor?.UserName - @expertise.AssignmentDate - @expertise.InspectionDate
-                </a>
+                <div class="row">
+                    <div class="col-md-6">
+                        <a asp-action="Edit" asp-controller="Experty" asp-route-id="@expertise.Id" class="btn btn-primary mt-2">
+                            @SharedLocalizer["Click here to manage dossier"] --> @expertise.Id - @expertise.Member?.UserName - @expertise.Contributor?.UserName - @expertise.AssignmentDate - @expertise.InspectionDate
+                        </a>
+                    </div>
+                </div>
             }
+        }
+        @if (Manager.UserHelperManager.IsManager)
+        {
+            <a asp-action="CreateNew" asp-controller="Experty" asp-route-id="@Model.Id" class="btn btn-primary mt-2">@SharedLocalizer["Create New Expertise"]</a>
         }
     </div>
 }
@@ -34,7 +41,7 @@
                 <label asp-for="AddressId" class="control-label"></label>
                 @if (Manager.UserHelperManager.IsManager)
                 {
-                    <partial name="_GetDropdownLocations" model="Model?.AddressId ?? 0" />
+                    <partial name="_GetDropdownLocations" model="Model?.AddressId" />
                 }
                 else
                 {
@@ -47,12 +54,7 @@
                 <label asp-for="InsuranceId" class="control-label"></label>
                 @if (Manager.UserHelperManager.IsManager)
                 {
-                    <div id="insurances">
-                        <partial name="_GetInsurances" model="Model?.InsuranceId ?? 0" />
-                    </div>
-                    <rystem-ajax-modal rystem-request-context="Manager.AjaxRequestManager.CreateNewInsurance" rystem-size="Large">
-                        <div class="btn btn-primary mt-2">@SharedLocalizer["Create New Insurance"]</div>
-                    </rystem-ajax-modal>
+                    <partial name="_GetDropdownInsurances" model="Model?.InsuranceId" />
                 }
                 else
                 {
@@ -65,12 +67,7 @@
                 <label asp-for="InsuranceAgencyId" class="control-label"></label>
                 @if (Manager.UserHelperManager.IsManager)
                 {
-                    <div id="insurance-agencies">
-                        <partial name="_GetInsuranceAgencies" model="Model?.InsuranceAgencyId" />
-                    </div>
-                    <rystem-ajax-modal rystem-request-context="Manager.AjaxRequestManager.CreateNewInsuranceAgency" rystem-size="Large">
-                        <div class="btn btn-primary mt-2">@SharedLocalizer["Create New Insurance Agency"]</div>
-                    </rystem-ajax-modal>
+                    <partial name="_GetDropdownInsuranceAgencies" model="Model?.InsuranceAgencyId" />
                 }
                 else
                 {
@@ -83,12 +80,7 @@
                 <label asp-for="InsuranceAdjusterId" class="control-label"></label>
                 @if (Manager.UserHelperManager.IsManager)
                 {
-                    <div id="insurance-adjusters">
-                        <partial name="_GetInsuranceAdjusters" model="Model?.InsuranceAdjusterId" />
-                    </div>
-                    <rystem-ajax-modal rystem-request-context="Manager.AjaxRequestManager.CreateNewInsuranceAdjuster" rystem-size="Large">
-                        <div class="btn btn-primary mt-2">@SharedLocalizer["Create New Insurance Adjuster"]</div>
-                    </rystem-ajax-modal>
+                    <partial name="_GetDropdownInsuranceAdjusters" model="Model?.InsuranceAdjusterId" />
                 }
                 else
                 {
@@ -101,12 +93,7 @@
                 <label asp-for="InspectorateId" class="control-label"></label>
                 @if (Manager.UserHelperManager.IsManager)
                 {
-                    <div id="inspectorates">
-                        <partial name="_GetInspectorates" model="Model?.InspectorateId" />
-                    </div>
-                    <rystem-ajax-modal rystem-request-context="Manager.AjaxRequestManager.CreateNewInspectorate" rystem-size="Large">
-                        <div class="btn btn-primary mt-2">@SharedLocalizer["Create New Inspectorate"]</div>
-                    </rystem-ajax-modal>
+                    <partial name="_GetDropdownInspectorates" model="Model?.InspectorateId" />
                 }
                 else
                 {

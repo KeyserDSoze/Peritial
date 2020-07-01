@@ -21,69 +21,89 @@ namespace Expertiser
         public async Task<int> FinalizeAsync(IFormFile file, ImporterType importerType)
         {
             IImporter importer = Factory.Create(importerType);
+            //Create customer of insurance
             ImportedExperty importValue = importer.Import(file.OpenReadStream());
+            int customerId = await GetCustomerId(importValue.Customer);
+
+            //Create insurance agency
+            var insuranceAgency = await Manager.Context.TableInsuranceAgency.FirstOrDefaultAsync(x => x.ExternalId == importValue.InsuranceAgency.ExternalId);
+            if (insuranceAgency == null)
+            {
+                insuranceAgency = new TableInsuranceAgency()
+                {
+                    InsuranceCompanyId = importValue.Insurance.InsuranceCompanyId,
+                    Label = importValue.InsuranceAgency.ExternalId,
+                    ExternalId = importValue.InsuranceAgency.ExternalId
+                };
+                Manager.Context.Add(insuranceAgency);
+                await Manager.Context.SaveChangesAsync();
+            }
+            //Create insurance inspectorate
+            var inspectorate = await Manager.Context.TableInspectorate.FirstOrDefaultAsync(x => x.ExternalId == importValue.Inspectorate.ExternalId);
+            if (inspectorate == null)
+            {
+                inspectorate = new TableInspectorate()
+                {
+                    InsuranceCompanyId = importValue.Insurance.InsuranceCompanyId,
+                    Label = importValue.Inspectorate.ExternalId,
+                    ExternalId = importValue.Inspectorate.ExternalId
+                };
+                Manager.Context.Add(inspectorate);
+                await Manager.Context.SaveChangesAsync();
+            }
+            //Create insurance
+            var insurance = await Manager.Context.TableInsurance.FirstOrDefaultAsync(x => x.ExternalId == importValue.Insurance.ExternalId);
+            if (insurance == null)
+            {
+                insurance = new TableInsurance()
+                {
+                    CustomerId = customerId,
+                    ExternalId = importValue.Insurance.ExternalId,
+                    InsuranceCompanyId = importValue.Insurance.InsuranceCompanyId,
+                };
+                Manager.Context.TableInsurance.Add(insurance);
+                await Manager.Context.SaveChangesAsync();
+            }
+            //Create insurance adjuster
+            var insuranceAdjuster = await Manager.Context.TableInsuranceAdjuster.FirstOrDefaultAsync(x => x.Name == importValue.InsuranceAdjuster.Name);
+            if (insuranceAdjuster == null)
+            {
+                insuranceAdjuster = new TableInsuranceAdjuster()
+                {
+                    Name = importValue.InsuranceAdjuster.Name
+                };
+                Manager.Context.TableInsuranceAdjuster.Add(insuranceAdjuster);
+                await Manager.Context.SaveChangesAsync();
+            }
+            //Create accident
             var accident = await Manager.Context.TableAccident.FirstOrDefaultAsync(x => x.ExternalId == importValue.Accident.ExternalId);
             if (accident == null)
             {
-                var city = await Manager.Context.TableCity.FirstOrDefaultAsync(x => x.PostalCode.Contains(importValue.Location.PostalCode));
-                var address = await Manager.Context.TableLocation.FirstOrDefaultAsync(x => x.CityId == city.Id && x.Address == importValue.Location.Address);
-                if (address == null)
-                {
-                    address = new TableLocation()
-                    {
-                        Address = importValue.Location.Address,
-                        CityId = city.Id,
-                        PostalCode = importValue.Location.PostalCode,
-                    };
-                    Manager.Context.TableLocation.Add(address);
-                    await Manager.Context.SaveChangesAsync();
-                }
-                var customer = string.IsNullOrWhiteSpace(importValue.Customer.FiscalCode) ?
-                    await Manager.Context.TableCustomer.FirstOrDefaultAsync(x => x.Name == importValue.Customer.Name)
-                    : await Manager.Context.TableCustomer.FirstOrDefaultAsync(x => x.FiscalCode == importValue.Customer.FiscalCode);
-                if (customer == null)
-                {
-                    customer = new TableCustomer()
-                    {
-                        AddressId = address.Id,
-                        FiscalCode = importValue.Customer.FiscalCode,
-                        Name = importValue.Customer.Name,
-                    };
-                    Manager.Context.TableCustomer.Add(customer);
-                    await Manager.Context.SaveChangesAsync();
-                }
-                var insurance = await Manager.Context.TableInsurance.FirstOrDefaultAsync(x => x.ExternalId == importValue.Insurance.ExternalId);
-                if (insurance == null)
-                {
-                    insurance = new TableInsurance()
-                    {
-                        CustomerId = customer.Id,
-                        ExternalId = importValue.Insurance.ExternalId,
-                        InsuranceCompanyId = importValue.Insurance.InsuranceCompanyId,
-                    };
-                    Manager.Context.TableInsurance.Add(insurance);
-                    await Manager.Context.SaveChangesAsync();
-                }
-                var insuranceAdjuster = await Manager.Context.TableInsuranceAdjuster.FirstOrDefaultAsync(x => x.Name == importValue.InsuranceAdjuster.Name);
-                if (insuranceAdjuster == null)
-                {
-                    insuranceAdjuster = new TableInsuranceAdjuster()
-                    {
-                        Name = importValue.InsuranceAdjuster.Name
-                    };
-                    Manager.Context.TableInsuranceAdjuster.Add(insuranceAdjuster);
-                    await Manager.Context.SaveChangesAsync();
-                }
                 accident = new TableAccident()
                 {
                     ExternalId = importValue.Accident.ExternalId,
                     DenunciationDate = importValue.Accident.DenunciationDate,
                     AccidentDate = importValue.Accident.AccidentDate,
                     InsuranceId = insurance.Id,
-                    InsuranceAdjusterId = insuranceAdjuster.Id
+                    InsuranceAdjusterId = insuranceAdjuster.Id,
+                    InspectorateId = inspectorate.Id,
+                    InsuranceAgencyId = insuranceAgency.Id,
                 };
                 Manager.Context.TableAccident.Add(accident);
                 await Manager.Context.SaveChangesAsync();
+            }
+            foreach (var damaged in importValue.Damageds)
+            {
+                int damagedId = await GetCustomerId(damaged);
+                if (!await Manager.Context.TableDamaged.AnyAsync(x => x.AccidentId == accident.Id && x.CustomerId == damagedId))
+                {
+                    Manager.Context.Add(new TableDamaged()
+                    {
+                        AccidentId = accident.Id,
+                        CustomerId = damagedId
+                    });
+                    await Manager.Context.SaveChangesAsync();
+                }
             }
             var expertise = await Manager.Context.TableExpertise.FirstOrDefaultAsync(x => x.AccidentId == accident.Id);
             if (expertise == null)
@@ -106,6 +126,38 @@ namespace Expertiser
                 }
             }
             return accident.Id;
+
+            async Task<int> GetCustomerId(TableCustomer tableCustomer)
+            {
+                var city = await Manager.Context.TableCity.FirstOrDefaultAsync(x => x.PostalCode.Contains(tableCustomer.Address.PostalCode));
+                var address = await Manager.Context.TableLocation.FirstOrDefaultAsync(x => x.CityId == city.Id && x.Address == tableCustomer.Address.Address);
+                if (address == null)
+                {
+                    address = new TableLocation()
+                    {
+                        Address = tableCustomer.Address.Address,
+                        CityId = city.Id,
+                        PostalCode = tableCustomer.Address.PostalCode,
+                    };
+                    Manager.Context.TableLocation.Add(address);
+                    await Manager.Context.SaveChangesAsync();
+                }
+                var customer = string.IsNullOrWhiteSpace(tableCustomer.FiscalCode) ?
+                await Manager.Context.TableCustomer.FirstOrDefaultAsync(x => x.Name == tableCustomer.Name)
+                : await Manager.Context.TableCustomer.FirstOrDefaultAsync(x => x.FiscalCode == tableCustomer.FiscalCode);
+                if (customer == null)
+                {
+                    customer = new TableCustomer()
+                    {
+                        AddressId = address.Id,
+                        FiscalCode = tableCustomer.FiscalCode,
+                        Name = tableCustomer.Name,
+                    };
+                    Manager.Context.TableCustomer.Add(customer);
+                    await Manager.Context.SaveChangesAsync();
+                }
+                return customer.Id;
+            }
         }
     }
 }

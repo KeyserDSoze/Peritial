@@ -4,32 +4,7 @@
 <div class="row">
     <div class="col-md-12">
         <rystem-ajax-form rystem-modal-close="true" rystem-request-context="Manager.AjaxRequestManager.SetInsurance">
-            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
-            @Html.AntiForgeryToken()
-            <div class="form-group">
-                <label class="control-label">@SharedLocalizer["CustomerId"]</label>
-                <div id="customers">
-                    <partial name="_GetCustomers" model="0" />
-                </div>
-                <rystem-ajax-modal rystem-request-context="Manager.AjaxRequestManager.CreateNewCustomer" rystem-size="Large">
-                    <div class="btn btn-primary mt-2">@SharedLocalizer["Create New Customer"]</div>
-                </rystem-ajax-modal>
-
-                <span asp-validation-for="CustomerId" class="text-danger"></span>
-            </div>
-            <div class="form-group">
-                <label class="control-label">@SharedLocalizer["ExternalId"]</label>
-                <input asp-for="ExternalId" class="form-control" />
-                <span asp-validation-for="ExternalId" class="text-danger"></span>
-            </div>
-            <div class="form-group">
-                <label class="control-label">@SharedLocalizer["InsuranceCompanyId"]</label>
-                <rystem-dropdown name="InsuranceCompanyId" rystem-data="Manager.DropdownManager.GetInsuranceCompanies(Model?.InsuranceCompanyId)"></rystem-dropdown>
-                <span asp-validation-for="InsuranceCompanyId" class="text-danger"></span>
-            </div>
-            <div class="form-group">
-                <input type="submit" value="@SharedLocalizer["Save"]" class="btn btn-primary" />
-            </div>
+            <partial name="_Form" model="Model" />
         </rystem-ajax-form>
     </div>
 </div>
