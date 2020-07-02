@@ -7,7 +7,7 @@ trigger:
 - master
 
 pool:
-  vmImage: 'ubuntu-latest'
+  vmImage: 'windows-latest'
 
 variables:
   solution: '**/*.sln'
@@ -24,13 +24,12 @@ steps:
     feedsToUse: 'select'
     vstsFeed: '9072218a-afc6-4668-aee7-e7769e98c15f'
 
-- task: MSBuild@1
+- task: VSBuild@1
   inputs:
-    solution: '**/*.sln'
-    msbuildArchitecture: 'x64'
-    platform: 'Any CPU'
-    configuration: 'Release'
-    msbuildArguments: '/p:DeployOnBuild=true /p:PublishProfile=WebDeployPackage'
+    solution: '$(solution)'
+    msbuildArgs: '/p:DeployOnBuild=true /p:WebPublishMethod=Package /p:PackageAsSingleFile=true /p:SkipInvalidConfigurations=true /p:PackageLocation="$(build.artifactstagingdirectory)\\"'
+    platform: '$(buildPlatform)'
+    configuration: '$(buildConfiguration)'
     clean: true
 
 - task: PublishBuildArtifacts@1
