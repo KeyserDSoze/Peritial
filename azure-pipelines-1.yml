@@ -29,7 +29,7 @@ steps:
   inputs:
     command: 'publish'
     publishWebProjects: true
-    arguments: '--configuration $(BuildConfiguration) --framework=$(TargetFramework) --output:"$(Build.ArtifactStagingDirectory)"'
+    arguments: '--configuration $(BuildConfiguration) --framework=$(TargetFramework)'
     modifyOutputPath: false
 
 - task: PublishBuildArtifacts@1
