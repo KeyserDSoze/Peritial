@@ -29,7 +29,7 @@ steps:
     solution: '**/*.sln'
     platform: '${BuildPlatform}'
     configuration: '${BuildConfiguration}'
-    msbuildArguments: '-c Release /p:DeployOnBuild=true /p:PublishProfile=WebDeployPackage'
+    msbuildArguments: '/p:DeployOnBuild=true /p:PublishProfile=WebDeployPackage'
     clean: true
 
 - task: PublishBuildArtifacts@1
