@@ -22,7 +22,7 @@ steps:
   displayName: Build
   inputs:
     projects: '$(RestoreBuildProjects)'
-    arguments: '--configuration $(BuildConfiguration) --framework=$(TargetFramework) --output:"$(Build.ArtifactStagingDirectory)"'
+    arguments: '--configuration $(BuildConfiguration) --framework=$(TargetFramework)'
 
 - task: DotNetCoreCLI@2
   displayName: Publish
