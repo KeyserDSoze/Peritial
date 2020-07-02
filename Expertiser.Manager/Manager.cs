@@ -21,6 +21,7 @@ namespace Expertiser
 {
     public class Manager
     {
+        public string Version => "1.0.0";
         private ContextExpertiser context;
         public ContextExpertiser Context => context ??= new ContextExpertiser(this.ConnectionString);
         public IHttpContextAccessor HttpContextAccessor { get; }
@@ -59,8 +60,8 @@ namespace Expertiser
         public UserHelperManager UserHelperManager => userHelperManager ??= new UserHelperManager(this);
         private static DefaultUI defaultUI = new DefaultUI()
         {
-            Primary = "#ED5C24",
-            Secondary = "#ED1C24",
+            Primary = "rgba(165,16,16,1)",
+            Secondary = "rgba(185,10,10,1)",
             Danger = DefaultUI.Default.Danger,
             Dark = DefaultUI.Default.Dark,
             Info = DefaultUI.Default.Info,
