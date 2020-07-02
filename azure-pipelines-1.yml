@@ -10,6 +10,11 @@ variables:
   BuildConfiguration: 'Release'
 
 steps:
+- task: UseDotNet@2
+  inputs:
+    packageType: 'sdk'
+    version: '3.1.301'
+
 - task: DotNetCoreCLI@2
   displayName: Restore
   inputs:
