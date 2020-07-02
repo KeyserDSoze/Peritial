@@ -24,12 +24,10 @@ steps:
     feedsToUse: 'select'
     vstsFeed: '9072218a-afc6-4668-aee7-e7769e98c15f'
 
-- task: VSBuild@1
+- task: DotNetCoreCLI@2
   inputs:
-    solution: '$(solution)'
-    msbuildArgs: '/p:DeployOnBuild=true /p:WebPublishMethod=Package /p:PackageAsSingleFile=true /p:SkipInvalidConfigurations=true /p:PackageLocation="$(build.artifactStagingDirectory)"'
-    platform: '$(buildPlatform)'
-    configuration: '$(buildConfiguration)'
+    command: 'build'
+    projects: '**/Expertise.Portal.csproj'
 
 - task: VSTest@2
   inputs:
