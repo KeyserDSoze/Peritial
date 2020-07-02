@@ -27,8 +27,9 @@ steps:
 - task: MSBuild@1
   inputs:
     solution: '**/*.sln'
-    platform: '${buildPlatform}'
-    configuration: '${buildConfiguration}'
+    msbuildArchitecture: 'x64'
+    platform: 'Any CPU'
+    configuration: 'Release'
     msbuildArguments: '/p:DeployOnBuild=true /p:PublishProfile=WebDeployPackage'
     clean: true
 
