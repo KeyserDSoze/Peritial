@@ -24,10 +24,13 @@ steps:
     feedsToUse: 'select'
     vstsFeed: '9072218a-afc6-4668-aee7-e7769e98c15f'
 
-- task: DotNetCoreCLI@2
+- task: MSBuild@1
   inputs:
-    command: 'build'
-    projects: '**/Expertise.Portal.csproj'
+    solution: '**/*.sln'
+    msbuildArchitecture: 'x64'
+    platform: 'Any CPU'
+    configuration: 'Release'
+    clean: true
 
 - task: VSTest@2
   inputs:
