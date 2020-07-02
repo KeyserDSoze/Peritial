@@ -30,7 +30,7 @@ steps:
     command: 'publish'
     publishWebProjects: true
     arguments: '--configuration $(BuildConfiguration) --framework=$(TargetFramework)'
-    zipAfterPublish: true
+    zipAfterPublish: false
     modifyOutputPath: false
 
 - task: PublishBuildArtifacts@1
