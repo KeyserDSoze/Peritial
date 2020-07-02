@@ -24,14 +24,14 @@ steps:
     feedsToUse: 'select'
     vstsFeed: '9072218a-afc6-4668-aee7-e7769e98c15f'
 
-- task: VSBuild@1
+- task: MSBuild@1
   inputs:
     solution: '$(solution)'
-    msbuildArgs: '/p:DeployOnBuild=true /p:WebPublishMethod=Package /p:PackageAsSingleFile=true /p:SkipInvalidConfigurations=true /p:PackageLocation="$(build.artifactstagingdirectory)\\"'
+    msbuildArchitecture: 'x64'
+    msbuildArguments: '/p:DeployOnBuild=true /p:WebPublishMethod=Package /p:PackageAsSingleFile=true /p:SkipInvalidConfigurations=true /p:PackageLocation="$(build.artifactstagingdirectory)\\"'
     platform: '$(buildPlatform)'
     configuration: '$(buildConfiguration)'
     clean: true
-    msbuildArchitecture: 'x64'
 
 - task: PublishBuildArtifacts@1
   inputs:
