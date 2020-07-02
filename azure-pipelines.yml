@@ -33,28 +33,8 @@ steps:
     clean: true
     msbuildArchitecture: 'x64'
 
-- task: ExtractFiles@1
-  inputs:
-    archiveFilePatterns: '$(build.artifactstagingdirectory)/*.zip'
-    destinationFolder: '$(Agent.BuildDirectory}/Temp'
-    cleanDestinationFolder: true
-
-- task: CopyFiles@2
-  inputs:
-    SourceFolder: '$(Agent.BuildDirectory)\\Temp\\Content\\D_C\\a\\1\\s\\src\\mywebApi\\obj\\Release\\netcoreapp3.1\\PubTmp\\Out'
-    Contents: '**'
-    TargetFolder: '$(Agent.BuildDirectory)/Temp'
-
-- task: ArchiveFiles@2
-  inputs:
-    rootFolderOrFile: '$(Agent.BuildDirectory)/Temp'
-    includeRootFolder: true
-    archiveType: 'zip'
-    archiveFile: '$(Agent.ArtifactStagingDirectory)/Site'
-    replaceExistingArchive: true
-
 - task: PublishBuildArtifacts@1
-  displayName: 'Publish Artifact: drop'
   inputs:
-    pathtoPublish: '$(Build.ArtifactStagingDirectory)\\Site\\' 
-    artifactName: 'strategy' 
+    PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+    ArtifactName: 'drop'
+    publishLocation: 'Container'
