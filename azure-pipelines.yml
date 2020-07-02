@@ -33,21 +33,28 @@ steps:
     clean: true
     msbuildArchitecture: 'x64'
 
-- task: VSTest@2
+- task: ExtractFiles@1
   inputs:
-    platform: '$(buildPlatform)'
-    configuration: '$(buildConfiguration)'
+    archiveFilePatterns: '$(build.artifactstagingdirectory)/*.zip'
+    destinationFolder: '$(Agent.BuildDirectory}/Temp'
+    cleanDestinationFolder: true
+
+- task: CopyFiles@2
+  inputs:
+    SourceFolder: '$(Agent.BuildDirectory)\\Temp\\Content\\D_C\\a\\1\\s\\src\\mywebApi\\obj\\Release\\netcoreapp3.1\\PubTmp\\Out'
+    Contents: '**'
+    TargetFolder: '$(Agent.BuildDirectory)/Temp'
 
 - task: ArchiveFiles@2
   inputs:
-    rootFolderOrFile: '$(Build.ArtifactStagingDirectory)\\publish\\*'
+    rootFolderOrFile: '$(Agent.BuildDirectory)/Temp'
     includeRootFolder: true
     archiveType: 'zip'
-    archiveFile: '$(Build.ArtifactStagingDirectory)/package/$(Build.BuildId).zip'
+    archiveFile: '$(Agent.ArtifactStagingDirectory)/Site'
     replaceExistingArchive: true
 
 - task: PublishBuildArtifacts@1
   displayName: 'Publish Artifact: drop'
   inputs:
-    pathtoPublish: '$(Build.ArtifactStagingDirectory)\\package\\' 
+    pathtoPublish: '$(Build.ArtifactStagingDirectory)\\Site\\' 
     artifactName: 'strategy' 
