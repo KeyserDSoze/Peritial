@@ -1,3 +1,8 @@
+variables:
+  TargetFramework: 'netcoreapp3.1'
+  RestoreBuildProjects: 'Expertiser.Portal/*.csproj'
+  BuildConfiguration: 'Release'
+
 steps:
 - task: UseDotNet@2
   inputs:
