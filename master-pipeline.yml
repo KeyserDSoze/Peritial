@@ -1,0 +1,5 @@
+trigger:
+- master
+
+extends:
+  template: default-template.yml
