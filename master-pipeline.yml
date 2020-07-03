@@ -1,44 +1,5 @@
 trigger:
-- $(trigger)
+- master
 
-pool:
-  vmImage: 'ubuntu-latest'
-
-variables:
-  TargetFramework: 'netcoreapp3.1'
-  RestoreBuildProjects: 'Expertiser.Portal/*.csproj'
-  BuildConfiguration: 'Release'
-
-steps:
-- task: UseDotNet@2
-  inputs:
-    packageType: 'sdk'
-    version: '3.1.300'
-
-- task: DotNetCoreCLI@2
-  displayName: Restore
-  inputs:
-    command: 'restore'
-    projects: '$(RestoreBuildProjects)'
-    feedsToUse: 'select'
-    vstsFeed: '9072218a-afc6-4668-aee7-e7769e98c15f'
-
-- task: DotNetCoreCLI@2
-  displayName: Build
-  inputs:
-    projects: '$(RestoreBuildProjects)'
-    arguments: '--configuration $(BuildConfiguration) --framework=$(TargetFramework)'
-
-- task: DotNetCoreCLI@2
-  displayName: Publish
-  inputs:
-    command: 'publish'
-    publishWebProjects: true
-    arguments: '-c $(BuildConfiguration) -f $(TargetFramework) -o $(Build.ArtifactStagingDirectory)'
-    modifyOutputPath: false
-
-- task: PublishBuildArtifacts@1
-  inputs:
-    PathtoPublish: '$(Build.ArtifactStagingDirectory)'
-    ArtifactName: 'drop'
-    publishLocation: 'Container'
+extends:
+  template: default-template.yml
