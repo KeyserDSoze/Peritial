@@ -1,5 +1,8 @@
 trigger:
 - master
 
+pool:
+  vmImage: 'ubuntu-latest'
+
 extends:
   template: default-template.yml
