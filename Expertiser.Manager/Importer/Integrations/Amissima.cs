@@ -13,6 +13,7 @@ namespace Expertiser
 {
     public class Amissima : IImporter
     {
+        private const int AmissimaId = 58;
         public ImportedExperty Import(Stream content)
         {
             var amissimaXml = (AmissimaXml)new XmlSerializer(typeof(AmissimaXml)).Deserialize(content);
@@ -36,7 +37,7 @@ namespace Expertiser
                 Files = amissimaXml.Files.Select(x => new ImportedFile() { Name = x.Name.Split('.')[0], Content = Convert.FromBase64String(x.Value), ContentType = "application/pdf" }),
                 Insurance = new TableInsurance()
                 {
-                    InsuranceCompanyId = 33,
+                    InsuranceCompanyId = AmissimaId,
                     ExternalId = amissimaXml.Customer.Insurance.Id,
                 },
                 Location = new TableLocation()
@@ -78,7 +79,7 @@ namespace Expertiser
                 },
                 InsuranceCompany = new TableInsuranceCompany()
                 {
-                    Id = 33
+                    Id = AmissimaId
                 },
                 InsuranceAgency = new TableInsuranceAgency
                 {
