@@ -2,6 +2,8 @@
 
 @{
     ViewData["Title"] = "Edit";
+    var currentState = await Manager.GetExpertyStateAsync(Model.Id, this.SharedLocalizer);
+    int numberOfFileUploaders = 0;
 }
 
 <h1>@SharedLocalizer["Expertise"]</h1>
@@ -18,6 +20,7 @@
             <div asp-validation-summary="ModelOnly" class="text-danger"></div>
             <input type="hidden" asp-for="Id" />
             <input type="hidden" asp-for="AccidentId" />
+            <input type="hidden" asp-for="Status" />
             <div class="form-group">
                 <label asp-for="MemberId" class="control-label"></label>
                 @if (Manager.UserHelperManager.IsManager)
@@ -43,11 +46,6 @@
                     <div class="form-control">@Model.Contributor?.UserName</div>
                 }
                 <span asp-validation-for="ContributorId" class="text-danger"></span>
-            </div>
-            <div class="form-group">
-                <label asp-for="Status" class="control-label"></label>
-                <rystem-dropdown name="Status" rystem-data="Manager.DropdownManager.GetStatus(Model?.Status ?? 0, SharedLocalizer)"></rystem-dropdown>
-                <span asp-validation-for="Status" class="text-danger"></span>
             </div>
             <div class="form-group">
                 <label asp-for="BranchId" class="control-label"></label>
@@ -93,31 +91,23 @@
         </form>
     </div>
     <div class="col-md-6">
-        <div class="row">
+        @foreach (var typeOfFiles in currentState.Files)
+        {
+            if (numberOfFileUploaders % 2 == 0)
+            {
+                @: <div class="row">
+            }
             <div class="col-md-6">
-                <label class="control-label">@SharedLocalizer["Completed Expertise"]</label>
-                <partial name="_Files" model='("Completed Expertise", await Manager.FileManager.GetUriFiles(Model.Id, "expertise"))' />
-                <rystem-ajax-file rystem-message='@SharedLocalizer["Drag&Drop or Click to Upload"] @SharedLocalizer["Completed Expertise"]' rystem-request-context='new RoutingContext() { Action = "Upload", Controller = "File", QueryString = new Dictionary<object, object>() { { "name", "expertise" } } }'></rystem-ajax-file>
+                <label class="control-label">@SharedLocalizer[typeOfFiles.Name]</label>
+                <partial name="_Files" model='(typeOfFiles.Name, await Manager.FileManager.GetUriFiles(Model.Id, typeOfFiles.Name))' />
+                <rystem-ajax-file rystem-message='@SharedLocalizer["Drag&Drop or Click to Upload"] @SharedLocalizer[typeOfFiles.Name]' rystem-request-context='new RoutingContext() { Action = "Upload", Controller = "File", QueryString = new Dictionary<object, object>() { { "name", typeOfFiles.Name }, { "status" , typeOfFiles.MinimumStatus } } }'></rystem-ajax-file>
             </div>
-            <div class="col-md-6">
-                <label class="control-label">@SharedLocalizer["Reserved Note"]</label>
-                <partial name="_Files" model='("Reserved Note", await Manager.FileManager.GetUriFiles(Model.Id, "reservednote"))' />
-                <rystem-ajax-file rystem-message='@SharedLocalizer["Drag&Drop or Click to Upload"] @SharedLocalizer["Reserved Note"]' rystem-request-context='new RoutingContext() { Action = "Upload", Controller = "File", QueryString = new Dictionary<object, object>() { { "name", "reservednote" } } }'></rystem-ajax-file>
-            </div>
-        </div>
-        <hr />
-        <div class="row">
-            <div class="col-md-6">
-                <label class="control-label">@SharedLocalizer["Accident Files"]</label>
-                <partial name="_Files" model='("Insurance Company Files", await Manager.FileManager.GetUriFiles(Model.Id, "insurancecompany/"))' />
-                <rystem-ajax-file rystem-message='@SharedLocalizer["Drag&Drop or Click to Upload"] @SharedLocalizer["Accident Files"]' rystem-request-context='new RoutingContext() { Action = "Upload", Controller = "File", QueryString = new Dictionary<object, object>() { { "name", "insurancecompany/" } }}'></rystem-ajax-file>
-            </div>
-            <div class="col-md-6">
-                <label class="control-label">@SharedLocalizer["Photos"]</label>
-                <partial name="_Files" model='("Photos", await Manager.FileManager.GetUriFiles(Model.Id, "photos/"))' />
-                <rystem-ajax-file rystem-message='@SharedLocalizer["Drag&Drop or Click to Upload"] @SharedLocalizer["Photos"]' rystem-request-context='new RoutingContext() { Action = "Upload", Controller = "File", QueryString = new Dictionary<object, object>() { { "name", "photos/" } }}'></rystem-ajax-file>
-            </div>
-        </div>
+            if (numberOfFileUploaders % 2 == 0)
+            {
+                @:</div>
+                @:<hr />
+            }
+        }
     </div>
 </div>
 <hr />

@@ -116,32 +116,11 @@ namespace Expertiser.Portal.Controllers
                 {
                     Manager.Context.Add(tableExpertise);
                     await Manager.Context.SaveChangesAsync();
-                    var expertise = await Manager.Context.TableExpertise.Include(x => x.Contributor).FirstOrDefaultAsync(x => x.Id == tableExpertise.Id);
-                    if (expertise.Member != null)
-                        await Manager.ServiceManager.EmailSender.SendEmailAsync(expertise.Member.Email, StringLocalizer["new experty"], string.Format(StringLocalizer["bodynewexperty"], $"{Manager.BaseUri}/Experty/Edit/{tableExpertise.Id}"));
                 }
-                else
-                {
-                    var expertise = await Manager.Context.TableExpertise.Include(x => x.Contributor).Include(x => x.Member).AsNoTracking().FirstOrDefaultAsync(x => x.Id == tableExpertise.Id);
-                    StatusType statusType = (StatusType)expertise.Status;
-                    StatusType newStatusType = (StatusType)tableExpertise.Status;
-                    if (newStatusType == StatusType.Billed)
-                        tableExpertise.CloseDate = DateTime.UtcNow;
-                    else
-                        tableExpertise.CloseDate = null;
-                    Manager.Context.Update(tableExpertise);
-                    await Manager.Context.SaveChangesAsync();
-                    var newExpertise = await Manager.Context.TableExpertise.Include(x => x.Contributor).Include(x => x.Member).FirstOrDefaultAsync(x => x.Id == tableExpertise.Id);
-                    if (statusType != newStatusType || newExpertise.ContributorId != expertise.ContributorId)
-                    {
-                        string subject = string.Format(StringLocalizer["modify experty"], SharedLocalizer[$"{newStatusType}"]);
-                        string message = string.Format(StringLocalizer["bodynewexperty"], $"{Manager.BaseUri}/Experty/Edit/{tableExpertise.Id}");
-                        if (newExpertise.Contributor.Email != User.Identity.Name)
-                            await Manager.ServiceManager.EmailSender.SendEmailAsync(newExpertise.Contributor.Email, subject, message);
-                        if (newExpertise.Member.Email != User.Identity.Name)
-                            await Manager.ServiceManager.EmailSender.SendEmailAsync(newExpertise.Member.Email, subject, message);
-                    }
-                }
+                var state = await Manager.GetExpertyStateAsync(tableExpertise.Id, this.StringLocalizer);
+                await state.Execute(tableExpertise);
+                if ((StatusType)tableExpertise.Status == StatusType.Registered && !string.IsNullOrWhiteSpace(tableExpertise.ContributorId))
+                    await state.Next();
             }
             return View(tableExpertise);
         }

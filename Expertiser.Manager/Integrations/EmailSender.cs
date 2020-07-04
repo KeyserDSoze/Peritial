@@ -27,7 +27,7 @@ namespace Expertiser
             {
                 Subject = subject,
                 Body = htmlMessage,
-                IsBodyHtml = true
+                IsBodyHtml = true,
             })
             {
                 smtp.Send(message);

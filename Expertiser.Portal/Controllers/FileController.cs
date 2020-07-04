@@ -7,6 +7,7 @@ using Expertiser.Base.Constant;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Localization;
 
 namespace Expertiser.Portal.Controllers
 {
@@ -14,12 +15,21 @@ namespace Expertiser.Portal.Controllers
     public class FileController : Controller
     {
         private readonly Manager Manager;
-        public FileController(Manager manager)
-            => this.Manager = manager;
+        private readonly IStringLocalizer<SharedResource> StringLocalizer;
+        public FileController(Manager manager, IStringLocalizer<SharedResource> stringLocalizer)
+        {
+            this.Manager = manager;
+            this.StringLocalizer = stringLocalizer;
+        }
+
         [HttpPost]
         public async Task<IActionResult> Upload(int id, IFormFile file)
         {
             await this.Manager.FileManager.SaveFile(id, file.OpenReadStream(), file.FileName, file.ContentType, Request.Query["name"]);
+            string minimumStatus = Request.Query["status"];
+            var state = await Manager.GetExpertyStateAsync(id, this.StringLocalizer);
+            await state.Execute(null);
+            await state.Next();
             return Ok();
         }
     }

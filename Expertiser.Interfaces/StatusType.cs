@@ -4,9 +4,10 @@
     {
         Registered = -1,
         Assigned,
-        Presented,
         ToBeRevised,
+        Revised,
         ToSend,
+        Sent,
         Billed,
         Duplicated,
         Cancelled,
