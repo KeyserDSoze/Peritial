@@ -4,5 +4,10 @@ trigger:
 pool:
   vmImage: 'ubuntu-latest'
 
+variables:
+  TargetFramework: 'netcoreapp3.1'
+  RestoreBuildProjects: 'Expertiser.Portal/*.csproj'
+  BuildConfiguration: 'Debug'
+
 extends:
   template: default-template.yml
