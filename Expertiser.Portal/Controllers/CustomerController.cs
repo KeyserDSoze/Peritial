@@ -49,7 +49,7 @@ namespace Expertiser.Portal.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create([Bind] TableCustomer tableCustomer)
         {
-            if (ModelState.IsValid)
+            if (this.IsAValidModel(tableCustomer.Id))
             {
                 Manager.Context.Add(tableCustomer);
                 await Manager.Context.SaveChangesAsync();
@@ -66,7 +66,7 @@ namespace Expertiser.Portal.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> CreateContractor([Bind] TableCustomer tableCustomer)
         {
-            if (ModelState.IsValid)
+            if (this.IsAValidModel(tableCustomer.Id))
             {
                 Manager.Context.Add(tableCustomer);
                 await Manager.Context.SaveChangesAsync();
@@ -83,7 +83,7 @@ namespace Expertiser.Portal.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> CreateDamaged([Bind] TableCustomer tableCustomer)
         {
-            if (ModelState.IsValid)
+            if (this.IsAValidModel(tableCustomer.Id))
             {
                 Manager.Context.Add(tableCustomer);
                 await Manager.Context.SaveChangesAsync();
@@ -110,7 +110,7 @@ namespace Expertiser.Portal.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Edit(int id, [Bind] TableCustomer tableCustomer)
         {
-            if (ModelState.IsValid)
+            if (this.IsAValidModel(tableCustomer.Id))
             {
                 if (tableCustomer.Id == 0)
                 {

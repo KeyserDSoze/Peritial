@@ -38,7 +38,7 @@ namespace Expertiser.Portal.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Edit(int id, [Bind] TableInsuranceAdjuster tableInsuranceAdjuster)
         {
-            if (ModelState.IsValid)
+            if (this.IsAValidModel(tableInsuranceAdjuster.Id))
             {
                 if (tableInsuranceAdjuster.Id == 0)
                 {
@@ -69,7 +69,7 @@ namespace Expertiser.Portal.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create([Bind] TableInsuranceAdjuster tableInsuranceAdjuster)
         {
-            if (ModelState.IsValid)
+            if (this.IsAValidModel(tableInsuranceAdjuster.Id))
             {
                 Manager.Context.Add(tableInsuranceAdjuster);
                 await Manager.Context.SaveChangesAsync();

@@ -43,7 +43,7 @@ namespace Expertiser.Portal.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create([Bind] TableInspectorate tableInspectorate)
         {
-            if (ModelState.IsValid)
+            if (this.IsAValidModel(tableInspectorate.Id))
             {
                 Manager.Context.Add(tableInspectorate);
                 await Manager.Context.SaveChangesAsync();
@@ -69,7 +69,7 @@ namespace Expertiser.Portal.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Edit(int id, [Bind] TableInspectorate tableInspectorate)
         {
-            if (ModelState.IsValid)
+            if (this.IsAValidModel(tableInspectorate.Id))
             {
                 if (tableInspectorate.Id == 0)
                 {

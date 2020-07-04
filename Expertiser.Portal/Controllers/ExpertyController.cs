@@ -110,7 +110,7 @@ namespace Expertiser.Portal.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Edit(int id, [Bind] TableExpertise tableExpertise)
         {
-            if (ModelState.IsValid)
+            if (this.IsAValidModel(tableExpertise.Id))
             {
                 if (tableExpertise.Id == 0)
                 {
@@ -149,7 +149,7 @@ namespace Expertiser.Portal.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Bill(int id, [Bind] TableBill tableBill)
         {
-            if (ModelState.IsValid)
+            if (this.IsAValidModel(tableBill.Id))
             {
                 if (tableBill.Id == 0)
                 {

@@ -28,6 +28,22 @@ namespace Expertiser.Portal.Controllers
             this.StringLocalizer = stringLocalizer;
             this.SharedLocalizer = sharedLocalizer;
         }
-        private protected bool IsAValidModel(int id) => ModelState.IsValid || (id == 0 && ModelState.ErrorCount == 1);
+        private protected bool IsAValidModel(int id)
+        {
+            if (ModelState.IsValid)
+                return true;
+            else if (id == 0)
+            {
+                foreach (ModelStateEntry child in ModelState.Root.Children)
+                {
+                    string key = (string)child.GetType().GetProperties().First(x => x.Name == "Key").GetValue(child);
+                    if (key != "id" && child.ValidationState == ModelValidationState.Invalid)
+                        return false;
+                }
+                return true;
+            }
+            else
+                return false;
+        }
     }
 }

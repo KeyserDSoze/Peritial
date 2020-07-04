@@ -48,7 +48,7 @@ namespace Expertiser.Portal.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create(int id, [Bind] TableMessage message)
         {
-            if (ModelState.IsValid)
+            if (this.IsAValidModel(message.Id))
             {
                 Manager.Context.TableMessage.Add(message);
                 await Manager.Context.SaveChangesAsync();

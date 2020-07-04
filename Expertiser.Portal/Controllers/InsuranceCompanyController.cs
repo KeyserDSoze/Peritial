@@ -41,7 +41,7 @@ namespace Expertiser.Portal.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create([Bind] TableInsuranceCompany tableInsuranceCompany)
         {
-            if (ModelState.IsValid)
+            if (this.IsAValidModel(tableInsuranceCompany.Id))
             {
                 Manager.Context.Add(tableInsuranceCompany);
                 await Manager.Context.SaveChangesAsync();
@@ -67,7 +67,7 @@ namespace Expertiser.Portal.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Edit(int id, [Bind] TableInsuranceCompany tableInsuranceCompany)
         {
-            if (ModelState.IsValid)
+            if (this.IsAValidModel(tableInsuranceCompany.Id))
             {
                 if (tableInsuranceCompany.Id == 0)
                 {
