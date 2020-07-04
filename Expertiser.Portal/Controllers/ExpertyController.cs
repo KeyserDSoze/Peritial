@@ -108,7 +108,7 @@ namespace Expertiser.Portal.Controllers
         // more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("Id,MemberId,ContributorId,Status,BranchId,ExternalId,AssignmentDate,InspectionDate,Liquidated,AccidentId")] TableExpertise tableExpertise)
+        public async Task<IActionResult> Edit(int id, [Bind] TableExpertise tableExpertise)
         {
             if (ModelState.IsValid)
             {
@@ -147,7 +147,7 @@ namespace Expertiser.Portal.Controllers
         }
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Bill(int id, [Bind("Id", "Amount", "Extra", "ExpertiseId", "Percentage")] TableBill tableBill)
+        public async Task<IActionResult> Bill(int id, [Bind] TableBill tableBill)
         {
             if (ModelState.IsValid)
             {

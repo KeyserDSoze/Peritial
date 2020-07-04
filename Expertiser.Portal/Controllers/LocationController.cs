@@ -45,7 +45,7 @@ namespace Expertiser.Portal.Controllers
             => PartialView("_PostalCode", (int.Parse(selectedItems.First()), Empty));
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([Bind("Address,CityId,PostalCode")] TableLocation tableLocation)
+        public async Task<IActionResult> Create([Bind] TableLocation tableLocation)
         {
             if (ModelState.IsValid)
             {
@@ -72,7 +72,7 @@ namespace Expertiser.Portal.Controllers
         // more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("Id,Address,CityId,PostalCode")] TableLocation tableLocation)
+        public async Task<IActionResult> Edit(int id, [Bind] TableLocation tableLocation)
         {
             if (ModelState.IsValid)
             {
