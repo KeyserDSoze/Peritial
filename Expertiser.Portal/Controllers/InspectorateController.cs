@@ -41,7 +41,7 @@ namespace Expertiser.Portal.Controllers
            => PartialView();
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([Bind("Label,ExternalId,AddressId,InsuranceCompanyId")] TableInspectorate tableInspectorate)
+        public async Task<IActionResult> Create([Bind] TableInspectorate tableInspectorate)
         {
             if (ModelState.IsValid)
             {
@@ -67,7 +67,7 @@ namespace Expertiser.Portal.Controllers
         // more details see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("Id,Label,ExternalId,AddressId,InsuranceCompanyId")] TableInspectorate tableInspectorate)
+        public async Task<IActionResult> Edit(int id, [Bind] TableInspectorate tableInspectorate)
         {
             if (ModelState.IsValid)
             {
