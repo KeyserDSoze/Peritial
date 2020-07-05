@@ -1,13 +1,10 @@
 trigger:
 - master
 
-pool:
-  vmImage: 'ubuntu-latest'
-
-variables:
-  TargetFramework: 'netcoreapp3.1'
-  RestoreBuildProjects: 'Expertiser.Portal/*.csproj'
-  BuildConfiguration: 'Release'
-
-extends:
-  template: default-template.yml
+stages:
+- template: default-template.yml
+  parameters:
+    vmImage: 'ubuntu-latest'
+    restoreBuildProjects: 'Expertiser.Portal/*.csproj'
+    buildConfiguration: 'Release'
+    targetFramework: 'netcoreapp3.1'
