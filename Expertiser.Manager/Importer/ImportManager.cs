@@ -113,7 +113,8 @@ namespace Expertiser
                 {
                     AccidentId = accident.Id,
                     BranchId = importValue.Expertise.BranchId,
-                    Status = importValue.Expertise.Status
+                    Status = importValue.Expertise.Status,
+                    FileId = Guid.NewGuid().ToString("N")
                 };
                 Manager.Context.TableExpertise.Add(expertise);
                 await Manager.Context.SaveChangesAsync();
@@ -123,7 +124,7 @@ namespace Expertiser
                 using (var stream = new MemoryStream(importedFile.Content))
                 {
                     stream.Position = 0;
-                    await Manager.FileManager.SaveFile(expertise.Id, stream, importedFile.Name, importedFile.ContentType, $"insurancecompany/{importedFile.Name}");
+                    await Manager.FileManager.SaveFile(expertise.FileId, stream, importedFile.Name, importedFile.ContentType, $"insurancecompany/{importedFile.Name}");
                 }
             }
             return accident.Id;

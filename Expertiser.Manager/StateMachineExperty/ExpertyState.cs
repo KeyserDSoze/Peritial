@@ -37,6 +37,12 @@ namespace Expertiser
             this.StringLocalizer = stringLocalizer;
             this.IsNotified = isNotified;
         }
+        private readonly List<string> Attachments = new List<string>();
+        public ExpertyState AddAttachment(IEnumerable<string> files)
+        {
+            Attachments.AddRange(files);
+            return this;
+        }
         public async Task ExecuteAndNext(TableExpertise expertiseToUpdate)
         {
             var expertise = this.Expertise;
@@ -68,7 +74,24 @@ namespace Expertiser
             {
                 List<Task> notifications = new List<Task>();
                 foreach (string email in GetEmails())
-                    notifications.Add(Manager.ServiceManager.EmailSender.SendEmailAsync(email, $"{this.StringLocalizer["Status"]} {this.StringLocalizer[this.StatusType.ToString()]}", this.Body ?? $"{this.StringLocalizer["Check it out the change of status"]} {this.Link}"));
+                {
+                    StringBuilder body = new StringBuilder(this.Body ?? $"{this.StringLocalizer["Check it out the change of status"]} {this.Link}");
+                    body.Append("<br />");
+                    if (this.Attachments.Count > 0)
+                    {
+                        body.Append("<hr />");
+                        body.Append($"<div>{this.StringLocalizer["Attachment links"]}</div>");
+                        foreach (string attachment in this.Attachments)
+                            body.Append($"<a download href='{attachment}'>{attachment}</a><br />");
+                    }
+                    body.Append("<hr />");
+                    body.Append("<br />");
+                    body.Append("<br />");
+                    body.Append(this.StringLocalizer["Best Regards"]);
+                    body.Append("<br />");
+                    body.Append(Manager.Title);
+                    notifications.Add(Manager.ServiceManager.EmailSender.SendEmailAsync(email, $"{this.StringLocalizer["Status"]} {this.StringLocalizer[this.StatusType.ToString()]} {(this.Attachments.Count > 0 ? this.StringLocalizer["With Attachments"] : string.Empty)}", body.ToString()));
+                }
                 await Task.WhenAll(notifications);
                 this.IsNotified = true;
             }

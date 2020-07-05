@@ -26,10 +26,11 @@ namespace Expertiser.Portal.Controllers
         [HttpPost]
         public async Task<IActionResult> Upload(int id, IFormFile file)
         {
-            await this.Manager.FileManager.SaveFile(id, file.OpenReadStream(), file.FileName, file.ContentType, Request.Query["name"]);
+            IEnumerable<string> files = await this.Manager.FileManager.SaveFile(Request.Query["fileId"], file.OpenReadStream(), file.FileName, file.ContentType, Request.Query["name"]);
             int.TryParse(Request.Query["status"], out int status);
             StatusType minimumStatus = (StatusType)status;
             var state = await Manager.GetExpertyStateAsync(id, this.StringLocalizer);
+            state.AddAttachment(files);
             await state.Next(minimumStatus);
             return Ok();
         }

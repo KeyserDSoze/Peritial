@@ -84,6 +84,7 @@ namespace Expertiser.Portal.Controllers
                     MemberId = HttpContext.User.Claims.FirstOrDefault(x => x.Type == ClaimTypes.NameIdentifier).Value,
                     Status = -1,
                     BranchId = 1,
+                    FileId = Guid.NewGuid().ToString("N")
                 };
                 Manager.Context.Add(tableExpertise);
                 await Manager.Context.SaveChangesAsync();
@@ -114,6 +115,7 @@ namespace Expertiser.Portal.Controllers
             {
                 if (tableExpertise.Id == 0)
                 {
+                    tableExpertise.FileId = Guid.NewGuid().ToString("N");
                     Manager.Context.Add(tableExpertise);
                     await Manager.Context.SaveChangesAsync();
                 }

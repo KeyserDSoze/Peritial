@@ -31,6 +31,9 @@ namespace Expertiser.Database.Models
         public int AccidentId { get; set; }
         [Column(TypeName = "datetime")]
         public DateTime? CloseDate { get; set; }
+        [Required]
+        [StringLength(38)]
+        public string FileId { get; set; }
 
         [ForeignKey(nameof(AccidentId))]
         [InverseProperty(nameof(TableAccident.TableExpertise))]

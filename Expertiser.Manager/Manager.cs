@@ -207,23 +207,24 @@ namespace Expertiser
         private readonly Manager Manager;
         public FileManager(Manager manager)
             => this.Manager = manager;
-        public async Task<IList<string>> GetUriFiles(int id, string name = null)
-            => await new File().SearchAsync($"{id}/{name}");
-        public async Task<bool> SaveFile(int id, Stream stream, string fileName, string contentType, string name = null)
+        public async Task<IList<string>> GetUriFiles(string fileId, string name = null)
+            => await new File().SearchAsync($"{fileId}/{name}");
+        public async Task<IList<string>> SaveFile(string fileId, Stream stream, string fileName, string contentType, string name = null)
         {
             if (name == null)
                 name = Guid.NewGuid().ToString("N");
             else if (name.EndsWith("/"))
                 name = $"{name}{Guid.NewGuid():N}";
-            return await new File()
+            var upload = await new File()
             {
-                Name = $"{id}/{name}.{fileName.Split('.').Last()}",
+                Name = $"{fileId}/{name}.{fileName.Split('.').Last()}",
                 Properties = new DataProperties()
                 {
                     ContentType = contentType
                 },
                 Stream = stream
             }.WriteAsync();
+            return await this.GetUriFiles(fileId);
         }
     }
     public class NavigationManager
@@ -520,7 +521,7 @@ namespace Expertiser
                     Selected = x.Id == branchId
                 });
         }
-       
+
         public IEnumerable<DropdownItem> GetPostalCodes(int cityId, string selectedPostalCode = null)
         {
             TableCity city = this.Manager.Context.TableCity.Where(x => x.Id == cityId).FirstOrDefault();

@@ -11,11 +11,11 @@
         {
             @if (value.Contains(".jpg") || value.Contains(".png"))
             {
-                <a href="@value" download><img title="@value.Split('/').Last()" src="@value" class="col-md-2" /></a>
+                <a href="@value" target="_blank"><img title="@value.Split('/').Last()" src="@value" class="col-md-2" /></a>
             }
             else
             {
-                <a href="@value" download class="h2"><i title="@value.Split('/').Last()" class="fas fa-file-download text-xl-left"></i></a>
+                <a href="@value" target="_blank" class="h2"><i title="@value.Split('/').Last()" class="fas fa-file-download text-xl-left"></i></a>
             }
         }
     }

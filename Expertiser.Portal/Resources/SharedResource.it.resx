@@ -168,6 +168,9 @@
   <data name="Assigned" xml:space="preserve">
     <value>Assegnato</value>
   </data>
+  <data name="assigned in" xml:space="preserve">
+    <value>assegnata il</value>
+  </data>
   <data name="Assignment" xml:space="preserve">
     <value>Incarico</value>
   </data>
@@ -177,11 +180,17 @@
   <data name="Assignments" xml:space="preserve">
     <value>Incarichi</value>
   </data>
+  <data name="Attachment links" xml:space="preserve">
+    <value>Allegati scaricabili</value>
+  </data>
   <data name="Back to Accident" xml:space="preserve">
     <value>Ritorna al sinistro</value>
   </data>
   <data name="Back to List" xml:space="preserve">
     <value>Torna alla lista</value>
+  </data>
+  <data name="Best Regards" xml:space="preserve">
+    <value>Cordiali saluti</value>
   </data>
   <data name="Bill" xml:space="preserve">
     <value>Fatturato</value>
@@ -221,6 +230,9 @@
   </data>
   <data name="Click here to manage dossier" xml:space="preserve">
     <value>Clicca qui per gestire la pratica</value>
+  </data>
+  <data name="Click here to manage dossier of" xml:space="preserve">
+    <value>Clicca qui per visionare la pratica di</value>
   </data>
   <data name="Companies" xml:space="preserve">
     <value>Compagnie</value>
@@ -620,5 +632,8 @@
   </data>
   <data name="Utilities" xml:space="preserve">
     <value>Utilità</value>
+  </data>
+  <data name="With Attachments" xml:space="preserve">
+    <value>con allegati</value>
   </data>
 </root>
