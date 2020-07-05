@@ -1,3 +1,9 @@
+parameters:
+  vmImage: ''
+  restoreBuildProjects: ''
+  buildConfiguration: ''
+  targetFramework: ''
+
 stages:
 - stage: Default
   jobs:
