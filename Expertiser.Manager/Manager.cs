@@ -520,27 +520,7 @@ namespace Expertiser
                     Selected = x.Id == branchId
                 });
         }
-        public IEnumerable<DropdownItem> GetStatus(int statusId, IStringLocalizer stringLocalizer)
-        {
-            return Status()
-                .Select(x => new DropdownItem()
-                {
-                    Label = stringLocalizer[$"{x}"],
-                    Value = ((int)x).ToString(),
-                    Selected = (int)x == statusId
-                });
-            IEnumerable<StatusType> Status()
-            {
-                yield return StatusType.Registered;
-                yield return StatusType.Assigned;
-                yield return StatusType.Presented;
-                yield return StatusType.ToBeRevised;
-                yield return StatusType.ToSend;
-                yield return StatusType.Billed;
-                yield return StatusType.Duplicated;
-                yield return StatusType.Cancelled;
-            }
-        }
+       
         public IEnumerable<DropdownItem> GetPostalCodes(int cityId, string selectedPostalCode = null)
         {
             TableCity city = this.Manager.Context.TableCity.Where(x => x.Id == cityId).FirstOrDefault();

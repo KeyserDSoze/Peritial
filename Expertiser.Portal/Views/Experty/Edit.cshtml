@@ -20,7 +20,11 @@
             <div asp-validation-summary="ModelOnly" class="text-danger"></div>
             <input type="hidden" asp-for="Id" />
             <input type="hidden" asp-for="AccidentId" />
-            <input type="hidden" asp-for="Status" />
+            <input type="hidden" name="Status" value="@Model.Status" />
+            <div class="form-group">
+                <label asp-for="Status" class="control-label"></label>
+                <div class="form-control">@SharedLocalizer[Model.StatusType.ToString()]</div>
+            </div>
             <div class="form-group">
                 <label asp-for="MemberId" class="control-label"></label>
                 @if (Manager.UserHelperManager.IsManager)
@@ -91,23 +95,16 @@
         </form>
     </div>
     <div class="col-md-6">
-        @foreach (var typeOfFiles in currentState.Files)
-        {
-            if (numberOfFileUploaders % 2 == 0)
+        <div class="row">
+            @foreach (var typeOfFiles in currentState.Files)
             {
-                @: <div class="row">
+                <div class="col-md-6">
+                    <label class="control-label">@SharedLocalizer[typeOfFiles.Name]</label>
+                    <partial name="_Files" model='(typeOfFiles.Name, await Manager.FileManager.GetUriFiles(Model.Id, typeOfFiles.Name))' />
+                    <rystem-ajax-file rystem-message='@SharedLocalizer["Drag&Drop or Click to Upload"] @SharedLocalizer[typeOfFiles.Name]' rystem-request-context='new RoutingContext() { Action = "Upload", Controller = "File", QueryString = new Dictionary<object, object>() { { "name", typeOfFiles.Name }, { "status", (int)typeOfFiles.MinimumStatus } } }'></rystem-ajax-file>
+                </div>
             }
-            <div class="col-md-6">
-                <label class="control-label">@SharedLocalizer[typeOfFiles.Name]</label>
-                <partial name="_Files" model='(typeOfFiles.Name, await Manager.FileManager.GetUriFiles(Model.Id, typeOfFiles.Name))' />
-                <rystem-ajax-file rystem-message='@SharedLocalizer["Drag&Drop or Click to Upload"] @SharedLocalizer[typeOfFiles.Name]' rystem-request-context='new RoutingContext() { Action = "Upload", Controller = "File", QueryString = new Dictionary<object, object>() { { "name", typeOfFiles.Name }, { "status" , typeOfFiles.MinimumStatus } } }'></rystem-ajax-file>
-            </div>
-            if (numberOfFileUploaders % 2 == 0)
-            {
-                @:</div>
-                @:<hr />
-            }
-        }
+        </div>
     </div>
 </div>
 <hr />

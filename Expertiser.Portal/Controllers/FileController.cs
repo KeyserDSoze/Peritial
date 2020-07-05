@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Expertiser.Base.Constant;
+using Expertiser.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -26,10 +27,10 @@ namespace Expertiser.Portal.Controllers
         public async Task<IActionResult> Upload(int id, IFormFile file)
         {
             await this.Manager.FileManager.SaveFile(id, file.OpenReadStream(), file.FileName, file.ContentType, Request.Query["name"]);
-            string minimumStatus = Request.Query["status"];
+            int.TryParse(Request.Query["status"], out int status);
+            StatusType minimumStatus = (StatusType)status;
             var state = await Manager.GetExpertyStateAsync(id, this.StringLocalizer);
-            await state.Execute(null);
-            await state.Next();
+            await state.Next(minimumStatus);
             return Ok();
         }
     }

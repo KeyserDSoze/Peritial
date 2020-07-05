@@ -118,11 +118,11 @@ namespace Expertiser.Portal.Controllers
                     await Manager.Context.SaveChangesAsync();
                 }
                 var state = await Manager.GetExpertyStateAsync(tableExpertise.Id, this.StringLocalizer);
-                await state.Execute(tableExpertise);
-                if ((StatusType)tableExpertise.Status == StatusType.Registered && !string.IsNullOrWhiteSpace(tableExpertise.ContributorId))
-                    await state.Next();
+                await state.ExecuteAndNext(tableExpertise);
+                return View(state.Expertise);
             }
-            return View(tableExpertise);
+            else
+                return View(tableExpertise);
         }
         [HttpPost]
         [ValidateAntiForgeryToken]

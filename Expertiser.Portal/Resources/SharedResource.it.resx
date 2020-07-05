@@ -126,6 +126,9 @@
   <data name="AccidentDate" xml:space="preserve">
     <value>Data Sinistro</value>
   </data>
+  <data name="AccidentDocs" xml:space="preserve">
+    <value>Documenti incarico</value>
+  </data>
   <data name="AccidentId" xml:space="preserve">
     <value>N. Sinistro Compagnia</value>
   </data>
@@ -204,11 +207,17 @@
   <data name="Check" xml:space="preserve">
     <value>Mostra</value>
   </data>
+  <data name="Check it out the change of status" xml:space="preserve">
+    <value>Controlla lo stato della pratica</value>
+  </data>
   <data name="City.Name" xml:space="preserve">
     <value>Nome città</value>
   </data>
   <data name="CityId" xml:space="preserve">
     <value>Città</value>
+  </data>
+  <data name="Click here" xml:space="preserve">
+    <value>Clicca qui</value>
   </data>
   <data name="Click here to manage dossier" xml:space="preserve">
     <value>Clicca qui per gestire la pratica</value>
@@ -218,6 +227,9 @@
   </data>
   <data name="Completed Expertise" xml:space="preserve">
     <value>Perizia Completa</value>
+  </data>
+  <data name="CompletedExpertise" xml:space="preserve">
+    <value>Perizia completa</value>
   </data>
   <data name="Connected Expertises" xml:space="preserve">
     <value>Perizie connesse</value>
@@ -233,6 +245,9 @@
   </data>
   <data name="ContributorId" xml:space="preserve">
     <value>Perito</value>
+  </data>
+  <data name="CorrectedExpertise" xml:space="preserve">
+    <value>Perizia da correggere</value>
   </data>
   <data name="Countries" xml:space="preserve">
     <value>Nazioni</value>
@@ -519,11 +534,20 @@
   <data name="Presented" xml:space="preserve">
     <value>Presentato</value>
   </data>
+  <data name="RawExpertise" xml:space="preserve">
+    <value>Perizia da revisionare</value>
+  </data>
   <data name="Registered" xml:space="preserve">
     <value>Registrato</value>
   </data>
   <data name="Reserved Note" xml:space="preserve">
     <value>Nota Riservata</value>
+  </data>
+  <data name="ReservedNote" xml:space="preserve">
+    <value>Nota riservata</value>
+  </data>
+  <data name="Revised" xml:space="preserve">
+    <value>Revisionato</value>
   </data>
   <data name="Save" xml:space="preserve">
     <value>Salva</value>
