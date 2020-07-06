@@ -21,7 +21,7 @@ namespace Expertiser.Functionality
                 var importer = new ImporterFactory().Create(ImporterType.Amissima);
                 string sdj = System.IO.File.ReadAllText(FilePath);
                 XDocument xml = XDocument.Parse(sdj);
-                var t = importer.Import(new MemoryStream(Encoding.UTF8.GetBytes(sdj)));
+                var t = importer.Import(new MemoryStream(Encoding.UTF8.GetBytes(sdj)), new Manager());
                 System.IO.File.WriteAllBytes(@"C:\Users\aless\Downloads\incarico.pdf", t.Files.FirstOrDefault().Content);
             }
             catch (Exception e)

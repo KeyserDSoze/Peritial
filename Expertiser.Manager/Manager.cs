@@ -29,6 +29,7 @@ namespace Expertiser
         public UserManager<IdentityUser> UserManager { get; }
         public RoleManager<IdentityRole> RoleManager { get; }
         public SignInManager<IdentityUser> SignInManager { get; }
+        public Manager() { }
         public Manager(IHttpContextAccessor httpContextAccessor, SignInManager<IdentityUser> signInManager, UserManager<IdentityUser> userManager, RoleManager<IdentityRole> roleManager)
         {
             this.HttpContextAccessor = httpContextAccessor;

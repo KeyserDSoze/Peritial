@@ -1,4 +1,6 @@
 ﻿using Expertiser.Database.Models;
+using Microsoft.Azure.Documents.SystemFunctions;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.OData.Edm;
 using System;
 using System.Collections.Generic;
@@ -13,9 +15,9 @@ namespace Expertiser
 {
     public class Amissima : IImporter
     {
-        private const int AmissimaId = 58;
-        public ImportedExperty Import(Stream content)
+        public ImportedExperty Import(Stream content, Manager manager)
         {
+            var tableInsuranceCompany = manager.Context.TableInsuranceCompany.FirstOrDefault(x => x.Label.ToLower().Contains("amissima"));
             var amissimaXml = (AmissimaXml)new XmlSerializer(typeof(AmissimaXml)).Deserialize(content);
             var importedExperty = new ImportedExperty()
             {
@@ -37,7 +39,7 @@ namespace Expertiser
                 Files = amissimaXml.Files.Select(x => new ImportedFile() { Name = x.Name.Split('.')[0], Content = Convert.FromBase64String(x.Value), ContentType = "application/pdf" }),
                 Insurance = new TableInsurance()
                 {
-                    InsuranceCompanyId = AmissimaId,
+                    InsuranceCompanyId = tableInsuranceCompany.Id,
                     ExternalId = amissimaXml.Customer.Insurance.Id,
                 },
                 Location = new TableLocation()
@@ -77,10 +79,7 @@ namespace Expertiser
                 {
                     ExternalId = $"{amissimaXml.Customer.Company.CompanyName} - {amissimaXml.Customer.Company.InsuranceInspectorateCode}"
                 },
-                InsuranceCompany = new TableInsuranceCompany()
-                {
-                    Id = AmissimaId
-                },
+                InsuranceCompany = tableInsuranceCompany,
                 InsuranceAgency = new TableInsuranceAgency
                 {
                     ExternalId = $"{amissimaXml.Customer.Company.CompanyName} - {amissimaXml.Customer.Company.InsuranceAgencyCode}"
