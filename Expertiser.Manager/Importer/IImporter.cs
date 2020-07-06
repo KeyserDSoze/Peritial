@@ -10,6 +10,6 @@ namespace Expertiser
 {
     public interface IImporter
     {
-        ImportedExperty Import(Stream content);
+        ImportedExperty Import(Stream content, Manager manager);
     }
 }

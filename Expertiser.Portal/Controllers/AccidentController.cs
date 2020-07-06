@@ -67,7 +67,17 @@ namespace Expertiser.Portal.Controllers
             => View();
         [HttpPost]
         public async Task<IActionResult> Import(int importType, IFormFile file)
-            => Ok(await Manager.ImportManager.FinalizeAsync(file, (ImporterType)importType));
+        {
+            try
+            {
+                return Ok(await Manager.ImportManager.FinalizeAsync(file, (ImporterType)importType));
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
         // POST: Accident/Create
         // To protect from overposting attacks, enable the specific properties you want to bind to, for 
         // more details, see http://go.microsoft.com/fwlink/?LinkId=317598.

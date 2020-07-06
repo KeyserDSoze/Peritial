@@ -22,7 +22,7 @@ namespace Expertiser
         {
             IImporter importer = Factory.Create(importerType);
             //Create customer of insurance
-            ImportedExperty importValue = importer.Import(file.OpenReadStream());
+            ImportedExperty importValue = importer.Import(file.OpenReadStream(), Manager);
             int customerId = await GetCustomerId(importValue.Customer);
             int contractorId = await GetCustomerId(importValue.Contractor);
 
@@ -132,6 +132,8 @@ namespace Expertiser
             async Task<int> GetCustomerId(TableCustomer tableCustomer)
             {
                 var city = await Manager.Context.TableCity.FirstOrDefaultAsync(x => x.PostalCode.Contains(tableCustomer.Address.PostalCode));
+                if (city == null)
+                    city = await Manager.Context.TableCity.FirstOrDefaultAsync(x => x.Name == "Nessuna");
                 var address = await Manager.Context.TableLocation.FirstOrDefaultAsync(x => x.CityId == city.Id && x.Address == tableCustomer.Address.Address);
                 if (address == null)
                 {
