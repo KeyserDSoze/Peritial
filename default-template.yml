@@ -1,33 +1,53 @@
-steps:
-- task: UseDotNet@2
-  inputs:
-    packageType: 'sdk'
-    version: '3.1.300'
+parameters:
+- name: vmImage
+  type: string
+  default: 'ubuntu-latest'
+- name: restoreBuildProjects
+  type: string
+  default: 'Expertiser.Portal/*.csproj'
+- name: buildConfiguration
+  type: string
+  default: 'Release'
+- name: targetFramework
+  type: string
+  default: 'netcoreapp3.1'
 
-- task: DotNetCoreCLI@2
-  displayName: Restore
-  inputs:
-    command: 'restore'
-    projects: '$(RestoreBuildProjects)'
-    feedsToUse: 'select'
-    vstsFeed: '9072218a-afc6-4668-aee7-e7769e98c15f'
+stages:
+- stage: build_experty
+  pool:
+    vmImage: ${{ parameters.vmImage }}
+  jobs:
+  - job: build_experty
+    steps:
+    - task: UseDotNet@2
+      inputs:
+        packageType: 'sdk'
+        version: '3.1.300'
 
-- task: DotNetCoreCLI@2
-  displayName: Build
-  inputs:
-    projects: '$(RestoreBuildProjects)'
-    arguments: '--configuration $(BuildConfiguration) --framework=$(TargetFramework)'
+    - task: DotNetCoreCLI@2
+      displayName: Restore
+      inputs:
+        command: 'restore'
+        projects: ${{ parameters.restoreBuildProjects }}
+        feedsToUse: 'select'
+        vstsFeed: '9072218a-afc6-4668-aee7-e7769e98c15f'
 
-- task: DotNetCoreCLI@2
-  displayName: Publish
-  inputs:
-    command: 'publish'
-    publishWebProjects: true
-    arguments: '-c $(BuildConfiguration) -f $(TargetFramework) -o $(Build.ArtifactStagingDirectory)'
-    modifyOutputPath: false
+    - task: DotNetCoreCLI@2
+      displayName: Build
+      inputs:
+        projects: ${{ parameters.restoreBuildProjects}}
+        arguments: '--configuration ${{ parameters.buildConfiguration }} --framework=${{ parameters.targetFramework }}'
 
-- task: PublishBuildArtifacts@1
-  inputs:
-    PathtoPublish: '$(Build.ArtifactStagingDirectory)'
-    ArtifactName: 'drop'
-    publishLocation: 'Container'
+    - task: DotNetCoreCLI@2
+      displayName: Publish
+      inputs:
+        command: 'publish'
+        publishWebProjects: true
+        arguments: '-c ${{ parameters.buildConfiguration }} -f ${{ parameters.targetFramework }} -o $(Build.ArtifactStagingDirectory)'
+        modifyOutputPath: false
+
+    - task: PublishBuildArtifacts@1
+      inputs:
+        PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+        ArtifactName: 'drop'
+        publishLocation: 'Container'
