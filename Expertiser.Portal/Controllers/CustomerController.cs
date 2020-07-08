@@ -48,7 +48,7 @@ namespace Expertiser.Portal.Controllers
         // more details see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([Bind] TableCustomer tableCustomer)
+        public async Task<IActionResult> Create([Bind("Id,Name,FiscalCode,AddressId")] TableCustomer tableCustomer)
         {
             if (this.IsAValidModel(tableCustomer.Id))
             {
@@ -65,7 +65,7 @@ namespace Expertiser.Portal.Controllers
         // more details see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> CreateContractor([Bind] TableCustomer tableCustomer)
+        public async Task<IActionResult> CreateContractor([Bind("Id,Name,FiscalCode,AddressId")] TableCustomer tableCustomer)
         {
             if (this.IsAValidModel(tableCustomer.Id))
             {
@@ -82,7 +82,7 @@ namespace Expertiser.Portal.Controllers
         // more details see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> CreateDamaged([Bind] TableCustomer tableCustomer)
+        public async Task<IActionResult> CreateDamaged([Bind("Id,Name,FiscalCode,AddressId")] TableCustomer tableCustomer)
         {
             if (this.IsAValidModel(tableCustomer.Id))
             {
@@ -109,7 +109,7 @@ namespace Expertiser.Portal.Controllers
         // more details see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind] TableCustomer tableCustomer)
+        public async Task<IActionResult> Edit(int id, [Bind("Id,Name,FiscalCode,AddressId")] TableCustomer tableCustomer)
         {
             if (this.IsAValidModel(tableCustomer.Id))
             {

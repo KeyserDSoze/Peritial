@@ -46,7 +46,7 @@ namespace Expertiser.Portal.Controllers
         }
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create(int id, [Bind] TableMessage message)
+        public async Task<IActionResult> Create(int id, [Bind("ExpertiseId, Value, UserId, Type")] TableMessage message)
         {
             if (this.IsAValidModel(message.Id))
             {

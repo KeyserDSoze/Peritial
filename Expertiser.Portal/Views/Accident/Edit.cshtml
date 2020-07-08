@@ -4,7 +4,7 @@
     ViewData["Title"] = "Create";
 }
 
-<h1>@SharedLocalizer["Assignment"]</h1>
+<h1>@SharedLocalizer["Assignment"] - @Model?.TableExpertise?.FirstOrDefault()?.ConcreteId</h1>
 <div>
     <a asp-action="Index">@SharedLocalizer["Back to List"]</a>
 </div>
@@ -50,6 +50,7 @@
             @Html.AntiForgeryToken()
             <div asp-validation-summary="ModelOnly" class="text-danger"></div>
             <input type="hidden" asp-for="Id" />
+            <input type="hidden" asp-for="YearlyId" />
             <div class="form-group">
                 <label asp-for="AddressId" class="control-label"></label>
                 @if (Manager.UserHelperManager.IsManager)
