@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Authorization;
 using Expertiser.Base.Constant;
 using Rystem.Web.Backoffice;
 using Microsoft.Extensions.Localization;
+using Expertiser.Portal.Models;
 
 namespace Expertiser.Portal.Controllers
 {
@@ -53,7 +54,7 @@ namespace Expertiser.Portal.Controllers
             {
                 Manager.Context.Add(tableCustomer);
                 await Manager.Context.SaveChangesAsync();
-                return PartialView("_GetCustomers", ("CustomerId", tableCustomer.Id));
+                return PartialView("_GetCustomers", CustomerModel.NewCustomer(tableCustomer.Id));
             }
             return NotOkMessage(ModelState);
         }
@@ -70,7 +71,7 @@ namespace Expertiser.Portal.Controllers
             {
                 Manager.Context.Add(tableCustomer);
                 await Manager.Context.SaveChangesAsync();
-                return PartialView("_GetCustomers", ("ContractorId", tableCustomer.Id));
+                return PartialView("_GetCustomers", CustomerModel.NewContractor(tableCustomer.Id));
             }
             return NotOkMessage(ModelState);
         }

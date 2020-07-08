@@ -3,6 +3,7 @@ using Expertiser.Database.Models;
 using Expertiser.Interfaces;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Azure.Documents;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Localization;
@@ -53,6 +54,8 @@ namespace Expertiser
             => await StateFactory.CreateAsync(expertiseId, this, stringLocalizer).NoContext();
         private DropdownManager dropdownManager;
         public DropdownManager DropdownManager => dropdownManager ??= new DropdownManager(this);
+        private TelemetryManager telemetryManager;
+        public TelemetryManager TelemetryManager => telemetryManager ??= new TelemetryManager(this);
         private FileManager fileManager;
         public FileManager FileManager => fileManager ??= new FileManager(this);
         private static readonly NavigationManager navigationManager = new NavigationManager();
@@ -99,6 +102,14 @@ namespace Expertiser
                 .AddGroup("Companies", "fa-tools")
                     .AddItem("Locations", null, new NavigationUrl("Location"))
             .Build();
+    }
+    public class TelemetryManager
+    {
+        private readonly Manager Manager;
+        public TelemetryManager(Manager manager)
+            => this.Manager = manager;
+        public async Task SaveExceptionLog(Exception exception)
+            => await new ErrorLog() { Message = exception.ToString() }.UpdateAsync().NoContext();
     }
     public class HttpHelperManager
     {

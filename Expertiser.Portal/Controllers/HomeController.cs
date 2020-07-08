@@ -11,12 +11,16 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Localization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.OData.Edm;
+using Microsoft.AspNetCore.Diagnostics;
 
 namespace Expertiser.Portal.Controllers
 {
     [Authorize]
     public class HomeController : Controller
     {
+        private readonly Manager Manager;
+        public HomeController(Manager manager)
+            => Manager = manager;
         public IActionResult Index()
             => View(new DateStats()
             {
@@ -42,9 +46,19 @@ namespace Expertiser.Portal.Controllers
 
         public IActionResult Privacy()
             => View();
-
+        private const string GenericError = "GenericError";
         [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
-        public IActionResult Error()
-            => View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
+        public async Task<IActionResult> Error()
+        {
+            string message = GenericError;
+            try
+            {
+                IExceptionHandlerFeature context = HttpContext.Features.Get<IExceptionHandlerFeature>();
+                await Manager.TelemetryManager.SaveExceptionLog(context.Error).NoContext();
+                message = context.Error.Message;
+            }
+            catch { }
+            return BadRequest(message);
+        }
     }
 }
