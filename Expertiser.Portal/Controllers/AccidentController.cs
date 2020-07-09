@@ -109,6 +109,7 @@ namespace Expertiser.Portal.Controllers
                     Manager.Context.Update(tableAccident);
                     await Manager.Context.SaveChangesAsync();
                     await ManageDamageds(tableAccident.Id);
+                    return View(await Manager.QueryManager.Accidents.FirstOrDefaultAsync(x => x.Id == tableAccident.Id));
                 }
                 async Task ManageDamageds(int accidentId)
                 {
