@@ -23,8 +23,8 @@ namespace Expertiser
         }
         public static List<ExpertiseDocument> Instance { get; } = new List<ExpertiseDocument>()
         {
-            new ExpertiseDocument("AccidentDocs", StatusType.Registered),
-            new ExpertiseDocument("Photos", StatusType.Registered),
+            new ExpertiseDocument("AccidentDocs/", StatusType.Registered),
+            new ExpertiseDocument("Photos/", StatusType.Registered),
             new ExpertiseDocument("RawExpertise", StatusType.Assigned),
             new ExpertiseDocument("CorrectedExpertise", StatusType.ToBeRevised),
             new ExpertiseDocument("CompletedExpertise", StatusType.Revised),

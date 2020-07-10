@@ -168,6 +168,9 @@
   <data name="Assigned" xml:space="preserve">
     <value>Assegnato</value>
   </data>
+  <data name="Assigned Assignments" xml:space="preserve">
+    <value>Incarichi assegnati</value>
+  </data>
   <data name="assigned in" xml:space="preserve">
     <value>assegnata il</value>
   </data>
@@ -179,6 +182,9 @@
   </data>
   <data name="Assignments" xml:space="preserve">
     <value>Incarichi</value>
+  </data>
+  <data name="Assignments By Status" xml:space="preserve">
+    <value>Incarichi per status</value>
   </data>
   <data name="Attachment links" xml:space="preserve">
     <value>Allegati scaricabili</value>
@@ -198,6 +204,9 @@
   <data name="Billed" xml:space="preserve">
     <value>Fatturato</value>
   </data>
+  <data name="Billed Assignments" xml:space="preserve">
+    <value>Incarichi fatturati</value>
+  </data>
   <data name="bodynewexperty" xml:space="preserve">
     <value>Puoi controllare la perizia &lt;a href='{0}'&gt;qui&lt;/a&gt;</value>
   </data>
@@ -212,6 +221,9 @@
   </data>
   <data name="Cancelled" xml:space="preserve">
     <value>Cancellato</value>
+  </data>
+  <data name="Cancelled Assignments" xml:space="preserve">
+    <value>Incarichi cancellati</value>
   </data>
   <data name="Check" xml:space="preserve">
     <value>Mostra</value>
@@ -341,6 +353,9 @@
   </data>
   <data name="Duplicated" xml:space="preserve">
     <value>Duplicato</value>
+  </data>
+  <data name="Duplicated Assignments" xml:space="preserve">
+    <value>Incarichi duplicati</value>
   </data>
   <data name="Edit" xml:space="preserve">
     <value>Modifica</value>
@@ -552,6 +567,9 @@
   <data name="Registered" xml:space="preserve">
     <value>Registrato</value>
   </data>
+  <data name="Registered Assignments" xml:space="preserve">
+    <value>Incarichi registrati</value>
+  </data>
   <data name="Reserved Note" xml:space="preserve">
     <value>Nota Riservata</value>
   </data>
@@ -561,8 +579,14 @@
   <data name="Revised" xml:space="preserve">
     <value>Revisionato</value>
   </data>
+  <data name="Revised Assignments" xml:space="preserve">
+    <value>Incarichi revisionati</value>
+  </data>
   <data name="Save" xml:space="preserve">
     <value>Salva</value>
+  </data>
+  <data name="Sent Assignments" xml:space="preserve">
+    <value>Incarichi inviati</value>
   </data>
   <data name="Status" xml:space="preserve">
     <value>Stato</value>
@@ -618,8 +642,14 @@
   <data name="ToBeRevised" xml:space="preserve">
     <value>Da revisionare</value>
   </data>
+  <data name="ToBeRevised Assignments" xml:space="preserve">
+    <value>Incarichi da revisionare</value>
+  </data>
   <data name="ToSend" xml:space="preserve">
     <value>Da evadere</value>
+  </data>
+  <data name="ToSend Assignments" xml:space="preserve">
+    <value>Incarichi da inviare</value>
   </data>
   <data name="TotalPercentage" xml:space="preserve">
     <value>Fatturato riconosciuto</value>

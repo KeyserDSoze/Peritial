@@ -17,6 +17,7 @@ namespace Expertiser.Database.Models
         public int ExpertiseId { get; set; }
         [Column(TypeName = "decimal(5, 2)")]
         public decimal? Percentage { get; set; }
+        public bool IsAuthorized { get; set; }
 
         [ForeignKey(nameof(ExpertiseId))]
         [InverseProperty(nameof(TableExpertise.TableBill))]

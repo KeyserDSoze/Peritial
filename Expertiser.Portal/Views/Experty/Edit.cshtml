@@ -3,10 +3,9 @@
 @{
     ViewData["Title"] = "Edit";
     var currentState = await Manager.GetExpertyStateAsync(Model.Id, this.SharedLocalizer);
-    int numberOfFileUploaders = 0;
 }
 
-<h1>@SharedLocalizer["Expertise"]</h1>
+<h1>@SharedLocalizer["Expertise"] - @Model?.ConcreteId</h1>
 <div>
     <a asp-action="Index">@SharedLocalizer["Back to List"]</a>
     <hr />
@@ -100,7 +99,7 @@
             @foreach (var typeOfFiles in currentState.Files)
             {
                 <div class="col-md-6">
-                    <label class="control-label">@SharedLocalizer[typeOfFiles.Name]</label>
+                    <label class="control-label">@SharedLocalizer[typeOfFiles.Name.Trim('/')]</label>
                     <partial name="_Files" model='(typeOfFiles.Name, await Manager.FileManager.GetUriFiles(Model.FileId, typeOfFiles.Name))' />
                     <rystem-ajax-file rystem-message='@SharedLocalizer["Drag&Drop or Click to Upload"] @SharedLocalizer[typeOfFiles.Name]' rystem-request-context='new RoutingContext() { Action = "Upload", Controller = "File", QueryString = new Dictionary<object, object>() { { "name", typeOfFiles.Name }, { "status", (int)typeOfFiles.MinimumStatus }, { "fileId", Model.FileId } } }'></rystem-ajax-file>
                 </div>
@@ -113,14 +112,14 @@
 @if (Manager.UserHelperManager.IsManager)
 {
     <div class="row mt-3">
-        <div id="billwrapper" class="col-md-5">
+        <div id="billwrapper" class="col-md-6">
             <partial name="_EditListBill" model="Model" />
         </div>
     </div>
 }
 else
 {
-    <div class="form-control">@Model.TotalPercentage</div>
+    <div class="form-control">&euro; @Model.TotalPercentage</div>
 }
 <hr />
 <h1>@SharedLocalizer["Messages"]</h1>

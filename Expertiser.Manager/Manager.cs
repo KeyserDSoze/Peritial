@@ -87,6 +87,19 @@ namespace Expertiser
                 .AddGroup("Assignments", "fa-cog", null, Roles.All)
                     .AddItem("Import New Accident", null, new NavigationUrl("Accident", "Import"), Roles.AdminContributor)
                     .AddItem("Assignments", null, new NavigationUrl("Accident"), Roles.All)
+                .AddGroup("Assignments By Status", "fa-cog", null, Roles.All)
+                    .AddItem("Registered Assignments", null, new NavigationUrl("Accident", parameters: new Dictionary<string, string> { { "Status", "-1" } }), Roles.All)
+                    .AddItem("Assigned Assignments", null, new NavigationUrl("Accident", parameters: new Dictionary<string, string> { { "Status", "0" } }), Roles.All)
+                    .AddItem("ToBeRevised Assignments", null, new NavigationUrl("Accident", parameters: new Dictionary<string, string> { { "Status", "1" } }), Roles.All)
+                    .AddItem("Revised Assignments", null, new NavigationUrl("Accident", parameters: new Dictionary<string, string> { { "Status", "2" } }), Roles.All)
+                    .AddItem("ToSend Assignments", null, new NavigationUrl("Accident", parameters: new Dictionary<string, string> { { "Status", "3" } }), Roles.All)
+                    .AddItem("Sent Assignments", null, new NavigationUrl("Accident", parameters: new Dictionary<string, string> { { "Status", "4" } }), Roles.All)
+                    .AddItem("Billed Assignments", null, new NavigationUrl("Accident", parameters: new Dictionary<string, string> { { "Status", "5" } }), Roles.All)
+                    .AddItem("Duplicated Assignments", null, new NavigationUrl("Accident", parameters: new Dictionary<string, string> { { "Status", "6" } }), Roles.All)
+                    .AddItem("Cancelled Assignments", null, new NavigationUrl("Accident", parameters: new Dictionary<string, string> { { "Status", "7" } }), Roles.All)
+            .AddSuperGroup("Bill", null, null, Roles.All)
+                .AddGroup("Bill", "fa-cog", null, Roles.All)
+                    .AddItem("Bill", null, new NavigationUrl("Bill"), Roles.All)
             .AddSuperGroup("Manage", null, null, Roles.Admin)
                 .AddGroup("Manage Members", "fa-user-check")
                     .AddItem("Members", null, new NavigationUrl("User"))
@@ -400,9 +413,15 @@ namespace Expertiser
             .Include(x => x.Branch)
                 .ThenInclude(x => x.BranchType)
             .Include(x => x.Contributor)
-            .Include(x => x.Member);
+            .Include(x => x.Member)
+            .Include(x => x.Accident);
         public IQueryable<TableExpertise> ExpertiseBills => Manager.Context.TableExpertise
             .Include(x => x.TableBill);
+        public IQueryable<TableExpertise> Bills => Manager.Context.TableExpertise
+            .Include(x => x.TableBill)
+            .Include(x => x.Accident)
+            .Include(x => x.Contributor)
+            .Include(x => x.Member);
         public IQueryable<TableLocation> Locations => Manager.Context.TableLocation
             .Include(x => x.City);
         public IQueryable<TableInsuranceAgency> InsuranceAgencies => Manager.Context.TableInsuranceAgency

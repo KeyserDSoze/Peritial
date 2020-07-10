@@ -1,0 +1,10 @@
+﻿@model (List<string> Headers, IEnumerable<Rystem.Web.Backoffice.NavigationValue> Values)
+
+@{
+    ViewData["Title"] = "Bill";
+}
+
+<h1>@SharedLocalizer["Bill"]</h1>
+<rystem-table class="table" rystem-can-delete="false" rystem-can-modify="false" rystem-headers="Model.Headers" rystem-values="Model.Values" rystem-culture="@System.Threading.Thread.CurrentThread.CurrentCulture">
+
+</rystem-table>

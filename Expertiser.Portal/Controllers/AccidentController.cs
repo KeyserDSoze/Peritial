@@ -21,23 +21,25 @@ namespace Expertiser.Portal.Controllers
     [Authorize(Roles = Roles.All)]
     public class AccidentController : BaseController<TableAccident>
     {
-        public AccidentController(Manager manager, IStringLocalizer<SharedResource> stringLocalizer, IStringLocalizer<SharedResource> sharedLocalizer) : base(manager, stringLocalizer, sharedLocalizer)
+        private readonly int StatusId = -2;
+        public AccidentController(Manager manager, IStringLocalizer<SharedResource> stringLocalizer, IStringLocalizer<SharedResource> sharedLocalizer, IHttpContextAccessor httpContextAccessor) : base(manager, stringLocalizer, sharedLocalizer)
         {
+            if (httpContextAccessor.HttpContext.Request.Query.ContainsKey("Status"))
+                StatusId = int.Parse(httpContextAccessor.HttpContext.Request.Query["Status"]);
         }
-
         public override async Task<IEnumerable<TableAccident>> GetList()
         {
             if (Manager.UserHelperManager.IsManager)
             {
                 return await Manager.QueryManager.Accidents
-                           .Where(x => x.TableExpertise.Any(t => t.Status <= (int)StatusType.ToSend))
+                           .Where(x => x.TableExpertise.Any(t => StatusId == -2 || t.Status == StatusId))
                            .OrderByDescending(x => x.AccidentDate)
                            .ToListAsync();
             }
             else if (Manager.UserHelperManager.IsReader)
             {
                 return await Manager.QueryManager.Accidents
-                           .Where(x => x.TableExpertise.Any(t => t.Status <= (int)StatusType.ToSend) && x.TableExpertise.Any(c => c.ContributorId == Manager.UserHelperManager.Id))
+                           .Where(x => x.TableExpertise.Any(t => StatusId == -2 || t.Status == StatusId) && x.TableExpertise.Any(c => c.ContributorId == Manager.UserHelperManager.Id))
                            .OrderByDescending(x => x.AccidentDate)
                            .ToListAsync();
             }
@@ -51,7 +53,6 @@ namespace Expertiser.Portal.Controllers
             => Manager.NavigationManager.GetAccidentNavigation("Assignment", this.StringLocalizer, this.Manager);
         public override INavigation<TableAccident> GetDeleteNavigation()
             => Manager.NavigationManager.GetAccidentNavigation("Delete", this.StringLocalizer, this.Manager);
-
         //
         // GET: Accident/Manage
         public async Task<IActionResult> Edit(int? id)

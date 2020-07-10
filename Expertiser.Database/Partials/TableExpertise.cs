@@ -18,7 +18,11 @@ namespace Expertiser.Database.Models
         [NotMapped]
         public string ConcreteId => $"{this.Accident?.YearlyId}{this.Accident?.InsuranceAgency?.InsuranceCompany?.Alias}{this.Accident?.AccidentDate:yyyy}{this.Member?.Alias}{this.Contributor?.Alias}";
         [NotMapped]
-        public decimal? TotalPercentage => this.TableBill?.Sum(x => (x.Amount * x.Percentage / 100) + x.Extra);
+        public decimal? TotalPercentage => this.TableBill?.Where(x => x.IsAuthorized).Sum(x => (x.Amount * x.Percentage / 100) + x.Extra);
+        [NotMapped]
+        public decimal? TotalBill => this.TableBill?.Where(x => x.IsAuthorized).Sum(x => x.Amount + x.Extra);
+        [NotMapped]
+        public decimal? TotalMember => this.TableBill?.Where(x => x.IsAuthorized).Sum(x => x.Amount - ((x.Amount * x.Percentage / 100) + x.Extra));
     }
     public class TableExpertiseMetadata
     {

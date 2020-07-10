@@ -128,7 +128,7 @@ namespace Expertiser.Portal.Controllers
         }
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Bill(int id, [Bind("Id,Amount,Extra,ExpertiseId,Percentage")] TableBill tableBill)
+        public async Task<IActionResult> Bill(int id, [Bind("Id,Amount,Extra,ExpertiseId,Percentage,IsAuthorized")] TableBill tableBill)
         {
             if (this.IsAValidModel(tableBill.Id))
             {
