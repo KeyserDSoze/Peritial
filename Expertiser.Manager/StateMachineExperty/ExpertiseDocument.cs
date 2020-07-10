@@ -12,23 +12,30 @@ using System.Threading.Tasks;
 
 namespace Expertiser
 {
+    public enum DocumentType
+    {
+        Document,
+        Image
+    }
     public class ExpertiseDocument
     {
         public string Name { get; }
         public StatusType MinimumStatus { get; }
-        private ExpertiseDocument(string name, StatusType statusType)
+        public DocumentType Type { get; }
+        private ExpertiseDocument(string name, StatusType statusType, DocumentType type)
         {
             this.Name = name;
             this.MinimumStatus = statusType;
+            this.Type = type;
         }
         public static List<ExpertiseDocument> Instance { get; } = new List<ExpertiseDocument>()
         {
-            new ExpertiseDocument("AccidentDocs/", StatusType.Registered),
-            new ExpertiseDocument("Photos/", StatusType.Registered),
-            new ExpertiseDocument("RawExpertise", StatusType.Assigned),
-            new ExpertiseDocument("CorrectedExpertise", StatusType.ToBeRevised),
-            new ExpertiseDocument("CompletedExpertise", StatusType.Revised),
-            new ExpertiseDocument("ReservedNote", StatusType.Revised),
+            new ExpertiseDocument("AccidentDocs/", StatusType.Registered, DocumentType.Document),
+            new ExpertiseDocument("Photos/", StatusType.Registered, DocumentType.Image),
+            new ExpertiseDocument("RawExpertise", StatusType.Assigned, DocumentType.Document),
+            new ExpertiseDocument("CorrectedExpertise", StatusType.ToBeRevised, DocumentType.Document),
+            new ExpertiseDocument("CompletedExpertise", StatusType.Revised, DocumentType.Document),
+            new ExpertiseDocument("ReservedNote", StatusType.Revised, DocumentType.Document),
         };
     }
 }

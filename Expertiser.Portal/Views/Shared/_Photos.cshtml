@@ -8,16 +8,5 @@
     else
     {
         <rystem-carousel rystem-data="Model.Files.Select(x => new CarouselItem { Content = x, Label = x, Link = x })" rystem-options="CarouselComponent.Default"></rystem-carousel>
-        @*@foreach (string value in Model.Files)
-        {
-            @if (value.Contains(".jpg") || value.Contains(".png"))
-            {
-                <a href="@value" target="_blank"><img title="@value.Split('/').Last()" src="@value" class="col-md-4" /></a>
-            }
-            else
-            {
-                <a href="@value" target="_blank" class="h2"><i title="@value.Split('/').Last()" class="fas fa-file-download text-xl-left"></i></a>
-            }
-        }*@
     }
 </div>
