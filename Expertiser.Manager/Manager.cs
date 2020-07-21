@@ -22,7 +22,7 @@ namespace Expertiser
 {
     public class Manager
     {
-        public string Version => "1.0.0";
+        public string Version => "1.0.1";
         private ContextExpertiser context;
         public ContextExpertiser Context => context ??= new ContextExpertiser(this.ConnectionString);
         public IHttpContextAccessor HttpContextAccessor { get; }
