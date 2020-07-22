@@ -11,7 +11,7 @@
     <PackageReference Include="Microsoft.Extensions.Identity.Stores" Version="3.1.6" />
     <PackageReference Include="Rystem" Version="7.1.0" />
     <PackageReference Include="Rystem.Interfaces" Version="7.1.0" />
-    <PackageReference Include="Rystem.Web" Version="1.2.0" />
+    <PackageReference Include="Rystem.Web" Version="1.2.1" />
   </ItemGroup>
 
   <ItemGroup>
