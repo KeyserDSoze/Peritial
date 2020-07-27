@@ -36,7 +36,7 @@ namespace Expertiser
                 {
                     Name = string.Join(" ", amissimaXml.InsuranceAdjuster.Split('-').SelectMany(x => x.Trim().Split(' ')).Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Substring(0, 1).ToUpper() + x.Substring(1).ToLower()).Reverse())
                 },
-                Files = amissimaXml.Files.Select(x => new ImportedFile() { Name = x.Name.Split('.')[0], Content = Convert.FromBase64String(x.Value), ContentType = "application/pdf" }),
+                Files = amissimaXml.Files.Select(x => new ImportedFile() { Name = x.Name, Content = Convert.FromBase64String(x.Value), ContentType = "application/pdf" }),
                 Insurance = new TableInsurance()
                 {
                     InsuranceCompanyId = tableInsuranceCompany.Id,
