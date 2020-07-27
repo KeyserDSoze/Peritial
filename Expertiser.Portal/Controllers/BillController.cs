@@ -20,79 +20,119 @@ namespace Expertiser.Portal.Controllers
     {
         private readonly Manager Manager;
         private readonly IStringLocalizer<SharedResource> StringLocalizer;
-        private List<string> Headers = new List<string>();
+        private List<string> Headers(string amountOf) => new List<string>
+        {
+            this.StringLocalizer["ConcreteId"],
+            this.StringLocalizer["Member"],
+            this.StringLocalizer["Contributor"],
+            this.StringLocalizer["Bill"],
+            amountOf,
+            this.StringLocalizer["Percentage"]
+        };
         public BillController(Manager manager, IStringLocalizer<SharedResource> stringLocalizer)
         {
             Manager = manager;
             this.StringLocalizer = stringLocalizer;
-            this.Headers.Add(this.StringLocalizer["ConcreteId"]);
-            this.Headers.Add(this.StringLocalizer["Member"]);
-            this.Headers.Add(this.StringLocalizer["Contributor"]);
-            this.Headers.Add(this.StringLocalizer["Bill"]);
-            this.Headers.Add(this.StringLocalizer["Amount"]);
-            this.Headers.Add(this.StringLocalizer["Percentage"]);
         }
 
         public async Task<IActionResult> Index()
-            => View("Index",
-                (this.Headers, await GetBills(new DateStats()
-                {
-                    From = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1),
-                    To = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1).AddMonths(1),
-                })));
+        {
+            var now = new DateStats()
+            {
+                From = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1),
+                To = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1).AddMonths(1),
+            };
+            return View("Index", (now, await GetBills(now)));
+        }
+
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Index([FromForm] DateStats dateStats)
-            => View("Index", (this.Headers, await GetBills(dateStats)));
-        private async Task<IEnumerable<NavigationValue>> GetBills(DateStats dateStats)
+            => PartialView("_Bill", await GetBills(dateStats));
+
+        private async Task<IEnumerable<BillModel>> GetBills(DateStats dateStats)
         {
-            List<BillStat> bills = new List<BillStat>();
-            foreach (var billByMember in (await Manager.QueryManager.Bills
-                .Where(x => x.Accident.AccidentDate >= dateStats.From && x.Accident.AccidentDate < dateStats.To)
+            List<BillModel> bills = new List<BillModel>();
+            foreach (var billByMember in (await FindCorrectBills()
                 .ToListAsync()).GroupBy(x => x.MemberId))
             {
+                string memberName = $"{billByMember.FirstOrDefault().Member?.Name} {billByMember.FirstOrDefault().Member?.Surname}";
                 BillStat memberTotalBill = new BillStat()
                 {
-                    Member = billByMember.FirstOrDefault().Member?.Name,
+                    Member = memberName,
+                    ConcreteId = StringLocalizer["Total"]
                 };
                 foreach (var billByContributor in billByMember.GroupBy(x => x.ContributorId))
                 {
+                    string contributorName = $"{billByMember.FirstOrDefault().Contributor?.Name} {billByMember.FirstOrDefault().Contributor?.Surname}";
+                    BillModel billModel = new BillModel
+                    {
+                        Title = $"{contributorName} {StringLocalizer["for"]} {memberName}",
+                        Headers = this.Headers($"{this.StringLocalizer["for"]} {memberName}")
+                    };
                     BillStat contributorTotalBill = new BillStat()
                     {
-                        Member = billByMember.FirstOrDefault().Member?.Name,
-                        Contributor = billByContributor.FirstOrDefault().Contributor?.Name
+                        Member = memberName,
+                        Contributor = contributorName,
+                        ConcreteId = StringLocalizer["Total"]
                     };
+                    List<NavigationValue> billsByContributor = new List<NavigationValue>();
                     foreach (var bill in billByContributor)
                     {
-                        memberTotalBill.Add(bill);
-                        contributorTotalBill.Add(bill);
-                        bills.Add(new BillStat()
+                        memberTotalBill.Sum(bill);
+                        contributorTotalBill.Sum(bill);
+                        TransformToNavigationValueAndAdd(new BillStat()
                         {
                             ConcreteId = bill.ConcreteId,
-                            Member = bill.Member?.Name,
-                            Contributor = bill.Contributor?.Name,
-                            TotalBill = bill.TotalBill ?? 0,
-                            TotalMember = bill.TotalMember ?? 0,
+                            Member = memberName,
+                            Contributor = contributorName,
+                            TotalBill = Manager.UserHelperManager.IsManager ? bill.TotalBill ?? 0 : 0,
+                            TotalMember = Manager.UserHelperManager.IsManager ? bill.TotalMember ?? 0 : 0,
                             TotalPercentage = bill.TotalPercentage ?? 0
-                        });
+                        }, x => billsByContributor.Add(x));
                     }
-                    bills.Add(contributorTotalBill);
+                    TransformToNavigationValueAndAdd(contributorTotalBill, x => billsByContributor.Add(x));
+                    billModel.Values = billsByContributor;
+                    bills.Add(billModel);
                 }
-                bills.Add(memberTotalBill);
+                if (Manager.UserHelperManager.IsManager)
+                {
+                    List<NavigationValue> billsByMember = new List<NavigationValue>();
+                    TransformToNavigationValueAndAdd(memberTotalBill, x => billsByMember.Add(x));
+                    bills.Add(new BillModel
+                    {
+                        Title = $"{StringLocalizer["Total"]} {StringLocalizer["of"]} {memberName}",
+                        Headers = this.Headers($"{this.StringLocalizer["of"]} {memberName}"),
+                        Values = billsByMember
+                    });
+                }
             }
-            List<NavigationValue> values = new List<NavigationValue>();
-            foreach (var bill in bills.Where(x => x.HasValue))
+            return bills.Where(x => x.Values.Any());
+
+            IQueryable<TableExpertise> FindCorrectBills()
             {
-                NavigationValue value = new NavigationValue();
-                value.Elements.Add(new NavigationObject(bill.ConcreteId, null, null));
-                value.Elements.Add(new NavigationObject(bill.Contributor, null, null));
-                value.Elements.Add(new NavigationObject(bill.Member, null, null));
-                value.Elements.Add(new NavigationObject(bill.TotalBill.ToString("N2"), null, null));
-                value.Elements.Add(new NavigationObject(bill.TotalPercentage.ToString("N2"), null, null));
-                value.Elements.Add(new NavigationObject(bill.TotalMember.ToString("N2"), null, null));
-                values.Add(value);
+                if (!Manager.UserHelperManager.IsSuperAdmin)
+                    return Manager.QueryManager.Bills
+                    .Where(x => x.Accident.AccidentDate >= dateStats.From && x.Accident.AccidentDate < dateStats.To && x.ContributorId == Manager.UserHelperManager.Id);
+                else
+                    return Manager.QueryManager.Bills
+                    .Where(x => x.Accident.AccidentDate >= dateStats.From && x.Accident.AccidentDate < dateStats.To);
             }
-            return values;
+
+            void TransformToNavigationValueAndAdd(BillStat bill, Action<NavigationValue> adder)
+            {
+                if (bill.HasValue)
+                {
+                    NavigationValue value = new NavigationValue();
+                    value.Elements.Add(new NavigationObject(bill.ConcreteId, null, null));
+                    value.Elements.Add(new NavigationObject(bill.Member, null, null));
+                    value.Elements.Add(new NavigationObject(bill.Contributor, null, null));
+                    value.Elements.Add(new NavigationObject(bill.TotalBill.ToString("N2"), null, null));
+                    value.Elements.Add(new NavigationObject(bill.TotalMember.ToString("N2"), null, null));
+                    value.Elements.Add(new NavigationObject(bill.TotalPercentage.ToString("N2"), null, null));
+                    adder(value);
+                }
+            }
         }
     }
 }

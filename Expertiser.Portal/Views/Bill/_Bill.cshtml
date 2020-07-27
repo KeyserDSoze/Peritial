@@ -1,0 +1,11 @@
+﻿@model IEnumerable<BillModel>
+
+@foreach (BillModel billModel in Model)
+{
+    <div class="mt-5">
+        <h3>@billModel.Title</h3>
+        <rystem-table class="table" rystem-can-delete="false" rystem-can-modify="false" rystem-headers="billModel.Headers" rystem-values="billModel.Values" rystem-culture="@System.Threading.Thread.CurrentThread.CurrentCulture">
+
+        </rystem-table>
+    </div>
+}

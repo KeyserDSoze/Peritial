@@ -15,7 +15,7 @@ namespace Expertiser.Portal.Models
         public decimal TotalBill { get; set; }
         public decimal TotalMember { get; set; }
         public bool HasValue => this.TotalBill > 0 || this.TotalMember > 0 || this.TotalPercentage > 0;
-        public void Add(TableExpertise expertise)
+        public void Sum(TableExpertise expertise)
         {
             this.TotalPercentage += expertise.TotalPercentage ?? 0;
             this.TotalMember += expertise.TotalMember ?? 0;

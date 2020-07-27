@@ -2,6 +2,7 @@
     if (isMobile) {
         $("#sidebarToggleTop").click();
     }
+    experty.prepareToCopyImage();
 });
 
 var experty = {
@@ -28,5 +29,16 @@ var experty = {
     },
     redirectAfterUpload: function (a, id, c) {
         document.location = `${document.location.origin}/Accident/Edit/${id}`;
+    },
+    prepareToCopyImage: function () {
+        $(".copyable").click(function (e) {
+            console.log($(this).attr("src"));
+            navigator.clipboard.write([
+                new ClipboardItem({
+                    'image/png': $(this).attr("src")
+                })
+            ]);
+            alert("image copied!");
+        });
     }
 }

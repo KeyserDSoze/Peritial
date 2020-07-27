@@ -384,6 +384,9 @@
   <data name="FiscalCode" xml:space="preserve">
     <value>Codice Fiscale o P.IVA</value>
   </data>
+  <data name="for" xml:space="preserve">
+    <value>per</value>
+  </data>
   <data name="From" xml:space="preserve">
     <value>Da</value>
   </data>
@@ -543,6 +546,9 @@
   <data name="new experty" xml:space="preserve">
     <value>Nuova perizia</value>
   </data>
+  <data name="of" xml:space="preserve">
+    <value>di</value>
+  </data>
   <data name="Overview" xml:space="preserve">
     <value>Panoramica</value>
   </data>
@@ -650,6 +656,9 @@
   </data>
   <data name="ToSend Assignments" xml:space="preserve">
     <value>Incarichi da inviare</value>
+  </data>
+  <data name="Total" xml:space="preserve">
+    <value>Totale</value>
   </data>
   <data name="TotalPercentage" xml:space="preserve">
     <value>Fatturato riconosciuto</value>

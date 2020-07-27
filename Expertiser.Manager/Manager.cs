@@ -17,6 +17,7 @@ using System.Linq;
 using System.Security.Claims;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using System.Web;
 
 namespace Expertiser
 {
@@ -642,6 +643,8 @@ namespace Expertiser
         public RequestContext CreateNewInsuranceAdjuster => new RequestContext() { Action = "Create", Controller = "InsuranceAdjuster" };
         public RequestContext UpdateUserRole(string userId) => new RequestContext() { Action = "UpdateRole", Controller = "User", QueryString = new Dictionary<object, object>() { { "id", userId } } };
         public RequestContext ShowStats => new RequestContext() { Action = "Stats", Controller = "Home", RequestType = RequestType.Post, Selector = "#stats-update" };
+        public RequestContext ShowRevenue => new RequestContext() { Action = "Index", Controller = "Bill", RequestType = RequestType.Post, Selector = "#revenue-update" };
+        public RequestContext ShowDocument(string url) => new RequestContext() { Action = "ShowDocument", Controller = "File", QueryString = new Dictionary<object, object> { { "url", HttpUtility.UrlEncode(url) } } };
     }
     public class ServiceManager
     {

@@ -3,6 +3,7 @@
 @{
     ViewData["Title"] = "Edit";
     var currentState = await Manager.GetExpertyStateAsync(Model.Id, this.SharedLocalizer);
+    bool isFirstTime = true;
 }
 
 <h1>@SharedLocalizer["Expertise"] - @Model?.ConcreteId</h1>
@@ -93,34 +94,45 @@
                 <input type="submit" value="@SharedLocalizer["Save"]" class="btn btn-primary" />
             </div>
         </form>
+        <hr />
+        <h1>@SharedLocalizer["Bill"]</h1>
+        @if (Manager.UserHelperManager.IsManager)
+        {
+            <div class="row mt-3">
+                <div id="billwrapper" class="col-md-12">
+                    <partial name="_EditListBill" model="Model" />
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="form-control">&euro; @Model.TotalPercentage</div>
+        }
     </div>
+    <div class="col-md-1"></div>
     <div class="col-md-6">
         <div class="row">
             @foreach (var typeOfFiles in currentState.Files)
             {
-                <div class="col-md-6">
+                @if (isFirstTime)
+                {
+                    isFirstTime = false;
+                }
+                else
+                {
+                    <hr style="width:100%" />
+                }
+                <div class="col-md-10">
                     <label class="control-label">@SharedLocalizer[typeOfFiles.Name.Trim('/')]</label>
                     <partial name="_Files" model='(typeOfFiles, await Manager.FileManager.GetUriFiles(Model.FileId, typeOfFiles.Name))' />
-                    <rystem-ajax-file rystem-message='@SharedLocalizer["Drag&Drop or Click to Upload"] @SharedLocalizer[typeOfFiles.Name]' rystem-request-context='new RoutingContext() { Action = "Upload", Controller = "File", QueryString = new Dictionary<object, object>() { { "name", typeOfFiles.Name }, { "status", (int)typeOfFiles.MinimumStatus }, { "fileId", Model.FileId } } }'></rystem-ajax-file>
+                </div>
+                <div class="col-md-2">
+                    <rystem-ajax-file rystem-message='' rystem-request-context='new RoutingContext() { Action = "Upload", Controller = "File", QueryString = new Dictionary<object, object>() { { "name", typeOfFiles.Name }, { "status", (int)typeOfFiles.MinimumStatus }, { "fileId", Model.FileId } } }'></rystem-ajax-file>
                 </div>
             }
         </div>
     </div>
 </div>
-<hr />
-<h1>@SharedLocalizer["Bill"]</h1>
-@if (Manager.UserHelperManager.IsManager)
-{
-    <div class="row mt-3">
-        <div id="billwrapper" class="col-md-6">
-            <partial name="_EditListBill" model="Model" />
-        </div>
-    </div>
-}
-else
-{
-    <div class="form-control">&euro; @Model.TotalPercentage</div>
-}
 <hr />
 <h1>@SharedLocalizer["Messages"]</h1>
 <div class="row mt-3">

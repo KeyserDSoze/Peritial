@@ -3,7 +3,7 @@
 <div class="mb-2 mt-2">
     @if (Model.Files.Count == 0)
     {
-        <div class="h2 mb-0"><i class="fas fa-file-alt"></i></div>
+        <div class="h2 mb-0 expertise-file"><i class="fas fa-file-alt"></i></div>
     }
     else
     {
@@ -11,12 +11,19 @@
         {
             foreach (string value in Model.Files)
             {
-                <a href="@value" target="_blank" class="h2"><i title="@value.Split('/').Last()" class="fas fa-file-download text-xl-left"></i></a>
+                <rystem-ajax-modal class="col-md-2" style="float:left;" rystem-request-context="Manager.AjaxRequestManager.ShowDocument(value)" rystem-size="Large">
+                    <div class="btn btn-primary mt-2 expertise-file"><i title="@value.Split('/').Last()" class="fas fa-file-download text-xl-left"></i></div>
+                </rystem-ajax-modal>
+                @*<div href="@value" target="_blank" class="h2 expertise-file"></div>*@
             }
         }
         else if (Model.Document.Type == DocumentType.Image)
         {
-            <rystem-carousel rystem-data="Model.Files.Select(x => new CarouselItem { Content = x, Label = x, Link = x })" rystem-options="CarouselComponent.Default"></rystem-carousel>
+            foreach (string value in Model.Files)
+            {
+                <img class="copyable col-md-2" src="@value" />
+                @*<rystem-carousel rystem-data="Model.Files.Select(x => new CarouselItem { Content = x, Label = x, Link = x })" rystem-options="CarouselComponent.Default"></rystem-carousel>*@
+            }
         }
     }
 </div>

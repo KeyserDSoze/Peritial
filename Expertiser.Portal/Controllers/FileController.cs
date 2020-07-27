@@ -23,6 +23,9 @@ namespace Expertiser.Portal.Controllers
             this.StringLocalizer = stringLocalizer;
         }
 
+        public IActionResult ShowDocument([FromQuery] string url)
+            => PartialView("ShowDocument", url);
+
         [HttpPost]
         public async Task<IActionResult> Upload(int id, IFormFile file)
         {
