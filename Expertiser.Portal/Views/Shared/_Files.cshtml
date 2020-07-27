@@ -9,21 +9,44 @@
     {
         if (Model.Document.Type == DocumentType.Document)
         {
+            string classOfFiles = $"files_{Guid.NewGuid().ToString("N")}";
+            string allUrl = string.Empty;
             foreach (string value in Model.Files)
             {
-                <rystem-ajax-modal class="col-md-2" style="float:left;" rystem-request-context="Manager.AjaxRequestManager.ShowDocument(value)" rystem-size="Large">
-                    <div class="btn btn-primary mt-2 expertise-file"><i title="@value.Split('/').Last()" class="fas fa-file-download text-xl-left"></i></div>
+                allUrl += $"urls={value}&";
+                <rystem-ajax-modal rystem-request-context="Manager.AjaxRequestManager.ShowDocument(value)" rystem-size="Large">
+                    <div class="btn btn-primary mt-2 expertise-file"><i title="@value.Split('/').Last()" class="fas @GetRightIcon(value) text-xl-left"></i></div>
                 </rystem-ajax-modal>
-                @*<div href="@value" target="_blank" class="h2 expertise-file"></div>*@
+                <a href="../../../../../../file/proxy?url=@value" class="h2 @classOfFiles" download>
+                    <div class="expertise-file"><i title="@value.Split('/').Last()" class="fas fa-file-download text-xl-left"></i></div>
+                </a>
             }
+            <div style="cursor:pointer;position:relative;float:left;" onclick="experty.downloadAllFiles('../../../../../../file/proxy?@allUrl')">@SharedLocalizer["Download All"]</div>
         }
         else if (Model.Document.Type == DocumentType.Image)
         {
             foreach (string value in Model.Files)
             {
-                <img class="copyable col-md-2" src="@value" />
+                <a href="@value" download>
+                    <img class="copyable col-md-2" src="@value" />
+                </a>
                 @*<rystem-carousel rystem-data="Model.Files.Select(x => new CarouselItem { Content = x, Label = x, Link = x })" rystem-options="CarouselComponent.Default"></rystem-carousel>*@
             }
         }
     }
 </div>
+
+@{
+    string GetRightIcon(string name)
+    {
+        return name.Split('.').Last().ToLower() switch
+        {
+            "pdf" => "fa-file-pdf",
+            "docx" => "fa-file-word",
+            "doc" => "fa-file-word",
+            "xlsx" => "fa-file-excel",
+            "xls" => "fa-file-excel",
+            _ => "fa-file-download"
+        };
+    }
+}

@@ -40,7 +40,7 @@ namespace Expertiser.Portal.Controllers
             var now = new DateStats()
             {
                 From = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1),
-                To = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1).AddMonths(1),
+                To = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1).AddMonths(1).AddMilliseconds(-1),
             };
             return View("Index", (now, await GetBills(now)));
         }
@@ -48,7 +48,10 @@ namespace Expertiser.Portal.Controllers
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Index([FromForm] DateStats dateStats)
-            => PartialView("_Bill", await GetBills(dateStats));
+        {
+            dateStats.To = new DateTime(dateStats.To.Year, dateStats.To.Month, dateStats.To.Day, 23, 59, 59, 999);
+            return PartialView("_Bill", await GetBills(dateStats));
+        }
 
         private async Task<IEnumerable<BillModel>> GetBills(DateStats dateStats)
         {
@@ -111,12 +114,12 @@ namespace Expertiser.Portal.Controllers
 
             IQueryable<TableExpertise> FindCorrectBills()
             {
-                if (!Manager.UserHelperManager.IsSuperAdmin)
+                if (!Manager.UserHelperManager.IsManager)
                     return Manager.QueryManager.Bills
-                    .Where(x => x.Accident.AccidentDate >= dateStats.From && x.Accident.AccidentDate < dateStats.To && x.ContributorId == Manager.UserHelperManager.Id);
+                    .Where(x => x.Accident.AccidentDate >= dateStats.From && x.Accident.AccidentDate <= dateStats.To && x.ContributorId == Manager.UserHelperManager.Id);
                 else
                     return Manager.QueryManager.Bills
-                    .Where(x => x.Accident.AccidentDate >= dateStats.From && x.Accident.AccidentDate < dateStats.To);
+                    .Where(x => x.Accident.AccidentDate >= dateStats.From && x.Accident.AccidentDate <= dateStats.To);
             }
 
             void TransformToNavigationValueAndAdd(BillStat bill, Action<NavigationValue> adder)

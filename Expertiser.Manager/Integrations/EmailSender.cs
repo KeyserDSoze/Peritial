@@ -10,9 +10,10 @@ namespace Expertiser
 {
     public class EmailSender : IEmailSender
     {
+        private readonly string Title = new Manager().Title;
         public Task SendEmailAsync(string email, string subject, string htmlMessage)
         {
-            var fromAddress = new MailAddress(Const.Email.Username, "Experty");
+            var fromAddress = new MailAddress(Const.Email.Username, this.Title);
             var toAddress = new MailAddress(email);
             var smtp = new SmtpClient
             {

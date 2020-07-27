@@ -415,7 +415,9 @@ namespace Expertiser
                 .ThenInclude(x => x.BranchType)
             .Include(x => x.Contributor)
             .Include(x => x.Member)
-            .Include(x => x.Accident);
+            .Include(x => x.Accident)
+                .ThenInclude(t => t.InsuranceAgency)
+                    .ThenInclude(t => t.InsuranceCompany);
         public IQueryable<TableExpertise> ExpertiseBills => Manager.Context.TableExpertise
             .Include(x => x.TableBill);
         public IQueryable<TableExpertise> Bills => Manager.Context.TableExpertise

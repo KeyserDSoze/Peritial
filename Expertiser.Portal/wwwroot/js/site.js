@@ -40,5 +40,8 @@ var experty = {
             ]);
             alert("image copied!");
         });
+    },
+    downloadAllFiles: function (value) {
+        window.open(value, "_Blank");
     }
 }

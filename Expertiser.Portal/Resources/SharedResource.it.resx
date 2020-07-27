@@ -348,6 +348,9 @@
   <data name="Details" xml:space="preserve">
     <value>Dettaglio</value>
   </data>
+  <data name="Download All" xml:space="preserve">
+    <value>Scarica tutto</value>
+  </data>
   <data name="Drag&amp;Drop or Click to Upload" xml:space="preserve">
     <value>Sposta qui o clicca per caricare</value>
   </data>
@@ -590,6 +593,9 @@
   </data>
   <data name="Save" xml:space="preserve">
     <value>Salva</value>
+  </data>
+  <data name="Sent" xml:space="preserve">
+    <value>inviato</value>
   </data>
   <data name="Sent Assignments" xml:space="preserve">
     <value>Incarichi inviati</value>
