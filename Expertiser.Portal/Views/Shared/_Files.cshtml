@@ -1,4 +1,4 @@
-﻿@model (ExpertiseDocument Document, IList<string> Files)
+﻿@model (string ConcreteId, ExpertiseDocument Document, IList<string> Files)
 
 <div class="mb-2 mt-2">
     @if (Model.Files.Count == 0)
@@ -21,7 +21,7 @@
                     <div class="expertise-file"><i title="@value.Split('/').Last()" class="fas fa-file-download text-xl-left"></i></div>
                 </a>
             }
-            <div style="cursor:pointer;position:relative;float:left;" onclick="experty.downloadAllFiles('../../../../../../file/proxy?@allUrl')">@SharedLocalizer["Download All"]</div>
+            <div style="cursor:pointer;position:relative;float:left;" onclick="experty.downloadAllFiles('../../../../../../file/proxy?name=@Model.ConcreteId&@allUrl')">@SharedLocalizer["Download All"]</div>
         }
         else if (Model.Document.Type == DocumentType.Image)
         {

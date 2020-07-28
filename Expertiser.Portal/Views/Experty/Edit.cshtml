@@ -124,7 +124,7 @@
                 }
                 <div class="col-md-10">
                     <label class="control-label">@SharedLocalizer[typeOfFiles.Name.Trim('/')]</label>
-                    <partial name="_Files" model='(typeOfFiles, await Manager.FileManager.GetUriFiles(Model.FileId, typeOfFiles.Name))' />
+                    <partial name="_Files" model='(Model.ConcreteId, typeOfFiles, await Manager.FileManager.GetUriFiles(Model.FileId, typeOfFiles.Name))' />
                 </div>
                 <div class="col-md-2">
                     <rystem-ajax-file rystem-message='' rystem-request-context='new RoutingContext() { Action = "Upload", Controller = "File", QueryString = new Dictionary<object, object>() { { "name", typeOfFiles.Name }, { "status", (int)typeOfFiles.MinimumStatus }, { "fileId", Model.FileId } } }'></rystem-ajax-file>

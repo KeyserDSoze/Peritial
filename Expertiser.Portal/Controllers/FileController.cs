@@ -39,7 +39,7 @@ namespace Expertiser.Portal.Controllers
             await state.Next(minimumStatus);
             return Ok();
         }
-        public async Task<IActionResult> Proxy([FromQuery] IEnumerable<string> urls)
+        public async Task<IActionResult> Proxy([FromQuery] string name, [FromQuery] IEnumerable<string> urls)
         {
             MemoryStream memoryStream = new MemoryStream();
             using ZipArchive zipArchive = new ZipArchive(memoryStream, ZipArchiveMode.Create, true);
@@ -55,7 +55,7 @@ namespace Expertiser.Portal.Controllers
             }
             zipArchive.Dispose();
             memoryStream.Seek(0, SeekOrigin.Begin);
-            return File(memoryStream.ToArray(), "application/zip", Guid.NewGuid().ToString("N") + ".zip");
+            return File(memoryStream.ToArray(), "application/zip", $"{name}.zip");
         }
     }
 }
