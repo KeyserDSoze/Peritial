@@ -546,6 +546,9 @@
   <data name="Name" xml:space="preserve">
     <value>Nome</value>
   </data>
+  <data name="new comunication for" xml:space="preserve">
+    <value>Nuova comunicazione per</value>
+  </data>
   <data name="new experty" xml:space="preserve">
     <value>Nuova perizia</value>
   </data>

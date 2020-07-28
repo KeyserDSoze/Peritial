@@ -52,6 +52,17 @@ namespace Expertiser.Portal.Controllers
             {
                 Manager.Context.TableMessage.Add(message);
                 await Manager.Context.SaveChangesAsync();
+                var expertise = await Manager.QueryManager.Expertises.FirstOrDefaultAsync(x => x.Id == id);
+                if (expertise != null)
+                {
+                    string uri = $"https://{Manager.HttpContextAccessor.HttpContext.Request.Host}/Experty/Edit/{expertise.Id}";
+                    string link = $"<a href='{uri}'>{this.StringLocalizer["Click here"]}</a>";
+                    string messageValue = $"<div>{message.Value}</div><div>{link}</div>";
+                    if (Manager.UserHelperManager.Id != expertise.MemberId)
+                        await Manager.ServiceManager.EmailSender.SendEmailAsync(expertise.Member.Email, $"{StringLocalizer["new comunication for"]} {expertise.ConcreteId}", messageValue);
+                    if (Manager.UserHelperManager.Id != expertise.ContributorId)
+                        await Manager.ServiceManager.EmailSender.SendEmailAsync(expertise.Contributor.Email, $"{StringLocalizer["new comunication for"]} {expertise.ConcreteId}", messageValue);
+                }
                 return PartialView("_Messages", Manager.Context.TableMessage
                     .Include(x => x.User).Where(x => x.ExpertiseId == id));
             }
