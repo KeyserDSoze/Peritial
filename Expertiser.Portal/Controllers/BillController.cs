@@ -67,7 +67,7 @@ namespace Expertiser.Portal.Controllers
                 };
                 foreach (var billByContributor in billByMember.GroupBy(x => x.ContributorId))
                 {
-                    string contributorName = $"{billByMember.FirstOrDefault().Contributor?.Name} {billByMember.FirstOrDefault().Contributor?.Surname}";
+                    string contributorName = $"{billByContributor.FirstOrDefault().Contributor?.Name} {billByContributor.FirstOrDefault().Contributor?.Surname}";
                     BillModel billModel = new BillModel
                     {
                         Title = $"{contributorName} {StringLocalizer["for"]} {memberName}",
