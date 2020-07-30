@@ -20,6 +20,8 @@ namespace Expertiser.Database.Models
         [NotMapped]
         public decimal? TotalPercentage => this.TableBill?.Where(x => x.IsAuthorized).Sum(x => (x.Amount * x.Percentage / 100) + x.Extra);
         [NotMapped]
+        public decimal? TotalExtra => this.TableBill?.Where(x => x.IsAuthorized).Sum(x => x.Extra);
+        [NotMapped]
         public decimal? TotalBill => this.TableBill?.Where(x => x.IsAuthorized).Sum(x => x.Amount);
         [NotMapped]
         public decimal? TotalMember => TotalBill - TotalPercentage;

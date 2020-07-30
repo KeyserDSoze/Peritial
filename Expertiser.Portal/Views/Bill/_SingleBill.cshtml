@@ -1,0 +1,38 @@
+﻿@model (string AccordedId, List<BillStat> Bills)
+
+@if (Model.Bills.Any())
+{
+    <tr class="hide-table-padding">
+        <td colspan="12">
+            <div id="@Model.AccordedId" class="collapse in p-3">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th scope="col">ConcreteId</th>
+                            <th scope="col">Contributor</th>
+                            <th scope="col">Total</th>
+                            <th scope="col">TotalExtra</th>
+                            <th scope="col">TotalPercentage</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var singleStat in Model.Bills)
+                        {
+                            <tr>
+                                <td style="cursor:pointer">
+                                    <rystem-ajax-modal rystem-request-context="Manager.AjaxRequestManager.EditInModal(singleStat.ExpertiseId)" rystem-size="ExtraLarge">
+                                        @singleStat.ConcreteId
+                                    </rystem-ajax-modal>
+                                </td>
+                                <td>@singleStat.Contributor</td>
+                                <td>@(singleStat.TotalPercentage - singleStat.TotalExtra)</td>
+                                <td>@singleStat.TotalExtra</td>
+                                <td>@singleStat.TotalPercentage</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </td>
+    </tr>
+}

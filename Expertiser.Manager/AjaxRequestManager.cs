@@ -30,6 +30,7 @@ namespace Expertiser
         public RequestContext CreateNewCustomer => new RequestContext() { Action = "Create", Controller = "Customer" };
         public RequestContext UpdateContractors => new RequestContext() { Action = "ListContractor", Controller = "Customer", Selector = "#contractors" };
         public RequestContext CreateNewContractor => new RequestContext() { Action = "CreateContractor", Controller = "Customer" };
+        public RequestContext EditInModal(int? id) => new RequestContext() { Action = "PartialEdit", Controller = "Experty", FurtherPath = id?.ToString(), RequestType = RequestType.Get };
         public RequestContext ModifyNewBill(int? id) => new RequestContext() { Action = "Bill", Controller = "Experty", FurtherPath = id?.ToString(), RequestType = RequestType.Post, Selector = "#billwrapper" };
         public RequestContext DeleteBill(int id) => new RequestContext() { Action = "DeleteBill", Controller = "Experty", FurtherPath = id.ToString(), RequestType = RequestType.Post, Selector = "#billwrapper" };
         public RequestContext UpdatePostalCodes => new RequestContext() { Action = "UpdatePostalCodes", Controller = "Location", Selector = "#updatePostalCodes" };

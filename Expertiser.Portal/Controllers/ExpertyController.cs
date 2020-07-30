@@ -103,6 +103,16 @@ namespace Expertiser.Portal.Controllers
                 return NotFound();
             return View(tableExpertise);
         }
+        // GET: Experty/Edit/5
+        public async Task<IActionResult> PartialEdit(int? id)
+        {
+            if (id == null)
+                return PartialView();
+            var tableExpertise = await Manager.QueryManager.Expertises.FirstOrDefaultAsync(x => x.Id == id);
+            if (tableExpertise == null)
+                return NotFound();
+            return PartialView("Edit", tableExpertise);
+        }
 
         // POST: Experty/Edit/5
         // To protect from overposting attacks, enable the specific properties you want to bind to, for 
