@@ -9,7 +9,7 @@
     <div id="customers">
         <partial name="_GetCustomers" model='CustomerModel.NewCustomer(Model?.CustomerId)' />
     </div>
-    <rystem-ajax-modal rystem-request-context="Manager.AjaxRequestManager.CreateNewCustomer" rystem-size="Large">
+    <rystem-ajax-modal rystem-request-context="Manager.AjaxRequestManager.CreateNewCustomer" rystem-update-context="Manager.AjaxRequestManager.UpdateContractors" rystem-size="Large">
         <div class="btn btn-primary mt-2">@SharedLocalizer["Create New Customer"]</div>
     </rystem-ajax-modal>
 

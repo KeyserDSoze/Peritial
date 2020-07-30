@@ -121,10 +121,10 @@ namespace Expertiser.Portal.Controllers
                 }
                 var state = await Manager.GetExpertyStateAsync(tableExpertise.Id, this.StringLocalizer);
                 await state.ExecuteAndNext(tableExpertise);
-                return View(state.Expertise);
+                return View(await Manager.QueryManager.Expertises.FirstOrDefaultAsync(x => x.Id == tableExpertise.Id));
             }
             else
-                return View(tableExpertise);
+                return View(await Manager.QueryManager.Expertises.FirstOrDefaultAsync(x => x.Id == tableExpertise.Id));
         }
         [HttpPost]
         [ValidateAntiForgeryToken]

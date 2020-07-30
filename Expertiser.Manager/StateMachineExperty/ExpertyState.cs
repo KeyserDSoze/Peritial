@@ -22,6 +22,7 @@ namespace Expertiser
         public Manager Manager { get; }
         public TableExpertise Expertise { get; private set; }
         public bool IsNotified { get; private set; }
+        private protected virtual bool IsNotificationNeeded => false;
         private protected abstract ExpertyState GetNext();
         public string Link => $"<a href='{this.Uri}'>{this.StringLocalizer["Click here"]}</a>";
         public string Uri => $"https://{Manager.HttpContextAccessor.HttpContext.Request.Host}/Experty/Edit/{this.Expertise.Id}";
@@ -47,13 +48,14 @@ namespace Expertiser
         {
             var expertise = this.Expertise;
             this.Expertise = expertiseToUpdate;
+            bool handled = expertise.Status != this.Expertise.Status;
             await this.InternalExecute(expertise).NoContext();
             await this.UpdateExpertiseAsync().NoContext();
             this.Expertise = await Manager.Context.TableExpertise
                 .Include(x => x.Member)
                 .Include(x => x.Contributor)
                         .FirstOrDefaultAsync(x => x.Id == this.Expertise.Id).NoContext();
-            if (expertise.StatusType != this.Expertise.StatusType || this.Expertise.StatusType == StatusType.Registered)
+            if (!handled && (expertise.StatusType != this.Expertise.StatusType || this.Expertise.StatusType == StatusType.Registered))
                 await Next(this.Expertise.StatusType);
         }
         public async Task<ExpertyState> Next(StatusType minimumStatus)
@@ -70,7 +72,7 @@ namespace Expertiser
         }
         private protected async Task NotifyAsync()
         {
-            if (!IsNotified)
+            if (!IsNotified && IsNotificationNeeded)
             {
                 List<Task> notifications = new List<Task>();
                 foreach (string email in GetEmails())

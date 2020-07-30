@@ -47,7 +47,7 @@ namespace Expertiser
                 },
                 Customer = new TableCustomer()
                 {
-                    Name = $"{amissimaXml.Customer.Name} {amissimaXml.Customer.Surname}".Trim(),
+                    Name = $"{amissimaXml.Customer.Name} {amissimaXml.Customer.Surname}".Replace("-", string.Empty).Trim(),
                     FiscalCode = !string.IsNullOrWhiteSpace(amissimaXml.Customer.FiscalCode) ? amissimaXml.Customer.FiscalCode : amissimaXml.Customer.PIVA,
                     Address = new TableLocation()
                     {
@@ -57,7 +57,7 @@ namespace Expertiser
                 },
                 Contractor = new TableCustomer()
                 {
-                    Name = $"{amissimaXml.Customer.Name} {amissimaXml.Customer.Surname}".Trim(),
+                    Name = $"{amissimaXml.Customer.Name} {amissimaXml.Customer.Surname}".Replace("-", string.Empty).Trim(),
                     FiscalCode = !string.IsNullOrWhiteSpace(amissimaXml.Customer.FiscalCode) ? amissimaXml.Customer.FiscalCode : amissimaXml.Customer.PIVA,
                     Address = new TableLocation()
                     {
@@ -67,7 +67,7 @@ namespace Expertiser
                 },
                 Damageds = amissimaXml.Damageds.Select(x => new TableCustomer()
                 {
-                    Name = $"{x.Name} {x.Surname}".Trim(),
+                    Name = $"{x.Name} {x.Surname}".Replace("-", string.Empty).Trim(),
                     FiscalCode = !string.IsNullOrWhiteSpace(x.FiscalCode) ? x.FiscalCode : x.PIVA,
                     Address = new TableLocation()
                     {

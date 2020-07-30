@@ -146,9 +146,7 @@ namespace Expertiser
                     Manager.Context.TableLocation.Add(address);
                     await Manager.Context.SaveChangesAsync();
                 }
-                var customer = string.IsNullOrWhiteSpace(tableCustomer.FiscalCode) ?
-                await Manager.Context.TableCustomer.FirstOrDefaultAsync(x => x.Name == tableCustomer.Name)
-                : await Manager.Context.TableCustomer.FirstOrDefaultAsync(x => x.FiscalCode == tableCustomer.FiscalCode);
+                var customer = await Manager.Context.TableCustomer.FirstOrDefaultAsync(x => x.Name == tableCustomer.Name);
                 if (customer == null)
                 {
                     customer = new TableCustomer()
@@ -158,6 +156,12 @@ namespace Expertiser
                         Name = tableCustomer.Name,
                     };
                     Manager.Context.TableCustomer.Add(customer);
+                    await Manager.Context.SaveChangesAsync();
+                }
+                else if (customer.FiscalCode != tableCustomer.FiscalCode)
+                {
+                    customer.FiscalCode = tableCustomer.FiscalCode;
+                    Manager.Context.TableCustomer.Update(customer);
                     await Manager.Context.SaveChangesAsync();
                 }
                 return customer.Id;

@@ -116,10 +116,10 @@ namespace Expertiser.Portal.Controllers
             {
                 if (!Manager.UserHelperManager.IsManager)
                     return Manager.QueryManager.Bills
-                    .Where(x => x.Accident.AccidentDate >= dateStats.From && x.Accident.AccidentDate <= dateStats.To && x.ContributorId == Manager.UserHelperManager.Id);
+                    .Where(x => x.CloseDate >= dateStats.From && x.CloseDate <= dateStats.To && x.ContributorId == Manager.UserHelperManager.Id);
                 else
                     return Manager.QueryManager.Bills
-                    .Where(x => x.Accident.AccidentDate >= dateStats.From && x.Accident.AccidentDate <= dateStats.To);
+                    .Where(x => x.CloseDate >= dateStats.From && x.CloseDate <= dateStats.To);
             }
 
             void TransformToNavigationValueAndAdd(BillStat bill, Action<NavigationValue> adder)

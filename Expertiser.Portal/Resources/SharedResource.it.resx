@@ -283,7 +283,7 @@
     <value>Crea Contraente</value>
   </data>
   <data name="Create Insurance" xml:space="preserve">
-    <value>Inserisci Polizza</value>
+    <value>Inserisci Nuova Anagrafica Polizza</value>
   </data>
   <data name="Create New" xml:space="preserve">
     <value>Crea Nuovo</value>
@@ -310,7 +310,7 @@
     <value>Inserisci nuovo ispettorato</value>
   </data>
   <data name="Create New Insurance" xml:space="preserve">
-    <value>Inserisci nuova polizza</value>
+    <value>Inserisci nuova anagrafica polizza</value>
   </data>
   <data name="Create New Insurance Adjuster" xml:space="preserve">
     <value>Inserisci nuovo liquidatore</value>
@@ -493,7 +493,7 @@
     <value>Compagnia assicurativa</value>
   </data>
   <data name="InsuranceId" xml:space="preserve">
-    <value>Polizza</value>
+    <value>Anagrafica Polizza</value>
   </data>
   <data name="Insurances" xml:space="preserve">
     <value>Polizze</value>
@@ -598,10 +598,13 @@
     <value>Salva</value>
   </data>
   <data name="Sent" xml:space="preserve">
-    <value>inviato</value>
+    <value>Inviato</value>
   </data>
   <data name="Sent Assignments" xml:space="preserve">
     <value>Incarichi inviati</value>
+  </data>
+  <data name="Show" xml:space="preserve">
+    <value>Mostra</value>
   </data>
   <data name="Status" xml:space="preserve">
     <value>Stato</value>
@@ -629,6 +632,9 @@
   </data>
   <data name="TableExpertise" xml:space="preserve">
     <value>Perizia</value>
+  </data>
+  <data name="TableExpertise.AssignmentDate" xml:space="preserve">
+    <value>Data incarico</value>
   </data>
   <data name="TableExpertise.ConcreteId" xml:space="preserve">
     <value>Id Studio</value>
@@ -671,6 +677,9 @@
   </data>
   <data name="TotalPercentage" xml:space="preserve">
     <value>Fatturato riconosciuto</value>
+  </data>
+  <data name="Type" xml:space="preserve">
+    <value>Tipologia</value>
   </data>
   <data name="UserName" xml:space="preserve">
     <value>Nome utente</value>

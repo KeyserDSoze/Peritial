@@ -75,6 +75,9 @@ namespace Expertiser.Portal.Controllers
             }
             return NotOkMessage(ModelState);
         }
+        [HttpGet]
+        public IActionResult ListContractor()
+            => PartialView("_GetCustomers", CustomerModel.NewContractor(null));
         public IActionResult CreateDamaged()
            => PartialView();
         // POST: Customer/Create

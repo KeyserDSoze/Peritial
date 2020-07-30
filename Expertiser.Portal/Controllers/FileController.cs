@@ -10,6 +10,7 @@ using Expertiser.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Localization;
 
 namespace Expertiser.Portal.Controllers
@@ -27,6 +28,15 @@ namespace Expertiser.Portal.Controllers
 
         public IActionResult ShowDocument([FromQuery] string url)
             => PartialView("ShowDocument", url);
+        public IActionResult ShowImage([FromQuery] string url)
+            => PartialView("ShowImage", url);
+        public async Task<IActionResult> DeleteDocument(int id, [FromQuery] string url)
+        {
+            string finding = $"{id}/{new System.Text.RegularExpressions.Regex($@"\/{id}\/").Split(url).Last()}";
+            await Manager.FileManager.DeleteFileAsync(finding);
+            var experty = await Manager.QueryManager.Expertises.FirstOrDefaultAsync(x => x.Id == id);
+            return PartialView("_AllFiles", experty);
+        }
 
         [HttpPost]
         public async Task<IActionResult> Upload(int id, IFormFile file)

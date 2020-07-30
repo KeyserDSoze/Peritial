@@ -2,8 +2,6 @@
 
 @{
     ViewData["Title"] = "Edit";
-    var currentState = await Manager.GetExpertyStateAsync(Model.Id, this.SharedLocalizer);
-    bool isFirstTime = true;
 }
 
 <h1>@SharedLocalizer["Expertise"] - @Model?.ConcreteId</h1>
@@ -21,11 +19,22 @@
             <input type="hidden" asp-for="Id" />
             <input type="hidden" asp-for="AccidentId" />
             <input type="hidden" asp-for="FileId" />
-            <input type="hidden" name="Status" value="@Model.Status" />
-            <div class="form-group">
-                <label asp-for="Status" class="control-label"></label>
-                <div class="form-control">@SharedLocalizer[Model.StatusType.ToString()]</div>
-            </div>
+            @if (Manager.UserHelperManager.IsManager)
+            {
+                <div class="form-group">
+                    <label asp-for="Status" class="control-label"></label>
+                    <rystem-dropdown name="Status" rystem-data="Manager.DropdownManager.GetStatus(Model?.Status ?? 0, SharedLocalizer)"></rystem-dropdown>
+                    <span asp-validation-for="Status" class="text-danger"></span>
+                </div>
+            }
+            else
+            {
+                <input type="hidden" name="Status" value="@Model.Status" />
+                <div class="form-group">
+                    <label asp-for="Status" class="control-label"></label>
+                    <div class="form-control">@SharedLocalizer[Model.StatusType.ToString()]</div>
+                </div>
+            }
             <div class="form-group">
                 <label asp-for="MemberId" class="control-label"></label>
                 @if (Manager.UserHelperManager.IsManager)
@@ -85,10 +94,33 @@
                     <span asp-validation-for="InspectionDate" class="text-danger"></span>
                 </div>
             </div>
-            <div class="form-group">
-                <label asp-for="Liquidated" class="control-label"></label>
-                <input type="number" step="any" name="Liquidated" class="form-control" value='@Model.Liquidated?.ToString(CultureInfo.InvariantCulture)' />
+            <div class="form-row">
+                <div class="form-group col-md-6">
+                    <label asp-for="Liquidated" class="control-label"></label>
+                    <div class="input-group mb-2">
+                        <div class="input-group-prepend">
+                            <div class="input-group-text">&euro;</div>
+                        </div>
+                        <input type="number" step="any" name="Liquidated" class="form-control" value='@Model.Liquidated?.ToString(CultureInfo.InvariantCulture)' />
+                    </div>
+                </div>
                 <span asp-validation-for="Liquidated" class="text-danger"></span>
+                <div class="form-group col-md-6">
+                    @if (Manager.UserHelperManager.IsManager)
+                    {
+                        <label asp-for="CloseDate" class="control-label"></label>
+                        <rystem-date name="InspectionDate" value="Model.CloseDate" class="form-control"></rystem-date>
+                        <span asp-validation-for="CloseDate" class="text-danger"></span>
+                    }
+                    else
+                    {
+                        <input type="hidden" name="CloseDate" value="@Model.CloseDate" />
+                        <div class="form-group">
+                            <label asp-for="CloseDate" class="control-label"></label>
+                            <div class="form-control">@Model.CloseDate?.ToString(System.Threading.Thread.CurrentThread.CurrentCulture)</div>
+                        </div>
+                    }
+                </div>
             </div>
             <div class="form-group">
                 <input type="submit" value="@SharedLocalizer["Save"]" class="btn btn-primary" />
@@ -111,25 +143,8 @@
     </div>
     <div class="col-md-1"></div>
     <div class="col-md-6">
-        <div class="row">
-            @foreach (var typeOfFiles in currentState.Files)
-            {
-                @if (isFirstTime)
-                {
-                    isFirstTime = false;
-                }
-                else
-                {
-                    <hr style="width:100%" />
-                }
-                <div class="col-md-10">
-                    <label class="control-label">@SharedLocalizer[typeOfFiles.Name.Trim('/')]</label>
-                    <partial name="_Files" model='(Model.ConcreteId, typeOfFiles, await Manager.FileManager.GetUriFiles(Model.FileId, typeOfFiles.Name))' />
-                </div>
-                <div class="col-md-2">
-                    <rystem-ajax-file rystem-message='' rystem-request-context='new RoutingContext() { Action = "Upload", Controller = "File", QueryString = new Dictionary<object, object>() { { "name", typeOfFiles.Name }, { "status", (int)typeOfFiles.MinimumStatus }, { "fileId", Model.FileId } } }'></rystem-ajax-file>
-                </div>
-            }
+        <div class="row" id="update-all-files">
+            <partial name="_AllFiles" model="Model" />
         </div>
     </div>
 </div>

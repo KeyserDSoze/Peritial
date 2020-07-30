@@ -235,6 +235,13 @@ namespace Expertiser
             => this.Manager = manager;
         public async Task<IList<string>> GetUriFiles(string fileId, string name = null)
             => await new File().SearchAsync($"{fileId}/{name}");
+        public async Task DeleteFileAsync(string name)
+        {
+            await new File()
+            {
+                Name = name
+            }.DeleteAsync();
+        }
         public async Task<IList<string>> SaveFile(string fileId, Stream stream, string fileName, string contentType, string name = null)
         {
             if (name == null)
@@ -264,6 +271,7 @@ namespace Expertiser
                 .Include(x => x.InsuranceAgency)
                     .ThenInclude(x => x.InsuranceCompany)
                         .ThenInclude(x => x.Label)
+                .Include(x => x.ExternalId)
                 .Include(x => x.Insurance)
                    .ThenInclude(x => x.Customer)
                         .ThenInclude(x => x.Name)
@@ -276,7 +284,8 @@ namespace Expertiser
                 .Include(x => x.Insurance)
                    .ThenInclude(x => x.ExternalId)
                 .Include(x => x.AccidentDate, new PropertyOptions() { Format = "dd-MM-yyyy" })
-                .Include(x => x.ExternalId)
+                .Include(x => x.TableExpertise)
+                    .ThenInclude(x => x.AssignmentDate, new PropertyOptions() { Format = "dd-MM-yyyy" })
                 .Include(x => x.TableExpertise)
                     .ThenInclude(x => x.StatusType, new PropertyOptions { IsLocalized = true });
         public INavigation<TableCustomer> GetCustomerNavigation(string title, IStringLocalizer localizer)
@@ -481,6 +490,28 @@ namespace Expertiser
                     Selected = x.Id == insuranceAgencyId
                 });
         }
+        public IEnumerable<DropdownItem> GetStatus(int statusId, IStringLocalizer stringLocalizer)
+        {
+            return Status()
+                .Select(x => new DropdownItem()
+                {
+                    Label = stringLocalizer[$"{x}"],
+                    Value = ((int)x).ToString(),
+                    Selected = (int)x == statusId
+                });
+            IEnumerable<StatusType> Status()
+            {
+                yield return StatusType.Registered;
+                yield return StatusType.Assigned;
+                yield return StatusType.ToBeRevised;
+                yield return StatusType.Revised;
+                yield return StatusType.ToSend;
+                yield return StatusType.Sent;
+                yield return StatusType.Billed;
+                yield return StatusType.Duplicated;
+                yield return StatusType.Cancelled;
+            }
+        }
         public IEnumerable<DropdownItem> GetInsuranceCompanies(int? insuranceCompanyId)
         {
             return this.Manager.QueryManager.InsuranceCompanies
@@ -624,6 +655,7 @@ namespace Expertiser
             => this.Manager = manager;
         public RequestContext CreateNewLocation => new RequestContext() { Action = "Create", Controller = "Location" };
         public RequestContext CreateNewCustomer => new RequestContext() { Action = "Create", Controller = "Customer" };
+        public RequestContext UpdateContractors => new RequestContext() { Action = "ListContractor", Controller = "Customer", Selector = "#contractors" };
         public RequestContext CreateNewContractor => new RequestContext() { Action = "CreateContractor", Controller = "Customer" };
         public RequestContext ModifyNewBill(int? id) => new RequestContext() { Action = "Bill", Controller = "Experty", FurtherPath = id?.ToString(), RequestType = RequestType.Post, Selector = "#billwrapper" };
         public RequestContext DeleteBill(int id) => new RequestContext() { Action = "DeleteBill", Controller = "Experty", FurtherPath = id.ToString(), RequestType = RequestType.Post, Selector = "#billwrapper" };
@@ -647,6 +679,8 @@ namespace Expertiser
         public RequestContext ShowStats => new RequestContext() { Action = "Stats", Controller = "Home", RequestType = RequestType.Post, Selector = "#stats-update" };
         public RequestContext ShowRevenue => new RequestContext() { Action = "Index", Controller = "Bill", RequestType = RequestType.Post, Selector = "#revenue-update" };
         public RequestContext ShowDocument(string url) => new RequestContext() { Action = "ShowDocument", Controller = "File", QueryString = new Dictionary<object, object> { { "url", HttpUtility.UrlEncode(url) } } };
+        public RequestContext ShowImage(string url) => new RequestContext() { Action = "ShowImage", Controller = "File", QueryString = new Dictionary<object, object> { { "url", HttpUtility.UrlEncode(url) } } };
+        public RequestContext DeleteDocument(string url, int expertiseId) => new RequestContext() { Action = "DeleteDocument", Controller = "File", FurtherPath = expertiseId.ToString(), QueryString = new Dictionary<object, object> { { "url", HttpUtility.UrlEncode(url) } }, Selector = "#update-all-files" };
     }
     public class ServiceManager
     {

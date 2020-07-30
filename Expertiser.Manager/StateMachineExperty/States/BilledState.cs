@@ -30,8 +30,6 @@ namespace Expertiser
         {
             if (this.Expertise.CloseDate == null)
                 this.Expertise.CloseDate = DateTime.UtcNow;
-            else
-                this.Expertise.CloseDate = null;
             return Task.CompletedTask;
         }
     }
