@@ -32,7 +32,7 @@ namespace Expertiser.Portal.Controllers
             => PartialView("ShowImage", url);
         public async Task<IActionResult> DeleteDocument(int id, [FromQuery] string url)
         {
-            string finding = $"{id}/{new System.Text.RegularExpressions.Regex($@"\/{id}\/").Split(url).Last()}";
+            string finding = new System.Text.RegularExpressions.Regex(@"\/files\/").Split(url).Last();
             await Manager.FileManager.DeleteFileAsync(finding);
             var experty = await Manager.QueryManager.Expertises.FirstOrDefaultAsync(x => x.Id == id);
             return PartialView("_AllFiles", experty);
