@@ -246,6 +246,9 @@
   <data name="Click here to manage dossier of" xml:space="preserve">
     <value>Clicca qui per visionare la pratica di</value>
   </data>
+  <data name="CloseDate" xml:space="preserve">
+    <value>Data evasione</value>
+  </data>
   <data name="Companies" xml:space="preserve">
     <value>Compagnie</value>
   </data>
