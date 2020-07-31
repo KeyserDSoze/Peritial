@@ -186,6 +186,12 @@
   <data name="Assignments By Status" xml:space="preserve">
     <value>Incarichi per status</value>
   </data>
+  <data name="Associate" xml:space="preserve">
+    <value>Socio</value>
+  </data>
+  <data name="Associate Revenue" xml:space="preserve">
+    <value>Fatturato personale</value>
+  </data>
   <data name="Attachment links" xml:space="preserve">
     <value>Allegati scaricabili</value>
   </data>
@@ -258,6 +264,9 @@
   <data name="CompletedExpertise" xml:space="preserve">
     <value>Perizia completa</value>
   </data>
+  <data name="ConcreteId" xml:space="preserve">
+    <value>Id Studio</value>
+  </data>
   <data name="Connected Expertises" xml:space="preserve">
     <value>Perizie connesse</value>
   </data>
@@ -267,6 +276,9 @@
   <data name="Contributor" xml:space="preserve">
     <value>Perito</value>
   </data>
+  <data name="Contributor Revenue" xml:space="preserve">
+    <value>Fatturato esterno</value>
+  </data>
   <data name="Contributor.UserName" xml:space="preserve">
     <value>Perito</value>
   </data>
@@ -275,6 +287,9 @@
   </data>
   <data name="CorrectedExpertise" xml:space="preserve">
     <value>Perizia corretta</value>
+  </data>
+  <data name="Cost" xml:space="preserve">
+    <value>Spese</value>
   </data>
   <data name="Countries" xml:space="preserve">
     <value>Nazioni</value>
@@ -549,6 +564,9 @@
   <data name="Name" xml:space="preserve">
     <value>Nome</value>
   </data>
+  <data name="Net Revenue" xml:space="preserve">
+    <value>Fatturato netto</value>
+  </data>
   <data name="new comunication for" xml:space="preserve">
     <value>Nuova comunicazione per</value>
   </data>
@@ -590,6 +608,9 @@
   </data>
   <data name="ReservedNote" xml:space="preserve">
     <value>Nota riservata</value>
+  </data>
+  <data name="Revenue" xml:space="preserve">
+    <value>Fatturare</value>
   </data>
   <data name="Revised" xml:space="preserve">
     <value>Revisionato</value>
@@ -677,6 +698,9 @@
   </data>
   <data name="Total" xml:space="preserve">
     <value>Totale</value>
+  </data>
+  <data name="Total Revenue" xml:space="preserve">
+    <value>Fatturato totale Gestito</value>
   </data>
   <data name="TotalPercentage" xml:space="preserve">
     <value>Fatturato riconosciuto</value>

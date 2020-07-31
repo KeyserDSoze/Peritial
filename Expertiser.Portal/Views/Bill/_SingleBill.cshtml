@@ -8,11 +8,11 @@
                 <table class="table">
                     <thead>
                         <tr>
-                            <th scope="col">ConcreteId</th>
-                            <th scope="col">Contributor</th>
-                            <th scope="col">Total</th>
-                            <th scope="col">TotalExtra</th>
-                            <th scope="col">TotalPercentage</th>
+                            <th scope="col">@SharedLocalizer["ConcreteId"]</th>
+                            <th scope="col">@SharedLocalizer["Contributor"]</th>
+                            <th scope="col">@SharedLocalizer["Total"]</th>
+                            <th scope="col">@SharedLocalizer["TotalExtra"]</th>
+                            <th scope="col">@SharedLocalizer["TotalPercentage"]</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -25,7 +25,7 @@
                                     </rystem-ajax-modal>
                                 </td>
                                 <td>@singleStat.Contributor</td>
-                                <td>@(singleStat.TotalPercentage - singleStat.TotalExtra)</td>
+                                <td>@singleStat.TotalPercentageNoExtra</td>
                                 <td>@singleStat.TotalExtra</td>
                                 <td>@singleStat.TotalPercentage</td>
                             </tr>

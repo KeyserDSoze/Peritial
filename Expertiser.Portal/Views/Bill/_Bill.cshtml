@@ -8,12 +8,13 @@
             <thead>
                 <tr>
                     <th scope="col">#</th>
-                    <th scope="col">Socio</th>
-                    <th scope="col">Fatturato totale Gestito</th>
-                    <th scope="col">Fatturato esterno</th>
-                    <th scope="col">Fatturato netto</th>
-                    <th scope="col">Spese</th>
-                    <th scope="col">Fatturare</th>
+                    <th scope="col">@SharedLocalizer["Associate"]</th>
+                    <th scope="col">@SharedLocalizer["Total Revenue"]</th>
+                    <th scope="col">@SharedLocalizer["Contributor Revenue"]</th>
+                    <th scope="col">@SharedLocalizer["Associate Revenue"]</th>
+                    <th scope="col">@SharedLocalizer["Net Revenue"]</th>
+                    <th scope="col">@SharedLocalizer["Cost"]</th>
+                    <th scope="col">@SharedLocalizer["Revenue"]</th>
                 </tr>
             </thead>
             <tbody>
@@ -31,9 +32,10 @@
                         <td>@userStat.Member</td>
                         <td>@userStat.TotalBill</td>
                         <td>@userStat.TotalPercentage</td>
+                        <td>@userStat.PersonalTotal</td>
                         <td>@userStat.TotalMember</td>
-                        <td>&nbsp;</td>
-                        <td>&nbsp;</td>
+                        <td>0</td>
+                        <td>@(userStat.TotalBill - userStat.TotalPercentage)</td>
                     </tr>
                     <partial name="_SingleBill" model="(accordedId, userStat.Bills)" />
                 }

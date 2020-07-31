@@ -13,6 +13,8 @@ namespace Expertiser.Portal.Models
         public override void Sum(TableExpertise expertise)
         {
             base.Sum(expertise);
+            if (expertise.ContributorId == this.UserId || (expertise.MemberId == this.UserId && expertise.ContributorId == null))
+                this.PersonalTotal += expertise.TotalPercentage ?? 0 - expertise.TotalPercentageNoExtra ?? 0;
             this.Bills.Add(expertise);
         }
     }
@@ -26,6 +28,7 @@ namespace Expertiser.Portal.Models
         public decimal TotalBill { get; set; }
         public decimal TotalMember { get; set; }
         public decimal TotalExtra { get; set; }
+        public decimal PersonalTotal { get; set; }
         public decimal TotalPercentageNoExtra => TotalPercentage - TotalExtra;
         public bool HasValue => this.TotalBill > 0 || this.TotalMember > 0 || this.TotalPercentage > 0;
         public virtual void Sum(TableExpertise expertise)
