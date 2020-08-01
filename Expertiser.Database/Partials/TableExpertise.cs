@@ -16,7 +16,7 @@ namespace Expertiser.Database.Models
         [NotMapped]
         public StatusType StatusType => (StatusType)this.Status;
         [NotMapped]
-        public string ConcreteId => $"{this.Accident?.YearlyId}{this.Accident?.InsuranceAgency?.InsuranceCompany?.Alias}{this.Accident?.AccidentDate:yyyy}{this.Member?.Alias}{this.Contributor?.Alias}";
+        public string ConcreteId => $"{this.Accident?.YearlyId}{this.Accident?.InsuranceAgency?.InsuranceCompany?.Alias}{this.Accident?.AccidentDate:yyyy}{this.Member?.Alias}{this.Contributor?.Alias ?? this.Member?.Alias}";
         [NotMapped]
         public decimal? TotalPercentage => this.TableBill?.Where(x => x.IsAuthorized).Sum(x => (x.Amount * x.Percentage / 100) + x.Extra);
         [NotMapped]
