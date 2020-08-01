@@ -33,10 +33,13 @@ namespace Expertiser.Portal.Models
         public bool HasValue => this.TotalBill > 0 || this.TotalMember > 0 || this.TotalPercentage > 0;
         public virtual void Sum(TableExpertise expertise)
         {
-            this.TotalPercentage += expertise.TotalPercentage ?? 0;
-            this.TotalMember += expertise.TotalMember ?? 0;
             this.TotalBill += expertise.TotalBill ?? 0;
-            this.TotalExtra += expertise.TotalExtra ?? 0;
+            this.TotalMember += expertise.TotalMember ?? 0;
+            if (!(expertise.MemberId == expertise.ContributorId || expertise.ContributorId == null))
+            {
+                this.TotalPercentage += expertise.TotalPercentage ?? 0;
+                this.TotalExtra += expertise.TotalExtra ?? 0;
+            }
         }
         public static implicit operator BillStat(TableExpertise expertise)
             => new BillStat()

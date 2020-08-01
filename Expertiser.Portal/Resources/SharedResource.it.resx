@@ -702,6 +702,9 @@
   <data name="Total Revenue" xml:space="preserve">
     <value>Fatturato totale Gestito</value>
   </data>
+  <data name="TotalExtra" xml:space="preserve">
+    <value>Extra</value>
+  </data>
   <data name="TotalPercentage" xml:space="preserve">
     <value>Fatturato riconosciuto</value>
   </data>

@@ -37,12 +37,15 @@ namespace Expertiser.Portal.Controllers
 
         public async Task<IActionResult> Index()
         {
-            var now = new DateStats()
+            DateTime now = DateTime.UtcNow;
+            if (now.Day <= 10)
+                now = now.AddMonths(-1);
+            var searchingDate = new DateStats()
             {
-                From = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1),
-                To = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1).AddMonths(1).AddMilliseconds(-1),
+                From = new DateTime(now.Year, now.Month, 1),
+                To = new DateTime(now.Year, now.Month, 1).AddMonths(1).AddMilliseconds(-1),
             };
-            return View("Index", (now, await GetBills(now)));
+            return View("Index", (searchingDate, await GetBills(searchingDate)));
         }
 
         [HttpPost]
@@ -67,18 +70,20 @@ namespace Expertiser.Portal.Controllers
                 });
                 foreach (var billByContributor in billByMember.GroupBy(x => x.ContributorId))
                 {
-                    string contributorName = $"{billByContributor.FirstOrDefault().Contributor?.Name} {billByContributor.FirstOrDefault().Contributor?.Surname}";
-                    if (!bills.ContainsKey(billByContributor.Key))
-                        bills.Add(billByContributor.Key, new UserBillStat
+                    bool isContributorNull = billByContributor == null;
+                    string contributorKey = billByContributor.Key ?? billByMember.Key;
+                    string contributorName = isContributorNull ? memberName : $"{billByContributor.FirstOrDefault().Contributor?.Name} {billByContributor.FirstOrDefault().Contributor?.Surname}";
+                    if (!bills.ContainsKey(contributorKey))
+                        bills.Add(contributorKey, new UserBillStat
                         {
-                            UserId = billByContributor.Key,
+                            UserId = contributorKey,
                             Contributor = contributorName
                         });
                     foreach (var bill in billByContributor)
                     {
                         bills[billByMember.Key].Sum(bill);
-                        if (billByMember.Key != billByContributor.Key)
-                            bills[billByContributor.Key].Sum(bill);
+                        if (billByMember.Key != contributorKey)
+                            bills[contributorKey].Sum(bill);
                     }
                 }
             }
