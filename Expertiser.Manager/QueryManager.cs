@@ -80,6 +80,8 @@ namespace Expertiser
         public IQueryable<TableExpertise> Bills => Manager.Context.TableExpertise
             .Include(x => x.TableBill)
             .Include(x => x.Accident)
+                .ThenInclude(x => x.InsuranceAgency)
+                    .ThenInclude(x => x.InsuranceCompany)
             .Include(x => x.Contributor)
             .Include(x => x.Member);
         public IQueryable<TableLocation> Locations => Manager.Context.TableLocation

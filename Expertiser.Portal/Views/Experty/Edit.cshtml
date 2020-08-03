@@ -109,7 +109,7 @@
                     @if (Manager.UserHelperManager.IsManager)
                     {
                         <label asp-for="CloseDate" class="control-label"></label>
-                        <rystem-date name="InspectionDate" value="Model.CloseDate" class="form-control"></rystem-date>
+                        <rystem-date name="CloseDate" value="Model.CloseDate" class="form-control"></rystem-date>
                         <span asp-validation-for="CloseDate" class="text-danger"></span>
                     }
                     else

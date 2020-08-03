@@ -30,12 +30,12 @@
                             }
                         </td>
                         <td>@userStat.Member</td>
-                        <td>@userStat.TotalBill</td>
-                        <td>@userStat.TotalPercentage</td>
-                        <td>@userStat.PersonalTotal</td>
-                        <td>@userStat.TotalMember</td>
+                        <td>@userStat.TotalBill.ToString("N2")</td>
+                        <td>@userStat.TotalPercentage.ToString("N2")</td>
+                        <td>@userStat.PersonalTotal.ToString("N2")</td>
+                        <td>@userStat.TotalMember.ToString("N2")</td>
                         <td>0</td>
-                        <td>@(userStat.TotalBill - userStat.TotalPercentage)</td>
+                        <td>@((userStat.TotalBill - userStat.TotalPercentage).ToString("N2"))</td>
                     </tr>
                     <partial name="_SingleBill" model="(accordedId, userStat.Bills)" />
                 }
@@ -69,9 +69,9 @@
                         }
                     </td>
                     <td>@userStat.Contributor</td>
-                    <td>@(userStat.TotalPercentage - userStat.TotalExtra)</td>
-                    <td>@userStat.TotalExtra</td>
-                    <td>@userStat.TotalPercentage</td>
+                    <td>@((userStat.TotalPercentage - userStat.TotalExtra).ToString("N2"))</td>
+                    <td>@userStat.TotalExtra.ToString("N2")</td>
+                    <td>@userStat.TotalPercentage.ToString("N2")</td>
                 </tr>
                 <partial name="_SingleBill" model="(accordedId, userStat.Bills)" />
             }
