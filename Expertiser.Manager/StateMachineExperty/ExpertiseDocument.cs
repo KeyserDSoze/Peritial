@@ -34,8 +34,8 @@ namespace Expertiser
             new ExpertiseDocument("Photos/", StatusType.Registered, DocumentType.Image),
             new ExpertiseDocument("RawExpertise", StatusType.Assigned, DocumentType.Document),
             new ExpertiseDocument("CorrectedExpertise", StatusType.ToBeRevised, DocumentType.Document),
-            new ExpertiseDocument("CompletedExpertise", StatusType.Revised, DocumentType.Document),
-            new ExpertiseDocument("ReservedNote", StatusType.Revised, DocumentType.Document),
+            new ExpertiseDocument("CompletedExpertise", StatusType.Assigned, DocumentType.Document),
+            new ExpertiseDocument("ReservedNote", StatusType.Assigned, DocumentType.Document),
         };
     }
 }
