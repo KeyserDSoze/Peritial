@@ -65,7 +65,7 @@ namespace Expertiser
                 var next = this.GetNext();
                 this.Expertise.Status = (int)next.StatusType;
                 await this.UpdateExpertiseAsync().NoContext();
-                await this.NotifyAsync();
+                await next.NotifyAsync();
                 return next;
             }
             return this;
