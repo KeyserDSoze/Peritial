@@ -18,7 +18,7 @@ namespace Expertiser
         {
         }
         public override StatusType StatusType => StatusType.ToSend;
-
+        private protected override bool IsNotificationNeeded => true;
         private protected override ExpertyState GetNext()
             => new SentState(this.Expertise, this.Manager, this.StringLocalizer, this.IsNotified);
         private protected override Task InternalExecute(TableExpertise previousExpertise)
