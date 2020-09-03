@@ -14,7 +14,7 @@ namespace Expertiser
 {
     public static class StateFactory
     {
-        public static async Task<ExpertyState> CreateAsync(int expertiseId, Manager manager, IStringLocalizer stringLocalizer)
+        public static async Task<ExpertyState> CreateAsync(int expertiseId, Manager manager, IStringLocalizer stringLocalizer, StatusType forced)
         {
             var expertise = await manager.Context.TableExpertise
                 .Include(x => x.Member)
@@ -22,6 +22,8 @@ namespace Expertiser
                     .AsNoTracking()
                         .FirstOrDefaultAsync(x => x.Id == expertiseId).NoContext();
             StatusType statusType = (StatusType)expertise.Status;
+            if (forced > statusType)
+                statusType = forced;
             return statusType switch
             {
                 StatusType.Registered => new RegisteredState(expertise, manager, stringLocalizer, false),

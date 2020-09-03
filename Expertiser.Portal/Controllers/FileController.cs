@@ -43,8 +43,10 @@ namespace Expertiser.Portal.Controllers
         {
             IEnumerable<string> files = await this.Manager.FileManager.SaveFile(Request.Query["fileId"], file.OpenReadStream(), file.FileName, file.ContentType, Request.Query["name"]);
             int.TryParse(Request.Query["status"], out int status);
+            int.TryParse(Request.Query["force"], out int force);
             StatusType minimumStatus = (StatusType)status;
-            var state = await Manager.GetExpertyStateAsync(id, this.StringLocalizer);
+            StatusType forceStatus = (StatusType)force;
+            var state = await Manager.GetExpertyStateAsync(id, this.StringLocalizer, forceStatus);
             state.AddAttachment(files);
             await state.Next(minimumStatus);
             return Ok();

@@ -21,21 +21,23 @@ namespace Expertiser
     {
         public string Name { get; }
         public StatusType MinimumStatus { get; }
+        public StatusType ForceToStatus { get; }
         public DocumentType Type { get; }
-        private ExpertiseDocument(string name, StatusType statusType, DocumentType type)
+        private ExpertiseDocument(string name, StatusType statusType, StatusType forceToStatus, DocumentType type)
         {
             this.Name = name;
             this.MinimumStatus = statusType;
             this.Type = type;
+            this.ForceToStatus = forceToStatus;
         }
         public static List<ExpertiseDocument> Instance { get; } = new List<ExpertiseDocument>()
         {
-            new ExpertiseDocument("AccidentDocs/", StatusType.Registered, DocumentType.Document),
-            new ExpertiseDocument("Photos/", StatusType.Registered, DocumentType.Image),
-            new ExpertiseDocument("RawExpertise", StatusType.Assigned, DocumentType.Document),
-            new ExpertiseDocument("CorrectedExpertise", StatusType.ToBeRevised, DocumentType.Document),
-            new ExpertiseDocument("CompletedExpertise", StatusType.Assigned, DocumentType.Document),
-            new ExpertiseDocument("ReservedNote", StatusType.Assigned, DocumentType.Document),
+            new ExpertiseDocument("AccidentDocs/", StatusType.Registered, StatusType.Registered, DocumentType.Document),
+            new ExpertiseDocument("Photos/", StatusType.Registered, StatusType.Registered,DocumentType.Image),
+            new ExpertiseDocument("RawExpertise", StatusType.Assigned, StatusType.Registered, DocumentType.Document),
+            new ExpertiseDocument("CorrectedExpertise", StatusType.ToBeRevised, StatusType.Registered, DocumentType.Document),
+            new ExpertiseDocument("CompletedExpertise", StatusType.Assigned, StatusType.Revised, DocumentType.Document),
+            new ExpertiseDocument("ReservedNote", StatusType.Assigned, StatusType.Registered, DocumentType.Document),
         };
     }
 }

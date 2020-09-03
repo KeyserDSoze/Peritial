@@ -18,7 +18,6 @@ namespace Expertiser
         {
         }
         public override StatusType StatusType => StatusType.ToBeRevised;
-
         private protected override ExpertyState GetNext()
             => new RevisedState(this.Expertise, this.Manager, this.StringLocalizer, this.IsNotified);
 

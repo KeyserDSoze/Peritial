@@ -60,7 +60,7 @@ namespace Expertiser
         }
         public async Task<ExpertyState> Next(StatusType minimumStatus)
         {
-            if (minimumStatus == this.Expertise.StatusType)
+            if (this.Expertise.StatusType >= minimumStatus)
             {
                 var next = this.GetNext();
                 this.Expertise.Status = (int)next.StatusType;
@@ -100,9 +100,9 @@ namespace Expertiser
 
             IEnumerable<string> GetEmails()
             {
-                if (this.Expertise.Member != null)
+                if (this.Expertise.Member != null && this.Expertise.MemberId != this.Manager.UserHelperManager.Id)
                     yield return this.Expertise.Member.Email;
-                if (this.Expertise.Contributor != null)
+                if (this.Expertise.Contributor != null && this.Expertise.ContributorId != this.Manager.UserHelperManager.Id)
                     yield return this.Expertise.Contributor.Email;
             }
         }

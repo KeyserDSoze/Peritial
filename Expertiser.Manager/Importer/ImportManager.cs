@@ -93,6 +93,20 @@ namespace Expertiser
                 };
                 await Manager.QueryManager.InsertAccidentAsync(accident);
             }
+            else if (accident.AccidentDate < importValue.Accident.AccidentDate)
+            {
+                accident = new TableAccident()
+                {
+                    ExternalId = importValue.Accident.ExternalId,
+                    DenunciationDate = importValue.Accident.DenunciationDate,
+                    AccidentDate = importValue.Accident.AccidentDate,
+                    InsuranceId = insurance.Id,
+                    InsuranceAdjusterId = insuranceAdjuster.Id,
+                    InspectorateId = inspectorate.Id,
+                    InsuranceAgencyId = insuranceAgency.Id,
+                };
+                await Manager.QueryManager.InsertAccidentAsync(accident);
+            }
             foreach (var damaged in importValue.Damageds)
             {
                 int damagedId = await GetCustomerId(damaged);

@@ -20,6 +20,6 @@
         <partial name="_Files" model='(Model.ConcreteId, typeOfFiles, await Manager.FileManager.GetUriFiles(Model.FileId, typeOfFiles.Name), Model)' />
     </div>
     <div class="col-md-6">
-        <rystem-ajax-file rystem-message='' rystem-request-context='new RoutingContext() { Action = "Upload", Controller = "File", QueryString = new Dictionary<object, object>() { { "name", typeOfFiles.Name }, { "status", (int)typeOfFiles.MinimumStatus }, { "fileId", Model.FileId } } }'></rystem-ajax-file>
+        <rystem-ajax-file rystem-message='' rystem-request-context='new RoutingContext() { Action = "Upload", Controller = "File", QueryString = new Dictionary<object, object>() { { "name", typeOfFiles.Name }, { "status", (int)typeOfFiles.MinimumStatus }, {"force", (int)typeOfFiles.ForceToStatus }, { "fileId", Model.FileId } } }'></rystem-ajax-file>
     </div>
 }
