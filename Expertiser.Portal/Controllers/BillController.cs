@@ -38,8 +38,6 @@ namespace Expertiser.Portal.Controllers
         public async Task<IActionResult> Index()
         {
             DateTime now = DateTime.UtcNow;
-            if (now.Day <= 10)
-                now = now.AddMonths(-1);
             var searchingDate = new DateStats()
             {
                 From = new DateTime(now.Year, now.Month, 1),

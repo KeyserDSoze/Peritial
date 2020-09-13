@@ -4,7 +4,7 @@
     ViewData["Title"] = "Create";
 }
 
-<h1>@SharedLocalizer["Assignment"] - @Model?.TableExpertise?.FirstOrDefault()?.ConcreteId</h1>
+<h1>@SharedLocalizer["Assignment"] - @Model?.TableExpertise?.FirstOrDefault()?.ConcreteId - @Model?.ExternalId</h1>
 <div>
     <a asp-action="Index">@SharedLocalizer["Back to List"]</a>
 </div>

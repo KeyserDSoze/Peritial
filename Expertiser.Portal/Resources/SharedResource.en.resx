@@ -219,6 +219,9 @@
   <data name="modify experty" xml:space="preserve">
     <value>Experty {0}</value>
   </data>
+  <data name="TableExpertise.Contributor.TotalName" xml:space="preserve">
+    <value>Contributor</value>
+  </data>
   <data name="Users" xml:space="preserve">
     <value>Users</value>
   </data>

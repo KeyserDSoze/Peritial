@@ -48,7 +48,10 @@ namespace Expertiser
                 .Include(x => x.TableExpertise)
                     .ThenInclude(x => x.AssignmentDate, new PropertyOptions() { Format = "dd-MM-yyyy" })
                 .Include(x => x.TableExpertise)
-                    .ThenInclude(x => x.StatusType, new PropertyOptions { IsLocalized = true });
+                    .ThenInclude(x => x.StatusType, new PropertyOptions { IsLocalized = true })
+                .Include(x => x.TableExpertise)
+                    .ThenInclude(x => x.Contributor)
+                        .ThenInclude(x => x.TotalName);
         public INavigation<TableCustomer> GetCustomerNavigation(string title, IStringLocalizer localizer)
             => INavigation<TableCustomer>.Create(NavigationOptions.CanDoneAll(title, localizer, "Edit"))
                 .Include(x => x.Id, PropertyOptions.Key)

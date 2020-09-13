@@ -666,6 +666,9 @@
   <data name="TableExpertise.ConcreteId" xml:space="preserve">
     <value>Id Studio</value>
   </data>
+  <data name="TableExpertise.Contributor.TotalName" xml:space="preserve">
+    <value>Perito</value>
+  </data>
   <data name="TableExpertise.StatusType" xml:space="preserve">
     <value>Stato</value>
   </data>
