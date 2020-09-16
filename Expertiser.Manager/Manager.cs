@@ -88,6 +88,7 @@ namespace Expertiser
                 .AddGroup("Assignments", "fa-cog", null, Roles.All)
                     .AddItem("Import New Accident", null, new NavigationUrl("Accident", "Import"), Roles.AdminContributor)
                     .AddItem("Assignments", null, new NavigationUrl("Accident"), Roles.All)
+                    .AddItem("All Assignments", null, new NavigationUrl("Accident", parameters: new Dictionary<string, string> { { "Status", "-3" } }), Roles.All)
                 .AddGroup("Assignments By Status", "fa-cog", null, Roles.All)
                     .AddItem("Registered Assignments", null, new NavigationUrl("Accident", parameters: new Dictionary<string, string> { { "Status", "-1" } }), Roles.All)
                     .AddItem("Assigned Assignments", null, new NavigationUrl("Accident", parameters: new Dictionary<string, string> { { "Status", "0" } }), Roles.All)

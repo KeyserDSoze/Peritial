@@ -21,6 +21,7 @@ namespace Expertiser.Portal.Models
     public class BillStat
     {
         public int ExpertiseId { get; set; }
+        public string ExternalId { get; set; }
         public string ConcreteId { get; set; }
         public string Member { get; set; }
         public string Contributor { get; set; }
@@ -45,6 +46,7 @@ namespace Expertiser.Portal.Models
             => new BillStat()
             {
                 ExpertiseId = expertise.Id,
+                ExternalId = expertise.Accident.ExternalId,
                 ConcreteId = expertise.ConcreteId,
                 Contributor = $"{expertise.Contributor?.Name} {expertise.Contributor?.Surname}",
                 Member = $"{expertise.Member?.Name} {expertise.Member?.Surname}",

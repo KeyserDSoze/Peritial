@@ -32,14 +32,14 @@ namespace Expertiser.Portal.Controllers
             if (Manager.UserHelperManager.IsManager)
             {
                 return await Manager.QueryManager.Accidents
-                           .Where(x => x.TableExpertise.Any(t => (StatusId == -2 && t.Status < 5) || t.Status == StatusId))
+                           .Where(x => x.TableExpertise.Any(t => StatusId == -3 || (StatusId == -2 && t.Status < 5) || t.Status == StatusId))
                            .OrderByDescending(x => x.AccidentDate)
                            .ToListAsync();
             }
             else if (Manager.UserHelperManager.IsReader)
             {
                 return await Manager.QueryManager.Accidents
-                           .Where(x => x.TableExpertise.Any(t => (StatusId == -2 && t.Status < 5) || t.Status == StatusId) && x.TableExpertise.Any(c => c.ContributorId == Manager.UserHelperManager.Id))
+                           .Where(x => x.TableExpertise.Any(t => StatusId == -3 || (StatusId == -2 && t.Status < 5) || t.Status == StatusId) && x.TableExpertise.Any(c => c.ContributorId == Manager.UserHelperManager.Id))
                            .OrderByDescending(x => x.AccidentDate)
                            .ToListAsync();
             }

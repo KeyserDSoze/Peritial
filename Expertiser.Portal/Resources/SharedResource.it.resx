@@ -153,6 +153,9 @@
   <data name="Admin" xml:space="preserve">
     <value>Amministratore</value>
   </data>
+  <data name="All Assignments" xml:space="preserve">
+    <value>Tutti gli incarichi</value>
+  </data>
   <data name="Amount" xml:space="preserve">
     <value>Totale</value>
   </data>

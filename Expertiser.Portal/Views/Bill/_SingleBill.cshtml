@@ -13,6 +13,7 @@
                             <th scope="col">@SharedLocalizer["Total"]</th>
                             <th scope="col">@SharedLocalizer["TotalExtra"]</th>
                             <th scope="col">@SharedLocalizer["TotalPercentage"]</th>
+                            <th scope="col">@SharedLocalizer["ExternalId"]</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -28,6 +29,7 @@
                                 <td>@singleStat.TotalPercentageNoExtra.ToString("N2")</td>
                                 <td>@singleStat.TotalExtra.ToString("N2")</td>
                                 <td>@singleStat.TotalPercentage.ToString("N2")</td>
+                                <td>@singleStat.ExternalId</td>
                             </tr>
                         }
                     </tbody>
