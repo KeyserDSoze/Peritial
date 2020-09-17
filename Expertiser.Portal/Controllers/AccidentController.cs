@@ -79,6 +79,40 @@ namespace Expertiser.Portal.Controllers
             }
         }
 
+        public async Task<IEnumerable<string>> Autocomplete([FromQuery] string query)
+        {
+            var t = (await Manager.QueryManager.Expertises
+                           .Where(x => Manager.UserHelperManager.IsManager || x.ContributorId == Manager.UserHelperManager.Id)
+                           .ToListAsync());
+            return t
+                    .Where(x =>
+                        CheckIfContainsQuery(query, x.Accident.AccidentDate)
+                        || CheckIfContainsQuery(query, x.Accident.Address?.Address)
+                        || CheckIfContainsQuery(query, x.Accident.DenunciationDate)
+                        || CheckIfContainsQuery(query, x.Accident.ExternalId)
+                        || CheckIfContainsQuery(query, x.Accident.Insurance?.ExternalId)
+                        || CheckIfContainsQuery(query, x.Accident.Insurance?.Customer?.Name)
+                        || x.Accident.TableDamaged.Any(t => CheckIfContainsQuery(query, t.Customer?.Name))
+                        || CheckIfContainsQuery(query, x.Contributor?.TotalName)
+                        || CheckIfContainsQuery(query, x.Member?.TotalName)
+                        || CheckIfContainsQuery(query, x.AssignmentDate)
+                        || CheckIfContainsQuery(query, x.ConcreteId)
+                        )
+                            .Select(x => $"{x.ConcreteId} - {x.Member?.TotalName} - {x.Accident.ExternalId} - {x.Accident.Insurance?.Customer?.Name}")
+                            .ToList();
+        }
+        public async Task<IActionResult> SetAutocomplete([FromQuery] string query)
+        {
+            var t = (await Manager.QueryManager.Expertises
+                          .Where(x => Manager.UserHelperManager.IsManager || x.ContributorId == Manager.UserHelperManager.Id)
+                          .ToListAsync());
+            string realQuery = query.Split('-').FirstOrDefault().Trim();
+            var c = t.FirstOrDefault(x => x.ConcreteId == realQuery);
+            return RedirectToAction("Edit", "Experty", new { id = c.Id });
+        }
+
+        private static bool CheckIfContainsQuery(string query, object value) => value?.ToString().ToLower().Contains(query.ToLower()) ?? false;
+
         // POST: Accident/Create
         // To protect from overposting attacks, enable the specific properties you want to bind to, for 
         // more details, see http://go.microsoft.com/fwlink/?LinkId=317598.

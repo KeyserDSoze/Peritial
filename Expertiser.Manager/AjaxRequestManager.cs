@@ -55,5 +55,7 @@ namespace Expertiser
         public RequestContext ShowDocument(string url) => new RequestContext() { Action = "ShowDocument", Controller = "File", QueryString = new Dictionary<object, object> { { "url", HttpUtility.UrlEncode(url) } } };
         public RequestContext ShowImage(string url) => new RequestContext() { Action = "ShowImage", Controller = "File", QueryString = new Dictionary<object, object> { { "url", HttpUtility.UrlEncode(url) } } };
         public RequestContext DeleteDocument(string url, int expertiseId) => new RequestContext() { Action = "DeleteDocument", Controller = "File", FurtherPath = expertiseId.ToString(), QueryString = new Dictionary<object, object> { { "url", HttpUtility.UrlEncode(url) } }, Selector = "#update-all-files" };
+        public RequestContext GetAutocompleteSearch => new RequestContext() { Action = "Autocomplete", Controller = "Accident" };
+        public RequestContext SetAutocompleteSearch => new RequestContext() { Action = "SetAutocomplete", Controller = "Accident", OnRedirect = true };
     }
 }

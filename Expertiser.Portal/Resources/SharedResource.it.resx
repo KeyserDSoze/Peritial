@@ -627,6 +627,9 @@
   <data name="Save" xml:space="preserve">
     <value>Salva</value>
   </data>
+  <data name="Search for..." xml:space="preserve">
+    <value>Cerca...</value>
+  </data>
   <data name="Sent" xml:space="preserve">
     <value>Inviato</value>
   </data>
