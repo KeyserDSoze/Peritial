@@ -7,6 +7,7 @@ using Microsoft.Azure.Documents;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Localization;
+using Rystem;
 using Rystem.Data;
 using Rystem.Web;
 using Rystem.Web.Backoffice;
@@ -24,9 +25,21 @@ namespace Expertiser
     public class TelemetryManager
     {
         private readonly Manager Manager;
+        public MyTelemetry MyTelemetry { get; } = Telemetry.CreateNew<MyTelemetry>();
         public TelemetryManager(Manager manager)
             => this.Manager = manager;
         public async Task SaveExceptionLog(Exception exception)
             => await new ErrorLog() { Message = exception.ToString() }.UpdateAsync().NoContext();
+        public Task EndTelemetryAsync()
+            => this.MyTelemetry.StopAsync();
+    }
+    public class MyTelemetry : Telemetry
+    {
+        public override ConfigurationBuilder GetConfigurationBuilder()
+        {
+            return new ConfigurationBuilder().WithTelemetry(Const.DatabaseConnectionString)
+                .WithSql(new SqlTelemetryBuilder("Telemetry"))
+                .Build();
+        }
     }
 }

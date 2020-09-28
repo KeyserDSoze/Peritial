@@ -15,6 +15,8 @@ using System.Numerics;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.OData.Edm;
 using System.Security.Claims;
+using Rystem;
+using Microsoft.Extensions.Logging;
 
 namespace Expertiser.Portal.Controllers
 {
@@ -129,7 +131,9 @@ namespace Expertiser.Portal.Controllers
                     Manager.Context.Add(tableExpertise);
                     await Manager.Context.SaveChangesAsync();
                 }
+                this.Manager.TelemetryManager.MyTelemetry.TrackTrace(LogLevel.Trace, tableExpertise.Id.ToString());
                 var state = await Manager.GetExpertyStateAsync(tableExpertise.Id, this.StringLocalizer);
+                this.Manager.TelemetryManager.MyTelemetry.TrackTrace(LogLevel.Trace, state.StatusType.ToString());
                 await state.ExecuteAndNext(tableExpertise);
                 return View(await Manager.QueryManager.Expertises.FirstOrDefaultAsync(x => x.Id == tableExpertise.Id));
             }

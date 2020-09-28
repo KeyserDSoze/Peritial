@@ -3,6 +3,8 @@ using Expertiser.Interfaces;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Localization;
+using Microsoft.Extensions.Logging;
+using Rystem;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -51,15 +53,18 @@ namespace Expertiser
             bool handled = expertise.Status != this.Expertise.Status;
             await this.InternalExecute(expertise).NoContext();
             await this.UpdateExpertiseAsync().NoContext();
+            this.Manager.TelemetryManager.MyTelemetry.TrackTrace(LogLevel.Debug, "Update trace");
             this.Expertise = await Manager.Context.TableExpertise
                 .Include(x => x.Member)
                 .Include(x => x.Contributor)
                         .FirstOrDefaultAsync(x => x.Id == this.Expertise.Id).NoContext();
+            this.Manager.TelemetryManager.MyTelemetry.TrackTrace(LogLevel.Information, $"Handled: {handled} -> {this.Expertise.StatusType}");
             if (!handled && (expertise.StatusType != this.Expertise.StatusType || this.Expertise.StatusType == StatusType.Registered))
                 await Next(this.Expertise.StatusType);
         }
         public async Task<ExpertyState> Next(StatusType minimumStatus)
         {
+            this.Manager.TelemetryManager.MyTelemetry.TrackTrace(LogLevel.Information, $"{this.Expertise.StatusType} vs {minimumStatus}");
             if (this.Expertise.StatusType >= minimumStatus)
             {
                 var next = this.GetNext();
@@ -77,6 +82,7 @@ namespace Expertiser
                 List<Task> notifications = new List<Task>();
                 foreach (string email in GetEmails())
                 {
+                    this.Manager.TelemetryManager.MyTelemetry.TrackTrace(LogLevel.Information, $"Notify to {email}");
                     StringBuilder body = new StringBuilder(this.Body ?? $"{this.StringLocalizer["Check it out the change of status"]} {this.Link}");
                     body.Append("<br />");
                     if (this.Attachments.Count > 0)

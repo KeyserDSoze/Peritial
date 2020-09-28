@@ -23,6 +23,7 @@ using Rystem.Web;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc.Authorization;
 using Microsoft.AspNetCore.Identity.UI.Services;
+using Expertiser.Portal.Middleware;
 
 namespace Expertiser.Portal
 {
@@ -70,6 +71,7 @@ namespace Expertiser.Portal
                     };
                 });
             services.AddScoped<Manager>();
+            services.AddScoped<EndTraceMiddleware>();
             services.Configure<RequestLocalizationOptions>(options =>
             {
                 var supportedCultures = new List<CultureInfo>
@@ -100,6 +102,8 @@ namespace Expertiser.Portal
 
             var options = app.ApplicationServices.GetService<IOptions<RequestLocalizationOptions>>();
             app.UseRequestLocalization(options.Value);
+
+            app.UseMiddleware<EndTraceMiddleware>();
 
             app.UseEndpoints(endpoints =>
             {
