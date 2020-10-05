@@ -9,9 +9,8 @@
     <PackageReference Include="Microsoft.AspNetCore.Identity.UI" Version="3.1.8" />
     <PackageReference Include="Microsoft.Extensions.Identity.Core" Version="3.1.8" />
     <PackageReference Include="Microsoft.Extensions.Identity.Stores" Version="3.1.8" />
-    <PackageReference Include="Rystem" Version="7.2.1" />
-    <PackageReference Include="Rystem.Interfaces" Version="7.2.1" />
-    <PackageReference Include="Rystem.Web" Version="1.5.2" />
+    <PackageReference Include="Rystem" Version="7.2.4" />
+    <PackageReference Include="Rystem.Web" Version="1.6.0" />
   </ItemGroup>
 
   <ItemGroup>

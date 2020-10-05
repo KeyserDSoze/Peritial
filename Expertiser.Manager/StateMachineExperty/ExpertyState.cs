@@ -18,7 +18,6 @@ namespace Expertiser
     {
         public abstract StatusType StatusType { get; }
         private protected abstract Task InternalExecute(TableExpertise previousExpertise);
-        public IEnumerable<ExpertiseDocument> Files => ExpertiseDocument.Instance.Where(x => x.MinimumStatus <= this.StatusType);
         public IStringLocalizer StringLocalizer { get; }
         private protected virtual string Body { get; }
         public Manager Manager { get; }

@@ -10,6 +10,7 @@ using Microsoft.Extensions.Localization;
 using Rystem.Data;
 using Rystem.Web;
 using Rystem.Web.Backoffice;
+using Rystem.Web.Models;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -27,7 +28,23 @@ namespace Expertiser
         public FileManager(Manager manager)
             => this.Manager = manager;
         public async Task<IList<string>> GetUriFiles(string fileId, string name = null)
-            => await new File().SearchAsync($"{fileId}/{name}");
+            => await new File().SearchAsync($"{fileId}/{name}").NoContext();
+        private static readonly IEnumerable<FileModel> StandardFolder =
+        new List<FileModel>()
+        {
+            new FileModel("folder", "/////AccidentDocs/", DateTime.UtcNow),
+            new FileModel("folder", "/////Photos/", DateTime.UtcNow),
+            new FileModel("folder", "/////RawExpertise/", DateTime.UtcNow),
+            new FileModel("folder", "/////CorrectedExpertise/", DateTime.UtcNow),
+            new FileModel("folder", "/////CompletedExpertise/", DateTime.UtcNow),
+            new FileModel("folder", "/////ReservedNote/", DateTime.UtcNow),
+        };
+        public async Task<IEnumerable<FileModel>> GetExpertiseFiles(string fileId)
+        {
+            var files = (await GetUriFiles(fileId).NoContext()).Select(x => new FileModel(x, DateTime.UtcNow));
+            return StandardFolder.Concat(files);
+        }
+
         public async Task DeleteFileAsync(string name)
         {
             await new File()
@@ -35,12 +52,12 @@ namespace Expertiser
                 Name = name
             }.DeleteAsync();
         }
-        public async Task<IList<string>> SaveFile(string fileId, Stream stream, string fileName, string contentType, string name = null)
+        public async Task<IList<string>> SaveFileAsync(string fileId, Stream stream, string fileName, string contentType, string name = null)
         {
             if (name == null)
                 name = Guid.NewGuid().ToString("N");
-            else if (name.EndsWith("/"))
-                name = $"{name}{Guid.NewGuid():N}";
+            else if (!name.Contains("."))
+                name = $"{name}/{Guid.NewGuid():N}";
             var upload = await new File()
             {
                 Name = $"{fileId}/{name}.{fileName.Split('.').Last()}",

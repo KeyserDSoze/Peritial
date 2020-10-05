@@ -363,6 +363,9 @@
   <data name="Damaged" xml:space="preserve">
     <value>Danneggiato</value>
   </data>
+  <data name="Date modified" xml:space="preserve">
+    <value>Data ultima modifica</value>
+  </data>
   <data name="Delete" xml:space="preserve">
     <value>Cancella</value>
   </data>
@@ -410,6 +413,9 @@
   </data>
   <data name="FiscalCode" xml:space="preserve">
     <value>Codice Fiscale o P.IVA</value>
+  </data>
+  <data name="Folder" xml:space="preserve">
+    <value>Cartella</value>
   </data>
   <data name="for" xml:space="preserve">
     <value>per</value>

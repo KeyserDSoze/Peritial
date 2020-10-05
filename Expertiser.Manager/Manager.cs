@@ -51,8 +51,8 @@ namespace Expertiser
         public ImportManager ImportManager => importManager ??= new ImportManager(this);
         private AjaxRequestManager ajaxRequestManager;
         public AjaxRequestManager AjaxRequestManager => ajaxRequestManager ??= new AjaxRequestManager(this);
-        public async Task<ExpertyState> GetExpertyStateAsync(int expertiseId, IStringLocalizer stringLocalizer, StatusType force = StatusType.Registered)
-            => await StateFactory.CreateAsync(expertiseId, this, stringLocalizer, force).NoContext();
+        public async Task<ExpertyState> GetExpertyStateAsync(int expertiseId, IStringLocalizer stringLocalizer)
+            => await StateFactory.CreateAsync(expertiseId, this, stringLocalizer).NoContext();
         private DropdownManager dropdownManager;
         public DropdownManager DropdownManager => dropdownManager ??= new DropdownManager(this);
         private TelemetryManager telemetryManager;

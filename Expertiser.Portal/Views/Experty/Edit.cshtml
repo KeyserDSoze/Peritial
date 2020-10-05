@@ -144,7 +144,12 @@
     <div class="col-md-1"></div>
     <div class="col-md-6">
         <div class="row" id="update-all-files">
-            <partial name="_AllFiles" model="Model" />
+            <rystem-file-manager rystem-files="await Manager.FileManager.GetExpertiseFiles(Model?.FileId)"
+                                 rystem-request-context='new RequestContext() { Action = "Upload", Controller = "File", QueryString=new Dictionary<object, object>() { { "fileId", Model.FileId} } }'
+                                 rystem-delete-request-context='new RequestContext() { Action = "DeleteDocument", Controller = "File"}'
+                                 rystem-localizer="SharedLocalizer"
+                                 rystem-skip-path="5"
+                                 style="width:100%;"></rystem-file-manager>
         </div>
     </div>
 </div>

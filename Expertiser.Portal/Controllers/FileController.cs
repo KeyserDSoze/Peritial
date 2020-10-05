@@ -30,26 +30,26 @@ namespace Expertiser.Portal.Controllers
             => PartialView("ShowDocument", url);
         public IActionResult ShowImage([FromQuery] string url)
             => PartialView("ShowImage", url);
-        public async Task<IActionResult> DeleteDocument(int id, [FromQuery] string url)
+        public async Task<IActionResult> DeleteDocument(int id, [FromQuery] string fileName)
         {
-            string finding = new System.Text.RegularExpressions.Regex(@"\/files\/").Split(url).Last();
+            string finding = new System.Text.RegularExpressions.Regex(@"\/files\/").Split(fileName).Last();
             await Manager.FileManager.DeleteFileAsync(finding);
-            var experty = await Manager.QueryManager.Expertises.FirstOrDefaultAsync(x => x.Id == id);
-            return PartialView("_AllFiles", experty);
+            return Ok();
         }
 
         [HttpPost]
-        public async Task<IActionResult> Upload(int id, IFormFile file)
+        public async Task<IActionResult> Upload(int id, IFormFile file, [FromQuery] string directory, [FromQuery] string fileId)
         {
-            IEnumerable<string> files = await this.Manager.FileManager.SaveFile(Request.Query["fileId"], file.OpenReadStream(), file.FileName, file.ContentType, Request.Query["name"]);
-            int.TryParse(Request.Query["status"], out int status);
-            int.TryParse(Request.Query["force"], out int force);
-            StatusType minimumStatus = (StatusType)status;
-            StatusType forceStatus = (StatusType)force;
-            var state = await Manager.GetExpertyStateAsync(id, this.StringLocalizer, forceStatus);
-            state.AddAttachment(files);
-            await state.Next(minimumStatus);
-            return Ok();
+            if (!string.IsNullOrWhiteSpace(directory) && directory != "root")
+            {
+                IEnumerable<string> files = await this.Manager.FileManager.SaveFileAsync(fileId, file.OpenReadStream(), file.FileName, file.ContentType, directory);
+                var state = await Manager.GetExpertyStateAsync(id, this.StringLocalizer);
+                state.AddAttachment(files);
+                await state.Next(minimumStatus);
+                return Ok();
+            }
+            else
+                return BadRequest("Not ok");
         }
         public async Task<IActionResult> Proxy([FromQuery] string name, [FromQuery] IEnumerable<string> urls)
         {
