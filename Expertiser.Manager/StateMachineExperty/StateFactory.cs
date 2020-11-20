@@ -29,6 +29,7 @@ namespace Expertiser
                 StatusType.ToBeRevised => new ToBeRevisedState(expertise, manager, stringLocalizer, false),
                 StatusType.Revised => new RevisedState(expertise, manager, stringLocalizer, false),
                 StatusType.ToSend => new ToSendState(expertise, manager, stringLocalizer, false),
+                StatusType.Sent => new SentState(expertise, manager, stringLocalizer, false),
                 StatusType.Billed => new BilledState(expertise, manager, stringLocalizer, false),
                 StatusType.Cancelled => new CancelledState(expertise, manager, stringLocalizer, false),
                 StatusType.Duplicated => new DuplicatedState(expertise, manager, stringLocalizer, false),

@@ -26,11 +26,11 @@ namespace Expertiser
                 return new BilledState(this.Expertise, this.Manager, this.StringLocalizer, this.IsNotified);
         }
 
-        private protected override Task InternalExecute(TableExpertise previousExpertise)
+        private protected override Task<bool> InternalExecute()
         {
             if (this.Expertise.CloseDate == null)
                 this.Expertise.CloseDate = DateTime.UtcNow;
-            return Task.CompletedTask;
+            return Task.FromResult(this.PreviousExpertise.StatusType == this.Expertise.StatusType);
         }
     }
 }

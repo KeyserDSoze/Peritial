@@ -22,7 +22,7 @@ namespace Expertiser
         private protected override ExpertyState GetNext()
             => new ToBeRevisedState(this.Expertise, this.Manager, this.StringLocalizer, this.IsNotified);
 
-        private protected override Task InternalExecute(TableExpertise previousExpertise)
-            => Task.CompletedTask;
+        private protected override Task<bool> InternalExecute() 
+            => Task.FromResult(this.PreviousExpertise.StatusType == this.Expertise.StatusType);
     }
 }

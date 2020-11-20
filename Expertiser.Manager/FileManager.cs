@@ -39,6 +39,16 @@ namespace Expertiser
             new FileModel("folder", "/////CompletedExpertise/", DateTime.UtcNow),
             new FileModel("folder", "/////ReservedNote/", DateTime.UtcNow),
         };
+        public StatusType GetMinimumStatus(string directory)
+        {
+            return directory.ToLower() switch
+            {
+                "rawexpertise" => StatusType.ToBeRevised,
+                "correctedexpertise" => StatusType.Revised,
+                "completedexpertise" => StatusType.ToSend,
+                _ => StatusType.Registered
+            };
+        }
         public async Task<IEnumerable<FileModel>> GetExpertiseFiles(string fileId)
         {
             var files = (await GetUriFiles(fileId).NoContext()).Select(x => new FileModel(x, DateTime.UtcNow));

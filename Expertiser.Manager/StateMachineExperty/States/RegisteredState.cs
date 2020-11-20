@@ -22,10 +22,7 @@ namespace Expertiser
         private protected override ExpertyState GetNext()
             => new AssignedState(this.Expertise, this.Manager, this.StringLocalizer, this.IsNotified);
 
-        private protected override async Task InternalExecute(TableExpertise previousExpertise)
-        {
-            if (previousExpertise.MemberId != this.Expertise.MemberId)
-                await this.NotifyAsync();
-        }
+        private protected override Task<bool> InternalExecute() 
+            => Task.FromResult(!string.IsNullOrWhiteSpace(this.Expertise.ContributorId));
     }
 }

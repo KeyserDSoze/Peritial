@@ -17,11 +17,12 @@ namespace Expertiser
     public abstract class ExpertyState
     {
         public abstract StatusType StatusType { get; }
-        private protected abstract Task InternalExecute(TableExpertise previousExpertise);
+        private protected abstract Task<bool> InternalExecute();
         public IStringLocalizer StringLocalizer { get; }
         private protected virtual string Body { get; }
         public Manager Manager { get; }
         public TableExpertise Expertise { get; private set; }
+        public TableExpertise PreviousExpertise { get; private set; }
         public bool IsNotified { get; private set; }
         private protected virtual bool IsNotificationNeeded => false;
         private protected abstract ExpertyState GetNext();
@@ -31,10 +32,14 @@ namespace Expertiser
         {
             Manager.Context.Update(this.Expertise);
             await Manager.Context.SaveChangesAsync().NoContext();
+            this.Manager.TelemetryManager.MyTelemetry.TrackTrace(LogLevel.Debug, "Update trace");
+            this.Expertise = await Manager.QueryManager.Expertises
+                        .FirstOrDefaultAsync(x => x.Id == this.Expertise.Id).NoContext();
         }
         public ExpertyState(TableExpertise expertise, Manager manager, IStringLocalizer stringLocalizer, bool isNotified)
         {
             this.Expertise = expertise;
+            this.PreviousExpertise = expertise;
             this.Manager = manager;
             this.StringLocalizer = stringLocalizer;
             this.IsNotified = isNotified;
@@ -47,32 +52,30 @@ namespace Expertiser
         }
         public async Task ExecuteAndNext(TableExpertise expertiseToUpdate)
         {
-            var expertise = this.Expertise;
             this.Expertise = expertiseToUpdate;
-            bool handled = expertise.Status != this.Expertise.Status;
-            await this.InternalExecute(expertise).NoContext();
+            bool handled = await this.InternalExecute().NoContext();
             await this.UpdateExpertiseAsync().NoContext();
-            this.Manager.TelemetryManager.MyTelemetry.TrackTrace(LogLevel.Debug, "Update trace");
-            this.Expertise = await Manager.Context.TableExpertise
-                .Include(x => x.Member)
-                .Include(x => x.Contributor)
-                        .FirstOrDefaultAsync(x => x.Id == this.Expertise.Id).NoContext();
             this.Manager.TelemetryManager.MyTelemetry.TrackTrace(LogLevel.Information, $"Handled: {handled} -> {this.Expertise.StatusType}");
-            if (!handled && (expertise.StatusType != this.Expertise.StatusType || this.Expertise.StatusType == StatusType.Registered))
-                await Next(this.Expertise.StatusType);
+            if (handled)
+                await Next(this.Expertise.StatusType + 1);
         }
         public async Task<ExpertyState> Next(StatusType minimumStatus)
         {
             this.Manager.TelemetryManager.MyTelemetry.TrackTrace(LogLevel.Information, $"{this.Expertise.StatusType} vs {minimumStatus}");
-            if (this.Expertise.StatusType >= minimumStatus)
+            var currentState = this;
+            int count = 0;
+            while (currentState.StatusType < minimumStatus)
             {
-                var next = this.GetNext();
-                this.Expertise.Status = (int)next.StatusType;
-                await this.UpdateExpertiseAsync().NoContext();
+                var next = currentState.GetNext();
+                currentState.Expertise.Status = (int)next.StatusType;
+                await currentState.UpdateExpertiseAsync().NoContext();
                 await next.NotifyAsync();
-                return next;
+                currentState = next;
+                count++;
+                if (count > 10)
+                    break;
             }
-            return this;
+            return currentState;
         }
         private protected async Task NotifyAsync()
         {
@@ -97,7 +100,7 @@ namespace Expertiser
                     body.Append(this.StringLocalizer["Best Regards"]);
                     body.Append("<br />");
                     body.Append(Manager.Title);
-                    notifications.Add(Manager.ServiceManager.EmailSender.SendEmailAsync(email, $"{this.StringLocalizer["Status"]} {this.StringLocalizer[this.StatusType.ToString()]} {(this.Attachments.Count > 0 ? this.StringLocalizer["With Attachments"] : string.Empty)}", body.ToString()));
+                    notifications.Add(Manager.ServiceManager.EmailSender.SendEmailAsync(email, $"{this.Expertise.ConcreteId} - {this.StringLocalizer["Status"]} {this.StringLocalizer[this.StatusType.ToString()]} {(this.Attachments.Count > 0 ? this.StringLocalizer["With Attachments"] : string.Empty)}", body.ToString()));
                 }
                 await Task.WhenAll(notifications);
                 this.IsNotified = true;

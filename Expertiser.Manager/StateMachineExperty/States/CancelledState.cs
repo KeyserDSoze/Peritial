@@ -22,12 +22,12 @@ namespace Expertiser
         private protected override ExpertyState GetNext()
             => new RegisteredState(this.Expertise, this.Manager, this.StringLocalizer, this.IsNotified);
 
-        private protected override Task InternalExecute(TableExpertise previousExpertise)
+        private protected override Task<bool> InternalExecute()
         {
             this.Expertise.ContributorId = null;
             this.Expertise.InspectionDate = null;
             this.Expertise.Liquidated = null;
-            return Task.CompletedTask;
+            return Task.FromResult(this.PreviousExpertise.StatusType == this.Expertise.StatusType);
         }
     }
 }

@@ -45,7 +45,7 @@ namespace Expertiser.Portal.Controllers
                 IEnumerable<string> files = await this.Manager.FileManager.SaveFileAsync(fileId, file.OpenReadStream(), file.FileName, file.ContentType, directory);
                 var state = await Manager.GetExpertyStateAsync(id, this.StringLocalizer);
                 state.AddAttachment(files);
-                await state.Next(minimumStatus);
+                await state.Next(this.Manager.FileManager.GetMinimumStatus(directory));
                 return Ok();
             }
             else
