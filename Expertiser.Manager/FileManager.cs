@@ -67,7 +67,7 @@ namespace Expertiser
             if (name == null)
                 name = Guid.NewGuid().ToString("N");
             else if (!name.Contains("."))
-                name = $"{name}/{Guid.NewGuid():N}";
+                name = $"{name}/{(!string.IsNullOrWhiteSpace(fileName) ? fileName.Split('.').FirstOrDefault() : Guid.NewGuid().ToString("N"))}";
             var upload = await new File()
             {
                 Name = $"{fileId}/{name}.{fileName.Split('.').Last()}",
