@@ -67,6 +67,7 @@ namespace Expertiser
             while (currentState.StatusType < minimumStatus)
             {
                 var next = currentState.GetNext();
+                bool handled = await this.InternalExecute().NoContext();
                 currentState.Expertise.Status = (int)next.StatusType;
                 await currentState.UpdateExpertiseAsync().NoContext();
                 await next.NotifyAsync();
