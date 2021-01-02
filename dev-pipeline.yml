@@ -3,12 +3,12 @@ trigger:
 
 resources:
   repositories:
-  - repository: Expertisier
+  - repository: "c5b6ecd6-1a81-4aaf-938e-c11a29a11fad"
     type: git
-    name: Expertisier.Pipeline
+    name: Pipeline
 
 stages:
-- template: prepare_tooling.yml@Expertisier.Pipeline
+- template: prepare_tooling.yml@Pipeline
   parameters:
     vmImage: 'ubuntu-latest'
     restoreBuildProjects: 'Expertiser.Portal/*.csproj'
