@@ -3,9 +3,9 @@ trigger:
 
 resources:
   repositories:
-  - repository: Expertisier.Pipeline
+  - repository: Expertisier
     type: git
-    name: main
+    name: Expertisier.Pipeline
 
 stages:
 - template: dev-pipeline.yml@main
