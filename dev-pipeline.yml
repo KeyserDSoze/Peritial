@@ -5,10 +5,10 @@ resources:
   repositories:
   - repository: Expertisier
     type: git
-    name: "c5b6ecd6-1a81-4aaf-938e-c11a29a11fad"
+    name: Expertisier.Pipeline
 
 stages:
-- template: prepare_tooling.yml@Pipeline
+- template: dev-pipeline.yml@Expertisier.Pipeline
   parameters:
     vmImage: 'ubuntu-latest'
     restoreBuildProjects: 'Expertiser.Portal/*.csproj'
