@@ -3,9 +3,9 @@ trigger:
 
 resources:
   repositories:
-  - repository: "c5b6ecd6-1a81-4aaf-938e-c11a29a11fad"
+  - repository: Expertisier
     type: git
-    name: Pipeline
+    name: "c5b6ecd6-1a81-4aaf-938e-c11a29a11fad"
 
 stages:
 - template: prepare_tooling.yml@Pipeline
