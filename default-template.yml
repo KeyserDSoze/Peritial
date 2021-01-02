@@ -30,7 +30,7 @@ stages:
         command: 'restore'
         projects: ${{ parameters.restoreBuildProjects }}
         feedsToUse: 'select'
-        vstsFeed: '9072218a-afc6-4668-aee7-e7769e98c15f'
+        vstsFeed: '2389554c-6845-44d7-8bfe-fb65df09be9b'
 
     - task: DotNetCoreCLI@2
       displayName: Build
