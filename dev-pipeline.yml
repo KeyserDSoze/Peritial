@@ -1,11 +1,7 @@
 trigger:
 - dev
 
-resources:
-  repositories:
-  - repository: Expertisier.Pipeline
-    type: git
-    name: templates
+
 
 stages:
 - template: prepare_tooling.yml@templates
