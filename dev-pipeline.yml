@@ -8,7 +8,7 @@ resources:
     name: Expertisier.Pipeline
 
 stages:
-- template: dev-pipeline.yml@Expertisier
+- template: template-pipeline.yml@Expertisier
   parameters:
     vmImage: 'ubuntu-latest'
     restoreBuildProjects: 'Expertiser.Portal/*.csproj'
