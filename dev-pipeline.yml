@@ -1,8 +1,14 @@
 trigger:
 - dev
 
+resources:
+  repositories:
+  - repository: templates
+    type: git
+    name: templates
+
 stages:
-- template: default-template.yml
+- template: prepare_tooling.yml@templates
   parameters:
     vmImage: 'ubuntu-latest'
     restoreBuildProjects: 'Expertiser.Portal/*.csproj'
