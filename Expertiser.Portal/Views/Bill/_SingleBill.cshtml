@@ -1,5 +1,7 @@
 ﻿@model (string AccordedId, List<BillStat> Bills)
-
+@{ 
+    int counter = 1;
+}
 @if (Model.Bills.Any())
 {
     <tr class="hide-table-padding">
@@ -8,6 +10,7 @@
                 <table class="table">
                     <thead>
                         <tr>
+                            <th scope="col">@SharedLocalizer["Counter"]</th>
                             <th scope="col">@SharedLocalizer["ConcreteId"]</th>
                             <th scope="col">@SharedLocalizer["Contributor"]</th>
                             <th scope="col">@SharedLocalizer["Total"]</th>
@@ -20,6 +23,7 @@
                         @foreach (var singleStat in Model.Bills)
                         {
                             <tr>
+                                <td>@counter</td>
                                 <td style="cursor:pointer">
                                     <rystem-ajax-modal rystem-request-context="Manager.AjaxRequestManager.EditInModal(singleStat.ExpertiseId)" rystem-size="ExtraLarge">
                                         @singleStat.ConcreteId
@@ -31,6 +35,7 @@
                                 <td>@singleStat.TotalPercentage.ToString("N2")</td>
                                 <td>@singleStat.ExternalId</td>
                             </tr>
+                            counter++;
                         }
                     </tbody>
                 </table>
