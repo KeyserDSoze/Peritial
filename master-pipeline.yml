@@ -1,8 +1,14 @@
 trigger:
-- master
+- dev
+
+resources:
+  repositories:
+  - repository: Expertisier
+    type: git
+    name: Expertisier.Pipeline
 
 stages:
-- template: default-template.yml
+- template: template-pipeline.yml@Expertisier
   parameters:
     vmImage: 'ubuntu-latest'
     restoreBuildProjects: 'Expertiser.Portal/*.csproj'
