@@ -32,7 +32,8 @@ namespace Expertiser
         {
             if (tableAccident.Id == 0)
             {
-                var startCurrentYear = new DateTime(DateTime.UtcNow.Year, 1, 1);
+                DateTime date = tableAccident.AccidentDate != default ? tableAccident.AccidentDate : DateTime.UtcNow;
+                var startCurrentYear = new DateTime(date.Year, 1, 1);
                 using (var locked = await TrafficLight.CreateAsync())
                 {
                     var previousAccident = await Manager.Context.TableAccident
