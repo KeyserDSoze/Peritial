@@ -27,6 +27,8 @@ namespace Expertiser.Database.Models
         public DateTime AccidentDate { get; set; }
         [Column(TypeName = "datetime")]
         public DateTime? DenunciationDate { get; set; }
+        [Column(TypeName = "datetime")]
+        public DateTime UploadDate { get; set; }
         public int? InsuranceAdjusterId { get; set; }
         public int YearlyId { get; set; }
 

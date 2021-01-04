@@ -125,6 +125,7 @@ namespace Expertiser.Portal.Controllers
             {
                 if (tableAccident.Id == 0)
                 {
+                    tableAccident.UploadDate = DateTime.UtcNow;
                     await Manager.QueryManager.InsertAccidentAsync(tableAccident);
                     TableExpertise tableExpertise = new TableExpertise()
                     {
