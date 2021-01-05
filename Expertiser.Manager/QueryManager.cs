@@ -36,7 +36,7 @@ namespace Expertiser
                 using (var locked = await TrafficLight.CreateAsync())
                 {
                     var previousAccident = await Manager.Context.TableAccident
-                        .Where(x => x.AccidentDate >= startCurrentYear)
+                        .Where(x => x.UploadDate >= startCurrentYear)
                         .OrderByDescending(x => x.YearlyId)
                         .FirstOrDefaultAsync();
                     int id = 1;
