@@ -140,7 +140,7 @@ namespace Expertiser
                 using (var stream = new MemoryStream(importedFile.Content))
                 {
                     stream.Position = 0;
-                    await Manager.FileManager.SaveFileAsync(expertise.FileId, stream, importedFile.Name, importedFile.ContentType, $"AccidentDocs/{importedFile.Name.Split('.').First()}");
+                    await Manager.FileManager.SaveFileAsync(expertise.FileId, stream, importedFile.Name, importedFile.ContentType, $"AccidentDocs/");
                 }
             }
             return accident.Id;
