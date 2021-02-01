@@ -56,6 +56,8 @@ namespace Expertiser.Portal.Controllers
 
         private async Task<IEnumerable<UserBillStat>> GetBills(DateStats dateStats)
         {
+            dateStats.From = dateStats.From.AddSeconds(-2);
+            dateStats.To = dateStats.To.AddSeconds(-2);
             Dictionary<string, UserBillStat> bills = new Dictionary<string, UserBillStat>();
             foreach (var billByMember in (await FindCorrectBills()
                 .ToListAsync()).GroupBy(x => x.MemberId))
