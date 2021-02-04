@@ -37,7 +37,7 @@ namespace Expertiser.Portal.Controllers
                 foreach (ModelStateEntry child in ModelState.Root.Children)
                 {
                     string key = (string)child.GetType().GetProperties().First(x => x.Name == "Key").GetValue(child);
-                    if (key != null && key.ToLower() != "id" && key.ToLower() != "yearlyid" && child.ValidationState == ModelValidationState.Invalid)
+                    if (key != null && key.ToLower() != "id" && key.ToLower() != "yearlyid" && key.ToLower() != "uploaddate" && child.ValidationState == ModelValidationState.Invalid)
                         return false;
                 }
                 return true;
