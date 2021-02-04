@@ -142,6 +142,8 @@ namespace Expertiser.Portal.Controllers
                 }
                 else
                 {
+                    if (tableAccident.UploadDate == null)
+                        tableAccident.UploadDate = DateTime.UtcNow;
                     Manager.Context.Update(tableAccident);
                     await Manager.Context.SaveChangesAsync();
                     await ManageDamageds(tableAccident.Id);
