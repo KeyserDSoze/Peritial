@@ -13,19 +13,20 @@ using System.Xml.Serialization;
 
 namespace Expertiser
 {
-    public class Amissima : IImporter
+    public class ClassicXml : IImporter
     {
         public ImportedExperty Import(Stream content, Manager manager)
         {
-            var tableInsuranceCompany = manager.Context.TableInsuranceCompany.FirstOrDefault(x => x.Label.ToLower().Contains("amissima"));
-            var amissimaXml = (AmissimaXml)new XmlSerializer(typeof(AmissimaXml)).Deserialize(content);
+            var classicXml = (BaseXml)new XmlSerializer(typeof(BaseXml)).Deserialize(content);
+            string companyName = classicXml.Customer.Company.CompanyName.Split(' ').FirstOrDefault().ToLower();
+            var tableInsuranceCompany = manager.Context.TableInsuranceCompany.FirstOrDefault(x => x.Label.ToLower().Contains(companyName));
             var importedExperty = new ImportedExperty()
             {
                 Accident = new TableAccident()
                 {
-                    AccidentDate = DateTime.ParseExact(amissimaXml.AccidentDate, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
-                    DenunciationDate = DateTime.ParseExact(amissimaXml.DenunciationDate, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
-                    ExternalId = amissimaXml.Id
+                    AccidentDate = DateTime.ParseExact(classicXml.AccidentDate, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
+                    DenunciationDate = DateTime.ParseExact(classicXml.DenunciationDate, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
+                    ExternalId = classicXml.Id
                 },
                 Expertise = new TableExpertise()
                 {
@@ -34,38 +35,38 @@ namespace Expertiser
                 },
                 InsuranceAdjuster = new TableInsuranceAdjuster()
                 {
-                    Name = string.Join(" ", amissimaXml.InsuranceAdjuster.Split('-').SelectMany(x => x.Trim().Split(' ')).Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Substring(0, 1).ToUpper() + x.Substring(1).ToLower()).Reverse())
+                    Name = string.Join(" ", classicXml.InsuranceAdjuster.Split('-').SelectMany(x => x.Trim().Split(' ')).Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Substring(0, 1).ToUpper() + x.Substring(1).ToLower()).Reverse())
                 },
-                Files = amissimaXml.Files.Select(x => new ImportedFile() { Name = x.Name, Content = Convert.FromBase64String(x.Value), ContentType = "application/pdf" }),
+                Files = classicXml.Files.Select(x => new ImportedFile() { Name = x.Name, Content = Convert.FromBase64String(x.Value), ContentType = "application/pdf" }),
                 Insurance = new TableInsurance()
                 {
                     InsuranceCompanyId = tableInsuranceCompany.Id,
-                    ExternalId = amissimaXml.Customer.Insurance.Id,
+                    ExternalId = classicXml.Customer.Insurance.Id,
                 },
                 Location = new TableLocation()
                 {
                 },
                 Customer = new TableCustomer()
                 {
-                    Name = $"{amissimaXml.Customer.Name} {amissimaXml.Customer.Surname}".Replace("-", string.Empty).Trim(),
-                    FiscalCode = !string.IsNullOrWhiteSpace(amissimaXml.Customer.FiscalCode) ? amissimaXml.Customer.FiscalCode : amissimaXml.Customer.PIVA,
+                    Name = $"{classicXml.Customer.Name} {classicXml.Customer.Surname}".Replace("-", string.Empty).Trim(),
+                    FiscalCode = !string.IsNullOrWhiteSpace(classicXml.Customer.FiscalCode) ? classicXml.Customer.FiscalCode : classicXml.Customer.PIVA,
                     Address = new TableLocation()
                     {
-                        Address = $"{amissimaXml.Customer.Address.Address} {amissimaXml.Customer.Address.CivicNumber}",
-                        PostalCode = amissimaXml.Customer.Address.PostalCode,
+                        Address = $"{classicXml.Customer.Address.Address} {classicXml.Customer.Address.CivicNumber}",
+                        PostalCode = classicXml.Customer.Address.PostalCode,
                     }
                 },
                 Contractor = new TableCustomer()
                 {
-                    Name = $"{amissimaXml.Customer.Name} {amissimaXml.Customer.Surname}".Replace("-", string.Empty).Trim(),
-                    FiscalCode = !string.IsNullOrWhiteSpace(amissimaXml.Customer.FiscalCode) ? amissimaXml.Customer.FiscalCode : amissimaXml.Customer.PIVA,
+                    Name = $"{classicXml.Customer.Name} {classicXml.Customer.Surname}".Replace("-", string.Empty).Trim(),
+                    FiscalCode = !string.IsNullOrWhiteSpace(classicXml.Customer.FiscalCode) ? classicXml.Customer.FiscalCode : classicXml.Customer.PIVA,
                     Address = new TableLocation()
                     {
-                        Address = $"{amissimaXml.Customer.Address.Address} {amissimaXml.Customer.Address.CivicNumber}",
-                        PostalCode = amissimaXml.Customer.Address.PostalCode,
+                        Address = $"{classicXml.Customer.Address.Address} {classicXml.Customer.Address.CivicNumber}",
+                        PostalCode = classicXml.Customer.Address.PostalCode,
                     }
                 },
-                Damageds = amissimaXml.Damageds.Select(x => new TableCustomer()
+                Damageds = classicXml.Damageds.Select(x => new TableCustomer()
                 {
                     Name = $"{x.Name} {x.Surname}".Replace("-", string.Empty).Trim(),
                     FiscalCode = !string.IsNullOrWhiteSpace(x.FiscalCode) ? x.FiscalCode : x.PIVA,
@@ -77,12 +78,12 @@ namespace Expertiser
                 }),
                 Inspectorate = new TableInspectorate()
                 {
-                    ExternalId = $"{amissimaXml.Customer.Company.CompanyName} - {amissimaXml.Customer.Company.InsuranceInspectorateCode}"
+                    ExternalId = $"{classicXml.Customer.Company.CompanyName} - {classicXml.Customer.Company.InsuranceInspectorateCode}"
                 },
                 InsuranceCompany = tableInsuranceCompany,
                 InsuranceAgency = new TableInsuranceAgency
                 {
-                    ExternalId = $"{amissimaXml.Customer.Company.CompanyName} - {amissimaXml.Customer.Company.InsuranceAgencyCode}"
+                    ExternalId = $"{classicXml.Customer.Company.CompanyName} - {classicXml.Customer.Company.InsuranceAgencyCode}"
                 }
             };
             foreach (var damaged in importedExperty.Damageds)
@@ -96,7 +97,7 @@ namespace Expertiser
         }
 
         [Serializable, XmlRoot("it.autosoftws.ReIncaricoRecord")]
-        public class AmissimaXml
+        public class BaseXml
         {
             [XmlElement(ElementName = "NumeroSinistro")]
             public string Id { get; set; }
@@ -107,15 +108,15 @@ namespace Expertiser
             [XmlElement(ElementName = "NomeLiquidatore")]
             public string InsuranceAdjuster { get; set; }
             [XmlElement(ElementName = "Contraente")]
-            public AmissimaCustomer Customer { get; set; }
+            public ClassicCustomer Customer { get; set; }
             [XmlArray("allegati")]
-            [XmlArrayItem("it.autosoftws.AllegatoRecord", typeof(AmissimaFile))]
-            public AmissimaFile[] Files { get; set; }
+            [XmlArrayItem("it.autosoftws.AllegatoRecord", typeof(ClassicFile))]
+            public ClassicFile[] Files { get; set; }
             [XmlArray("Danneggiati")]
-            [XmlArrayItem("it.autosoftws.DatiDanneggitoRecord", typeof(AmissimaCustomer))]
-            public AmissimaCustomer[] Damageds { get; set; }
+            [XmlArrayItem("it.autosoftws.DatiDanneggitoRecord", typeof(ClassicCustomer))]
+            public ClassicCustomer[] Damageds { get; set; }
         }
-        public class AmissimaCustomer
+        public class ClassicCustomer
         {
             [XmlElement(ElementName = "Nome")]
             public string Name { get; set; }
@@ -126,15 +127,15 @@ namespace Expertiser
             [XmlElement(ElementName = "PartitaIVA")]
             public string PIVA { get; set; }
             [XmlElement(ElementName = "indirizzo")]
-            public AmissimaAddress Address { get; set; }
+            public ClassicAddress Address { get; set; }
             [XmlElement(ElementName = "Compagnia")]
-            public AmissimaCompany Company { get; set; }
+            public ClassicCompany Company { get; set; }
             [XmlElement(ElementName = "residenza")]
-            public AmissimaAddress Residence { get; set; }
+            public ClassicAddress Residence { get; set; }
             [XmlElement(ElementName = "Polizza")]
-            public AmissimaInsurance Insurance { get; set; }
+            public ClassicInsurance Insurance { get; set; }
         }
-        public class AmissimaCompany
+        public class ClassicCompany
         {
             [XmlElement(ElementName = "CodiceCompagnia")]
             public string InsuranceAgencyCode { get; set; }
@@ -143,12 +144,12 @@ namespace Expertiser
             [XmlElement(ElementName = "NomeCompagnia")]
             public string CompanyName { get; set; }
         }
-        public class AmissimaInsurance
+        public class ClassicInsurance
         {
             [XmlElement(ElementName = "Numero")]
             public string Id { get; set; }
         }
-        public class AmissimaAddress
+        public class ClassicAddress
         {
             [XmlElement(ElementName = "Cap")]
             public string PostalCode { get; set; }
@@ -159,7 +160,7 @@ namespace Expertiser
             [XmlElement(ElementName = "NumeroCivico")]
             public string CivicNumber { get; set; }
         }
-        public class AmissimaFile
+        public class ClassicFile
         {
             [XmlElement(ElementName = "Nome")]
             public string Name { get; set; }

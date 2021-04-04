@@ -14,8 +14,8 @@ namespace Expertiser
         {
             switch (type)
             {
-                case ImporterType.Amissima:
-                    return new Amissima();
+                case ImporterType.Classic:
+                    return new ClassicXml();
                 default:
                     throw new NotImplementedException();
             }

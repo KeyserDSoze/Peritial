@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Authorization;
 using Expertiser.Base.Constant;
 using Rystem.Web.Backoffice;
 using Microsoft.Extensions.Localization;
+using Microsoft.AspNetCore.Http;
 
 namespace Expertiser.Portal.Controllers
 {
@@ -82,6 +83,26 @@ namespace Expertiser.Portal.Controllers
                 }
             }
             return View(tableInsuranceCompany);
+        }
+        [HttpPost]
+        public async Task<IActionResult> ImportTemplate(int id, IFormFile file)
+        {
+            try
+            {
+                if (file.ContentType.StartsWith("application/vnd.openxmlformats"))
+                {
+                    await Manager.FileManager.SaveTemplateAsync(id, file.ContentType, file.OpenReadStream());
+                    return Ok();
+                }
+                else
+                {
+                    return BadRequest("Not supported format.");
+                }
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
         }
     }
 }

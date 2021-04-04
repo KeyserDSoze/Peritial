@@ -9,6 +9,11 @@
     <a asp-action="Index">@SharedLocalizer["Back to List"]</a>
     <hr />
     <a asp-action="Edit" asp-controller="Accident" asp-route-id="@Model?.AccidentId">@SharedLocalizer["Back to Accident"]</a>
+    @if (Model != null && Model.StatusType >= Expertiser.Interfaces.StatusType.Revised)
+    {
+        <hr />
+        <a href="@Manager.BaseUri/Experty/DownloadFinalDocument/@Model.Id" download target="_blank">@SharedLocalizer["Download"] @SharedLocalizer["report"]</a>
+    }
 </div>
 <hr />
 <div class="row">
