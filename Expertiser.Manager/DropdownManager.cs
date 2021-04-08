@@ -202,8 +202,8 @@ namespace Expertiser
                 {
                     Value = x.Id.ToString(),
                     Group = x.InsuranceCompany.Label,
-                    Label = x.ExternalId,
-                    //Label = $"{x.Customer.Name} - {x.ExternalId}",
+                    //Label = x.ExternalId,
+                    Label = $"{x.ExternalId} - {x.Customer.Name} - {x.Customer.Address.Address} - {x.Customer.Address.City.Name}",
                     Selected = x.Id == insuranceId
                 });
         }
