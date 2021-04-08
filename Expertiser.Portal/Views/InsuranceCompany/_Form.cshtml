@@ -28,6 +28,15 @@
         <input class="form-check-input" asp-for="IsActive" /> @Html.DisplayNameFor(model => model.IsActive)
     </label>
 </div>
+@if (Model != null && Model.Id > 0)
+{
+    <div class="form-group">
+        <a href="https://@Manager.BlobBaseUri/templates/@(Model.Id).docx" target="_blank" download>@SharedLocalizer["Download"] @SharedLocalizer["Template"]</a>
+    </div>
+    <div class="form-group">
+        <rystem-ajax-file rystem-message='@SharedLocalizer["Drag&Drop or Click to Upload"] @SharedLocalizer["Template"]' rystem-request-context='new RoutingContext() { Action = "ImportTemplate", Controller = "InsuranceCompany" }'></rystem-ajax-file>
+    </div>
+}
 <div class="form-group">
     <input type="submit" value="@SharedLocalizer["Save"]" class="btn btn-primary" />
 </div>

@@ -168,5 +168,20 @@ namespace Expertiser.Portal.Controllers
             await Manager.Context.SaveChangesAsync();
             return PartialView("_EditListBill", await Manager.QueryManager.ExpertiseBills.FirstOrDefaultAsync(x => x.Id == bill.ExpertiseId));
         }
+        [HttpGet]
+        public async Task<IActionResult> DownloadFinalDocument(int id)
+        {
+            try
+            {
+                return File(await Manager.FileManager.CreateFinalDocumentationFromTemplateAsync(
+                                   await Manager.QueryManager.Expertises
+                                          .FirstOrDefaultAsync(x => x.Id == id)),
+                                       "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
     }
 }

@@ -1,4 +1,5 @@
-﻿using Expertiser.Base.Constant;
+﻿using DocumentFormat.OpenXml;
+using Expertiser.Base.Constant;
 using Expertiser.Database.Models;
 using Expertiser.Interfaces;
 using Microsoft.AspNetCore.Http;
@@ -19,6 +20,8 @@ using System.Security.Claims;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Web;
+using DocumentFormat.OpenXml.Wordprocessing;
+using DocumentFormat.OpenXml.Packaging;
 
 namespace Expertiser
 {
@@ -78,6 +81,55 @@ namespace Expertiser
                 Stream = stream
             }.WriteAsync();
             return await this.GetUriFiles(fileId);
+        }
+        public async Task<bool> SaveTemplateAsync(int companyId, string contentType, Stream stream)
+        {
+            var upload = await new Template()
+            {
+                Name = $"{companyId}.docx",
+                Properties = new DataProperties()
+                {
+                    ContentType = contentType
+                },
+                Stream = stream
+            }.WriteAsync();
+            return upload;
+        }
+        public async Task<Stream> CreateFinalDocumentationFromTemplateAsync(TableExpertise expertise)
+        {
+            var template = await new Template()
+            {
+                Name = $"{expertise.Accident.InsuranceAgency.InsuranceCompany.Id}.docx",
+            }.FetchAsync();
+            using (WordprocessingDocument wordDocument =
+                WordprocessingDocument.Open(template.Stream, true))
+            {
+                foreach (var element in wordDocument.MainDocumentPart.Document.Elements())
+                {
+                    ChangeElement(element);
+                }
+                wordDocument.MainDocumentPart.Document.Save();
+            }
+            template.Stream.Position = 0;
+            return template.Stream;
+
+            void ChangeElement(OpenXmlElement openXmlElement)
+            {
+                if (openXmlElement.HasChildren)
+                {
+                    foreach (var element in openXmlElement.Elements())
+                    {
+                        if (element is Text)
+                        {
+                            string text = (element as Text).Text;
+                            if (text.Contains("{ExternalId}"))
+                                (element as Text).Text = text.Replace("{ExternalId}", expertise.Accident.ExternalId);
+                        }
+                        else
+                            ChangeElement(element);
+                    }
+                }
+            }
         }
     }
 }

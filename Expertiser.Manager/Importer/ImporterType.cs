@@ -10,6 +10,6 @@ namespace Expertiser
 {
     public enum ImporterType
     {
-        Amissima
+        Classic,
     }
 }

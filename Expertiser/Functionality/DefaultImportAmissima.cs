@@ -18,7 +18,7 @@ namespace Expertiser.Functionality
         {
             try
             {
-                var importer = new ImporterFactory().Create(ImporterType.Amissima);
+                var importer = new ImporterFactory().Create(ImporterType.Classic);
                 string sdj = System.IO.File.ReadAllText(FilePath);
                 XDocument xml = XDocument.Parse(sdj);
                 var t = importer.Import(new MemoryStream(Encoding.UTF8.GetBytes(sdj)), new Manager());
