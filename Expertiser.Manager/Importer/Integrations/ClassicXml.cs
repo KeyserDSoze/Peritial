@@ -15,17 +15,40 @@ namespace Expertiser
 {
     public class ClassicXml : IImporter
     {
+        private IBaseXml GetBaseXml(Stream content)
+        {
+            try
+            {
+                return (BaseXml)new XmlSerializer(typeof(BaseXml)).Deserialize(content);
+            }
+            catch
+            {
+                content.Position = 0;
+                return (BaseBaseXml)new XmlSerializer(typeof(BaseBaseXml)).Deserialize(content);
+            }
+        }
+        private DateTime ParseTime(string value)
+        {
+            try
+            {
+                return DateTime.ParseExact(value, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+            }
+            catch
+            {
+                return DateTime.ParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture);
+            }
+        }
         public ImportedExperty Import(Stream content, Manager manager)
         {
-            var classicXml = (BaseXml)new XmlSerializer(typeof(BaseXml)).Deserialize(content);
+            var classicXml = GetBaseXml(content);
             string companyName = classicXml.Customer.Company.CompanyName.Split(' ').FirstOrDefault().ToLower();
             var tableInsuranceCompany = manager.Context.TableInsuranceCompany.FirstOrDefault(x => x.Label.ToLower().Contains(companyName));
             var importedExperty = new ImportedExperty()
             {
                 Accident = new TableAccident()
                 {
-                    AccidentDate = DateTime.ParseExact(classicXml.AccidentDate, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
-                    DenunciationDate = DateTime.ParseExact(classicXml.DenunciationDate, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
+                    AccidentDate = ParseTime(classicXml.AccidentDate),
+                    DenunciationDate = ParseTime(classicXml.DenunciationDate),
                     ExternalId = classicXml.Id
                 },
                 Expertise = new TableExpertise()
@@ -37,7 +60,7 @@ namespace Expertiser
                 {
                     Name = string.Join(" ", classicXml.InsuranceAdjuster.Split('-').SelectMany(x => x.Trim().Split(' ')).Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Substring(0, 1).ToUpper() + x.Substring(1).ToLower()).Reverse())
                 },
-                Files = classicXml.Files.Select(x => new ImportedFile() { Name = x.Name, Content = Convert.FromBase64String(x.Value), ContentType = "application/pdf" }),
+                Files = classicXml.Files?.Select(x => new ImportedFile() { Name = x.Name, Content = Convert.FromBase64String(x.Value), ContentType = "application/pdf" }) ?? new List<ImportedFile>(),
                 Insurance = new TableInsurance()
                 {
                     InsuranceCompanyId = tableInsuranceCompany.Id,
@@ -95,9 +118,38 @@ namespace Expertiser
             }
             return importedExperty;
         }
-
+        public interface IBaseXml
+        {
+            string Id { get; set; }
+            string AccidentDate { get; set; }
+            string DenunciationDate { get; set; }
+            string InsuranceAdjuster { get; set; }
+            ClassicCustomer Customer { get; set; }
+            ClassicFile[] Files { get; set; }
+            ClassicCustomer[] Damageds { get; set; }
+        }
+        [Serializable, XmlRoot("it.autosoftws.ReIncaricoBaseRecord")]
+        public class BaseBaseXml : IBaseXml
+        {
+            [XmlElement(ElementName = "NumeroSinistro")]
+            public string Id { get; set; }
+            [XmlElement(ElementName = "DataIncarico")]
+            public string AccidentDate { get; set; }
+            [XmlElement(ElementName = "DataOraSinistro")]
+            public string DenunciationDate { get; set; }
+            [XmlElement(ElementName = "NomeLiquidatore")]
+            public string InsuranceAdjuster { get; set; }
+            [XmlElement(ElementName = "Contraente")]
+            public ClassicCustomer Customer { get; set; }
+            [XmlArray("allegati")]
+            [XmlArrayItem("it.autosoftws.AllegatoRecord", typeof(ClassicFile))]
+            public ClassicFile[] Files { get; set; }
+            [XmlArray("Danneggiati")]
+            [XmlArrayItem("it.autosoftws.DatiDanneggitoRecord", typeof(ClassicCustomer))]
+            public ClassicCustomer[] Damageds { get; set; }
+        }
         [Serializable, XmlRoot("it.autosoftws.ReIncaricoRecord")]
-        public class BaseXml
+        public class BaseXml : IBaseXml
         {
             [XmlElement(ElementName = "NumeroSinistro")]
             public string Id { get; set; }
