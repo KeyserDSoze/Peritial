@@ -9,7 +9,6 @@ namespace Expertiser.Database.Models
     [ModelMetadataType(typeof(TableInsuranceMetadata))]
     public partial class TableInsurance
     {
-
     }
     public partial class TableInsuranceMetadata
     {

@@ -7,11 +7,11 @@ namespace Expertiser
     public static class Const
     {
 #if DEBUG
-        public const string DatabaseConnectionString = "Server=tcp:experty.database.windows.net;Initial Catalog=Experty-Dev;Persist Security Info=True;User ID=Experty;Password=REDACTED;MultipleActiveResultSets=True;Connection Timeout=30;";
-        public const string StorageConnectionString = "DefaultEndpointsProtocol=https;AccountName=pirati;AccountKey=REDACTED;EndpointSuffix=core.windows.net";
+        public const string DatabaseConnectionString = "Server=tcp:expertydb.database.windows.net;Initial Catalog=Experty-Dev;Persist Security Info=True;User ID=experty;Password=REDACTED;MultipleActiveResultSets=True;Connection Timeout=30;";
+        public const string StorageConnectionString = "DefaultEndpointsProtocol=https;AccountName=expertysa;AccountKey=REDACTED;EndpointSuffix=core.windows.net";
 #else
-        public const string DatabaseConnectionString = "Server=tcp:experty.database.windows.net;Initial Catalog=Experty;Persist Security Info=True;User ID=Experty;Password=REDACTED;MultipleActiveResultSets=True;Connection Timeout=30;";
-        public const string StorageConnectionString = "DefaultEndpointsProtocol=https;AccountName=experty;AccountKey=REDACTED;EndpointSuffix=core.windows.net";
+        public const string DatabaseConnectionString = "Server=tcp:expertydb.database.windows.net;Initial Catalog=Experty;Persist Security Info=True;User ID=experty;Password=REDACTED;MultipleActiveResultSets=True;Connection Timeout=30;";
+        public const string StorageConnectionString = "DefaultEndpointsProtocol=https;AccountName=expertysa;AccountKey=REDACTED;EndpointSuffix=core.windows.net";
 #endif
         public static class Email
         {

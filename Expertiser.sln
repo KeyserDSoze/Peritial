@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 16
-VisualStudioVersion = 16.0.29920.165
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31919.166
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Expertiser", "Expertiser\Expertiser.csproj", "{FBC5B1B4-2BE6-41CE-A7BF-5D02ABD768E7}"
 EndProject
@@ -22,6 +22,14 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Expertiser.Database", "Expertiser.Database", "{9B6C5465-0A65-4227-ABDB-72FF4BDA23E0}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Expertiser.Web", "Expertiser.Web", "{7D4CF4D0-8230-4FD1-9A6A-68803CE18BE4}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Rystem", "Rystem", "{345C9A68-8CDC-40A1-9AF9-87DE1116A1F9}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Rystem", "Rystem\Rystem.csproj", "{FE70ED17-F36C-48EF-B98D-EF781E36188C}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Rystem.Interfaces", "Rystem.Interfaces\Rystem.Interfaces.csproj", "{C6B76B95-030D-4439-BA72-603A0B4EA290}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Rystem.Web", "Rystem.Web\Rystem.Web.csproj", "{041FAB10-658A-434B-9F62-4A274AD86D36}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -53,6 +61,18 @@ Global
 		{7449FF85-37F8-4861-B26C-CA39576662A9}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{7449FF85-37F8-4861-B26C-CA39576662A9}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{7449FF85-37F8-4861-B26C-CA39576662A9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FE70ED17-F36C-48EF-B98D-EF781E36188C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FE70ED17-F36C-48EF-B98D-EF781E36188C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FE70ED17-F36C-48EF-B98D-EF781E36188C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FE70ED17-F36C-48EF-B98D-EF781E36188C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C6B76B95-030D-4439-BA72-603A0B4EA290}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C6B76B95-030D-4439-BA72-603A0B4EA290}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C6B76B95-030D-4439-BA72-603A0B4EA290}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C6B76B95-030D-4439-BA72-603A0B4EA290}.Release|Any CPU.Build.0 = Release|Any CPU
+		{041FAB10-658A-434B-9F62-4A274AD86D36}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{041FAB10-658A-434B-9F62-4A274AD86D36}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{041FAB10-658A-434B-9F62-4A274AD86D36}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{041FAB10-658A-434B-9F62-4A274AD86D36}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -64,6 +84,9 @@ Global
 		{F1F7BAF2-F7E4-470A-93D5-923233F31857} = {C25D2A41-52BF-4837-B5D2-62E436999A83}
 		{E6A2C2C7-CB06-495B-96A2-BBCFC59CDF91} = {7D4CF4D0-8230-4FD1-9A6A-68803CE18BE4}
 		{7449FF85-37F8-4861-B26C-CA39576662A9} = {C25D2A41-52BF-4837-B5D2-62E436999A83}
+		{FE70ED17-F36C-48EF-B98D-EF781E36188C} = {345C9A68-8CDC-40A1-9AF9-87DE1116A1F9}
+		{C6B76B95-030D-4439-BA72-603A0B4EA290} = {345C9A68-8CDC-40A1-9AF9-87DE1116A1F9}
+		{041FAB10-658A-434B-9F62-4A274AD86D36} = {345C9A68-8CDC-40A1-9AF9-87DE1116A1F9}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {9BF98413-7B6F-479B-8F54-BDE539EFF7D6}
