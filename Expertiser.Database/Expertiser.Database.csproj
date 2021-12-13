@@ -16,12 +16,14 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="Rystem.Interfaces" Version="7.3.1" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Expertiser.Base\Expertiser.Base.csproj" />
     <ProjectReference Include="..\Expertiser.Interfaces\Expertiser.Interfaces.csproj" />
+    <ProjectReference Include="..\Rystem.Interfaces\Rystem.Interfaces.csproj" />
+    <ProjectReference Include="..\Rystem.Web\Rystem.Web.csproj" />
+    <ProjectReference Include="..\Rystem\Rystem.csproj" />
   </ItemGroup>
 
 </Project>

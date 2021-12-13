@@ -29,9 +29,9 @@ namespace Expertiser
         public IHttpContextAccessor HttpContextAccessor { get; }
         public string BaseUri => $"{HttpContextAccessor.HttpContext.Request.Scheme}://{HttpContextAccessor.HttpContext.Request.Host}";
 #if DEBUG
-        public string BlobBaseUri => "pirati.blob.core.windows.net";
+        public string BlobBaseUri => "expertysa.blob.core.windows.net";
 #else
-        public string BlobBaseUri => "experty.blob.core.windows.net";
+        public string BlobBaseUri => "expertysa.blob.core.windows.net";
 #endif
         public UserManager<IdentityUser> UserManager { get; }
         public RoleManager<IdentityRole> RoleManager { get; }
