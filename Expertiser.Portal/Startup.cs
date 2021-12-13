@@ -17,7 +17,6 @@ using Microsoft.AspNetCore.Mvc.Razor;
 using System.Globalization;
 using Microsoft.AspNetCore.Localization;
 using Microsoft.Extensions.Options;
-using Microsoft.Extensions.Localization;
 using System.Reflection;
 using Rystem.Web;
 using Microsoft.AspNetCore.Authorization;
