@@ -7,7 +7,7 @@ namespace Expertiser
     public static class Const
     {
 #if DEBUG
-        public const string DatabaseConnectionString = "Server=tcp:expertydb.database.windows.net;Initial Catalog=Experty-Dev;Persist Security Info=True;User ID=experty;Password=REDACTED;MultipleActiveResultSets=True;Connection Timeout=30;";
+        public const string DatabaseConnectionString = "Server=tcp:expertydb.database.windows.net;Initial Catalog=Experty;Persist Security Info=True;User ID=experty;Password=REDACTED;MultipleActiveResultSets=True;Connection Timeout=30;";
         public const string StorageConnectionString = "DefaultEndpointsProtocol=https;AccountName=expertysa;AccountKey=REDACTED;EndpointSuffix=core.windows.net";
 #else
         public const string DatabaseConnectionString = "Server=tcp:expertydb.database.windows.net;Initial Catalog=Experty;Persist Security Info=True;User ID=experty;Password=REDACTED;MultipleActiveResultSets=True;Connection Timeout=30;";

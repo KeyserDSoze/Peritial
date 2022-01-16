@@ -22,29 +22,35 @@ namespace Expertiser.Portal.Controllers
     public class AccidentController : BaseController<TableAccident>
     {
         private readonly int StatusId = -2;
+        private readonly int Year = int.MaxValue;
         public AccidentController(Manager manager, IStringLocalizer<SharedResource> stringLocalizer, IStringLocalizer<SharedResource> sharedLocalizer, IHttpContextAccessor httpContextAccessor) : base(manager, stringLocalizer, sharedLocalizer)
         {
             if (httpContextAccessor.HttpContext.Request.Query.ContainsKey("Status"))
                 StatusId = int.Parse(httpContextAccessor.HttpContext.Request.Query["Status"]);
+            if (httpContextAccessor.HttpContext.Request.Query.ContainsKey("Year"))
+                Year = int.Parse(httpContextAccessor.HttpContext.Request.Query["Year"]);
         }
         public override async Task<IEnumerable<TableAccident>> GetList()
         {
+            IQueryable<TableAccident> accidents = Manager.QueryManager.Accidents;
             if (Manager.UserHelperManager.IsManager)
             {
-                return await Manager.QueryManager.Accidents
+                accidents = accidents
                            .Where(x => x.TableExpertise.Any(t => StatusId == -3 || (StatusId == -2 && t.Status < 5) || t.Status == StatusId))
-                           .OrderByDescending(x => x.AccidentDate)
-                           .ToListAsync();
+                           .OrderByDescending(x => x.AccidentDate);
             }
             else if (Manager.UserHelperManager.IsReader)
             {
-                return await Manager.QueryManager.Accidents
+                accidents = accidents
                            .Where(x => x.TableExpertise.Any(t => StatusId == -3 || (StatusId == -2 && t.Status < 5) || t.Status == StatusId) && x.TableExpertise.Any(c => c.ContributorId == Manager.UserHelperManager.Id))
-                           .OrderByDescending(x => x.AccidentDate)
-                           .ToListAsync();
+                           .OrderByDescending(x => x.AccidentDate);
             }
             else
                 return new List<TableAccident>();
+            if (Year == int.MaxValue)
+                return await accidents.ToListAsync();
+            else
+                return await accidents.Where(x => x.AccidentDate.Year == Year).ToListAsync();
         }
 
         public override async Task<TableAccident> GetModel(string id)
@@ -111,7 +117,8 @@ namespace Expertiser.Portal.Controllers
             return RedirectToAction("Edit", "Experty", new { id = c.Id });
         }
 
-        private static bool CheckIfContainsQuery(string query, object value) => value?.ToString().ToLower().Contains(query.ToLower()) ?? false;
+        private static bool CheckIfContainsQuery(string query, object value)
+            => value?.ToString().ToLower().Contains(query.ToLower()) ?? false;
 
         // POST: Accident/Create
         // To protect from overposting attacks, enable the specific properties you want to bind to, for 

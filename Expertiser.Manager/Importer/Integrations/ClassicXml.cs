@@ -95,8 +95,8 @@ namespace Expertiser
                     FiscalCode = !string.IsNullOrWhiteSpace(x.FiscalCode) ? x.FiscalCode : x.PIVA,
                     Address = new TableLocation()
                     {
-                        Address = $"{x.Residence.Address} {x.Residence.CivicNumber}",
-                        PostalCode = x.Residence.PostalCode,
+                        Address = $"{x.Residence?.Address} {x.Residence?.CivicNumber}".Trim(),
+                        PostalCode = x.Residence?.PostalCode,
                     }
                 }),
                 Inspectorate = new TableInspectorate()

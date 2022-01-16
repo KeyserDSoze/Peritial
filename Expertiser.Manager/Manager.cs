@@ -86,6 +86,7 @@ namespace Expertiser
         };
         public DefaultUI DefaultUI => defaultUI;
         private static NavigationBuilder navigationBar;
+
         public NavigationBuilder NavigationBar => navigationBar ??= new NavigationBar(this.Title, "fa-institution")
             .AddSuperGroup()
                 .AddGroup("Home", "fa-business-time", new NavigationUrl())
@@ -93,6 +94,7 @@ namespace Expertiser
                 .AddGroup("Assignments", "fa-cog", null, Roles.All)
                     .AddItem("Import New Accident", null, new NavigationUrl("Accident", "Import"), Roles.AdminContributor)
                     .AddItem("Assignments", null, new NavigationUrl("Accident"), Roles.All)
+                    .AddAssignmentsByTime() 
                     .AddItem("All Assignments", null, new NavigationUrl("Accident", parameters: new Dictionary<string, string> { { "Status", "-3" } }), Roles.All)
                 .AddGroup("Assignments By Status", "fa-cog", null, Roles.All)
                     .AddItem("Registered Assignments", null, new NavigationUrl("Accident", parameters: new Dictionary<string, string> { { "Status", "-1" } }), Roles.All)
@@ -122,5 +124,15 @@ namespace Expertiser
                 .AddGroup("Companies", "fa-tools")
                     .AddItem("Locations", null, new NavigationUrl("Location"))
             .Build();
+    }
+    public static class NavigatorExtensions
+    {
+        public static NavigationGroup AddAssignmentsByTime(this NavigationGroup group)
+        {
+            int count = DateTime.UtcNow.Year;
+            for (int i = count; i >= 2019; i--)
+                group.AddItem($"Incarichi {i}", null, new NavigationUrl("Accident", parameters: new Dictionary<string, string> { { "Year", i.ToString() } }), Roles.All);
+            return group;
+        }
     }
 }
