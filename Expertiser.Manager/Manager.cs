@@ -96,6 +96,7 @@ namespace Expertiser
                     .AddItem("Assignments", null, new NavigationUrl("Accident"), Roles.All)
                     .AddAssignmentsByTime() 
                     .AddItem("All Assignments", null, new NavigationUrl("Accident", parameters: new Dictionary<string, string> { { "Status", "-3" } }), Roles.All)
+                    .AddAllAssignmentsByTime()
                 .AddGroup("Assignments By Status", "fa-cog", null, Roles.All)
                     .AddItem("Registered Assignments", null, new NavigationUrl("Accident", parameters: new Dictionary<string, string> { { "Status", "-1" } }), Roles.All)
                     .AddItem("Assigned Assignments", null, new NavigationUrl("Accident", parameters: new Dictionary<string, string> { { "Status", "0" } }), Roles.All)
@@ -132,6 +133,13 @@ namespace Expertiser
             int count = DateTime.UtcNow.Year;
             for (int i = count; i >= 2019; i--)
                 group.AddItem($"Incarichi {i}", null, new NavigationUrl("Accident", parameters: new Dictionary<string, string> { { "Year", i.ToString() } }), Roles.All);
+            return group;
+        }
+        public static NavigationGroup AddAllAssignmentsByTime(this NavigationGroup group)
+        {
+            int count = DateTime.UtcNow.Year;
+            for (int i = count; i >= 2019; i--)
+                group.AddItem($"Tutti gli incarichi {i}", null, new NavigationUrl("Accident", parameters: new Dictionary<string, string> { { "Year", i.ToString() }, { "Status", "-3" } }), Roles.All);
             return group;
         }
     }
