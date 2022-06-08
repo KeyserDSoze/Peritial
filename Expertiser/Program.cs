@@ -1,14 +1,16 @@
 ﻿using Rystem.UnitTest;
 using System;
+using System.Threading.Tasks;
 
 namespace Expertiser
 {
     class Program
     {
-        static void Main()
+        static async Task Main()
         {
-            var testMachine = new ConsoleMachine<IImporter>("Expertiser");
-            testMachine.Start();
+            //var testMachine = new ConsoleMachine<IImporter>("Expertiser");
+            //testMachine.Start();
+            await new EmailSender().SendEmailAsync("alessandro.rapiti44@gmail.com", "aloah", "dasdasdsad");
         }
     }
 }
