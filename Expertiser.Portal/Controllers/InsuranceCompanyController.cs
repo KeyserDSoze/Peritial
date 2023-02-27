@@ -85,13 +85,13 @@ namespace Expertiser.Portal.Controllers
             return View(tableInsuranceCompany);
         }
         [HttpPost]
-        public async Task<IActionResult> ImportTemplate(int id, IFormFile file)
+        public async Task<IActionResult> ImportTemplate(int id, IFormFile file, [FromQuery] string directory, [FromQuery] int companyId)
         {
             try
             {
                 if (file.ContentType.StartsWith("application/vnd.openxmlformats"))
                 {
-                    await Manager.FileManager.SaveTemplateAsync(id, file.ContentType, file.OpenReadStream());
+                    await Manager.FileManager.SaveTemplateAsync(companyId, file.FileName, file.ContentType, file.OpenReadStream());
                     return Ok();
                 }
                 else
@@ -103,6 +103,12 @@ namespace Expertiser.Portal.Controllers
             {
                 return BadRequest(ex.Message);
             }
+        }
+        public async Task<IActionResult> DeleteTemplate(int id, [FromQuery] string fileName)
+        {
+            string finding = new System.Text.RegularExpressions.Regex(@"\/templates\/").Split(fileName).Last();
+            await Manager.FileManager.DeleteTemplateAsync(finding);
+            return Ok();
         }
     }
 }

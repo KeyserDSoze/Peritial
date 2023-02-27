@@ -169,14 +169,15 @@ namespace Expertiser.Portal.Controllers
             return PartialView("_EditListBill", await Manager.QueryManager.ExpertiseBills.FirstOrDefaultAsync(x => x.Id == bill.ExpertiseId));
         }
         [HttpGet]
-        public async Task<IActionResult> DownloadFinalDocument(int id)
+        public async Task<IActionResult> DownloadFinalDocument(int id, [FromQuery] string name)
         {
             try
             {
-                return File(await Manager.FileManager.CreateFinalDocumentationFromTemplateAsync(
-                                   await Manager.QueryManager.Expertises
-                                          .FirstOrDefaultAsync(x => x.Id == id)),
-                                       "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+                var expertise = await Manager.QueryManager.Expertises
+                                          .FirstOrDefaultAsync(x => x.Id == id);
+                return File(await Manager.FileManager.CreateFinalDocumentationFromTemplateAsync(expertise, name),
+                              "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                               $"{expertise.Accident.InsuranceAgency.InsuranceCompany.Label}_{expertise.ConcreteId}_{expertise.Accident.ExternalId}_{name}");
             }
             catch (Exception ex)
             {

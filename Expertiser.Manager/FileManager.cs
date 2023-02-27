@@ -82,11 +82,11 @@ namespace Expertiser
             }.WriteAsync();
             return await this.GetUriFiles(fileId);
         }
-        public async Task<bool> SaveTemplateAsync(int companyId, string contentType, Stream stream)
+        public async Task<bool> SaveTemplateAsync(int companyId, string name, string contentType, Stream stream)
         {
             var upload = await new Template()
             {
-                Name = $"{companyId}.docx",
+                Name = $"{companyId}/{name}",
                 Properties = new DataProperties()
                 {
                     ContentType = contentType
@@ -95,11 +95,25 @@ namespace Expertiser
             }.WriteAsync();
             return upload;
         }
-        public async Task<Stream> CreateFinalDocumentationFromTemplateAsync(TableExpertise expertise)
+        public async Task<IList<string>> GetUriForTemplateFiles(int companyId, string name = null)
+            => await new Template().SearchAsync($"{companyId}/{name}").NoContext();
+        public async Task<IEnumerable<FileModel>> GetTemplateFiles(int companyId)
+        {
+            var files = (await GetUriForTemplateFiles(companyId).NoContext()).Select(x => new FileModel(x, DateTime.UtcNow));
+            return files;
+        }
+        public async Task DeleteTemplateAsync(string name)
+        {
+            await new Template()
+            {
+                Name = name
+            }.DeleteAsync();
+        }
+        public async Task<Stream> CreateFinalDocumentationFromTemplateAsync(TableExpertise expertise, string name)
         {
             var template = await new Template()
             {
-                Name = $"{expertise.Accident.InsuranceAgency.InsuranceCompany.Id}.docx",
+                Name = $"{expertise.Accident.InsuranceAgency.InsuranceCompany.Id}/{name}",
             }.FetchAsync();
             using (WordprocessingDocument wordDocument =
                 WordprocessingDocument.Open(template.Stream, true))
@@ -122,14 +136,32 @@ namespace Expertiser
                         if (element is Text)
                         {
                             string text = (element as Text).Text;
-                            if (text.Contains("{ExternalId}"))
-                                (element as Text).Text = text.Replace("{ExternalId}", expertise.Accident.ExternalId);
+                            foreach (var replacer in Replacer.All.Where(x => text.Contains(x.Variable)))
+                            {
+                                var value = replacer.ValueRetriever(expertise);
+                                if (value != null)
+                                    (element as Text).Text = text.Replace(replacer.Variable, value.ToString());
+                            }
                         }
                         else
                             ChangeElement(element);
                     }
                 }
             }
+        }
+        private class Replacer
+        {
+            public string Variable { get; }
+            public Func<TableExpertise, object> ValueRetriever { get; }
+            private Replacer(string variable, Func<TableExpertise, object> valueRetriever)
+            {
+                Variable = $"{{{variable}}}";
+                ValueRetriever = valueRetriever;
+            }
+            public static List<Replacer> All = new List<Replacer>()
+            {
+                new Replacer("ExternalId", x => x.Accident.ExternalId)
+            };
         }
     }
 }
