@@ -85,9 +85,7 @@ namespace Expertiser
             White = DefaultUI.Default.White
         };
         public DefaultUI DefaultUI => defaultUI;
-        private static NavigationBuilder navigationBar;
-
-        public NavigationBuilder NavigationBar => navigationBar ??= new NavigationBar(this.Title, "fa-institution")
+        public NavigationBuilder NavigationBar =>  new NavigationBar(this.Title, "fa-institution")
             .AddSuperGroup()
                 .AddGroup("Home", "fa-business-time", new NavigationUrl())
             .AddSuperGroup("Manage Experty", null, null, Roles.All)
