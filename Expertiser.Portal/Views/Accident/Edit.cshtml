@@ -149,7 +149,7 @@
                     <label asp-for="AccidentDate" class="control-label"></label>
                     @if (Manager.UserHelperManager.IsManager)
                     {
-                        <rystem-date name="AccidentDate" value="Model?.AccidentDate" class="form-control"></rystem-date>
+                        <rystem-date name="AccidentDate" value="Model?.AccidentDate" class="form-control" readonly=true></rystem-date>
                     }
                     else
                     {
@@ -162,7 +162,7 @@
                     <label asp-for="DenunciationDate" class="control-label"></label>
                     @if (Manager.UserHelperManager.IsManager)
                     {
-                        <rystem-date name="DenunciationDate" value="Model?.DenunciationDate" class="form-control"></rystem-date>
+                        <rystem-date name="DenunciationDate" value="Model?.DenunciationDate" class="form-control" readonly=true></rystem-date>
                     }
                     else
                     {

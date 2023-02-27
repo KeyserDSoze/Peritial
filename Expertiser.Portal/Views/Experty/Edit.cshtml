@@ -79,7 +79,7 @@
                     <label asp-for="AssignmentDate" class="control-label"></label>
                     @if (Manager.UserHelperManager.IsManager)
                     {
-                        <rystem-date name="AssignmentDate" value="Model.AssignmentDate" class="form-control"></rystem-date>
+                        <rystem-date name="AssignmentDate" value="Model.AssignmentDate" class="form-control" readonly=@(!Manager.UserHelperManager.IsAdmin)></rystem-date>
                     }
                     else
                     {
@@ -90,7 +90,7 @@
                 </div>
                 <div class="form-group col-md-6">
                     <label asp-for="InspectionDate" class="control-label"></label>
-                    <rystem-date name="InspectionDate" value="Model.InspectionDate" class="form-control"></rystem-date>
+                    <rystem-date name="InspectionDate" value="Model.InspectionDate" class="form-control" readonly=@(!Manager.UserHelperManager.IsAdmin)></rystem-date>
                     <span asp-validation-for="InspectionDate" class="text-danger"></span>
                 </div>
             </div>
@@ -109,7 +109,7 @@
                     @if (Manager.UserHelperManager.IsManager)
                     {
                         <label asp-for="CloseDate" class="control-label"></label>
-                        <rystem-date name="CloseDate" value="Model.CloseDate" class="form-control"></rystem-date>
+                        <rystem-date name="CloseDate" value="Model.CloseDate" class="form-control" readonly=@(!Manager.UserHelperManager.IsAdmin)></rystem-date>
                         <span asp-validation-for="CloseDate" class="text-danger"></span>
                     }
                     else

@@ -26,10 +26,9 @@ namespace Expertiser
         private readonly Manager Manager;
         public UserHelperManager(Manager manager)
             => this.Manager = manager;
+        public bool IsAdmin => Manager.HttpContextAccessor.HttpContext.User.IsInRole(Roles.Admin);
         public bool IsManager => Manager.HttpContextAccessor.HttpContext.User.IsInRole(Roles.Admin) || Manager.HttpContextAccessor.HttpContext.User.IsInRole(Roles.Contributor);
-        //public bool IsManager => false;
         public bool IsReader => Manager.HttpContextAccessor.HttpContext.User.IsInRole(Roles.Reader);
-        //public bool IsReader => true;
         public string Id => Manager.HttpContextAccessor.HttpContext.User?.FindFirstValue(ClaimTypes.NameIdentifier);
         public bool IsSuperAdmin => Manager.HttpContextAccessor.HttpContext.User.Identity.Name == "alessandro.rapiti44@gmail.com";
     }

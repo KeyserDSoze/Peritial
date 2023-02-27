@@ -14,12 +14,12 @@
             <div class="form-row">
                 <div class="form-group col-md-4">
                     <label asp-for="From" class="control-label"></label>
-                    <rystem-date name="From" value="Model?.From" class="form-control"></rystem-date>
+                    <rystem-date name="From" value="Model?.From" class="form-control" readonly=true></rystem-date>
                     <span asp-validation-for="From" class="text-danger"></span>
                 </div>
                 <div class="form-group col-md-4">
                     <label asp-for="To" class="control-label"></label>
-                    <rystem-date name="To" value="Model?.To" class="form-control"></rystem-date>
+                    <rystem-date name="To" value="Model?.To" class="form-control" readonly=true></rystem-date>
                     <span asp-validation-for="To" class="text-danger"></span>
                 </div>
                 <div class="form-group col-md-3">

@@ -1,27 +1,16 @@
 ﻿using DocumentFormat.OpenXml;
-using Expertiser.Base.Constant;
+using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Wordprocessing;
 using Expertiser.Database.Models;
 using Expertiser.Interfaces;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.Azure.Documents;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Localization;
 using Rystem.Data;
-using Rystem.Web;
-using Rystem.Web.Backoffice;
 using Rystem.Web.Models;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Security.Claims;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using System.Web;
-using DocumentFormat.OpenXml.Wordprocessing;
-using DocumentFormat.OpenXml.Packaging;
 
 namespace Expertiser
 {
@@ -149,7 +138,7 @@ namespace Expertiser
                 }
             }
         }
-        private class Replacer
+        private sealed class Replacer
         {
             public string Variable { get; }
             public Func<TableExpertise, object> ValueRetriever { get; }
@@ -158,7 +147,7 @@ namespace Expertiser
                 Variable = $"{{{variable}}}";
                 ValueRetriever = valueRetriever;
             }
-            public static List<Replacer> All = new List<Replacer>()
+            public static readonly List<Replacer> All = new List<Replacer>()
             {
                 new Replacer("ExternalId", x => x.Accident.ExternalId)
             };
