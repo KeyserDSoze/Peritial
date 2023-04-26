@@ -16,7 +16,8 @@ namespace Rystem.Web.Controllers
             => PartialView("ShowDocument", url);
         public IActionResult ShowImage([FromQuery] string url)
             => PartialView("ShowImage", url);
-        public async Task<IActionResult> Download([FromQuery] string name, [FromQuery] IEnumerable<string> urls)
+        [HttpPost]
+        public async Task<IActionResult> Download([FromQuery] string name, [FromBody] IEnumerable<string> urls)
         {
             MemoryStream memoryStream = new MemoryStream();
             using ZipArchive zipArchive = new ZipArchive(memoryStream, ZipArchiveMode.Create, true);

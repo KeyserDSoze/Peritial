@@ -8,7 +8,7 @@
 @addTagHelper *, Rystem.Web
 @{
     string cssClass = Model.Directory.IsRoot ? "folder-container-visible" : string.Empty;
-    string allUrl = string.Empty;
+    List<string> urls = new List<string>();
 }
 
 <div class="folder-container @Model.Directory.Id @cssClass">
@@ -28,7 +28,8 @@
                 <div class="folder-file-type">
                     @if (Model.StringLocalizer != null)
                     {
-                        @Model.StringLocalizer["Folder"];
+                        @Model.StringLocalizer["Folder"]
+                        ;
                     }
                     else
                     {
@@ -42,7 +43,7 @@
         }
         @foreach (var file in Model.Directory.Files)
         {
-            allUrl += $"urls={HttpUtility.UrlEncode(file.FullName)}&";
+            urls.Add(file.FullName);
             <div class="folder-file-line" id="file-@file.RandomId">
                 @if (file.IsImage())
                 {
@@ -63,13 +64,13 @@
                     if (Model.DeleteRequestContext != null)
                     {
                         RequestContext requestContext = new RequestContext
-                        {
-                            Action = Model.DeleteRequestContext.Action,
-                            Controller = Model.DeleteRequestContext.Controller,
-                            Area = Model.DeleteRequestContext.Area,
-                            FurtherPath = Model.DeleteRequestContext.FurtherPath,
-                            SuccessCallback = $"(a,b,c)=>fileManager.remove('{file.RandomId}')"
-                        };
+                    {
+                        Action = Model.DeleteRequestContext.Action,
+                        Controller = Model.DeleteRequestContext.Controller,
+                        Area = Model.DeleteRequestContext.Area,
+                        FurtherPath = Model.DeleteRequestContext.FurtherPath,
+                        SuccessCallback = $"(a,b,c)=>fileManager.remove('{file.RandomId}')"
+                    };
                         if (Model.DeleteRequestContext.QueryString == null)
                             requestContext.QueryString = new Dictionary<object, object>();
                         else
@@ -82,15 +83,16 @@
                 }
             </div>
         }
-        @if (!string.IsNullOrWhiteSpace(allUrl))
+        @if (urls.Count > 0)
         {
             <div class="folder-file-line" style="margin-top:10px;">
-                <div class="folder-file-name" onclick="fileManager.downloadAllFiles('../../../../../../rystemajaxmanager/download?name=@Model.Directory.Name&@allUrl');">
+                <div class="folder-file-name" onclick="fileManager.downloadAllFiles('@Model.Directory.Name', [@($"'{string.Join("','", urls)}'")]);">
                     <i class="fas fa-download text-xl-left folder-file-download-color"></i>
                     <div>
                         @if (Model.StringLocalizer != null)
                         {
-                            @Model.StringLocalizer["Download All"];
+                            @Model.StringLocalizer["Download All"]
+                            ;
                         }
                         else
                         {
@@ -105,12 +107,12 @@
         if (Model.RequestContext != null)
         {
             RoutingContext routingContext = new RoutingContext
-            {
-                Action = Model.RequestContext.Action,
-                Controller = Model.RequestContext.Controller,
-                Area = Model.RequestContext.Area,
-                FurtherPath = Model.RequestContext.FurtherPath,
-            };
+                {
+                    Action = Model.RequestContext.Action,
+                    Controller = Model.RequestContext.Controller,
+                    Area = Model.RequestContext.Area,
+                    FurtherPath = Model.RequestContext.FurtherPath,
+                };
             if (Model.RequestContext.QueryString == null)
                 routingContext.QueryString = new Dictionary<object, object>();
             else

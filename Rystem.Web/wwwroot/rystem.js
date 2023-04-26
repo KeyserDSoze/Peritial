@@ -410,8 +410,68 @@ var fileManager = {
             $("." + value).addClass("folder-container-visible");
         }
     },
-    downloadAllFiles: function (value) {
-        window.open(value, "_Blank");
+    downloadAllFiles: function (name, value) {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", "../../../../../../rystemajaxmanager/download?name=" + name, true);
+        xhr.setRequestHeader("Content-type", "application/json");
+        xhr.setRequestHeader("Access-Control-Allow-Origin", "*");
+        xhr.onreadystatechange = function () {
+            if (xhr.readyState == 4 && xhr.status == 200) {
+                const blob = new Blob([xhr.response], { type: "application/zip" });
+                const filename = name + ".zip";
+                if (navigator.msSaveOrOpenBlob) {
+                    navigator.msSaveOrOpenBlob(blob, filename);
+                } else {
+                    const a = document.createElement("a");
+                    document.body.appendChild(a);
+                    a.style = "display:none";
+                    const url = window.URL.createObjectURL(blob);
+                    a.href = url;
+                    a.download = filename;
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    a.remove();
+                }
+            }
+        }
+        xhr.responseType = "arraybuffer";
+        xhr.send(JSON.stringify(value));
+        //$.ajax({
+        //    type: "POST",
+        //    url: "../../../../../../rystemajaxmanager/download?name=" + name,
+        //    contentType: "application/json",
+        //    data: JSON.stringify(value),
+        //    success: function (response, status) {
+        //        if (status != "success") {
+        //            return;
+        //        }
+        //        const blob = new Blob([fileManager.str2bytes(response)], { type: 'application/zip' });
+        //        const filename = name + ".zip";
+        //        if (navigator.msSaveOrOpenBlob) {
+        //            navigator.msSaveOrOpenBlob(blob, filename);
+        //        } else {
+        //            const a = document.createElement("a");
+        //            document.body.appendChild(a);
+        //            a.style = "display:none";
+        //            const url = window.URL.createObjectURL(blob);
+        //            a.href = url;
+        //            a.download = filename;
+        //            a.click();
+        //            window.URL.revokeObjectURL(url);
+        //            a.remove();
+        //        }
+        //    },
+        //    error: function (result, status, err) {
+        //        return;
+        //    }
+        //});
+    },
+    str2bytes(str) {
+        const bytes = new Uint8Array(str.length);
+        for (let i = 0; i < str.length; i++) {
+            bytes[i] = str.charCodeAt(i);
+        }
+        return bytes;
     },
     remove: function (value) {
         $("#file-" + value).remove();
