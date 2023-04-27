@@ -35,5 +35,13 @@ namespace Rystem.Web.Controllers
             memoryStream.Seek(0, SeekOrigin.Begin);
             return File(memoryStream.ToArray(), "application/zip", $"{name}.zip");
         }
+        [HttpGet]
+        public async Task<IActionResult> ProxyAsync([FromQuery] string url)
+        {
+            using WebClient myWebClient = new WebClient();
+            byte[] file = await myWebClient.DownloadDataTaskAsync(url);
+            var contentType = myWebClient.ResponseHeaders["Content-Type"];
+            return File(new MemoryStream(file), contentType);
+        }
     }
 }

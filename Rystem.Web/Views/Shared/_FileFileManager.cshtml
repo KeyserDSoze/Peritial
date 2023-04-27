@@ -86,7 +86,7 @@
         @if (urls.Count > 0)
         {
             <div class="folder-file-line" style="margin-top:10px;">
-                <div class="folder-file-name" onclick="fileManager.downloadAllFiles('@Model.Directory.Name', [@($"'{string.Join("','", urls)}'")]);">
+                <div class="folder-file-name" onclick="fileManager.zipAllFiles('@Model.Directory.Name', [@($"'{string.Join("','", urls)}'")]);">
                     <i class="fas fa-download text-xl-left folder-file-download-color"></i>
                     <div>
                         @if (Model.StringLocalizer != null)

@@ -410,68 +410,75 @@ var fileManager = {
             $("." + value).addClass("folder-container-visible");
         }
     },
-    downloadAllFiles: function (name, value) {
-        const xhr = new XMLHttpRequest();
-        xhr.open("POST", "../../../../../../rystemajaxmanager/download?name=" + name, true);
-        xhr.setRequestHeader("Content-type", "application/json");
-        xhr.setRequestHeader("Access-Control-Allow-Origin", "*");
-        xhr.onreadystatechange = function () {
-            if (xhr.readyState == 4 && xhr.status == 200) {
-                const blob = new Blob([xhr.response], { type: "application/zip" });
-                const filename = name + ".zip";
-                if (navigator.msSaveOrOpenBlob) {
-                    navigator.msSaveOrOpenBlob(blob, filename);
+    download: function (fullname, uri, index, values, zip) {
+        fetch("../../../../../../rystemajaxmanager/proxy?url=" + uri)
+            .then(res => res.blob()) // Gets the response and returns it as a blob
+            .then(blob => {
+                const singleName = uri.split('/')[uri.split('/').length - 1];
+                zip.file(singleName, blob, { base64: true });
+                index++;
+                if (index < values.length) {
+                    const fileUri = values[index];
+                    fileManager.download(fullname, fileUri, index, values, zip);
                 } else {
-                    const a = document.createElement("a");
-                    document.body.appendChild(a);
-                    a.style = "display:none";
-                    const url = window.URL.createObjectURL(blob);
-                    a.href = url;
-                    a.download = filename;
-                    a.click();
-                    window.URL.revokeObjectURL(url);
-                    a.remove();
+                    const fileName = document.getElementsByTagName("h1")[0].innerText;
+                    zip.generateAsync({ type: "blob" })
+                        .then(function (content) {
+                            saveAs(content, fileName + "_" + fullname + ".zip");
+                        });
+                }
+            });
+    },
+    zipAllFiles: function (name, values) {
+        const zip = new JSZip();
+        const fileUri = values[0];
+        fileManager.download(name, fileUri, 0, values, zip);
+    },
+    downloadAllFiles: function (name, value, skip, responses) {
+        if (skip) {
+
+        } else {
+            skip = 0;
+        }
+        if (responses) {
+
+        } else {
+            responses = new Array();
+        }
+        const array = value.slice(skip, skip + 10);
+        if (array.length == 0) {
+            fileManager.save(name, responses);
+        } else {
+            const xhr = new XMLHttpRequest();
+            xhr.open("POST", "../../../../../../rystemajaxmanager/download?name=" + name, true);
+            xhr.setRequestHeader("Content-type", "application/json");
+            xhr.setRequestHeader("Access-Control-Allow-Origin", "*");
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState == 4 && xhr.status == 200) {
+                    responses.push(xhr.response);
+                    fileManager.downloadAllFiles(name, value, skip + 10, responses);
                 }
             }
+            xhr.responseType = "arraybuffer";
+            xhr.send(JSON.stringify(array));
         }
-        xhr.responseType = "arraybuffer";
-        xhr.send(JSON.stringify(value));
-        //$.ajax({
-        //    type: "POST",
-        //    url: "../../../../../../rystemajaxmanager/download?name=" + name,
-        //    contentType: "application/json",
-        //    data: JSON.stringify(value),
-        //    success: function (response, status) {
-        //        if (status != "success") {
-        //            return;
-        //        }
-        //        const blob = new Blob([fileManager.str2bytes(response)], { type: 'application/zip' });
-        //        const filename = name + ".zip";
-        //        if (navigator.msSaveOrOpenBlob) {
-        //            navigator.msSaveOrOpenBlob(blob, filename);
-        //        } else {
-        //            const a = document.createElement("a");
-        //            document.body.appendChild(a);
-        //            a.style = "display:none";
-        //            const url = window.URL.createObjectURL(blob);
-        //            a.href = url;
-        //            a.download = filename;
-        //            a.click();
-        //            window.URL.revokeObjectURL(url);
-        //            a.remove();
-        //        }
-        //    },
-        //    error: function (result, status, err) {
-        //        return;
-        //    }
-        //});
     },
-    str2bytes(str) {
-        const bytes = new Uint8Array(str.length);
-        for (let i = 0; i < str.length; i++) {
-            bytes[i] = str.charCodeAt(i);
+    save: function (name, responses) {
+        const blob = new Blob(responses, { type: "application/zip" });
+        const filename = name + ".zip";
+        if (navigator.msSaveOrOpenBlob) {
+            navigator.msSaveOrOpenBlob(blob, filename);
+        } else {
+            const a = document.createElement("a");
+            document.body.appendChild(a);
+            a.style = "display:none";
+            const url = window.URL.createObjectURL(blob);
+            a.href = url;
+            a.download = filename;
+            a.click();
+            window.URL.revokeObjectURL(url);
+            a.remove();
         }
-        return bytes;
     },
     remove: function (value) {
         $("#file-" + value).remove();
