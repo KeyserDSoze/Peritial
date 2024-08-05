@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <TargetLatestRuntimePatch>true</TargetLatestRuntimePatch>
-    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <UserSecretsId>aspnet-Expertiser.Portal-E6927B6A-6938-4FE0-9F4D-AD4119BA5BF9</UserSecretsId>
   </PropertyGroup>
 
@@ -18,10 +18,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.ApplicationInsights.AspNetCore" Version="2.15.0" />
-    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="3.1.8" />
-    <PackageReference Include="Microsoft.AspNetCore.Identity.UI" Version="3.1.8" />
-    <PackageReference Include="Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation" Version="3.1.8" />
+    <PackageReference Include="Microsoft.ApplicationInsights.AspNetCore" Version="2.22.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="8.0.7" />
+    <PackageReference Include="Microsoft.AspNetCore.Identity.UI" Version="8.0.7" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation" Version="8.0.7" />
   </ItemGroup>
 
   <ItemGroup>

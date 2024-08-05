@@ -10,7 +10,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Localization;
 using Rystem.Web.Backoffice;
 using Expertiser.Base.Constant;
-using System.Runtime.InteropServices.WindowsRuntime;
 
 namespace Expertiser.Portal.Controllers
 {
