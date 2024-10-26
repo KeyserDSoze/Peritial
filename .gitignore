@@ -338,3 +338,5 @@ ASALocalRun/
 
 # BeatPulse healthcheck temp database
 healthchecksdb
+/Expertiser.Portal/Properties/ServiceDependencies/experty-dev - FTP/profile.arm.json
+/Expertiser.Portal/Properties/ServiceDependencies/experty-dev - Web Deploy/profile.arm.json
