@@ -21,7 +21,7 @@ jobs:
       containerRegistry: 'container-registry' # Define this service connection in your Azure DevOps project
       repository: 'experty-dev'
       command: 'buildAndPush'
-      Dockerfile: 'Dockerfile' # Adjust the path to your Dockerfile
+      Dockerfile: 'Expertiser.Portal/Dockerfile' # Adjust the path to your Dockerfile
       tags: |
         $(Build.BuildId)
         latest
