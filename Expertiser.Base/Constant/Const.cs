@@ -15,8 +15,10 @@ namespace Expertiser
 #endif
         public static class Email
         {
-            public const string Username = "experty.platform@yahoo.com";
-            public const string Password = "ehcoxattefsfhyqt";
+            //public const string Username = "experty.platform@yahoo.com";
+            //public const string Password = "ehcoxattefsfhyqt";
+            public const string Username = "donotreplyexpertyservice@gmail.com";
+            public const string Password = "widq abjs xzdo xgju";
         }
     }
 }

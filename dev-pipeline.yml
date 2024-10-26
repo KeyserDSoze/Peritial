@@ -13,4 +13,4 @@ stages:
     vmImage: 'ubuntu-latest'
     restoreBuildProjects: 'Expertiser.Portal/*.csproj'
     buildConfiguration: 'Debug'
-    targetFramework: 'netcoreapp3.1'
+    targetFramework: 'net8.0'

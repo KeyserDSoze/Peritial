@@ -1,20 +1,20 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+﻿using Expertiser.Base.Constant;
+using Expertiser.Database.Models;
+using Expertiser.Interfaces;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
-using Expertiser.Database.Models;
-using Microsoft.AspNetCore.Authorization;
-using System.Security.Claims;
-using Rystem.Web;
-using Expertiser.Base.Constant;
-using Rystem.Web.Backoffice;
 using Microsoft.Extensions.Localization;
-using Expertiser.Interfaces;
-using Microsoft.AspNetCore.Http;
 using Microsoft.OData.Edm;
+using Rystem.Web;
+using Rystem.Web.Backoffice;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Security.Claims;
+using System.Threading.Tasks;
 
 namespace Expertiser.Portal.Controllers
 {
@@ -84,36 +84,27 @@ namespace Expertiser.Portal.Controllers
                 return BadRequest(ex.Message);
             }
         }
+        //$"{this.Accident?.YearlyId}{this.Accident?.InsuranceAgency?.InsuranceCompany?.Alias}{this.Accident?.UploadDate:yyyy}{this.Member?.Alias}{this.Contributor?.Alias ?? this.Member?.Alias}"
 
         public async Task<IEnumerable<string>> Autocomplete([FromQuery] string query)
         {
-            var t = (await Manager.QueryManager.Expertises
-                           .Where(x => Manager.UserHelperManager.IsManager || x.ContributorId == Manager.UserHelperManager.Id)
-                           .ToListAsync());
-            return t
-                    .Where(x =>
-                        CheckIfContainsQuery(query, x.Accident.AccidentDate)
-                        || CheckIfContainsQuery(query, x.Accident.Address?.Address)
-                        || CheckIfContainsQuery(query, x.Accident.DenunciationDate)
-                        || CheckIfContainsQuery(query, x.Accident.ExternalId)
-                        || CheckIfContainsQuery(query, x.Accident.Insurance?.ExternalId)
-                        || CheckIfContainsQuery(query, x.Accident.Insurance?.Customer?.Name)
-                        || x.Accident.TableDamaged.Any(t => CheckIfContainsQuery(query, t.Customer?.Name))
-                        || CheckIfContainsQuery(query, x.Contributor?.TotalName)
-                        || CheckIfContainsQuery(query, x.Member?.TotalName)
-                        || CheckIfContainsQuery(query, x.AssignmentDate)
-                        || CheckIfContainsQuery(query, x.ConcreteId)
+            var t = await Manager.QueryManager.Expertises
+                    .Where(x => (
+                            query.Contains(x.Accident.YearlyId.ToString()) ||
+                            query.Contains(x.Accident.UploadDate.ToString()) ||
+                            x.Accident.ExternalId.Contains(query))
+                        && (Manager.UserHelperManager.IsManager || x.ContributorId == Manager.UserHelperManager.Id)
                         )
-                            .Select(x => $"{x.ConcreteId} - {x.Member?.TotalName} - {x.Accident.ExternalId} - {x.Accident.Insurance?.Customer?.Name}")
-                            .ToList();
+                    .Take(4)
+                    .ToListAsync();
+            return t
+                .Select(x => $"{x.ConcreteId} - {x.Member?.TotalName} - {x.Accident.ExternalId}{(!string.IsNullOrWhiteSpace(x.Accident.Insurance?.Customer?.Name) ? $" - {x.Accident.Insurance?.Customer?.Name}" : string.Empty)}");
         }
         public async Task<IActionResult> SetAutocomplete([FromQuery] string query)
         {
-            var t = (await Manager.QueryManager.Expertises
-                          .Where(x => Manager.UserHelperManager.IsManager || x.ContributorId == Manager.UserHelperManager.Id)
-                          .ToListAsync());
-            string realQuery = query.Split('-').FirstOrDefault().Trim();
-            var c = t.FirstOrDefault(x => x.ConcreteId == realQuery);
+            string realQuery = query.Split('-').Skip(2).FirstOrDefault().Trim();
+            var c = await Manager.QueryManager.Expertises.FirstOrDefaultAsync(x => x.Accident.ExternalId == realQuery
+                && (Manager.UserHelperManager.IsManager || x.ContributorId == Manager.UserHelperManager.Id));
             return RedirectToAction("Edit", "Experty", new { id = c.Id });
         }
 
