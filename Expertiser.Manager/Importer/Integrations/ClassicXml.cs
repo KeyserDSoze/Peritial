@@ -133,9 +133,9 @@ namespace Expertiser
         {
             [XmlElement(ElementName = "NumeroSinistro")]
             public string Id { get; set; }
-            [XmlElement(ElementName = "DataIncarico")]
-            public string AccidentDate { get; set; }
             [XmlElement(ElementName = "DataOraSinistro")]
+            public string AccidentDate { get; set; }
+            [XmlElement(ElementName = "DataIncarico")]
             public string DenunciationDate { get; set; }
             [XmlElement(ElementName = "NomeLiquidatore")]
             public string InsuranceAdjuster { get; set; }
@@ -153,9 +153,9 @@ namespace Expertiser
         {
             [XmlElement(ElementName = "NumeroSinistro")]
             public string Id { get; set; }
-            [XmlElement(ElementName = "DataIncarico")]
-            public string AccidentDate { get; set; }
             [XmlElement(ElementName = "DataOraSinistro")]
+            public string AccidentDate { get; set; }
+            [XmlElement(ElementName = "DataIncarico")]
             public string DenunciationDate { get; set; }
             [XmlElement(ElementName = "NomeLiquidatore")]
             public string InsuranceAdjuster { get; set; }
