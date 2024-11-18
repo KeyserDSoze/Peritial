@@ -1,10 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using System.Threading.Tasks;
+﻿using Microsoft.AspNetCore.Identity.UI.Services;
 using System.Net;
 using System.Net.Mail;
-using Microsoft.AspNetCore.Identity.UI.Services;
+using System.Threading.Tasks;
 
 namespace Expertiser
 {
@@ -13,27 +10,35 @@ namespace Expertiser
         private readonly string Title = new Manager().Title;
         public async Task SendEmailAsync(string email, string subject, string htmlMessage)
         {
-            var fromAddress = new MailAddress(Const.Email.Username, this.Title);
-            var toAddress = new MailAddress(email);
-            var smtp = new SmtpClient
+            try
             {
-                //Host = "smtp.mail.yahoo.com",
-                //Port = 587,
-                EnableSsl = true,
-                //DeliveryMethod = SmtpDeliveryMethod.Network,
-                //UseDefaultCredentials = false,
-                Credentials = new NetworkCredential(fromAddress.Address, Const.Email.Password)
-            };
-            using (var message = new MailMessage(fromAddress, toAddress)
-            {
-                Subject = subject,
-                Body = htmlMessage,
-                IsBodyHtml = true,
-            })
-            {
-                await smtp.SendMailAsync(message);
+                var fromAddress = new MailAddress(Const.Email.Username, this.Title);
+                var toAddress = new MailAddress(email);
+                var smtp = new SmtpClient
+                {
+                    Host = "smtp.gmail.com ",
+                    //Host = "smtp.mail.yahoo.com",
+                    Port = 587,
+                    EnableSsl = true,
+                    //DeliveryMethod = SmtpDeliveryMethod.Network,
+                    //UseDefaultCredentials = false,
+                    Credentials = new NetworkCredential(fromAddress.Address, Const.Email.Password)
+                };
+                using (var message = new MailMessage(fromAddress, toAddress)
+                {
+                    Subject = subject,
+                    Body = htmlMessage,
+                    IsBodyHtml = true,
+                })
+                {
+                    await smtp.SendMailAsync(message);
+                }
+                //return Task.CompletedTask;
             }
-            //return Task.CompletedTask;
+            catch
+            {
+
+            }
         }
     }
 }
