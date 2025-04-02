@@ -1,17 +1,17 @@
-﻿using System;
+﻿using Expertiser.Portal.Models;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Localization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Localization;
+using Microsoft.Extensions.Logging;
+using Microsoft.OData.Edm;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
-using Expertiser.Portal.Models;
-using Microsoft.AspNetCore.Localization;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc.Localization;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.OData.Edm;
-using Microsoft.AspNetCore.Diagnostics;
 
 namespace Expertiser.Portal.Controllers
 {
@@ -43,7 +43,6 @@ namespace Expertiser.Portal.Controllers
             );
             return Redirect(returnUrl);
         }
-
         public IActionResult Privacy()
             => View();
         private const string GenericError = "GenericError";
