@@ -424,7 +424,7 @@ var fileManager = {
                     const fileName = document.getElementsByTagName("h1")[0].innerText;
                     zip.generateAsync({ type: "blob" })
                         .then(function (content) {
-                            fileManager.save(fileName + "_" + fullname, [content]);
+                            saveAs(content, fileName + "_" + fullname + ".zip");
                         });
                 }
             });
