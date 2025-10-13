@@ -35,5 +35,6 @@ namespace Expertiser.Portal.Models
         public string BranchName { get; set; }
         public int TotalCases { get; set; }
         public decimal TotalLiquidated { get; set; }
+        public decimal AverageLiquidated { get; set; }
     }
 }
