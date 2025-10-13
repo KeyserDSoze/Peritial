@@ -75,14 +75,14 @@ namespace Expertiser
             White = DefaultUI.Default.White
         };
         public DefaultUI DefaultUI => defaultUI;
-        public NavigationBuilder NavigationBar =>  new NavigationBar(this.Title, "fa-institution")
+        public NavigationBuilder NavigationBar => new NavigationBar(this.Title, "fa-institution")
             .AddSuperGroup()
                 .AddGroup("Home", "fa-business-time", new NavigationUrl())
             .AddSuperGroup("Manage Experty", null, null, Roles.All)
                 .AddGroup("Assignments", "fa-cog", null, Roles.All)
                     .AddItem("Import New Accident", null, new NavigationUrl("Accident", "Import"), Roles.AdminContributor)
                     .AddItem("Assignments", null, new NavigationUrl("Accident"), Roles.All)
-                    .AddAssignmentsByTime() 
+                    .AddAssignmentsByTime()
                     .AddItem("All Assignments", null, new NavigationUrl("Accident", parameters: new Dictionary<string, string> { { "Status", "-3" } }), Roles.All)
                     .AddAllAssignmentsByTime()
                 .AddGroup("Assignments By Status", "fa-cog", null, Roles.All)
@@ -98,6 +98,7 @@ namespace Expertiser
             .AddSuperGroup("Bill", null, null, Roles.All)
                 .AddGroup("Bill", "fa-cog", null, Roles.All)
                     .AddItem("Bill", null, new NavigationUrl("Bill"), Roles.All)
+                    .AddItem("KPI", null, new NavigationUrl("KPI"), Roles.Admin)
             .AddSuperGroup("Manage", null, null, Roles.Admin)
                 .AddGroup("Manage Members", "fa-user-check")
                     .AddItem("Members", null, new NavigationUrl("User"))

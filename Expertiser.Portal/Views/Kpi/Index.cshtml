@@ -1,4 +1,4 @@
-﻿@model DateStats
+﻿@model KpiViewModel
 
 @{
     ViewData["Title"] = "KPI";
@@ -6,9 +6,112 @@
 
 <h1>@SharedLocalizer["Overview"]</h1>
 <hr />
+
 <div class="row">
     <div class="col-md-12">
-
+        <h3>Incarichi in Pancia (senza fatturato)</h3>
+        <p>Incarichi per consulente che non rientrano nel fatturato (senza stato fatturato)</p>
+        <table class="table table-striped table-bordered">
+            <thead class="thead-dark">
+                <tr>
+                    <th>Consulente</th>
+                    <th>Totale Incarichi</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (Model.ContributorAssignments != null && Model.ContributorAssignments.Any())
+                {
+                    @foreach (var item in Model.ContributorAssignments)
+                    {
+                        <tr>
+                            <td>@item.ContributorName</td>
+                            <td>@item.TotalAssignments</td>
+                        </tr>
+                    }
+                }
+                else
+                {
+                    <tr>
+                        <td colspan="2" class="text-center">Nessun dato disponibile</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
     </div>
-    
+</div>
+
+<hr />
+
+<div class="row">
+    <div class="col-md-12">
+        <h3>Tempo Medio di Chiusura</h3>
+        <p>Tempo medio di chiusura (da data incarico a data chiusura) per consulente</p>
+        <table class="table table-striped table-bordered">
+            <thead class="thead-dark">
+                <tr>
+                    <th>Consulente</th>
+                    <th>Pratiche Chiuse</th>
+                    <th>Giorni Medi Chiusura</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (Model.ContributorClosingTimes != null && Model.ContributorClosingTimes.Any())
+                {
+                    @foreach (var item in Model.ContributorClosingTimes)
+                    {
+                        <tr>
+                            <td>@item.ContributorName</td>
+                            <td>@item.ClosedCases</td>
+                            <td>@item.AverageClosingDays.ToString("F2")</td>
+                        </tr>
+                    }
+                }
+                else
+                {
+                    <tr>
+                        <td colspan="3" class="text-center">Nessun dato disponibile</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<hr />
+
+<div class="row">
+    <div class="col-md-12">
+        <h3>Liquidato per Ramo</h3>
+        <p>Totale liquidato per consulente e ramo</p>
+        <table class="table table-striped table-bordered">
+            <thead class="thead-dark">
+                <tr>
+                    <th>Consulente</th>
+                    <th>Ramo</th>
+                    <th>Numero Pratiche</th>
+                    <th>Totale Liquidato</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (Model.ContributorLiquidatedByBranch != null && Model.ContributorLiquidatedByBranch.Any())
+                {
+                    @foreach (var item in Model.ContributorLiquidatedByBranch)
+                    {
+                        <tr>
+                            <td>@item.ContributorName</td>
+                            <td>@item.BranchName</td>
+                            <td>@item.TotalCases</td>
+                            <td>@item.TotalLiquidated.ToString("C2")</td>
+                        </tr>
+                    }
+                }
+                else
+                {
+                    <tr>
+                        <td colspan="4" class="text-center">Nessun dato disponibile</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
 </div>
