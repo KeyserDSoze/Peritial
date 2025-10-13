@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.EntityFrameworkCore;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -21,6 +22,17 @@ namespace Expertiser.Database.Models
         public string ExternalId { get; set; }
         public int InsuranceCompanyId { get; set; }
         public int? ContractorId { get; set; }
+        [StringLength(50)]
+        [Unicode(false)]
+        public string AgencyCode { get; set; }
+
+        [StringLength(50)]
+        [Unicode(false)]
+        public DateTime? StartCoverage { get; set; }
+
+        [StringLength(50)]
+        [Unicode(false)]
+        public DateTime? EndCoverage { get; set; }
 
         [ForeignKey(nameof(ContractorId))]
         [InverseProperty(nameof(TableCustomer.TableInsuranceContractor))]

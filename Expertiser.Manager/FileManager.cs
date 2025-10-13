@@ -107,16 +107,17 @@ namespace Expertiser
             using (WordprocessingDocument wordDocument =
                 WordprocessingDocument.Open(template.Stream, true))
             {
+                var isOpen = false;
                 foreach (var element in wordDocument.MainDocumentPart.Document.Elements())
                 {
-                    ChangeElement(element);
+                    ChangeElement(element, ref isOpen);
                 }
                 wordDocument.MainDocumentPart.Document.Save();
             }
             template.Stream.Position = 0;
             return template.Stream;
 
-            void ChangeElement(OpenXmlElement openXmlElement)
+            void ChangeElement(OpenXmlElement openXmlElement, ref bool isOpen)
             {
                 if (openXmlElement.HasChildren)
                 {
@@ -125,15 +126,28 @@ namespace Expertiser
                         if (element is Text)
                         {
                             string text = (element as Text).Text;
-                            foreach (var replacer in Replacer.All.Where(x => text.Contains(x.Variable)))
+                            if (text == "{")
                             {
-                                var value = replacer.ValueRetriever(expertise);
-                                if (value != null)
-                                    (element as Text).Text = text.Replace(replacer.Variable, value.ToString());
+                                isOpen = true;
+                                (element as Text).Text = text.Replace("{", string.Empty);
+                            }
+                            else if (text.Trim() == "}" && isOpen)
+                            {
+                                isOpen = false;
+                                (element as Text).Text = text.Replace("}", string.Empty);
+                            }
+                            else if (isOpen)
+                            {
+                                foreach (var replacer in Replacer.All.Where(x => text.Contains(x.Variable)))
+                                {
+                                    var value = replacer.ValueRetriever(expertise);
+                                    if (value != null)
+                                        (element as Text).Text = text.Replace(replacer.Variable, value.ToString());
+                                }
                             }
                         }
                         else
-                            ChangeElement(element);
+                            ChangeElement(element, ref isOpen);
                     }
                 }
             }
@@ -147,23 +161,29 @@ namespace Expertiser
                 Variable = $"{variable}";
                 ValueRetriever = valueRetriever;
             }
-            public static readonly List<Replacer> All = new List<Replacer>()
-            {
+            public static readonly List<Replacer> All =
+            [
                 new Replacer("NumeroSinistro", x => x.Accident.ExternalId),
-                new Replacer("DataSinistro", x => x.Accident.AccidentDate),
-                new Replacer("Indirizzo", x => $"{x.Accident?.Damageds?.FirstOrDefault()?.Address} {x.Accident?.Address?.City} {x.Accident?.Address?.PostalCode}"),
+                new Replacer("DataSinistro", x => GetDateTimeAsString(x.Accident.AccidentDate)),
+                new Replacer("Indirizzo", x => $"{x.Accident?.Address} {x.Accident?.Address?.City} {x.Accident?.Address?.PostalCode}"),
                 new Replacer("Contraente", x => $"{x.Accident?.Insurance?.Contractor?.Name}"),
                 new Replacer("CodiceFiscale", x => $"{x.Accident?.Insurance?.Contractor?.FiscalCode}"),
                 new Replacer("Danneggiati", x => $"{string.Join(", ", x.Accident?.TableDamaged?.Select(x => x.Customer.Name))}"),
                 new Replacer("NumeroPolizza", x => $"{x.Accident?.Insurance?.ExternalId}"),
-                new Replacer("DataIncarico", x => $"{x.Accident?.TableExpertise?.LastOrDefault()?.AssignmentDate}"),
-                new Replacer("DataChiusura", x => $"{x.Accident?.TableExpertise?.LastOrDefault()?.CloseDate}"),
+                new Replacer("DataIncarico", x => GetDateTimeAsString(x.Accident?.TableExpertise?.LastOrDefault()?.AssignmentDate)),
+                new Replacer("DataChiusura", x => GetDateTimeAsString(x.Accident?.TableExpertise?.LastOrDefault()?.CloseDate)),
                 new Replacer("Perito", x => $"{x.Accident?.TableExpertise?.LastOrDefault()?.Contributor?.Name}"),
                 new Replacer("Liquidatore", x => $"{x.Accident?.InsuranceAdjuster?.Name}"),
                 new Replacer("Ispettorato", x => $"{x.Accident?.Inspectorate?.Label}"),
                 new Replacer("Ramo", x => $"{x.Accident?.TableExpertise?.LastOrDefault()?.Branch?.Label}"),
                 new Replacer("Liquidato", x => $"{x.Accident?.TableExpertise?.LastOrDefault()?.Liquidated}"),
-            };
+                new Replacer("IdStudio", x => $"{x.Accident?.TableExpertise?.FirstOrDefault()?.ConcreteId}"),
+                new Replacer("CodiceAgenzia", x => $"{x.Accident?.Insurance?.AgencyCode}"),
+                new Replacer("DataInizioCopertura", x => $"{GetDateTimeAsString(x.Accident?.Insurance?.StartCoverage)}"),
+                new Replacer("DataFineCopertura", x => $"{GetDateTimeAsString(x.Accident?.Insurance?.EndCoverage)}"),
+            ];
         }
+        private static string GetDateTimeAsString(DateTime? dateTime)
+            => dateTime?.ToString("dd/MM/yyyy") ?? string.Empty;
     }
 }

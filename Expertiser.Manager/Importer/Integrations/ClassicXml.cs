@@ -1,13 +1,9 @@
 ﻿using Expertiser.Database.Models;
-using Microsoft.Azure.Documents.SystemFunctions;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.OData.Edm;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Xml;
 using System.Xml.Serialization;
 
@@ -35,7 +31,14 @@ namespace Expertiser
             }
             catch
             {
-                return DateTime.ParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture);
+                try
+                {
+                    return DateTime.ParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture);
+                }
+                catch
+                {
+                    return DateTime.MinValue;
+                }
             }
         }
         public ImportedExperty Import(Stream content, Manager manager)
@@ -65,6 +68,9 @@ namespace Expertiser
                 {
                     InsuranceCompanyId = tableInsuranceCompany.Id,
                     ExternalId = classicXml.Customer.Insurance.Id,
+                    AgencyCode = classicXml.Customer.Insurance.AgencyCode,
+                    StartCoverage = ParseTime(classicXml.Customer.Insurance.StartCoverage),
+                    EndCoverage = ParseTime(classicXml.Customer.Insurance.EndCoverage)
                 },
                 Location = new TableLocation()
                 {
