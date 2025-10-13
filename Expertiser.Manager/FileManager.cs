@@ -144,25 +144,25 @@ namespace Expertiser
             public Func<TableExpertise, object> ValueRetriever { get; }
             private Replacer(string variable, Func<TableExpertise, object> valueRetriever)
             {
-                Variable = $"{{{variable}}}";
+                Variable = $"{variable}";
                 ValueRetriever = valueRetriever;
             }
             public static readonly List<Replacer> All = new List<Replacer>()
             {
                 new Replacer("NumeroSinistro", x => x.Accident.ExternalId),
                 new Replacer("DataSinistro", x => x.Accident.AccidentDate),
-                new Replacer("Indirizzo", x => $"{x.Accident.Address.Address} {x.Accident.Address.City} {x.Accident.Address.PostalCode}"),
-                new Replacer("Contraente", x => $"{x.Accident.Insurance.Contractor.Name}"),
-                new Replacer("CodiceFiscale", x => $"{x.Accident.Insurance.Contractor.FiscalCode}"),
-                new Replacer("Danneggiati", x => $"{string.Join(", ", x.Accident.TableDamaged.Select(x => x.Customer.Name))}"),
-                new Replacer("NumeroPolizza", x => $"{x.Accident.Insurance.ExternalId}"),
-                new Replacer("DataIncarico", x => $"{x.Accident.TableExpertise.Last().AssignmentDate}"),
-                new Replacer("DataChiusura", x => $"{x.Accident.TableExpertise.Last().CloseDate}"),
-                new Replacer("Perito", x => $"{x.Accident.TableExpertise.Last().Contributor.Name}"),
-                new Replacer("Liquidatore", x => $"{x.Accident.InsuranceAdjuster.Name}"),
-                new Replacer("Ispettorato", x => $"{x.Accident.Inspectorate.Label}"),
-                new Replacer("Ramo", x => $"{x.Accident.TableExpertise.Last().Branch.Label}"),
-                new Replacer("Liquidato", x => $"{x.Accident.TableExpertise.Last().Liquidated}"),
+                new Replacer("Indirizzo", x => $"{x.Accident?.Damageds?.FirstOrDefault()?.Address} {x.Accident?.Address?.City} {x.Accident?.Address?.PostalCode}"),
+                new Replacer("Contraente", x => $"{x.Accident?.Insurance?.Contractor?.Name}"),
+                new Replacer("CodiceFiscale", x => $"{x.Accident?.Insurance?.Contractor?.FiscalCode}"),
+                new Replacer("Danneggiati", x => $"{string.Join(", ", x.Accident?.TableDamaged?.Select(x => x.Customer.Name))}"),
+                new Replacer("NumeroPolizza", x => $"{x.Accident?.Insurance?.ExternalId}"),
+                new Replacer("DataIncarico", x => $"{x.Accident?.TableExpertise?.LastOrDefault()?.AssignmentDate}"),
+                new Replacer("DataChiusura", x => $"{x.Accident?.TableExpertise?.LastOrDefault()?.CloseDate}"),
+                new Replacer("Perito", x => $"{x.Accident?.TableExpertise?.LastOrDefault()?.Contributor?.Name}"),
+                new Replacer("Liquidatore", x => $"{x.Accident?.InsuranceAdjuster?.Name}"),
+                new Replacer("Ispettorato", x => $"{x.Accident?.Inspectorate?.Label}"),
+                new Replacer("Ramo", x => $"{x.Accident?.TableExpertise?.LastOrDefault()?.Branch?.Label}"),
+                new Replacer("Liquidato", x => $"{x.Accident?.TableExpertise?.LastOrDefault()?.Liquidated}"),
             };
         }
     }

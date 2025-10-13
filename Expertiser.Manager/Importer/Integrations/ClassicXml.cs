@@ -200,6 +200,12 @@ namespace Expertiser
         {
             [XmlElement(ElementName = "Numero")]
             public string Id { get; set; }
+            [XmlElement(ElementName = "CodiceAgenzia")]
+            public string AgencyCode { get; set; }
+            [XmlElement(ElementName = "DataInizioCopertura")]
+            public string StartCoverage { get; set; }
+            [XmlElement(ElementName = "DataFineCopertura")]
+            public string EndCoverage { get; set; }
         }
         public class ClassicAddress
         {
