@@ -24,24 +24,37 @@ namespace Expertiser.Portal.Controllers
         public KpiController(Manager manager)
             => Manager = manager;
 
-        public async Task<IActionResult> Index()
+        // Index now accepts optional date range. Defaults to the last 3 months (inclusive).
+        public async Task<IActionResult> Index(DateTime? from, DateTime? to)
         {
+            // toDateInclusive is today by default
+            var toDateInclusive = to?.Date ?? DateTime.UtcNow.Date;
+            // fromDate default = same day 3 months earlier
+            var fromDate = from?.Date ?? toDateInclusive.AddMonths(-3);
+
+            // use exclusive upper bound for queries
+            var toDateExclusive = toDateInclusive.AddDays(1);
+
             var model = new KpiViewModel
             {
-                From = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1),
-                To = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1).AddMonths(1),
-                ContributorAssignments = await GetContributorAssignments(),
-                ContributorClosingTimes = await GetContributorClosingTimes(),
-                ContributorLiquidatedByBranch = await GetContributorLiquidatedByBranch()
+                From = fromDate,
+                To = toDateInclusive,
+                ContributorAssignments = await GetContributorAssignments(fromDate, toDateExclusive),
+                ContributorClosingTimes = await GetContributorClosingTimes(fromDate, toDateExclusive),
+                ContributorLiquidatedByBranch = await GetContributorLiquidatedByBranch(fromDate, toDateExclusive)
             };
 
             return View(model);
         }
 
         [HttpGet]
-        public async Task<IActionResult> ExportAssignmentsCsv()
+        public async Task<IActionResult> ExportAssignmentsCsv(DateTime? from, DateTime? to)
         {
-            var data = await GetContributorAssignments();
+            var toDateInclusive = to?.Date ?? DateTime.UtcNow.Date;
+            var fromDate = from?.Date ?? toDateInclusive.AddMonths(-3);
+            var toDateExclusive = toDateInclusive.AddDays(1);
+
+            var data = await GetContributorAssignments(fromDate, toDateExclusive);
             var csv = new StringBuilder();
 
             // Header
@@ -54,15 +67,19 @@ namespace Expertiser.Portal.Controllers
             }
 
             var bytes = Encoding.UTF8.GetBytes(csv.ToString());
-            var fileName = $"Incarichi_In_Pancia_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
+            var fileName = $"Incarichi_In_Pancia_{fromDate:yyyyMMdd}_{toDateInclusive:yyyyMMdd}.csv";
 
             return File(bytes, "text/csv", fileName);
         }
 
         [HttpGet]
-        public async Task<IActionResult> ExportClosingTimesCsv()
+        public async Task<IActionResult> ExportClosingTimesCsv(DateTime? from, DateTime? to)
         {
-            var data = await GetContributorClosingTimes();
+            var toDateInclusive = to?.Date ?? DateTime.UtcNow.Date;
+            var fromDate = from?.Date ?? toDateInclusive.AddMonths(-3);
+            var toDateExclusive = toDateInclusive.AddDays(1);
+
+            var data = await GetContributorClosingTimes(fromDate, toDateExclusive);
             var csv = new StringBuilder();
 
             // Header
@@ -75,15 +92,19 @@ namespace Expertiser.Portal.Controllers
             }
 
             var bytes = Encoding.UTF8.GetBytes(csv.ToString());
-            var fileName = $"Tempo_Medio_Chiusura_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
+            var fileName = $"Tempo_Medio_Chiusura_{fromDate:yyyyMMdd}_{toDateInclusive:yyyyMMdd}.csv";
 
             return File(bytes, "text/csv", fileName);
         }
 
         [HttpGet]
-        public async Task<IActionResult> ExportLiquidatedByBranchCsv()
+        public async Task<IActionResult> ExportLiquidatedByBranchCsv(DateTime? from, DateTime? to)
         {
-            var data = await GetContributorLiquidatedByBranch();
+            var toDateInclusive = to?.Date ?? DateTime.UtcNow.Date;
+            var fromDate = from?.Date ?? toDateInclusive.AddMonths(-3);
+            var toDateExclusive = toDateInclusive.AddDays(1);
+
+            var data = await GetContributorLiquidatedByBranch(fromDate, toDateExclusive);
             var csv = new StringBuilder();
 
             // Header
@@ -96,16 +117,20 @@ namespace Expertiser.Portal.Controllers
             }
 
             var bytes = Encoding.UTF8.GetBytes(csv.ToString());
-            var fileName = $"Liquidato_Per_Ramo_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
+            var fileName = $"Liquidato_Per_Ramo_{fromDate:yyyyMMdd}_{toDateInclusive:yyyyMMdd}.csv";
 
             return File(bytes, "text/csv", fileName);
         }
 
-        private async Task<List<ContributorAssignmentsKpi>> GetContributorAssignments()
+        // All Get... methods accept a [fromDate, toDateExclusive) range and filter on AssignmentDate.
+        private async Task<List<ContributorAssignmentsKpi>> GetContributorAssignments(DateTime fromDate, DateTime toDateExclusive)
         {
             var query = from e in Manager.Context.TableExpertise
                         join a in Manager.Context.AspNetUsers on e.ContributorId equals a.Id
-                        where e.CloseDate == null || e.Status < 5
+                        where (e.CloseDate == null || e.Status < 5)
+                              && e.AssignmentDate != null
+                              && e.AssignmentDate >= fromDate
+                              && e.AssignmentDate < toDateExclusive
                         group e by new { a.Id, a.UserName, a.Name, a.Surname } into g
                         orderby g.Count() descending
                         select new ContributorAssignmentsKpi
@@ -120,11 +145,14 @@ namespace Expertiser.Portal.Controllers
             return await query.ToListAsync();
         }
 
-        private async Task<List<ContributorClosingTimeKpi>> GetContributorClosingTimes()
+        private async Task<List<ContributorClosingTimeKpi>> GetContributorClosingTimes(DateTime fromDate, DateTime toDateExclusive)
         {
             var query = from e in Manager.Context.TableExpertise
                         join a in Manager.Context.AspNetUsers on e.ContributorId equals a.Id
-                        where e.CloseDate != null && e.AssignmentDate != null
+                        where e.CloseDate != null
+                              && e.AssignmentDate != null
+                              && e.AssignmentDate >= fromDate
+                              && e.AssignmentDate < toDateExclusive
                         group e by new { a.Id, a.UserName, a.Name, a.Surname } into g
                         select new ContributorClosingTimeKpi
                         {
@@ -139,12 +167,16 @@ namespace Expertiser.Portal.Controllers
             return await query.OrderBy(x => x.AverageClosingDays).ToListAsync();
         }
 
-        private async Task<List<ContributorLiquidatedByBranchKpi>> GetContributorLiquidatedByBranch()
+        private async Task<List<ContributorLiquidatedByBranchKpi>> GetContributorLiquidatedByBranch(DateTime fromDate, DateTime toDateExclusive)
         {
             var query = from e in Manager.Context.TableExpertise
                         join a in Manager.Context.AspNetUsers on e.ContributorId equals a.Id
                         join b in Manager.Context.TableBranch on e.BranchId equals b.Id
-                        where e.Liquidated != null && e.Status >= 5
+                        where e.Liquidated != null
+                              && e.Status >= 5
+                              && e.AssignmentDate != null
+                              && e.AssignmentDate >= fromDate
+                              && e.AssignmentDate < toDateExclusive
                         group e by new { a.Id, a.UserName, a.Name, a.Surname, e.BranchId, b.Label } into g
                         orderby g.Key.UserName, g.Key.BranchId
                         select new ContributorLiquidatedByBranchKpi

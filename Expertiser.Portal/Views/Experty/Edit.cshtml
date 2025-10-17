@@ -151,7 +151,7 @@
                                  rystem-skip-path="5"
                                  style="width:100%;"></rystem-file-manager>
         </div>
-        @if (Model != null && Model.StatusType >= Expertiser.Interfaces.StatusType.Revised)
+        @if (Model != null)
         {
                 <hr />
             @foreach (var file in await Manager.FileManager.GetTemplateFiles(Model.Accident.InsuranceAgency.InsuranceCompany.Id))
