@@ -173,7 +173,7 @@ namespace Expertiser.Portal.Controllers
         {
             try
             {
-                var expertise = await Manager.QueryManager.Expertises
+                var expertise = await Manager.QueryManager.ExpertisesWithAll
                                           .FirstOrDefaultAsync(x => x.Id == id);
                 return File(await Manager.FileManager.CreateFinalDocumentationFromTemplateAsync(expertise, name),
                               "application/vnd.openxmlformats-officedocument.wordprocessingml.document",

@@ -142,7 +142,7 @@ namespace Expertiser
                                 {
                                     var value = replacer.ValueRetriever(expertise);
                                     if (value != null)
-                                        (element as Text).Text = text.Replace(replacer.Variable, value.ToString());
+                                        (element as Text).Text = text.Trim('}').Trim('{').Replace(replacer.Variable, value.ToString());
                                 }
                             }
                         }
@@ -170,14 +170,14 @@ namespace Expertiser
                 new Replacer("CodiceFiscale", x => $"{x.Accident?.Insurance?.Contractor?.FiscalCode}"),
                 new Replacer("Danneggiati", x => $"{string.Join(", ", x.Accident?.TableDamaged?.Select(x => x.Customer.Name))}"),
                 new Replacer("NumeroPolizza", x => $"{x.Accident?.Insurance?.ExternalId}"),
-                new Replacer("DataIncarico", x => GetDateTimeAsString(x.Accident?.TableExpertise?.LastOrDefault()?.AssignmentDate)),
-                new Replacer("DataChiusura", x => GetDateTimeAsString(x.Accident?.TableExpertise?.LastOrDefault()?.CloseDate)),
-                new Replacer("Perito", x => $"{x.Accident?.TableExpertise?.LastOrDefault()?.Contributor?.Name}"),
+                new Replacer("DataIncarico", x => GetDateTimeAsString(x.AssignmentDate)),
+                new Replacer("DataChiusura", x => GetDateTimeAsString(x.CloseDate)),
+                new Replacer("Perito", x => $"{x.Contributor?.Name}"),
                 new Replacer("Liquidatore", x => $"{x.Accident?.InsuranceAdjuster?.Name}"),
                 new Replacer("Ispettorato", x => $"{x.Accident?.Inspectorate?.Label}"),
-                new Replacer("Ramo", x => $"{x.Accident?.TableExpertise?.LastOrDefault()?.Branch?.Label}"),
-                new Replacer("Liquidato", x => $"{x.Accident?.TableExpertise?.LastOrDefault()?.Liquidated}"),
-                new Replacer("IdStudio", x => $"{x.Accident?.TableExpertise?.FirstOrDefault()?.ConcreteId}"),
+                new Replacer("Ramo", x => $"{x.Branch?.Label}"),
+                new Replacer("Liquidato", x => $"{x.Liquidated}"),
+                new Replacer("IdStudio", x => $"{x.ConcreteId}"),
                 new Replacer("CodiceAgenzia", x => $"{x.Accident?.Insurance?.AgencyCode}"),
                 new Replacer("DataInizioCopertura", x => $"{GetDateTimeAsString(x.Accident?.Insurance?.StartCoverage)}"),
                 new Replacer("DataFineCopertura", x => $"{GetDateTimeAsString(x.Accident?.Insurance?.EndCoverage)}"),
