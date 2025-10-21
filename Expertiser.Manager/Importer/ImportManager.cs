@@ -62,8 +62,19 @@ namespace Expertiser
                     ExternalId = importValue.Insurance.ExternalId,
                     ContractorId = contractorId,
                     InsuranceCompanyId = importValue.Insurance.InsuranceCompanyId,
+                    AgencyCode = importValue.Insurance.AgencyCode,
+                    StartCoverage = importValue.Insurance.StartCoverage,
+                    EndCoverage = importValue.Insurance.EndCoverage
                 };
                 Manager.Context.TableInsurance.Add(insurance);
+                await Manager.Context.SaveChangesAsync();
+            }
+            else if (insurance.AgencyCode != importValue.Insurance.AgencyCode 
+                || insurance.StartCoverage != importValue.Insurance.StartCoverage || insurance.EndCoverage != importValue.Insurance.EndCoverage)
+            {
+                insurance.AgencyCode = importValue.Insurance.AgencyCode;
+                insurance.StartCoverage = importValue.Insurance.StartCoverage;
+                insurance.EndCoverage = importValue.Insurance.EndCoverage;
                 await Manager.Context.SaveChangesAsync();
             }
             //Create insurance adjuster

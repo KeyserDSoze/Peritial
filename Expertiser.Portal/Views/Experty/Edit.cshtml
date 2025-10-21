@@ -153,11 +153,16 @@
         </div>
         @if (Model != null)
         {
-                <hr />
-            @foreach (var file in await Manager.FileManager.GetTemplateFiles(Model.Accident.InsuranceAgency.InsuranceCompany.Id))
-            {
-                            <a href="@Manager.BaseUri/Experty/DownloadFinalDocument/@Model.Id?name=@file.Name" download target="_blank">@SharedLocalizer["Download"] @file.Name</a>
-            }
+            <hr />
+            <div class="d-flex flex-column">
+                @foreach (var file in await Manager.FileManager.GetTemplateFiles(Model.Accident.InsuranceAgency.InsuranceCompany.Id))
+                {
+                    <a href="@Manager.BaseUri/Experty/DownloadFinalDocument/@Model.Id?name=@file.Name" download target="_blank" class="mb-2">
+                        <i class="fa fa-download"></i> @SharedLocalizer["Download"] @file.Name
+                    </a>
+                    <br />
+                }
+            </div>
         }
     </div>
 </div>
