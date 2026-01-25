@@ -40,16 +40,31 @@ namespace Expertiser.Portal.Controllers
         [HttpPost]
         public async Task<IActionResult> Upload(int id, IFormFile file, [FromQuery] string directory, [FromQuery] string fileId)
         {
-            if (!string.IsNullOrWhiteSpace(directory) && directory != "root")
+            try
             {
-                IEnumerable<string> files = await this.Manager.FileManager.SaveFileAsync(fileId, file.OpenReadStream(), file.FileName, file.ContentType, directory);
+                // Validazione del file
+                if (file == null || file.Length == 0)
+                    return BadRequest("File not provided or empty");
+
+                if (string.IsNullOrWhiteSpace(directory) || directory == "root")
+                    return BadRequest("Invalid directory");
+
+                // Genera un nome di fallback se il file non ha un nome valido
+                var fileName = string.IsNullOrWhiteSpace(file.FileName) 
+                    ? $"{Guid.NewGuid().ToString("N")}.jpg" 
+                    : file.FileName;
+
+                IEnumerable<string> files = await this.Manager.FileManager.SaveFileAsync(fileId, file.OpenReadStream(), fileName, file.ContentType, directory);
                 var state = await Manager.GetExpertyStateAsync(id, this.StringLocalizer);
                 state.AddAttachment(files);
                 await state.Next(this.Manager.FileManager.GetMinimumStatus(directory));
                 return Ok();
             }
-            else
-                return BadRequest("Not ok");
+            catch (Exception ex)
+            {
+                // Log dell'errore per debugging
+                return BadRequest($"Error uploading file: {ex.Message}");
+            }
         }
         public async Task<IActionResult> Proxy([FromQuery] string name, [FromQuery] IEnumerable<string> urls)
         {

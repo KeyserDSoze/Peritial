@@ -56,13 +56,31 @@ namespace Expertiser
         }
         public async Task<IList<string>> SaveFileAsync(string fileId, Stream stream, string fileName, string contentType, string name = null)
         {
+            // Genera un nome di fallback se fileName è vuoto o non valido
+            if (string.IsNullOrWhiteSpace(fileName))
+                fileName = $"{Guid.NewGuid().ToString("N")}.jpg";
+            
+            var fileNameParts = fileName.Split('.');
+            var fileExtension = fileNameParts.Length > 1 ? fileNameParts.Last() : "jpg";
+            var fileNameWithoutExtension = fileNameParts.Length > 1 ? fileNameParts.First() : Guid.NewGuid().ToString("N");
+
+            // Generiamo un identificatore univoco per evitare conflitti di duplicazione
+            var uniqueIdentifier = Guid.NewGuid().ToString("N").Substring(0, 8);
+            
             if (name == null)
                 name = Guid.NewGuid().ToString("N");
             else if (!name.Contains("."))
-                name = $"{name}/{(!string.IsNullOrWhiteSpace(fileName) ? fileName.Split('.').FirstOrDefault() : Guid.NewGuid().ToString("N"))}";
+            {
+                // Aggiungiamo l'identificatore univoco al nome per evitare conflitti con file simili
+                var sanitizedFileName = !string.IsNullOrWhiteSpace(fileNameWithoutExtension) 
+                    ? fileNameWithoutExtension 
+                    : Guid.NewGuid().ToString("N");
+                name = $"{name}/{uniqueIdentifier}_{sanitizedFileName}";
+            }
+            
             var upload = await new File()
             {
-                Name = $"{fileId}/{name}.{fileName.Split('.').Last()}",
+                Name = $"{fileId}/{name}.{fileExtension}",
                 Properties = new DataProperties()
                 {
                     ContentType = contentType
