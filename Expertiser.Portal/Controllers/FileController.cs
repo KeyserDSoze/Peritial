@@ -58,7 +58,10 @@ namespace Expertiser.Portal.Controllers
                 var state = await Manager.GetExpertyStateAsync(id, this.StringLocalizer);
                 state.AddAttachment(files);
                 await state.Next(this.Manager.FileManager.GetMinimumStatus(directory));
-                return Ok();
+                
+                // Ritorna la lista aggiornata dei file per l'aggiornamento automatico del componente
+                var updatedFiles = await this.Manager.FileManager.GetExpertiseFiles(fileId);
+                return Ok(updatedFiles);
             }
             catch (Exception ex)
             {

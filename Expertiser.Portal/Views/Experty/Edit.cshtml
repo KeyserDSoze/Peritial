@@ -186,3 +186,63 @@
         </rystem-ajax-form>
     </div>
 </div>
+
+<script>
+    // Auto-refresh del file manager dopo l'upload di file o foto
+    document.addEventListener('DOMContentLoaded', function() {
+        // Intercetta tutte le richieste AJAX per l'upload di file
+        const originalXHROpen = XMLHttpRequest.prototype.open;
+        const originalXHRSend = XMLHttpRequest.prototype.send;
+        
+        XMLHttpRequest.prototype.open = function(method, url) {
+            this._uploadUrl = url;
+            this._uploadMethod = method;
+            return originalXHROpen.apply(this, arguments);
+        };
+        
+        XMLHttpRequest.prototype.send = function(data) {
+            const self = this;
+            const originalOnreadystatechange = this.onreadystatechange;
+            
+            this.onreadystatechange = function() {
+                if (originalOnreadystatechange) {
+                    originalOnreadystatechange.apply(this, arguments);
+                }
+                
+                // Verifica se è un upload di file completato con successo
+                if (this.readyState === 4 && this.status === 200) {
+                    // Se l'URL contiene "File/Upload" e il metodo è POST
+                    if (self._uploadUrl && self._uploadUrl.includes('File/Upload') && self._uploadMethod === 'POST') {
+                        console.log('File upload completato, aggiornando...');
+                        // Attendi un momento per garantire il salvataggio
+                        setTimeout(function() {
+                            location.reload();
+                        }, 500);
+                    }
+                }
+            };
+            
+            return originalXHRSend.apply(this, arguments);
+        };
+        
+        // Fallback: monitora anche gli eventi di mutazione del DOM
+        const fileManagerContainer = document.getElementById('update-all-files');
+        if (fileManagerContainer) {
+            const observer = new MutationObserver(function(mutations) {
+                // Se il file manager è stato modificato, ricarica
+                mutations.forEach(function(mutation) {
+                    if (mutation.type === 'childList' || mutation.type === 'subtree') {
+                        console.log('Modifiche rilevate nel file manager');
+                    }
+                });
+            });
+            
+            observer.observe(fileManagerContainer, {
+                childList: true,
+                subtree: true,
+                attributes: true,
+                characterData: true
+            });
+        }
+    });
+</script>
