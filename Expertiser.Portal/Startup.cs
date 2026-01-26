@@ -16,6 +16,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using QuestPDF.Infrastructure;
 using Rystem.Web;
 using System;
 using System.Collections.Generic;
@@ -39,6 +40,9 @@ namespace Expertiser.Portal
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
+            // Configura QuestPDF con licenza Community (gratuita)
+            QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
+            
             services.AddTransient<IEmailSender, EmailSender>();
             services.AddDbContext<ApplicationDbContext>(options =>
                 options.UseSqlServer(Const.DatabaseConnectionString));
