@@ -228,4 +228,7 @@
   <data name="Utilities" xml:space="preserve">
     <value>Utilities</value>
   </data>
+  <data name="Download Photographic Report" xml:space="preserve">
+    <value>Download Photographic Report</value>
+  </data>
 </root>
