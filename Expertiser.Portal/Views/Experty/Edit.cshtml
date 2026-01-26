@@ -310,39 +310,50 @@
         }
     });
 
-    // Funzione per scaricare il rapporto fotografico
-    function downloadPhotographicReport(fileId) {
-        if (!fileId) {
-            alert('FileId non trovato');
-            return;
+        // Funzione per scaricare il rapporto fotografico
+        function downloadPhotographicReport(fileId) {
+            if (!fileId) {
+                alert('FileId non trovato');
+                return;
+            }
+            
+            const title = prompt('Inserisci titolo del rapporto (opzionale):', 'Reperti Fotografici');
+            let url = `/File/GeneratePhotographicReport?fileId=${fileId}`;
+            
+            if (title && title.trim()) {
+                url += `&title=${encodeURIComponent(title)}`;
+            }
+            
+            // Scarica il PDF
+            fetch(url)
+                .then(response => {
+                    if (!response.ok) throw new Error('Error downloading report');
+                    
+                    // Estrai il nome dal header Content-Disposition
+                    const contentDisposition = response.headers.get('content-disposition');
+                    let fileName = 'Reperti_Fotografici.pdf';
+                    if (contentDisposition) {
+                        const fileNameMatch = contentDisposition.match(/filename="?(.+?)"?$/);
+                        if (fileNameMatch && fileNameMatch.length > 1) {
+                            fileName = fileNameMatch[1];
+                        }
+                    }
+                    
+                    return response.blob().then(blob => ({blob, fileName}));
+                })
+                .then(({blob, fileName}) => {
+                    const downloadUrl = window.URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = downloadUrl;
+                    link.download = fileName;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    window.URL.revokeObjectURL(downloadUrl);
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Errore nel download del rapporto');
+                });
         }
-        
-        const title = prompt('Inserisci titolo del rapporto (opzionale):', 'RAPPORTO FOTOGRAFICO');
-        let url = `/File/GeneratePhotographicReport?fileId=${fileId}`;
-        
-        if (title && title.trim()) {
-            url += `&title=${encodeURIComponent(title)}`;
-        }
-        
-        // Scarica il PDF
-        fetch(url)
-            .then(response => {
-                if (!response.ok) throw new Error('Error downloading report');
-                return response.blob();
-            })
-            .then(blob => {
-                const downloadUrl = window.URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = downloadUrl;
-                link.download = `Rapporto_Fotografico_${new Date().toISOString().slice(0,10)}.pdf`;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                window.URL.revokeObjectURL(downloadUrl);
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('Errore nel download del rapporto');
-            });
-    }
 </script>

@@ -10,11 +10,13 @@ using System.Threading.Tasks;
 using Expertiser.Base.Constant;
 using Expertiser.Interfaces;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Localization;
 using QuestPDF.Fluent;
+using QuestPDF.Infrastructure;
 using Rystem.Web;
 
 namespace Expertiser.Portal.Controllers
@@ -24,10 +26,13 @@ namespace Expertiser.Portal.Controllers
     {
         private readonly Manager Manager;
         private readonly IStringLocalizer<SharedResource> StringLocalizer;
-        public FileController(Manager manager, IStringLocalizer<SharedResource> stringLocalizer)
+        private readonly IWebHostEnvironment WebHostEnvironment;
+
+        public FileController(Manager manager, IStringLocalizer<SharedResource> stringLocalizer, IWebHostEnvironment webHostEnvironment)
         {
             this.Manager = manager;
             this.StringLocalizer = stringLocalizer;
+            this.WebHostEnvironment = webHostEnvironment;
         }
 
         public IActionResult ShowDocument([FromQuery] string url)
@@ -126,12 +131,12 @@ namespace Expertiser.Portal.Controllers
 
                 // Titolo documento
                 var reportTitle = string.IsNullOrWhiteSpace(title) 
-                    ? "RAPPORTO FOTOGRAFICO" 
+                    ? "REPERTI FOTOGRAFICI" 
                     : title.ToUpper();
 
                 // Scarica tutte le immagini con deduplicazione per hash
                 using var httpClient = new HttpClient();
-                var seenHashes = new HashSet<string>(); // Memorizza gli hash per rilevare duplicati
+                var seenHashes = new HashSet<string>();
                 var images = new List<(byte[] Data, string Name)>();
                 var duplicateCount = 0;
                 
@@ -145,7 +150,7 @@ namespace Expertiser.Portal.Controllers
                         using (var sha256 = SHA256.Create())
                         {
                             var hash = sha256.ComputeHash(imageBytes);
-                            var hashString = Convert.ToHexString(hash); // .NET 5+ oppure BitConverter.ToString(hash).Replace("-", "")
+                            var hashString = Convert.ToHexString(hash);
                             
                             // Se l'hash non è mai stato visto, aggiungi l'immagine
                             if (seenHashes.Add(hashString))
@@ -156,93 +161,313 @@ namespace Expertiser.Portal.Controllers
                             {
                                 // Hash duplicato - scarta l'immagine
                                 duplicateCount++;
-                                Console.WriteLine($"⚠️ Immagine duplicata scartata: {imageFile.Name} (hash: {hashString})");
                             }
                         }
                     }
                     catch (Exception ex)
                     {
-                        // Salta le immagini che non riescono a scaricare
-                        Console.WriteLine($"❌ Errore nel download: {imageFile.Name} - {ex.Message}");
+                        Console.WriteLine($"❌ Errore nel download: {imageFile.Name}");
                     }
                 }
 
                 if (!images.Any())
-                    return BadRequest("No valid images found after deduplication");
+                    return BadRequest("No valid images found");
 
-                // Genera il PDF usando QuestPDF
-                var pdf = QuestPDF.Fluent.Document.Create(container =>
+                // Genera il PDF con griglia 2x2 (4 foto per pagina)
+                var pdf = Document.Create(container =>
                 {
-                    container
-                        .Page(page =>
-                        {
-                            page.Margin(20);
-                            
-                            page.Content()
-                                .PaddingVertical(10)
-                                .Column(column =>
-                                {
-                                    // Titolo
-                                    column
-                                        .Item()
-                                        .Text(reportTitle)
-                                        .FontSize(24)
-                                        .Bold()
-                                        .AlignCenter();
-
-                                    // Data
-                                    column
-                                        .Item()
-                                        .PaddingVertical(5)
-                                        .Text($"Data: {DateTime.Now:dd/MM/yyyy HH:mm}")
-                                        .FontSize(10)
-                                        .AlignCenter();
-
-                                    // Info duplicati (se ce ne sono)
-                                    if (duplicateCount > 0)
+                    container.Page(page =>
+                    {
+                        page.Margin(20);
+                        
+                        // HEADER con ARBEC logo e testo
+                        page.Header()
+                            .Column(col =>
+                            {
+                                col
+                                    .Item()
+                                    .Background("#FFFFFF")
+                                    .Padding(10)
+                                    .Row(row =>
                                     {
-                                        column
+                                        // Logo ARBEC - molto piccolo a sinistra
+                                        row.ConstantColumn(28)
+                                            .AlignLeft()
+                                            .Height(28)
+                                            .Image(System.IO.Path.Combine(this.WebHostEnvironment.WebRootPath, "images/logos/arbec-logo.png"));
+                                        
+                                        // Testo ARBEC - attaccato al logo
+                                        row.RelativeColumn()
+                                            .PaddingLeft(5)
+                                            .Column(textCol =>
+                                            {
+                                                textCol
+                                                    .Item()
+                                                    .AlignLeft()
+                                                    .Text("ARBEC")
+                                                    .FontSize(16)
+                                                    .Bold()
+                                                    .FontColor("#000000");
+                                                textCol
+                                                    .Item()
+                                                    .AlignLeft()
+                                                    .Text("Professional Loss Adjuster")
+                                                    .FontSize(8)
+                                                    .FontColor("#666666");
+                                            });
+                                    });
+                                col.Item().Height(5);
+                            });
+                        
+                        page.Content()
+                            .Column(column =>
+                            {
+                                // Titolo
+                                column
+                                    .Item()
+                                    .Background("#404040")
+                                    .Padding(15)
+                                    .Column(col =>
+                                    {
+                                        col
                                             .Item()
-                                            .PaddingVertical(5)
-                                            .Text($"⚠️ {duplicateCount} immagini duplicate rimosse")
-                                            .FontSize(9)
+                                            .Text(reportTitle)
+                                            .FontSize(24)
+                                            .Bold()
+                                            .FontColor("#FFFFFF")
                                             .AlignCenter();
-                                    }
 
-                                    // Contatore foto
+                                        col
+                                            .Item()
+                                            .PaddingTop(5)
+                                            .Text($"Data: {DateTime.Now:dd/MM/yyyy HH:mm:ss}")
+                                            .FontSize(10)
+                                            .FontColor("#FFFFFF")
+                                            .AlignCenter();
+
+                                        if (duplicateCount > 0)
+                                        {
+                                            col
+                                                .Item()
+                                                .Text($"⚠️ {duplicateCount} foto duplicate rimosse - Totale: {images.Count} foto")
+                                                .FontSize(9)
+                                                .FontColor("#FFC800")
+                                                .AlignCenter();
+                                        }
+                                        else
+                                        {
+                                            col
+                                                .Item()
+                                                .Text($"Totale foto: {images.Count}")
+                                                .FontSize(9)
+                                                .FontColor("#FFFFFF")
+                                                .AlignCenter();
+                                        }
+                                    });
+
+                                column.Item().Height(20);
+
+                                // Crea pagine con griglia 2x2
+                                int imageIndex = 0;
+                                while (imageIndex < images.Count)
+                                {
+                                    // Riga 1 (2 foto)
                                     column
                                         .Item()
-                                        .PaddingVertical(5)
-                                        .Text($"Foto nel report: {images.Count}")
-                                        .FontSize(9)
-                                        .AlignCenter();
+                                        .Row(row =>
+                                        {
+                                            // Foto 1 della riga - SINISTRA (allineata a destra)
+                                            if (imageIndex < images.Count)
+                                            {
+                                                row.RelativeColumn()
+                                                    .Padding(5)
+                                                    .Column(col =>
+                                                    {
+                                                        col
+                                                            .Item()
+                                                            .MaxWidth(250)
+                                                            .MaxHeight(250)
+                                                            .Image(images[imageIndex].Data);
+                                                        col
+                                                            .Item()
+                                                            .PaddingTop(5)
+                                                            .Text(images[imageIndex].Name)
+                                                            .FontSize(8)
+                                                            .Italic();
+                                                    });
+                                                imageIndex++;
+                                            }
 
-                                    // Spazio
-                                    column.Item().Height(10);
+                                            // Foto 2 della riga - DESTRA (allineata a sinistra)
+                                            if (imageIndex < images.Count)
+                                            {
+                                                row.RelativeColumn()
+                                                    .Padding(5)
+                                                    .Column(col =>
+                                                    {
+                                                        col
+                                                            .Item()
+                                                            .MaxWidth(250)
+                                                            .MaxHeight(250)
+                                                            .Image(images[imageIndex].Data);
+                                                        col
+                                                            .Item()
+                                                            .PaddingTop(5)
+                                                            .Text(images[imageIndex].Name)
+                                                            .FontSize(8)
+                                                            .Italic();
+                                                    });
+                                                imageIndex++;
+                                            }
+                                        });
 
-                                    // Immagini
-                                    foreach (var (imageData, imageName) in images)
+                                    // Riga 2 (2 foto)
+                                    if (imageIndex < images.Count)
                                     {
-                                        column
-                                            .Item()
-                                            .PaddingVertical(10)
-                                            .Image(imageData);
+                                        column.Item().Height(10);
 
                                         column
                                             .Item()
-                                            .Text(imageName)
-                                            .FontSize(9)
-                                            .Italic();
+                                            .Row(row =>
+                                            {
+                                                // Foto 3 della riga - SINISTRA (allineata a destra)
+                                                if (imageIndex < images.Count)
+                                                {
+                                                    row.RelativeColumn()
+                                                        .Padding(5)
+                                                        .Column(col =>
+                                                        {
+                                                            col
+                                                                .Item()
+                                                                .MaxWidth(250)
+                                                                .MaxHeight(250)
+                                                                .Image(images[imageIndex].Data);
+                                                            col
+                                                                .Item()
+                                                                .PaddingTop(5)
+                                                                .Text(images[imageIndex].Name)
+                                                                .FontSize(8)
+                                                                .Italic();
+                                                        });
+                                                    imageIndex++;
+                                                }
 
-                                        column.Item().Height(5);
+                                                // Foto 4 della riga - DESTRA (allineata a sinistra)
+                                                if (imageIndex < images.Count)
+                                                {
+                                                    row.RelativeColumn()
+                                                        .Padding(5)
+                                                        .Column(col =>
+                                                        {
+                                                            col
+                                                                .Item()
+                                                                .MaxWidth(250)
+                                                                .MaxHeight(250)
+                                                                .Image(images[imageIndex].Data);
+                                                            col
+                                                                .Item()
+                                                                .PaddingTop(5)
+                                                                .Text(images[imageIndex].Name)
+                                                                .FontSize(8)
+                                                                .Italic();
+                                                        });
+                                                    imageIndex++;
+                                                }
+                                        });
+
+                                        // Spacer tra pagine
+                                        if (imageIndex < images.Count)
+                                        {
+                                            column.Item().Height(15);
+                                        }
                                     }
-                                });
-                        });
+                                }
+                            });
+                        
+                        
+                        
+                        // FOOTER con testo, linea e logo
+                        page.Footer()
+                            .Column(col =>
+                            {
+                                
+
+                                // Linea di separazione
+                                col.Item().Height(5);
+                                col
+                                    .Item()
+                                    .BorderTop(1)
+                                    .BorderColor("#CCCCCC")
+                                    .PaddingTop(5);
+
+                                // Testo di contatto (PRIMA della linea)
+                                col
+                                    .Item()
+                                    .Column(textCol =>
+                                    {
+                                        textCol
+                                            .Item()
+                                            .Text("Geom. Leonardo Rossi  -  p.iva 01908160565")
+                                            .FontSize(8)
+                                            .AlignCenter();
+                                        
+                                        textCol
+                                            .Item()
+                                            .Text("Sede Legale: Str. Pian del Cerro 13/F – 01100 Viterbo (VT)  |  rec. 333. 8295491  |  e-mail: leonardorossiprof@gmail.com")
+                                            .FontSize(7)
+                                            .AlignCenter();
+                                        
+                                        textCol
+                                            .Item()
+                                            .Text("Sedi operative: Via A. Volta 15 – 01100 Viterbo (VT) / Via Maglianello 9 – 02046 Magliano Sabina (RI) / Via G. Rosaccio 77 – 00156 Roma (RM)")
+                                            .FontSize(7)
+                                            .AlignCenter();
+                                    });
+
+                                col.Item().Height(5);
+
+                                // Logo bar (DOPO la linea)
+                                col
+                                    .Item()
+                                    .AlignCenter()
+                                    .Row(row =>
+                                    {
+                                        // APAI logo
+                                        row.RelativeColumn()
+                                            .AlignCenter()
+                                            .Height(50)
+                                            .Image(System.IO.Path.Combine(this.WebHostEnvironment.WebRootPath, "images/logos/apai-logo.png"));
+                                        
+                                        // ICMQ logo
+                                        row.RelativeColumn()
+                                            .AlignCenter()
+                                            .Height(50)
+                                            .Image(System.IO.Path.Combine(this.WebHostEnvironment.WebRootPath, "images/logos/icmq-logo.png"));
+                                        
+                                        // Certificazione logo
+                                        row.RelativeColumn()
+                                            .AlignCenter()
+                                            .Height(50)
+                                            .Image(System.IO.Path.Combine(this.WebHostEnvironment.WebRootPath, "images/logos/certificazione-logo.png"));
+                                    });
+                            });
+                    });
                 })
                 .GeneratePdf();
 
-                var fileName = $"Rapporto_Fotografico_{DateTime.Now:yyyyMMdd_HHmmss}.pdf";
-                return File(pdf, "application/pdf", fileName);
+                // Sanitizza il titolo: sostituisci spazi e caratteri speciali con underscore
+                var sanitizedTitle = System.Text.RegularExpressions.Regex.Replace(
+                    title ?? "REPERTI_FOTOGRAFICI", 
+                    @"[^\w\-]", 
+                    "_"
+                );
+                
+                var fileName = $"{sanitizedTitle}_{fileId}_{DateTime.Now:yyyyMMdd_HHmmss}.pdf";
+                
+                // Imposta esplicitamente il Content-Disposition header
+                Response.Headers.Add("Content-Disposition", $"attachment; filename=\"{fileName}\"");
+                
+                return File(pdf, "application/pdf");
             }
             catch (Exception ex)
             {
