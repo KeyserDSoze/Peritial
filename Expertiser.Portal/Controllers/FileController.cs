@@ -69,6 +69,24 @@ namespace Expertiser.Portal.Controllers
                 return BadRequest($"Error uploading file: {ex.Message}");
             }
         }
+
+        [HttpGet]
+        public async Task<IActionResult> RefreshFileManager([FromQuery] string fileId)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(fileId))
+                    return BadRequest("fileId is required");
+
+                var files = await this.Manager.FileManager.GetExpertiseFiles(fileId);
+                // Restituisci il componente file manager renderizzato
+                return PartialView("_FileManager", new { files = files, fileId = fileId });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"Error refreshing file manager: {ex.Message}");
+            }
+        }
         public async Task<IActionResult> Proxy([FromQuery] string name, [FromQuery] IEnumerable<string> urls)
         {
             MemoryStream memoryStream = new MemoryStream();

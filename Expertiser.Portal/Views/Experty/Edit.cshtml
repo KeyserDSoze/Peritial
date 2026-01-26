@@ -188,60 +188,117 @@
 </div>
 
 <script>
-    // Auto-refresh del file manager dopo l'upload di file o foto
+    // Auto-refresh del file manager intercettando gli eventi di Dropzone
     document.addEventListener('DOMContentLoaded', function() {
-        // Intercetta tutte le richieste AJAX per l'upload di file
-        const originalXHROpen = XMLHttpRequest.prototype.open;
-        const originalXHRSend = XMLHttpRequest.prototype.send;
+        const fileIdInput = document.querySelector('input[asp-for="FileId"]');
+        const fileId = fileIdInput ? fileIdInput.value : null;
         
-        XMLHttpRequest.prototype.open = function(method, url) {
-            this._uploadUrl = url;
-            this._uploadMethod = method;
-            return originalXHROpen.apply(this, arguments);
-        };
+        if (!fileId) return;
         
-        XMLHttpRequest.prototype.send = function(data) {
-            const self = this;
-            const originalOnreadystatechange = this.onreadystatechange;
+        let isRefreshing = false;
+        let currentFolderId = null; // Salva la cartella attualmente visualizzata
+        
+        // Funzione per salvare l'ID della cartella visibile
+        function saveCurrentFolder() {
+            const visibleFolder = document.querySelector('.folder-container-visible');
+            if (visibleFolder) {
+                // Estrai l'ID della cartella visibile
+                currentFolderId = visibleFolder.className.split(' ').find(cls => cls !== 'folder-container-visible' && cls !== 'folder-container');
+                console.log('Cartella salvata:', currentFolderId);
+            }
+        }
+        
+        // Funzione per ripristinare il folder dopo il refresh
+        function restoreFolder() {
+            if (currentFolderId && typeof fileManager !== 'undefined') {
+                console.log('Ripristinando cartella:', currentFolderId);
+                fileManager.openDirectory(currentFolderId);
+            }
+        }
+        
+        // Funzione per ricaricare il file manager
+        function refreshFileManager() {
+            if (isRefreshing) return;
+            isRefreshing = true;
             
-            this.onreadystatechange = function() {
-                if (originalOnreadystatechange) {
-                    originalOnreadystatechange.apply(this, arguments);
-                }
-                
-                // Verifica se è un upload di file completato con successo
-                if (this.readyState === 4 && this.status === 200) {
-                    // Se l'URL contiene "File/Upload" e il metodo è POST
-                    if (self._uploadUrl && self._uploadUrl.includes('File/Upload') && self._uploadMethod === 'POST') {
-                        console.log('File upload completato, aggiornando...');
-                        // Attendi un momento per garantire il salvataggio
-                        setTimeout(function() {
-                            location.reload();
-                        }, 500);
+            // Salva la cartella prima del refresh
+            saveCurrentFolder();
+            
+            console.log('Aggiornando file manager via Dropzone event...');
+            
+            fetch(`/File/RefreshFileManager?fileId=${fileId}`)
+                .then(response => response.text())
+                .then(html => {
+                    const fileManagerContainer = document.getElementById('update-all-files');
+                    if (fileManagerContainer) {
+                        fileManagerContainer.innerHTML = html;
+                        console.log('File manager aggiornato');
+                        
+                        // Ripristina la cartella visibile dopo un piccolo delay
+                        setTimeout(restoreFolder, 100);
+                        
+                        isRefreshing = false;
                     }
-                }
-            };
-            
-            return originalXHRSend.apply(this, arguments);
-        };
+                })
+                .catch(error => {
+                    console.error('Errore nell\'aggiornamento:', error);
+                    isRefreshing = false;
+                });
+        }
         
-        // Fallback: monitora anche gli eventi di mutazione del DOM
+        // Attendi che Dropzone sia inizializzato
+        setTimeout(function() {
+            // Cerca tutte le istanze di Dropzone sulla pagina
+            if (typeof Dropzone !== 'undefined' && Dropzone.instances && Dropzone.instances.length > 0) {
+                Dropzone.instances.forEach(function(dz) {
+                    // Ascolta l'evento di successo di Dropzone
+                    dz.on('success', function(file, response) {
+                        console.log('Dropzone success event rilevato');
+                        // Attendi un po' per assicurarsi che il file sia salvato
+                        setTimeout(refreshFileManager, 1000);
+                    });
+                    
+                    // Ascolta anche l'evento complete
+                    dz.on('complete', function(file) {
+                        if (this.getUploadingFiles().length === 0 && this.getQueuedFiles().length === 0) {
+                            console.log('Dropzone complete - tutti i file caricati');
+                            setTimeout(refreshFileManager, 1000);
+                        }
+                    });
+                    
+                    // Ascolta l'evento totaluploadprogress
+                    dz.on('totaluploadprogress', function(uploadProgress, totalBytes, totalBytesSent) {
+                        if (uploadProgress === 100) {
+                            console.log('Upload 100% completato');
+                            setTimeout(refreshFileManager, 1000);
+                        }
+                    });
+                });
+            }
+        }, 2000);
+        
+        // Fallback: Monitora gli attributi data del componente
         const fileManagerContainer = document.getElementById('update-all-files');
         if (fileManagerContainer) {
             const observer = new MutationObserver(function(mutations) {
-                // Se il file manager è stato modificato, ricarica
+                // Se vediamo un elemento con classe "dz-success" aggiunto
                 mutations.forEach(function(mutation) {
-                    if (mutation.type === 'childList' || mutation.type === 'subtree') {
-                        console.log('Modifiche rilevate nel file manager');
+                    if (mutation.type === 'childList') {
+                        const newNodes = mutation.addedNodes;
+                        for (let i = 0; i < newNodes.length; i++) {
+                            if (newNodes[i].classList && newNodes[i].classList.contains('dz-success')) {
+                                console.log('Elemento dz-success rilevato');
+                                setTimeout(refreshFileManager, 500);
+                                break;
+                            }
+                        }
                     }
                 });
             });
             
             observer.observe(fileManagerContainer, {
                 childList: true,
-                subtree: true,
-                attributes: true,
-                characterData: true
+                subtree: true
             });
         }
     });

@@ -1,0 +1,13 @@
+@model dynamic
+
+@{
+    var files = Model.files as IEnumerable<Rystem.Web.Models.FileModel>;
+    var fileId = Model.fileId as string;
+}
+
+<rystem-file-manager rystem-files="@files"
+                     rystem-request-context='new RequestContext() { Action = "Upload", Controller = "File", QueryString=new Dictionary<object, object>() { { "fileId", "@fileId"} } }'
+                     rystem-delete-request-context='new RequestContext() { Action = "DeleteDocument", Controller = "File"}'
+                     rystem-localizer="SharedLocalizer"
+                     rystem-skip-path="5"
+                     style="width:100%;"></rystem-file-manager>
