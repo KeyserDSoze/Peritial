@@ -157,7 +157,13 @@
                 <i class="fa fa-download"></i> @SharedLocalizer["Download Photographic Report"] (PDF)
             </button>
         </div>
-        
+
+        <div class="mt-2">
+            <button type="button" class="btn btn-primary btn-block" onclick="downloadPhotographicReportWord('@Model.FileId')">
+                <i class="fa fa-file-word-o"></i> @SharedLocalizer["Download Photographic Report"] (Word)
+            </button>
+        </div>
+
         @if (Model != null)
         {
             <hr />
@@ -316,19 +322,19 @@
                 alert('FileId non trovato');
                 return;
             }
-            
+
             const title = prompt('Inserisci titolo del rapporto (opzionale):', 'Reperti Fotografici');
             let url = `/File/GeneratePhotographicReport?fileId=${fileId}`;
-            
+
             if (title && title.trim()) {
                 url += `&title=${encodeURIComponent(title)}`;
             }
-            
+
             // Scarica il PDF
             fetch(url)
                 .then(response => {
                     if (!response.ok) throw new Error('Error downloading report');
-                    
+
                     // Estrai il nome dal header Content-Disposition
                     const contentDisposition = response.headers.get('content-disposition');
                     let fileName = 'Reperti_Fotografici.pdf';
@@ -338,7 +344,7 @@
                             fileName = fileNameMatch[1];
                         }
                     }
-                    
+
                     return response.blob().then(blob => ({blob, fileName}));
                 })
                 .then(({blob, fileName}) => {
@@ -354,6 +360,53 @@
                 .catch(error => {
                     console.error('Error:', error);
                     alert('Errore nel download del rapporto');
+                });
+        }
+
+        // Funzione per scaricare il rapporto fotografico in formato Word
+        function downloadPhotographicReportWord(fileId) {
+            if (!fileId) {
+                alert('FileId non trovato');
+                return;
+            }
+
+            const title = prompt('Inserisci titolo del rapporto (opzionale):', 'Reperti Fotografici');
+            let url = `/File/GeneratePhotographicReportWord?fileId=${fileId}`;
+
+            if (title && title.trim()) {
+                url += `&title=${encodeURIComponent(title)}`;
+            }
+
+            // Scarica il documento Word
+            fetch(url)
+                .then(response => {
+                    if (!response.ok) throw new Error('Error downloading Word report');
+
+                    // Estrai il nome dal header Content-Disposition
+                    const contentDisposition = response.headers.get('content-disposition');
+                    let fileName = 'Reperti_Fotografici.docx';
+                    if (contentDisposition) {
+                        const fileNameMatch = contentDisposition.match(/filename="?(.+?)"?$/);
+                        if (fileNameMatch && fileNameMatch.length > 1) {
+                            fileName = fileNameMatch[1];
+                        }
+                    }
+
+                    return response.blob().then(blob => ({blob, fileName}));
+                })
+                .then(({blob, fileName}) => {
+                    const downloadUrl = window.URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = downloadUrl;
+                    link.download = fileName;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    window.URL.revokeObjectURL(downloadUrl);
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Errore nel download del rapporto Word');
                 });
         }
 </script>

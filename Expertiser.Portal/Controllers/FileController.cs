@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -7,6 +8,12 @@ using System.Net;
 using System.Net.Http;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
+using DocumentFormat.OpenXml;
+using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Wordprocessing;
+using A = DocumentFormat.OpenXml.Drawing;
+using DW = DocumentFormat.OpenXml.Drawing.Wordprocessing;
+using PIC = DocumentFormat.OpenXml.Drawing.Pictures;
 using Expertiser.Base.Constant;
 using Expertiser.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -174,7 +181,7 @@ namespace Expertiser.Portal.Controllers
                     return BadRequest("No valid images found");
 
                 // Genera il PDF con griglia 2x2 (4 foto per pagina)
-                var pdf = Document.Create(container =>
+                var pdf = QuestPDF.Fluent.Document.Create(container =>
                 {
                     container.Page(page =>
                     {
@@ -281,20 +288,10 @@ namespace Expertiser.Portal.Controllers
                                             {
                                                 row.RelativeColumn()
                                                     .Padding(5)
-                                                    .Column(col =>
-                                                    {
-                                                        col
-                                                            .Item()
-                                                            .MaxWidth(250)
-                                                            .MaxHeight(250)
-                                                            .Image(images[imageIndex].Data);
-                                                        col
-                                                            .Item()
-                                                            .PaddingTop(5)
-                                                            .Text(images[imageIndex].Name)
-                                                            .FontSize(8)
-                                                            .Italic();
-                                                    });
+                                                    .AlignRight()
+                                                    .MaxWidth(250)
+                                                    .MaxHeight(250)
+                                                    .Image(images[imageIndex].Data);
                                                 imageIndex++;
                                             }
 
@@ -303,20 +300,10 @@ namespace Expertiser.Portal.Controllers
                                             {
                                                 row.RelativeColumn()
                                                     .Padding(5)
-                                                    .Column(col =>
-                                                    {
-                                                        col
-                                                            .Item()
-                                                            .MaxWidth(250)
-                                                            .MaxHeight(250)
-                                                            .Image(images[imageIndex].Data);
-                                                        col
-                                                            .Item()
-                                                            .PaddingTop(5)
-                                                            .Text(images[imageIndex].Name)
-                                                            .FontSize(8)
-                                                            .Italic();
-                                                    });
+                                                    .AlignLeft()
+                                                    .MaxWidth(250)
+                                                    .MaxHeight(250)
+                                                    .Image(images[imageIndex].Data);
                                                 imageIndex++;
                                             }
                                         });
@@ -335,20 +322,10 @@ namespace Expertiser.Portal.Controllers
                                                 {
                                                     row.RelativeColumn()
                                                         .Padding(5)
-                                                        .Column(col =>
-                                                        {
-                                                            col
-                                                                .Item()
-                                                                .MaxWidth(250)
-                                                                .MaxHeight(250)
-                                                                .Image(images[imageIndex].Data);
-                                                            col
-                                                                .Item()
-                                                                .PaddingTop(5)
-                                                                .Text(images[imageIndex].Name)
-                                                                .FontSize(8)
-                                                                .Italic();
-                                                        });
+                                                        .AlignRight()
+                                                        .MaxWidth(250)
+                                                        .MaxHeight(250)
+                                                        .Image(images[imageIndex].Data);
                                                     imageIndex++;
                                                 }
 
@@ -357,20 +334,10 @@ namespace Expertiser.Portal.Controllers
                                                 {
                                                     row.RelativeColumn()
                                                         .Padding(5)
-                                                        .Column(col =>
-                                                        {
-                                                            col
-                                                                .Item()
-                                                                .MaxWidth(250)
-                                                                .MaxHeight(250)
-                                                                .Image(images[imageIndex].Data);
-                                                            col
-                                                                .Item()
-                                                                .PaddingTop(5)
-                                                                .Text(images[imageIndex].Name)
-                                                                .FontSize(8)
-                                                                .Italic();
-                                                        });
+                                                        .AlignLeft()
+                                                        .MaxWidth(250)
+                                                        .MaxHeight(250)
+                                                        .Image(images[imageIndex].Data);
                                                     imageIndex++;
                                                 }
                                         });
@@ -473,6 +440,362 @@ namespace Expertiser.Portal.Controllers
             {
                 return BadRequest($"Error: {ex.Message}");
             }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GeneratePhotographicReportWord([FromQuery] string fileId, [FromQuery] string title = null)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(fileId))
+                    return BadRequest("fileId is required");
+
+                var files = await this.Manager.FileManager.GetExpertiseFiles(fileId);
+                var imageFiles = files.Where(f => f.IsImage()).ToList();
+
+                if (!imageFiles.Any())
+                    return BadRequest("No images found");
+
+                // Titolo documento
+                var reportTitle = string.IsNullOrWhiteSpace(title) 
+                    ? "REPERTI FOTOGRAFICI" 
+                    : title.ToUpper();
+
+                // Scarica tutte le immagini con deduplicazione per hash
+                using var httpClient = new HttpClient();
+                var seenHashes = new HashSet<string>();
+                var images = new List<(byte[] Data, string Name)>();
+                var duplicateCount = 0;
+
+                foreach (var imageFile in imageFiles)
+                {
+                    try
+                    {
+                        var imageBytes = await httpClient.GetByteArrayAsync(imageFile.FullName);
+
+                        // Calcola SHA256 dell'immagine
+                        using (var sha256 = SHA256.Create())
+                        {
+                            var hash = sha256.ComputeHash(imageBytes);
+                            var hashString = Convert.ToHexString(hash);
+
+                            // Se l'hash non è mai stato visto, aggiungi l'immagine
+                            if (seenHashes.Add(hashString))
+                            {
+                                images.Add((imageBytes, imageFile.Name));
+                            }
+                            else
+                            {
+                                duplicateCount++;
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"❌ Errore nel download: {imageFile.Name}");
+                    }
+                }
+
+                if (!images.Any())
+                    return BadRequest("No valid images found");
+
+                // === CARICA TEMPLATE CON HEADER/FOOTER GIÀ CONFIGURATI ===
+                var templatePath = Path.Combine(WebHostEnvironment.WebRootPath, "templates", "reportofotografici_template.docx");
+
+                if (!System.IO.File.Exists(templatePath))
+                    return BadRequest("Template file not found. Please ensure reportofotografici_template.docx exists in wwwroot/templates/");
+
+                // Carica template in memoria
+                using var memoryStream = new MemoryStream();
+                using (var templateStream = System.IO.File.OpenRead(templatePath))
+                {
+                    await templateStream.CopyToAsync(memoryStream);
+                }
+
+                memoryStream.Position = 0;
+
+                // Apri template e modifica il contenuto
+                using (var wordDocument = WordprocessingDocument.Open(memoryStream, true))
+                {
+                    var mainPart = wordDocument.MainDocumentPart;
+                    var body = mainPart.Document.Body;
+
+                    // Trova e sostituisci il titolo "REPERTI FOTOGRAFICI" con quello personalizzato
+                    var titleParagraph = body.Descendants<Paragraph>()
+                        .FirstOrDefault(p => p.InnerText.Contains("REPERTI FOTOGRAFICI"));
+
+                    if (titleParagraph != null)
+                    {
+                        // Sostituisci il testo del titolo esistente
+                        var titleText = titleParagraph.Descendants<Text>().FirstOrDefault();
+                        if (titleText != null)
+                        {
+                            titleText.Text = reportTitle;
+                        }
+
+                        // Spacer dopo il titolo
+                        var spacerPara = new Paragraph();
+                        titleParagraph.InsertAfterSelf(spacerPara);
+                    }
+
+                    // GRIGLIA FOTO 2x2 (inserisce dopo il titolo/data)
+                    int imageIndex = 0;
+                    while (imageIndex < images.Count)
+                    {
+                        // Crea tabella 2x2
+                        var table = new Table();
+                        var tableProps = table.AppendChild(new TableProperties());
+                        tableProps.AppendChild(new TableWidth { Width = "5000", Type = TableWidthUnitValues.Pct });
+                        tableProps.AppendChild(new TableJustification { Val = TableRowAlignmentValues.Center });
+
+                        // Riga 1
+                        var row1 = table.AppendChild(new TableRow());
+
+                        // Foto 1
+                        if (imageIndex < images.Count)
+                        {
+                            var cell1 = row1.AppendChild(new TableCell());
+                            var cellPara1 = cell1.AppendChild(new Paragraph());
+                            var cellParaProps1 = cellPara1.AppendChild(new ParagraphProperties());
+                            cellParaProps1.AppendChild(new Justification { Val = JustificationValues.Right });
+                            var cellRun1 = cellPara1.AppendChild(new Run());
+                            AddImageToBody(mainPart, cellRun1, images[imageIndex].Data, 2200000, 2200000);
+                            imageIndex++;
+                        }
+
+                        // Foto 2
+                        if (imageIndex < images.Count)
+                        {
+                            var cell2 = row1.AppendChild(new TableCell());
+                            var cellPara2 = cell2.AppendChild(new Paragraph());
+                            var cellParaProps2 = cellPara2.AppendChild(new ParagraphProperties());
+                            cellParaProps2.AppendChild(new Justification { Val = JustificationValues.Left });
+                            var cellRun2 = cellPara2.AppendChild(new Run());
+                            AddImageToBody(mainPart, cellRun2, images[imageIndex].Data, 2200000, 2200000);
+                            imageIndex++;
+                        }
+
+                        // Riga 2
+                        if (imageIndex < images.Count)
+                        {
+                            var row2 = table.AppendChild(new TableRow());
+
+                            // Foto 3
+                            if (imageIndex < images.Count)
+                            {
+                                var cell3 = row2.AppendChild(new TableCell());
+                                var cellPara3 = cell3.AppendChild(new Paragraph());
+                                var cellParaProps3 = cellPara3.AppendChild(new ParagraphProperties());
+                                cellParaProps3.AppendChild(new Justification { Val = JustificationValues.Right });
+                                var cellRun3 = cellPara3.AppendChild(new Run());
+                                AddImageToBody(mainPart, cellRun3, images[imageIndex].Data, 2200000, 2200000);
+                                imageIndex++;
+                            }
+
+                            // Foto 4
+                            if (imageIndex < images.Count)
+                            {
+                                var cell4 = row2.AppendChild(new TableCell());
+                                var cellPara4 = cell4.AppendChild(new Paragraph());
+                                var cellParaProps4 = cellPara4.AppendChild(new ParagraphProperties());
+                                cellParaProps4.AppendChild(new Justification { Val = JustificationValues.Left });
+                                var cellRun4 = cellPara4.AppendChild(new Run());
+                                AddImageToBody(mainPart, cellRun4, images[imageIndex].Data, 2200000, 2200000);
+                                imageIndex++;
+                            }
+                        }
+
+                        body.AppendChild(table);
+
+                        // Page Break dopo ogni tabella (4 foto) se ci sono altre foto
+                        if (imageIndex < images.Count)
+                        {
+                            var pageBreakPara = new Paragraph();
+                            var pageBreakRun = pageBreakPara.AppendChild(new Run());
+                            pageBreakRun.AppendChild(new Break { Type = BreakValues.Page });
+                            body.AppendChild(pageBreakPara);
+                        }
+                    }
+
+                    mainPart.Document.Save();
+                }
+
+                memoryStream.Seek(0, SeekOrigin.Begin);
+
+                // Sanitizza il titolo per il nome file
+                var sanitizedTitle = System.Text.RegularExpressions.Regex.Replace(
+                    title ?? "REPERTI_FOTOGRAFICI", 
+                    @"[^\w\-]", 
+                    "_"
+                );
+
+                var fileName = $"{sanitizedTitle}_{fileId}_{DateTime.Now:yyyyMMdd_HHmmss}.docx";
+
+                Response.Headers.Add("Content-Disposition", $"attachment; filename=\"{fileName}\"");
+
+                return File(memoryStream.ToArray(), "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"Error: {ex.Message}");
+            }
+        }
+
+        private void AddImageToBody(MainDocumentPart mainPart, Run run, string imagePath, long width, long height)
+        {
+            var imageBytes = System.IO.File.ReadAllBytes(imagePath);
+            AddImageToBody(mainPart, run, imageBytes, width, height);
+        }
+
+        private void AddImageToBody(MainDocumentPart mainPart, Run run, byte[] imageBytes, long width, long height)
+        {
+            var imagePart = mainPart.AddImagePart(ImagePartType.Png);
+            using (var stream = new MemoryStream(imageBytes))
+            {
+                imagePart.FeedData(stream);
+            }
+
+            var element = new Drawing(
+                new DW.Inline(
+                    new DW.Extent { Cx = width, Cy = height },
+                    new DW.EffectExtent { LeftEdge = 0L, TopEdge = 0L, RightEdge = 0L, BottomEdge = 0L },
+                    new DW.DocProperties { Id = 1U, Name = "Picture" },
+                    new DW.NonVisualGraphicFrameDrawingProperties(
+                        new A.GraphicFrameLocks { NoChangeAspect = true }),
+                    new A.Graphic(
+                        new A.GraphicData(
+                            new PIC.Picture(
+                                new PIC.NonVisualPictureProperties(
+                                    new PIC.NonVisualDrawingProperties { Id = 0U, Name = "Image.png" },
+                                    new PIC.NonVisualPictureDrawingProperties()),
+                                new PIC.BlipFill(
+                                    new A.Blip { Embed = mainPart.GetIdOfPart(imagePart) },
+                                    new A.Stretch(new A.FillRectangle())),
+                                new PIC.ShapeProperties(
+                                    new A.Transform2D(
+                                        new A.Offset { X = 0L, Y = 0L },
+                                        new A.Extents { Cx = width, Cy = height }),
+                                    new A.PresetGeometry(new A.AdjustValueList()) { Preset = A.ShapeTypeValues.Rectangle }))
+                        ) { Uri = "http://schemas.openxmlformats.org/drawingml/2006/picture" })
+                ) { DistanceFromTop = 0U, DistanceFromBottom = 0U, DistanceFromLeft = 0U, DistanceFromRight = 0U }
+            );
+
+            run.AppendChild(element);
+        }
+
+        // Metodo generico per aggiungere immagini a HeaderPart o FooterPart
+        private void AddImageToPart(OpenXmlPart part, Run run, string imagePath, long width, long height)
+        {
+            var imageBytes = System.IO.File.ReadAllBytes(imagePath);
+
+            ImagePart imagePart;
+            if (part is HeaderPart headerPart)
+            {
+                imagePart = headerPart.AddImagePart(ImagePartType.Png);
+            }
+            else if (part is FooterPart footerPart)
+            {
+                imagePart = footerPart.AddImagePart(ImagePartType.Png);
+            }
+            else
+            {
+                throw new InvalidOperationException("Part must be HeaderPart or FooterPart");
+            }
+
+            using (var stream = new MemoryStream(imageBytes))
+            {
+                imagePart.FeedData(stream);
+            }
+
+            var element = new Drawing(
+                new DW.Inline(
+                    new DW.Extent { Cx = width, Cy = height },
+                    new DW.EffectExtent { LeftEdge = 0L, TopEdge = 0L, RightEdge = 0L, BottomEdge = 0L },
+                    new DW.DocProperties { Id = 1U, Name = "Picture" },
+                    new DW.NonVisualGraphicFrameDrawingProperties(
+                        new A.GraphicFrameLocks { NoChangeAspect = true }),
+                    new A.Graphic(
+                        new A.GraphicData(
+                            new PIC.Picture(
+                                new PIC.NonVisualPictureProperties(
+                                    new PIC.NonVisualDrawingProperties { Id = 0U, Name = "Image.png" },
+                                    new PIC.NonVisualPictureDrawingProperties()),
+                                new PIC.BlipFill(
+                                    new A.Blip { Embed = part.GetIdOfPart(imagePart) },
+                                    new A.Stretch(new A.FillRectangle())),
+                                new PIC.ShapeProperties(
+                                    new A.Transform2D(
+                                        new A.Offset { X = 0L, Y = 0L },
+                                        new A.Extents { Cx = width, Cy = height }),
+                                    new A.PresetGeometry(new A.AdjustValueList()) { Preset = A.ShapeTypeValues.Rectangle }))
+                        ) { Uri = "http://schemas.openxmlformats.org/drawingml/2006/picture" })
+                ) { DistanceFromTop = 0U, DistanceFromBottom = 0U, DistanceFromLeft = 0U, DistanceFromRight = 0U }
+            );
+
+            run.AppendChild(element);
+        }
+
+        // Overload che mantiene l'aspect ratio - specifica solo la larghezza
+        private void AddImageToPartWithAspectRatio(OpenXmlPart part, Run run, string imagePath, long maxWidth)
+        {
+            var imageBytes = System.IO.File.ReadAllBytes(imagePath);
+
+            // Carica l'immagine per ottenere le dimensioni reali
+            using var ms = new MemoryStream(imageBytes);
+            using var image = System.Drawing.Image.FromStream(ms);
+
+            // Calcola aspect ratio
+            double aspectRatio = (double)image.Height / image.Width;
+
+            // Calcola altezza proporzionale
+            long calculatedHeight = (long)(maxWidth * aspectRatio);
+
+            // Usa il metodo esistente con dimensioni calcolate
+            ImagePart imagePart;
+            if (part is HeaderPart headerPart)
+            {
+                imagePart = headerPart.AddImagePart(ImagePartType.Png);
+            }
+            else if (part is FooterPart footerPart)
+            {
+                imagePart = footerPart.AddImagePart(ImagePartType.Png);
+            }
+            else
+            {
+                throw new InvalidOperationException("Part must be HeaderPart or FooterPart");
+            }
+
+            using (var stream = new MemoryStream(imageBytes))
+            {
+                imagePart.FeedData(stream);
+            }
+
+            var element = new Drawing(
+                new DW.Inline(
+                    new DW.Extent { Cx = maxWidth, Cy = calculatedHeight },
+                    new DW.EffectExtent { LeftEdge = 0L, TopEdge = 0L, RightEdge = 0L, BottomEdge = 0L },
+                    new DW.DocProperties { Id = 1U, Name = "Picture" },
+                    new DW.NonVisualGraphicFrameDrawingProperties(
+                        new A.GraphicFrameLocks { NoChangeAspect = true }),
+                    new A.Graphic(
+                        new A.GraphicData(
+                            new PIC.Picture(
+                                new PIC.NonVisualPictureProperties(
+                                    new PIC.NonVisualDrawingProperties { Id = 0U, Name = "Image.png" },
+                                    new PIC.NonVisualPictureDrawingProperties()),
+                                new PIC.BlipFill(
+                                    new A.Blip { Embed = part.GetIdOfPart(imagePart) },
+                                    new A.Stretch(new A.FillRectangle())),
+                                new PIC.ShapeProperties(
+                                    new A.Transform2D(
+                                        new A.Offset { X = 0L, Y = 0L },
+                                        new A.Extents { Cx = maxWidth, Cy = calculatedHeight }),
+                                    new A.PresetGeometry(new A.AdjustValueList()) { Preset = A.ShapeTypeValues.Rectangle }))
+                        ) { Uri = "http://schemas.openxmlformats.org/drawingml/2006/picture" })
+                ) { DistanceFromTop = 0U, DistanceFromBottom = 0U, DistanceFromLeft = 0U, DistanceFromRight = 0U }
+            );
+
+            run.AppendChild(element);
         }
     }
 }
