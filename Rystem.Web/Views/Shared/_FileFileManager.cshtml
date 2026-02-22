@@ -3,6 +3,8 @@
 @using Microsoft.Extensions.Localization
 @using System.Web
 @using System.Threading
+@using System.Text.Json
+@using System.Text.Encodings.Web
 @model (DirectoryModel Directory, RequestContext RequestContext, RequestContext DeleteRequestContext, IStringLocalizer StringLocalizer)
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 @addTagHelper *, Rystem.Web
@@ -85,8 +87,13 @@
         }
         @if (urls.Count > 0)
         {
+            var downloadId = "download-" + Guid.NewGuid().ToString("N");
+            var urlsJson = JsonSerializer.Serialize(urls);
+            var nameJson = JsonSerializer.Serialize(Model.Directory.Name);
+            var urlsBase64 = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(urlsJson));
+            var nameBase64 = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(nameJson));
             <div class="folder-file-line" style="margin-top:10px;">
-                <div class="folder-file-name" onclick="fileManager.zipAllFiles('@Model.Directory.Name', [@($"'{string.Join("','", urls)}'")]);">
+                <div id="@downloadId" class="folder-file-name download-all-files" data-name-b64="@nameBase64" data-urls-b64="@urlsBase64" style="cursor: pointer;">
                     <i class="fas fa-download text-xl-left folder-file-download-color"></i>
                     <div>
                         @if (Model.StringLocalizer != null)
@@ -101,6 +108,20 @@
                     </div>
                 </div>
             </div>
+            <script>
+                (function() {
+                    var element = document.getElementById('@downloadId');
+                    if (element) {
+                        element.addEventListener('click', function() {
+                            var nameB64 = this.getAttribute('data-name-b64');
+                            var urlsB64 = this.getAttribute('data-urls-b64');
+                            var name = JSON.parse(atob(nameB64));
+                            var urls = JSON.parse(atob(urlsB64));
+                            fileManager.zipAllFiles(name, urls);
+                        });
+                    }
+                })();
+            </script>
         }
     </div>
     @{

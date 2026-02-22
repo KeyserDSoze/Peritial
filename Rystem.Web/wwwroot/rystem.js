@@ -411,7 +411,7 @@ var fileManager = {
         }
     },
     download: function (fullname, uri, index, values, zip) {
-        fetch("../../../../../../rystemajaxmanager/proxy?url=" + uri)
+        fetch("../../../../../../rystemajaxmanager/proxy?url=" + encodeURIComponent(uri))
             .then(res => res.blob()) // Gets the response and returns it as a blob
             .then(blob => {
                 const singleName = uri.split('/')[uri.split('/').length - 1];
