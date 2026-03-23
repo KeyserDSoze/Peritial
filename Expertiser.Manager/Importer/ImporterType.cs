@@ -10,6 +10,8 @@ namespace Expertiser
 {
     public enum ImporterType
     {
+        Auto,
         Classic,
+        Accertatore,
     }
 }

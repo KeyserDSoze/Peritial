@@ -11,6 +11,8 @@ namespace Expertiser
 {
     public class ClassicXml : IImporter
     {
+        public const string RootName = "it.autosoftws.ReIncaricoRecord";
+        public const string BaseRootName = "it.autosoftws.ReIncaricoBaseRecord";
         private IBaseXml GetBaseXml(Stream content)
         {
             try
@@ -134,7 +136,7 @@ namespace Expertiser
             ClassicFile[] Files { get; set; }
             ClassicCustomer[] Damageds { get; set; }
         }
-        [Serializable, XmlRoot("it.autosoftws.ReIncaricoBaseRecord")]
+        [Serializable, XmlRoot(BaseRootName)]
         public class BaseBaseXml : IBaseXml
         {
             [XmlElement(ElementName = "NumeroSinistro")]
@@ -154,7 +156,7 @@ namespace Expertiser
             [XmlArrayItem("it.autosoftws.DatiDanneggitoRecord", typeof(ClassicCustomer))]
             public ClassicCustomer[] Damageds { get; set; }
         }
-        [Serializable, XmlRoot("it.autosoftws.ReIncaricoRecord")]
+        [Serializable, XmlRoot(RootName)]
         public class BaseXml : IBaseXml
         {
             [XmlElement(ElementName = "NumeroSinistro")]

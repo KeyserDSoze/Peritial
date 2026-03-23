@@ -15,14 +15,23 @@ namespace Expertiser
     public class ImportManager
     {
         private readonly Manager Manager;
+        private static readonly XmlImportTypeResolver Resolver = new XmlImportTypeResolver();
         public ImportManager(Manager manager)
             => this.Manager = manager;
         private static readonly ImporterFactory Factory = new ImporterFactory();
         public async Task<int> FinalizeAsync(IFormFile file, ImporterType importerType)
         {
+            using var content = new MemoryStream();
+            await file.CopyToAsync(content);
+            content.Position = 0;
+
+            if (importerType == ImporterType.Auto)
+                importerType = Resolver.Resolve(content);
+
+            content.Position = 0;
             IImporter importer = Factory.Create(importerType);
             //Create customer of insurance
-            ImportedExperty importValue = importer.Import(file.OpenReadStream(), Manager);
+            ImportedExperty importValue = importer.Import(content, Manager);
             int customerId = await GetCustomerId(importValue.Customer);
             int contractorId = await GetCustomerId(importValue.Contractor);
 

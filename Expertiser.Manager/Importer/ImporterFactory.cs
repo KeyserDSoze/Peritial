@@ -16,6 +16,8 @@ namespace Expertiser
             {
                 case ImporterType.Classic:
                     return new ClassicXml();
+                case ImporterType.Accertatore:
+                    return new AccertatoreXml();
                 default:
                     throw new NotImplementedException();
             }
