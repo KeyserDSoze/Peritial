@@ -211,7 +211,10 @@ resource "azurerm_container_app" "web" {
       image = var.frontend_image
       cpu = 0.25
       memory = "0.5Gi"
-      env { name = "API_UPSTREAM"; value = "https://${azurerm_container_app.api.latest_revision_fqdn}" }
+      env {
+        name = "API_UPSTREAM"
+        value = "https://${azurerm_container_app.api.latest_revision_fqdn}"
+      }
     }
   }
   ingress {

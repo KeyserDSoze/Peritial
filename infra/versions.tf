@@ -4,4 +4,6 @@ terraform {
     azurerm = { source = "hashicorp/azurerm", version = "~> 4.0" }
   }
 }
-provider "azurerm" { features {} }
+provider "azurerm" {
+  features {}
+}
