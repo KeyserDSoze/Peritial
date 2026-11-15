@@ -89,7 +89,7 @@ public sealed class ObjectRecoveryArchiveContractTests
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 ObjectRecoveryArchive.ImportAsync(destDb, restored, bucket, archive));
             var empty = await restored.ListObjectsV2Async(new ListObjectsV2Request { BucketName = bucket });
-            Assert.Empty(empty.S3Objects);
+            Assert.True(empty.S3Objects is null || empty.S3Objects.Count == 0); // SDK v4 returns null for no keys
 
             bytes[7] ^= 0x20;
             await File.WriteAllBytesAsync(blob0, bytes);
