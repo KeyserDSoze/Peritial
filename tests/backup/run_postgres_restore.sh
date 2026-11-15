@@ -58,19 +58,30 @@ docker exec -i -e PGDATABASE=peritial -e PGUSER=peritial \
   -e PERITIAL_BACKUP_FILE=/tmp/peritial.dump "$src" sh -s < scripts/db/backup.sh
 docker cp "$src:/tmp/peritial.dump" "$dir/peritial.dump"
 docker cp "$src:/tmp/peritial.dump.sha256" "$dir/peritial.dump.sha256"
+# Refuse accidentally overwriting the previous recovery point.
+if docker exec -i -e PGDATABASE=peritial -e PGUSER=peritial \
+  -e PERITIAL_BACKUP_FILE=/tmp/peritial.dump "$src" sh -s < scripts/db/backup.sh; then
+  echo "Backup overwrote an existing archive" >&2; exit 1
+fi
 docker cp "$dir/peritial.dump" "$dst:/tmp/peritial.dump"
 docker cp "$dir/peritial.dump.sha256" "$dst:/tmp/peritial.dump.sha256"
+
+restore() {
+  docker exec -i -e PGDATABASE=peritial -e PGUSER=peritial \
+    -e PERITIAL_RESTORE_FILE="/tmp/${1}" \
+    -e PERITIAL_RESTORE_CONFIRM="${2}" "$dst" sh -s < scripts/db/restore.sh
+}
+# A new PostgreSQL cluster has no application roles. Refuse an incomplete restore
+# before any DDL to avoid missing or incorrect grants/RLS policies.
+if restore peritial.dump "EMPTY_DATABASE"; then
+  echo "Restore without least-privilege roles unexpectedly succeeded" >&2; exit 1
+fi
 
 # Role names are cluster-wide and intentionally never stored in pg_dump.
 docker exec -i "$dst" psql -X -U peritial -d peritial -v ON_ERROR_STOP=1 >/dev/null <<'SQL'
 CREATE ROLE peritial_app NOLOGIN NOSUPERUSER NOBYPASSRLS;
 CREATE ROLE peritial_recovery NOLOGIN NOSUPERUSER NOBYPASSRLS;
 SQL
-restore() {
-  docker exec -i -e PGDATABASE=peritial -e PGUSER=peritial \
-    -e PERITIAL_RESTORE_FILE="/tmp/${1}" \
-    -e PERITIAL_RESTORE_CONFIRM="${2}" "$dst" sh -s < scripts/db/restore.sh
-}
 
 # Must fail closed without explicit confirmation.
 if restore peritial.dump ""; then

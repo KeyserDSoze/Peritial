@@ -9,6 +9,7 @@ Prerequisiti: Docker Engine, Docker Compose v2.
 - Utente solo locale: localuser / local-only-user; admin Keycloak locale: localadmin / local-only-admin.
 - Test backend PostgreSQL reale: docker compose -f docker/compose.yml --profile test run --rm tests
 - Installazione frontend riproducibile: `cd src/frontend && npm ci` (richiede Node.js 22 e il `package-lock.json` versionato); non usare `npm install` per build/CI di rilascio.
+- Backup/restore **solo PostgreSQL** in `scripts/db/{backup,restore}.sh` con checksum e prova CI su due server: `docs/database-backup-restore.md`. Questi script NON salvano documenti S3/Blob né costituiscono un backup completo.
 
 ATTENZIONE: i segreti dimostrativi e il singolo tenant hardcoded nel realm Keycloak sono esclusivamente per il computer di sviluppo. Non distribuire questa configurazione in produzione. Servono HTTPS, provider OAuth e claim tenant reali, secret manager, backup, migrazioni versionate, scansione file e security tests.
 

@@ -4,9 +4,9 @@ Ogni use case: test rosso (xUnit / Playwright), implementazione minima, test ver
 
 - Backend completo: docker compose -f docker/compose.yml --profile test run --rm tests
 - Frontend: cd src/frontend && npm ci && npx playwright install chromium && npm run build && npm run test:e2e
-- CI: xUnit unitari e con PostgreSQL reale, build frontend, Playwright e smoke Docker Compose.
+- CI: xUnit unitari e con PostgreSQL reale, build frontend, Playwright, smoke Docker Compose e job isolato `database-recovery` (backup/restore PostgreSQL su due server PG17).
 - Lavorare solo su main. Non fondere death.
-- Debiti bloccanti produzione: pin digest delle immagini e supply-chain, quarantena persistente e signature freshness dello scanner, limitazione chiamate, audit completo, idempotenza, backup/restore verificati e adozione legacy delle migrazioni, provisioning e rotazione dei privilegi RLS in produzione, test OAuth/MCP su client reali, deploy automatizzato su Azure, secret vault.
+- Debiti bloccanti produzione: pin digest delle immagini e supply-chain, quarantena persistente e signature freshness dello scanner, limitazione chiamate, audit completo, idempotenza, backup/restore integrati con object storage verificati e adozione legacy delle migrazioni, provisioning e rotazione dei privilegi RLS in produzione, test OAuth/MCP su client reali, deploy automatizzato su Azure, secret vault.
 
 La build iniziale CI ha guidato la correzione delle dipendenze e la scelta dell'immagine S3 open-source disponibile sul registry.
 
