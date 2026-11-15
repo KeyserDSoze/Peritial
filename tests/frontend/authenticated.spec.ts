@@ -63,6 +63,19 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     expect(goodFile.status(), await goodFile.text()).toBe(201);
     expect((await goodFile.json() as {fileName: string}).fileName).toBe("valid.pdf");
 
+    // EICAR is a harmless industry-standard malware-test signature. Even with
+    // a valid PDF prefix and a signed write token it MUST never enter storage.
+    const eicar = "X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*";
+    const infectedPdf = Buffer.concat([
+      Buffer.from("%PDF-1.7\n"), Buffer.from(eicar, "ascii"), Buffer.from("\n%%EOF\n")
+    ]);
+    const blockedFile = await request.post("http://localhost:8080/api/files", {
+      headers: { Authorization: "Bearer " + accessToken },
+      multipart: { file: { name: "scan-test.pdf", mimeType: "application/pdf", buffer: infectedPdf } }
+    });
+    expect(blockedFile.status(), await blockedFile.text()).toBe(422);
+    expect(await blockedFile.text()).not.toContain(eicar);
+
     // Body-size enforcement is performed by ASP.NET, not only by the business service.
     const tooLarge = await request.post("http://localhost:8080/api/files", {
       headers: { Authorization: "Bearer " + accessToken },

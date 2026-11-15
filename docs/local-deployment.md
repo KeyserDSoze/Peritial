@@ -28,3 +28,7 @@ Il realm dimostrativo importa intenzionalmente soltanto gli scope `peritial.read
 Il database viene inizializzato con `scripts/db/001_init.sql` (tabelle e policy `ENABLE/FORCE RLS`) e, **solo nella configurazione locale**, con `scripts/db/002_dev_app_role.sql` per l'account `peritial_app` a password di esempio. L'API usa il ruolo applicativo ristretto, non il superuser `peritial`. `Database:Bootstrap` resta disattivato nell'API.
 
 Dopo upgrade di un volume PostgreSQL preesistente, gli script in `docker-entrypoint-initdb.d` **non vengono rieseguiti**. Applicare lo schema e il provisioning del ruolo da un amministratore con backup prima dell'upgrade; cancellare i volumi solo se contengono dati effimeri. Il provisioning e le migrazioni versionate per installazioni persistenti appartengono alla issue #6.
+
+## Scansione antivirus locale
+
+Compose avvia un demone ClamAV `clamd` con immagini/firme pre-caricate, connessione TCP solo interna (`clamav:3310`) e health check obbligatorio prima dell'avvio dell'API. Non è pubblicata alcuna porta scanner. I file PDF/JPG/PNG/XML/DOCX validati sono analizzati in memoria con ClamAV **prima** di raggiungere SeaweedFS/PostgreSQL; se ClamAV non è disponibile il caricamento è bloccato (503), un EICAR viene rifiutato (422). La demo disattiva `freshclam` per evitare aggiornamenti esterni non deterministici in CI: non replicare questa configurazione in produzione. L'immagine ufficiale può richiedere una quantità significativa di RAM. Quarantena persistente, worker di recovery e aggiornamento firme sono ancora aperti (#5/#21).

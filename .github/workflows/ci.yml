@@ -79,7 +79,7 @@ jobs:
         env:
           E2E_FULL_STACK: "1"
           E2E_BASE_URL: http://localhost:5173
-      - name: Verify S3 and Azure Blob adapter cleanup against real emulators
+      - name: Verify S3, Azure Blob and ClamAV scanner against real local services
         run: |
           docker compose -f docker/compose.yml --profile azure-test up -d azurite
           for i in $(seq 1 30); do
@@ -89,8 +89,9 @@ jobs:
           docker compose -f docker/compose.yml --profile test run -T --rm \
             -e PERITIAL_TEST_S3_ENDPOINT=http://seaweedfs:8333 \
             -e PERITIAL_TEST_AZURITE_ENDPOINT=http://azurite:10000/devstoreaccount1 \
+            -e PERITIAL_TEST_CLAMD_HOST=clamav \
             tests dotnet test tests/backend/Peritial.Infrastructures.Tests/Peritial.Infrastructures.Tests.csproj \
-            --filter FullyQualifiedName~ObjectStoreContractTests \
+            --filter "FullyQualifiedName~ObjectStoreContractTests|FullyQualifiedName~ClamdScannerContractTests" \
             --logger "console;verbosity=normal"
       - name: Verify durable REST/MCP audit via privileged CI PostgreSQL role
         run: |
@@ -99,6 +100,7 @@ jobs:
               SELECT
                 (SELECT count(*) FROM security_audit WHERE action='perizia.create' AND outcome='succeeded') >= 2
                 AND (SELECT count(*) FROM security_audit WHERE action='document.ingest' AND outcome='succeeded') >= 1
+                AND (SELECT count(*) FROM security_audit WHERE action='document.scan' AND outcome='denied') >= 1
                 AND (SELECT count(*) FROM security_audit WHERE action='authorization.forbidden' AND outcome='denied') >= 1
                 AND (SELECT count(*) FROM security_audit WHERE action='perizia.create' AND outcome='denied') >= 1
                 AND (SELECT count(*) FROM security_audit WHERE subject = '') = 0;

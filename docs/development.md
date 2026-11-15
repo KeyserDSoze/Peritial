@@ -6,7 +6,7 @@ Ogni use case: test rosso (xUnit / Playwright), implementazione minima, test ver
 - Frontend: cd src/frontend && npm install && npx playwright install chromium && npm run build && npm run test:e2e
 - CI: xUnit unitari e con PostgreSQL reale, build frontend, Playwright e smoke Docker Compose.
 - Lavorare solo su main. Non fondere death.
-- Debiti bloccanti produzione: lockfile npm e npm ci, scansione antivirus/validazione magic bytes, limitazione chiamate, audit completo, idempotenza, backup/migrazioni, provisioning e rotazione dei privilegi RLS in produzione, test OAuth/MCP su client reali, deploy automatizzato su Azure, secret vault.
+- Debiti bloccanti produzione: lockfile npm e npm ci, quarantena persistente e signature freshness dello scanner, limitazione chiamate, audit completo, idempotenza, backup/migrazioni, provisioning e rotazione dei privilegi RLS in produzione, test OAuth/MCP su client reali, deploy automatizzato su Azure, secret vault.
 
 La build iniziale CI ha guidato la correzione delle dipendenze e la scelta dell'immagine S3 open-source disponibile sul registry.
 
@@ -29,3 +29,7 @@ PeriziaAtomicAuditTests prova su PostgreSQL reale che INSERT/UPDATE perizie e au
 FileIngestionCompensationTests esercita lo storage fake con upload parziale, errore metadata dopo PUT, cleanup fallito, cancellazione HTTP a metà commit, retry dopo errore e successo senza cancellazione. L'adapter S3 e quello Azure implementano DeleteAsync, con cancellazione idempotente. Le prove reali contro entrambi i provider e il recupero persistente dopo crash non sono ancora completati: ADR 0009.
 
 I test in Peritial.Infrastructures.Tests riutilizzano un database PostgreSQL condiviso: oltre al lock di bootstrap SQL, la suite xUnit è serializzata a livello di assembly. Il lock da solo non impedisce che DDL del test successivo interferisca con la transazione RLS di un test in esecuzione. La serializzazione riguarda solo l'assembly di integrazione, non i test Business o Domain.
+
+## Scanner documentale (#5)
+
+L'API richiede `Malware:Clamd:Host` e porta TCP privata (default 3310), con timeout configurabile 1–120 s. Nessun fallback permissivo: `IFileMalwareScanner` restituisce `Clean` solo per la risposta esatta `stream: OK`. In CI `MalwareAdmissionTests`, `ClamdScannerContractTests` e Playwright EICAR verificano che i file infetti/non verificati non raggiungano la persistenza. Per produzione, gestire update firme e quarantena persistente: ADR 0010.

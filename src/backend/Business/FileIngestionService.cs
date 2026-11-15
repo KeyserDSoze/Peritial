@@ -72,7 +72,13 @@ public sealed class FileIngestionService(
         // or the success audit. No fallbacks when clamd is down or inconclusive.
         var verdict = await scanner.ScanAsync(buffer.GetBuffer().AsMemory(0, (int)total), ct);
         if (verdict == MalwareScanResult.Infected)
+        {
+            // No file name, content or signature details enter the audit trail.
+            await audit.AppendAsync(new SecurityAuditEvent(
+                Guid.NewGuid(), context.TenantId, context.Subject, "document.scan",
+                "denied", null, DateTime.UtcNow), ct);
             throw new FileThreatDetectedException();
+        }
         if (verdict != MalwareScanResult.Clean)
             throw new MalwareScannerUnavailableException();
 

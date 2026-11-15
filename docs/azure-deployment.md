@@ -18,3 +18,7 @@ Terraform non è stato applicato a una subscription; servono pipeline immagini, 
 ## Endpoint MCP OAuth
 
 La variabile `resource_url` deve essere l'URL HTTPS canonico dell'endpoint MCP pubblico, **incluso `/mcp`** (es. `https://api.example.org/mcp`). Il documento RFC 9728 si trova a `https://api.example.org/.well-known/oauth-protected-resource/mcp` e l'issuer di Entra deve emettere token con audience configurata, claim tenant e subject firmati e scope Peritial appropriati. La conformance con client MCP esterni e l'app registration Entra sono ancora gate aperti (#4 e #17).
+
+## Scanner file obbligatorio
+
+Le build API ora richiedono `Malware__Clamd__Host` (hostname/DNS del servizio `clamd` privato). Opzionali `Malware__Clamd__Port` (default 3310), `Malware__Clamd__TimeoutSeconds` (default 30, max 120). Fornire un servizio ClamAV con firme aggiornate e health/readiness monitorati in una subnet privata raggiungibile dall'API: il protocollo TCP clamd non fornisce TLS o autenticazione, quindi **non esporre la porta 3310**. Un deploy con configurazione scanner mancante non deve avviarsi; con scanner irraggiungibile i caricamenti falliscono con 503. Il Terraform attuale non crea ancora un antivirus gestito; aggiungere provisioning e prove Azure reali prima del rollout (#5/#17). Non considerare il servizio Container Apps prodotto pronto prima del gate.

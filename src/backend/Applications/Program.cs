@@ -21,6 +21,8 @@ builder.Services.Configure<FormOptions>(options =>
 var authIssuer = builder.Configuration["Auth:Authority"] ?? throw new InvalidOperationException("Auth:Authority required.");
 var audience = builder.Configuration["Auth:Audience"] ?? throw new InvalidOperationException("Auth:Audience required.");
 var publicResource = builder.Configuration["Auth:Resource"] ?? "http://localhost:8080/mcp";
+if (string.IsNullOrWhiteSpace(builder.Configuration["Malware:Clamd:Host"]))
+    throw new InvalidOperationException("A private ClamAV malware scanner must be configured.");
 var metadata = new OAuthProtectedResource(publicResource, builder.Environment.IsDevelopment());
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
