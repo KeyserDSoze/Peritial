@@ -128,7 +128,7 @@ public sealed class FileIngestionSecurityTests
         var foreign = Perizia.Create(TenantId.From(Guid.NewGuid()), "FOREIGN");
         var store = new SpyStore();
         var docs = new SpyDocuments();
-        var service = new FileIngestionService(new FakeTenant(true), new FakePerizie(foreign), docs, store, new FakeAudit(), new CleanScanner(), new FakeIntents());
+        var service = new FileIngestionService(new FakeTenant(true), new FakePerizie(foreign), docs, store, new FakeAudit(), new CleanScanner(), new FakeIntents(), new FakeIdempotency());
 
         await Assert.ThrowsAsync<KeyNotFoundException>(() =>
             service.IngestAsync("fattura.pdf", "application/pdf",
@@ -141,13 +141,22 @@ public sealed class FileIngestionSecurityTests
     {
         var store = new SpyStore();
         var docs = new SpyDocuments();
-        return (new FileIngestionService(new FakeTenant(canWrite), new FakePerizie(), docs, store, new FakeAudit(), new CleanScanner(), new FakeIntents()), store, docs);
+        return (new FileIngestionService(new FakeTenant(canWrite), new FakePerizie(), docs, store, new FakeAudit(), new CleanScanner(), new FakeIntents(), new FakeIdempotency()), store, docs);
     }
 
     private sealed class CleanScanner : IFileMalwareScanner
     {
         public Task<MalwareScanResult> ScanAsync(ReadOnlyMemory<byte> data, CancellationToken ct = default) =>
             Task.FromResult(MalwareScanResult.Clean);
+    }
+
+    private sealed class FakeIdempotency : IUploadIdempotencyStore
+    {
+        public Task<UploadIdempotencyReservation> ReserveAsync(
+            TenantId tenant, string subject, string key, byte[] digest, Guid id, CancellationToken ct = default) =>
+            Task.FromResult(new UploadIdempotencyReservation(UploadIdempotencyState.Acquired));
+        public Task ReleaseAsync(TenantId tenant, Guid documentId, CancellationToken ct = default) =>
+            Task.CompletedTask;
     }
 
     private sealed class FakeIntents : IUploadIntentLedger

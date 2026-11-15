@@ -107,8 +107,17 @@ public sealed class FileIngestionCompensationTests
         var store = new TrackingStore();
         var documents = new Documents();
         var service = new FileIngestionService(
-            new Tenant(), new Perizie(), documents, store, new Audit(), new CleanScanner(), new FakeIntents());
+            new Tenant(), new Perizie(), documents, store, new Audit(), new CleanScanner(), new FakeIntents(), new FakeIdempotency());
         return (service, store, documents);
+    }
+
+    private sealed class FakeIdempotency : IUploadIdempotencyStore
+    {
+        public Task<UploadIdempotencyReservation> ReserveAsync(
+            TenantId tenant, string subject, string key, byte[] digest, Guid id, CancellationToken ct = default) =>
+            Task.FromResult(new UploadIdempotencyReservation(UploadIdempotencyState.Acquired));
+        public Task ReleaseAsync(TenantId tenant, Guid documentId, CancellationToken ct = default) =>
+            Task.CompletedTask;
     }
 
     private sealed class FakeIntents : IUploadIntentLedger

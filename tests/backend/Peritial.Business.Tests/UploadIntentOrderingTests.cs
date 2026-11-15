@@ -53,7 +53,16 @@ public sealed class UploadIntentOrderingTests
     }
 
     private static FileIngestionService Service(FakeIntents intents, FakeStore store, FakeDocs docs) =>
-        new(new Tenant(), new Perizie(), docs, store, new Audit(), new CleanScanner(), intents);
+        new(new Tenant(), new Perizie(), docs, store, new Audit(), new CleanScanner(), intents, new FakeIdempotency());
+
+    private sealed class FakeIdempotency : IUploadIdempotencyStore
+    {
+        public Task<UploadIdempotencyReservation> ReserveAsync(
+            TenantId tenant, string subject, string key, byte[] digest, Guid id, CancellationToken ct = default) =>
+            Task.FromResult(new UploadIdempotencyReservation(UploadIdempotencyState.Acquired));
+        public Task ReleaseAsync(TenantId tenant, Guid documentId, CancellationToken ct = default) =>
+            Task.CompletedTask;
+    }
 
     private sealed class FakeIntents(List<string> order) : IUploadIntentLedger
     {

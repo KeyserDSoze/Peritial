@@ -6,7 +6,8 @@ public sealed record DocumentDto(Guid Id, Guid? PeriziaId, string FileName, stri
 
 public sealed class FileIngestionService(
     ITenantContext context, IPeriziaRepository perizie, IDocumentRepository documents, IObjectStore objects,
-    ISecurityAuditTrail audit, IFileMalwareScanner scanner, IUploadIntentLedger uploadIntents)
+    ISecurityAuditTrail audit, IFileMalwareScanner scanner, IUploadIntentLedger uploadIntents,
+    IUploadIdempotencyStore idempotency)
 {
     public const long MaxUploadBytes = 25 * 1024 * 1024;
     public const int MaxMcpBytes = 4 * 1024 * 1024;
@@ -23,7 +24,7 @@ public sealed class FileIngestionService(
 
     public async Task<DocumentDto> IngestAsync(
         string name, string contentType, Stream content, long size, Guid? periziaId = null,
-        CancellationToken ct = default)
+        string? idempotencyKey = null, CancellationToken ct = default)
     {
         if (!context.HasScope("peritial.write"))
         {
@@ -86,9 +87,36 @@ public sealed class FileIngestionService(
 
         var id = Guid.NewGuid();
         var key = DocumentKeys.For(context.TenantId, id, safeName);
-        // Commit a durable reservation BEFORE PUT. If the process dies at any
-        // point afterwards, the recovery role can find this storage key.
-        await uploadIntents.RecordAsync(context.TenantId, id, key, ct);
+        var keyed = idempotencyKey is not null;
+        if (keyed)
+        {
+            var digest = UploadFingerprint.Compute(safeName, contentType, periziaId,
+                buffer.GetBuffer().AsSpan(0, (int)total));
+            var reservation = await idempotency.ReserveAsync(
+                context.TenantId, context.Subject, idempotencyKey!, digest, id, ct);
+            if (reservation.State == UploadIdempotencyState.Completed)
+                return reservation.Document ?? throw new UploadIdempotencyConflictException();
+            if (reservation.State != UploadIdempotencyState.Acquired)
+                throw new UploadIdempotencyConflictException();
+        }
+
+        // Reserve the storage key before PUT. If this fails, release any newly
+        // created request-key reservation: no object upload has started.
+        try { await uploadIntents.RecordAsync(context.TenantId, id, key, ct); }
+        catch (Exception intentError)
+        {
+            if (keyed)
+            {
+                using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+                try { await idempotency.ReleaseAsync(context.TenantId, id, cleanup.Token); }
+                catch (Exception releaseError)
+                {
+                    throw new AggregateException("Unable to release failed upload reservation.",
+                        intentError, releaseError);
+                }
+            }
+            throw;
+        }
         try
         {
             // A PUT error cannot have committed metadata (metadata is written
@@ -101,6 +129,10 @@ public sealed class FileIngestionService(
             try
             {
                 await objects.DeleteAsync(key, cleanupTimeout.Token);
+                // Release the idempotency reservation before removing the
+                // durable intent, so a recovery worker can retry if this fails.
+                if (keyed)
+                    await idempotency.ReleaseAsync(context.TenantId, id, cleanupTimeout.Token);
                 await uploadIntents.ForgetAsync(context.TenantId, id, cleanupTimeout.Token);
             }
             catch (Exception cleanupError)
@@ -118,7 +150,7 @@ public sealed class FileIngestionService(
         // is lost, deleting this blob here would be dangerous: it may already
         // be a valid, referenced document. Keep it for row-locked recovery.
         var record = new DocumentRecord(id, context.TenantId, periziaId, safeName,
-            contentType, total, key, DateTime.UtcNow);
+            contentType, total, key, DateTime.UtcNow, RequiresIdempotency: keyed);
         await documents.AddAuditedAsync(record, new SecurityAuditEvent(
             Guid.NewGuid(), context.TenantId, context.Subject, "document.ingest",
             "succeeded", id, DateTime.UtcNow), ct);
@@ -126,7 +158,8 @@ public sealed class FileIngestionService(
     }
 
     public async Task<DocumentDto> IngestBase64Async(
-        string name, string contentType, string base64, Guid? periziaId = null, CancellationToken ct = default)
+        string name, string contentType, string base64, Guid? periziaId = null,
+        string? idempotencyKey = null, CancellationToken ct = default)
     {
         if (!context.HasScope("peritial.write"))
         {
@@ -145,6 +178,6 @@ public sealed class FileIngestionService(
             throw new ArgumentException("MCP upload exceeds the limit.");
 
         using var stream = new MemoryStream(bytes, writable: false);
-        return await IngestAsync(name, contentType, stream, bytes.LongLength, periziaId, ct);
+        return await IngestAsync(name, contentType, stream, bytes.LongLength, periziaId, idempotencyKey, ct);
     }
 }

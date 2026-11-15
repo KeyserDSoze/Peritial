@@ -147,6 +147,7 @@ app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
     {
         UnauthorizedAccessException => StatusCodes.Status403Forbidden,
         FileThreatDetectedException => StatusCodes.Status422UnprocessableEntity,
+        UploadIdempotencyConflictException => StatusCodes.Status409Conflict,
         MalwareScannerUnavailableException => StatusCodes.Status503ServiceUnavailable,
         InvalidDataException => StatusCodes.Status413PayloadTooLarge,
         BadHttpRequestException badRequest when badRequest.StatusCode == 413 => StatusCodes.Status413PayloadTooLarge,
@@ -203,7 +204,9 @@ api.MapPost("/files", async (HttpRequest request, FileIngestionService service, 
     if (file is null) return Results.BadRequest("file required");
     Guid? periziaId = Guid.TryParse(form["periziaId"].ToString(), out var id) ? id : null;
     await using var stream = file.OpenReadStream();
-    var uploaded = await service.IngestAsync(file.FileName, file.ContentType, stream, file.Length, periziaId, ct);
+    var idempotencyKey = request.Headers["Idempotency-Key"].ToString();
+    var uploaded = await service.IngestAsync(file.FileName, file.ContentType, stream, file.Length,
+        periziaId, string.IsNullOrEmpty(idempotencyKey) ? null : idempotencyKey, ct);
     return Results.Created($"/api/files/{uploaded.Id}", uploaded);
 }).DisableAntiforgery().RequireAuthorization("peritial.write");
 

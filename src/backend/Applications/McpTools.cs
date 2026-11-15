@@ -17,6 +17,7 @@ public sealed class McpTools(PeriziaService perizie, FileIngestionService ingest
 
     [McpServerTool(Name = "ingest_file"), Description("Uploads a PDF, XML, JPEG, PNG or DOCX document (base64, max 4 MiB, peritial.write).")]
     public Task<DocumentDto> IngestFile(
-        string fileName, string contentType, string base64, Guid? periziaId = null, CancellationToken ct = default) =>
-        ingestion.IngestBase64Async(fileName, contentType, base64, periziaId, ct);
+        string fileName, string contentType, string base64, Guid? periziaId = null,
+        string? idempotencyKey = null, CancellationToken ct = default) =>
+        ingestion.IngestBase64Async(fileName, contentType, base64, periziaId, idempotencyKey, ct);
 }
