@@ -56,6 +56,19 @@ jobs:
           done
           docker compose -f docker/compose.yml logs
           exit 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install --no-audit --no-fund
+        working-directory: src/frontend
+      - run: npx playwright install --with-deps chromium
+        working-directory: src/frontend
+      - name: Authenticated OAuth + MCP integration
+        run: npm run test:e2e
+        working-directory: src/frontend
+        env:
+          E2E_FULL_STACK: "1"
+          E2E_BASE_URL: http://localhost:5173
       - if: always()
         run: docker compose -f docker/compose.yml down -v
   terraform:
