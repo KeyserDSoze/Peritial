@@ -49,6 +49,25 @@ public static class ObjectRecoveryCheckpoint
         NpgsqlDataSource administrator, IAmazonS3 objects, string bucket,
         Manifest checkpoint, CancellationToken ct = default)
     {
+        await VerifyMetadataAsync(administrator, checkpoint, ct);
+        foreach (var saved in checkpoint.Documents)
+        {
+            var (length, hash) = await HashObjectAsync(objects, bucket, saved.StorageKey, ct);
+            if (length != saved.LengthBytes || !string.Equals(hash, saved.Sha256, StringComparison.Ordinal))
+                throw new InvalidOperationException(
+                    "S3 object integrity mismatch: restored bytes do not match checkpoint.");
+        }
+    }
+
+    /// <summary>
+    /// Validate the FULL restored PostgreSQL inventory before writing a single
+    /// byte into the destination S3 bucket. Reject RLS-filtered access, pending
+    /// requests, incorrect tenant/key/length or an unsupported manifest.
+    /// </summary>
+    public static async Task VerifyMetadataAsync(
+        NpgsqlDataSource administrator, Manifest checkpoint,
+        CancellationToken ct = default)
+    {
         if (checkpoint is null || checkpoint.FormatVersion != 1 || checkpoint.Documents is null)
             throw new InvalidOperationException("Unsupported or malformed checkpoint.");
 
@@ -68,11 +87,6 @@ public static class ObjectRecoveryCheckpoint
                 !saved.Sha256.All(c => c is >= '0' and <= '9' or >= 'a' and <= 'f'))
                 throw new InvalidOperationException(
                     "Restored document references or checkpoint manifest differ from PostgreSQL.");
-
-            var (length, hash) = await HashObjectAsync(objects, bucket, current.StorageKey, ct);
-            if (length != saved.LengthBytes || !string.Equals(hash, saved.Sha256, StringComparison.Ordinal))
-                throw new InvalidOperationException(
-                    "S3 object integrity mismatch: restored bytes do not match checkpoint.");
         }
     }
 
