@@ -1,0 +1,22 @@
+name: Frontend npm lock bootstrap (temporary #6)
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/frontend-lock-bootstrap.yml
+permissions:
+  contents: read
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Generate package-lock.json with npm 10 / Node 22
+        working-directory: src/frontend
+        run: npm install --package-lock-only --no-audit --no-fund
+      - name: Export lockfile as bounded log chunks for the one-time migration
+        run: |
+          node -e "const fs=require('node:fs'); const b=fs.readFileSync('src/frontend/package-lock.json').toString('base64'); for(let i=0;i<b.length;i+=4096) console.log('PERITIAL_LOCK_CHUNK '+(i/4096)+' '+b.slice(i,i+4096)); console.log('PERITIAL_LOCK_END '+b.length);"
