@@ -1,8 +1,9 @@
-# TDD e workflow
+# TDD e processo
 
-- Per ogni use case: scrivere il test rosso xUnit / Playwright, osservare il fallimento, implementare il minimo per renderlo verde, rifattorizzare.
-- Per repository e adapter usare test di integrazione reali con PostgreSQL/MinIO dove possibile; non sostituire i test di isolamento multi-tenant con soli mock.
-- Branch di sviluppo: solo `main`. Non creare PR da `death`; non fonderlo.
-- Controlli obbligatori: `dotnet test`, `npm ci`, `npm run build`, `npx playwright test`, `docker compose config`, scansioni sicurezza prima del rilascio.
-- Gli script di provisioning e l'infrastruttura non devono contenere credenziali reali.
-- Allineare ADR, API, catalogo MCP e user-facing docs nello stesso commit funzionale.
+Ogni use case: test rosso (xUnit / Playwright), implementazione minima, test verde, refactoring, aggiornamento docs/ e adr/.
+
+- Backend completo: docker compose -f docker/compose.yml --profile test run --rm tests
+- Frontend: cd src/frontend && npm install && npx playwright install chromium && npm run build && npm run test:e2e
+- CI: xUnit unitari e con PostgreSQL reale, build frontend, Playwright e smoke Docker Compose.
+- Lavorare solo su main. Non fondere death.
+- Debiti bloccanti produzione: lockfile npm e npm ci, scansione antivirus/validazione magic bytes, limitazione chiamate, audit completo, idempotenza, backup/migrazioni, database RLS, test OAuth/MCP su client reali, deploy automatizzato su Azure, secret vault.

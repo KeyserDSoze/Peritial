@@ -1,0 +1,9 @@
+<Solution>
+  <Project Path="src/backend/Domains/Peritial.Domains.csproj" />
+  <Project Path="src/backend/Business/Peritial.Business.csproj" />
+  <Project Path="src/backend/Infrastructures/Peritial.Infrastructures.csproj" />
+  <Project Path="src/backend/Applications/Peritial.Applications.csproj" />
+  <Project Path="tests/backend/Peritial.Domains.Tests/Peritial.Domains.Tests.csproj" />
+  <Project Path="tests/backend/Peritial.Business.Tests/Peritial.Business.Tests.csproj" />
+  <Project Path="tests/backend/Peritial.Infrastructures.Tests/Peritial.Infrastructures.Tests.csproj" />
+</Solution>
