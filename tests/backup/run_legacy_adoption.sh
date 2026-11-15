@@ -16,7 +16,7 @@ docker run -d --name "$name" -p 127.0.0.1:55433:5432 \
   -e POSTGRES_DB=peritial postgres:17-alpine >/dev/null
 ready=false
 for i in $(seq 1 60); do
-  if docker exec "$name" pg_isready -U peritial -d peritial >/dev/null 2>&1; then
+  if docker exec "$name" pg_isready -h 127.0.0.1 -U peritial -d peritial >/dev/null 2>&1; then
     ready=true; break
   fi
   sleep 1
