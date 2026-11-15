@@ -15,6 +15,10 @@ public interface IPeriziaRepository
     Task<Perizia?> FindAsync(TenantId tenant, Guid id, CancellationToken cancellationToken = default);
     Task AddAsync(Perizia perizia, CancellationToken cancellationToken = default);
     Task UpdateAsync(Perizia perizia, CancellationToken cancellationToken = default);
+    // These operations MUST write perizia + success audit in the same database
+    // transaction. Separate AddAsync/UpdateAsync are legacy/test-only seams.
+    Task AddAuditedAsync(Perizia perizia, SecurityAuditEvent audit, CancellationToken cancellationToken = default);
+    Task UpdateAuditedAsync(Perizia perizia, SecurityAuditEvent audit, CancellationToken cancellationToken = default);
 }
 
 public interface IObjectStore

@@ -20,8 +20,7 @@ public sealed class PeriziaService(ITenantContext context, IPeriziaRepository re
     {
         await RequireWriteAsync("perizia.create", ct);
         var perizia = Perizia.Create(context.TenantId, reference);
-        await repository.AddAsync(perizia, ct);
-        await RecordAsync("perizia.create", "succeeded", perizia.Id, ct);
+        await repository.AddAuditedAsync(perizia, Event("perizia.create", "succeeded", perizia.Id), ct);
         return PeriziaDto.From(perizia);
     }
 
@@ -30,8 +29,7 @@ public sealed class PeriziaService(ITenantContext context, IPeriziaRepository re
         await RequireWriteAsync("perizia.assign", ct);
         var perizia = await GetRequiredAsync(id, ct);
         perizia.Assign(context.TenantId, assignee);
-        await repository.UpdateAsync(perizia, ct);
-        await RecordAsync("perizia.assign", "succeeded", perizia.Id, ct);
+        await repository.UpdateAuditedAsync(perizia, Event("perizia.assign", "succeeded", perizia.Id), ct);
         return PeriziaDto.From(perizia);
     }
 
@@ -40,8 +38,7 @@ public sealed class PeriziaService(ITenantContext context, IPeriziaRepository re
         await RequireWriteAsync("perizia.advance", ct);
         var perizia = await GetRequiredAsync(id, ct);
         perizia.Advance(context.TenantId, target);
-        await repository.UpdateAsync(perizia, ct);
-        await RecordAsync("perizia.advance", "succeeded", perizia.Id, ct);
+        await repository.UpdateAuditedAsync(perizia, Event("perizia.advance", "succeeded", perizia.Id), ct);
         return PeriziaDto.From(perizia);
     }
 
@@ -62,6 +59,8 @@ public sealed class PeriziaService(ITenantContext context, IPeriziaRepository re
     }
 
     private Task RecordAsync(string action, string outcome, Guid? resource, CancellationToken ct) =>
-        audit.AppendAsync(new SecurityAuditEvent(
-            Guid.NewGuid(), context.TenantId, context.Subject, action, outcome, resource, DateTime.UtcNow), ct);
+        audit.AppendAsync(Event(action, outcome, resource), ct);
+
+    private SecurityAuditEvent Event(string action, string outcome, Guid? resource) =>
+        new(Guid.NewGuid(), context.TenantId, context.Subject, action, outcome, resource, DateTime.UtcNow);
 }

@@ -40,26 +40,61 @@ public sealed class PgPeriziaRepository(NpgsqlDataSource dataSource) : IPeriziaR
     public async Task AddAsync(Perizia item, CancellationToken ct = default)
     {
         await using var scope = await TenantDbScope.OpenAsync(dataSource, item.TenantId, ct);
-        await using (var cmd = scope.Command(
-            "INSERT INTO perizie (tenant_id,id,reference,status,assigned_to,created_at_utc) VALUES (@tenant,@id,@reference,@status,@assignee,@created)"))
-        {
-            Fill(cmd, item);
-            await cmd.ExecuteNonQueryAsync(ct);
-        }
+        await InsertAsync(scope, item, ct);
         await scope.CommitAsync(ct);
     }
 
     public async Task UpdateAsync(Perizia item, CancellationToken ct = default)
     {
         await using var scope = await TenantDbScope.OpenAsync(dataSource, item.TenantId, ct);
-        await using (var cmd = scope.Command(
-            "UPDATE perizie SET status=@status, assigned_to=@assignee WHERE tenant_id=@tenant AND id=@id"))
-        {
-            Fill(cmd, item);
-            if (await cmd.ExecuteNonQueryAsync(ct) != 1)
-                throw new KeyNotFoundException("Perizia not found.");
-        }
+        await UpdateRowAsync(scope, item, ct);
         await scope.CommitAsync(ct);
+    }
+
+    public async Task AddAuditedAsync(Perizia item, SecurityAuditEvent audit, CancellationToken ct = default)
+    {
+        CheckAudit(item, audit, "perizia.create");
+        await using var scope = await TenantDbScope.OpenAsync(dataSource, item.TenantId, ct);
+        await InsertAsync(scope, item, ct);
+        await PgSecurityAuditTrail.AppendWithinScopeAsync(scope, audit, ct);
+        await scope.CommitAsync(ct);
+    }
+
+    public async Task UpdateAuditedAsync(Perizia item, SecurityAuditEvent audit, CancellationToken ct = default)
+    {
+        if (audit.Action is not ("perizia.assign" or "perizia.advance"))
+            throw new ArgumentException("Invalid update audit action.", nameof(audit));
+        CheckAudit(item, audit, audit.Action);
+        await using var scope = await TenantDbScope.OpenAsync(dataSource, item.TenantId, ct);
+        await UpdateRowAsync(scope, item, ct);
+        await PgSecurityAuditTrail.AppendWithinScopeAsync(scope, audit, ct);
+        await scope.CommitAsync(ct);
+    }
+
+    private static void CheckAudit(Perizia item, SecurityAuditEvent audit, string action)
+    {
+        if (audit.TenantId != item.TenantId)
+            throw new UnauthorizedAccessException("Cross-tenant audit operation denied.");
+        if (audit.ResourceId != item.Id || audit.Action != action || audit.Outcome != "succeeded")
+            throw new ArgumentException("Audit must describe this successful perizia mutation.", nameof(audit));
+    }
+
+    private static async Task InsertAsync(TenantDbScope scope, Perizia item, CancellationToken ct)
+    {
+        await using var cmd = scope.Command(
+            "INSERT INTO perizie (tenant_id,id,reference,status,assigned_to,created_at_utc) " +
+            "VALUES (@tenant,@id,@reference,@status,@assignee,@created)");
+        Fill(cmd, item);
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    private static async Task UpdateRowAsync(TenantDbScope scope, Perizia item, CancellationToken ct)
+    {
+        await using var cmd = scope.Command(
+            "UPDATE perizie SET status=@status, assigned_to=@assignee WHERE tenant_id=@tenant AND id=@id");
+        Fill(cmd, item);
+        if (await cmd.ExecuteNonQueryAsync(ct) != 1)
+            throw new KeyNotFoundException("Perizia not found.");
     }
 
     private static Perizia Read(NpgsqlDataReader reader) => Perizia.Restore(

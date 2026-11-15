@@ -10,7 +10,7 @@ public sealed class SecurityAuditUseCaseTests
     public async Task Successful_mutations_are_audited_without_reference_or_payload()
     {
         var tenant = new ActingTenant(true);
-        var perizie = new MemoryPerizie();
+        var perizie = new MemoryPerizie(audit);
         var audit = new SpyAudit();
         var service = new PeriziaService(tenant, perizie, audit);
 
@@ -34,7 +34,7 @@ public sealed class SecurityAuditUseCaseTests
     public async Task Denied_mcp_mutation_is_recorded_and_does_not_change_data()
     {
         var actor = new ActingTenant(false);
-        var perizie = new MemoryPerizie();
+        var perizie = new MemoryPerizie(audit);
         var audit = new SpyAudit();
         var service = new PeriziaService(actor, perizie, audit);
 
@@ -54,7 +54,7 @@ public sealed class SecurityAuditUseCaseTests
         public bool HasScope(string scope) => allowWrite && scope == "peritial.write";
     }
 
-    private sealed class MemoryPerizie : IPeriziaRepository
+    private sealed class MemoryPerizie(SpyAudit audit) : IPeriziaRepository
     {
         public Dictionary<Guid, Perizia> Items { get; } = [];
         public Task<IReadOnlyList<Perizia>> ListAsync(TenantId tenant, CancellationToken ct = default) =>
@@ -70,6 +70,18 @@ public sealed class SecurityAuditUseCaseTests
         {
             Items[item.Id] = item;
             return Task.CompletedTask;
+        }
+
+        public async Task AddAuditedAsync(Perizia item, SecurityAuditEvent entry, CancellationToken ct = default)
+        {
+            await audit.AppendAsync(entry, ct);
+            await AddAsync(item, ct);
+        }
+
+        public async Task UpdateAuditedAsync(Perizia item, SecurityAuditEvent entry, CancellationToken ct = default)
+        {
+            await audit.AppendAsync(entry, ct);
+            await UpdateAsync(item, ct);
         }
     }
 

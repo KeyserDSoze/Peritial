@@ -160,6 +160,8 @@ public sealed class FileIngestionSecurityTests
             Task.FromResult<Perizia?>(existing is not null && existing.Id == id && existing.TenantId == tenant ? existing : null);
         public Task AddAsync(Perizia item, CancellationToken ct = default) => Task.CompletedTask;
         public Task UpdateAsync(Perizia item, CancellationToken ct = default) => Task.CompletedTask;
+        public Task AddAuditedAsync(Perizia item, SecurityAuditEvent audit, CancellationToken ct = default) => Task.CompletedTask;
+        public Task UpdateAuditedAsync(Perizia item, SecurityAuditEvent audit, CancellationToken ct = default) => Task.CompletedTask;
     }
 
     private sealed class SpyDocuments : IDocumentRepository
