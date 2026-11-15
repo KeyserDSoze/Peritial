@@ -56,6 +56,17 @@ jobs:
           done
           docker compose -f docker/compose.yml logs
           exit 1
+      - name: Inspect local OIDC client scope configuration
+        run: |
+          set -euo pipefail
+          token="$(curl -fsS -d 'client_id=admin-cli' -d 'grant_type=password' -d 'username=localadmin' -d 'password=local-only-admin' http://localhost:8081/realms/master/protocol/openid-connect/token | jq -r '.access_token')"
+          test "$token" != "null"
+          client="$(curl -fsS -H "Authorization: Bearer $token" 'http://localhost:8081/admin/realms/peritial/clients?clientId=peritial-web' | jq -r '.[0].id')"
+          test "$client" != "null"
+          echo "Client protocol: $(curl -fsS -H "Authorization: Bearer $token" "http://localhost:8081/admin/realms/peritial/clients/$client" | jq -r '.protocol')"
+          echo "Default scopes: $(curl -fsS -H "Authorization: Bearer $token" "http://localhost:8081/admin/realms/peritial/clients/$client/default-client-scopes" | jq -r '.[].name' | paste -sd ',' -)"
+          echo "Optional scopes: $(curl -fsS -H "Authorization: Bearer $token" "http://localhost:8081/admin/realms/peritial/clients/$client/optional-client-scopes" | jq -r '.[].name' | paste -sd ',' -)"
+          echo "Defined scopes: $(curl -fsS -H "Authorization: Bearer $token" 'http://localhost:8081/admin/realms/peritial/client-scopes' | jq -r '.[].name' | paste -sd ',' -)"
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
