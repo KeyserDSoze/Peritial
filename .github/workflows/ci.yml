@@ -59,6 +59,10 @@ jobs:
       - name: Inspect local OIDC client scope configuration
         run: |
           set -euo pipefail
+          for i in $(seq 1 40); do
+            if curl -fsS http://localhost:8081/realms/master/.well-known/openid-configuration > /dev/null; then break; fi
+            sleep 5
+          done
           token="$(curl -fsS -d 'client_id=admin-cli' -d 'grant_type=password' -d 'username=localadmin' -d 'password=local-only-admin' http://localhost:8081/realms/master/protocol/openid-connect/token | jq -r '.access_token')"
           test "$token" != "null"
           client="$(curl -fsS -H "Authorization: Bearer $token" 'http://localhost:8081/admin/realms/peritial/clients?clientId=peritial-web' | jq -r '.[0].id')"
