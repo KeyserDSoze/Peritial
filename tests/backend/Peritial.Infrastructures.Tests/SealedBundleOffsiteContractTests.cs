@@ -38,10 +38,10 @@ public sealed class SealedBundleOffsiteContractTests
 
         try
         {
-            byte[] dump = "PGDMP\\0encrypted offsite smoke\\n"u8.ToArray();
+            byte[] dump = "PGDMP\0encrypted offsite smoke\n"u8.ToArray();
             await File.WriteAllBytesAsync(pg, dump);
             await File.WriteAllTextAsync(pg + ".sha256",
-                Convert.ToHexString(SHA256.HashData(dump)).ToLowerInvariant() + "\\n");
+                Convert.ToHexString(SHA256.HashData(dump)).ToLowerInvariant() + "\n");
             Directory.CreateDirectory(archive, UnixFileMode.UserRead |
                                                UnixFileMode.UserWrite | UnixFileMode.UserExecute);
             Directory.CreateDirectory(Path.Combine(archive, "objects"),
@@ -54,7 +54,7 @@ public sealed class SealedBundleOffsiteContractTests
             await File.WriteAllBytesAsync(Path.Combine(archive, "manifest.json"), manifest);
             using (var h = IncrementalHash.CreateHMAC(HashAlgorithmName.SHA256, s3Key))
             {
-                h.AppendData("Peritial.S3Archive.Manifest.HMACSHA256.v1\\n"u8);
+                h.AppendData("Peritial.S3Archive.Manifest.HMACSHA256.v1\n"u8);
                 h.AppendData(manifest);
                 await File.WriteAllBytesAsync(Path.Combine(archive, "manifest.hmac"),
                     h.GetHashAndReset());
