@@ -104,13 +104,34 @@ public static partial class SchemaMigrator
         )::text
         """;
 
+    private const string PreLeaseRestoreSql = """
+        ALTER TABLE upload_intents ADD COLUMN lease_expires_at_utc
+            timestamptz NOT NULL DEFAULT (now() + interval '2 minutes');
+        CREATE INDEX ix_upload_intents_lease
+            ON upload_intents (created_at_utc, lease_expires_at_utc);
+        GRANT UPDATE (lease_expires_at_utc) ON upload_intents TO peritial_app;
+        """;
+
     /// <summary>
-    /// Performs the catalog verification and atomic adoption. Call only from
-    /// an operator tool which has independently verified the backup archive,
-    /// consent and maintenance window. Does not modify legacy tenant rows.
+    /// Adopt only a catalog exactly equivalent to the historical V001.
+    /// Backup verification and offline consent are mandatory in the CLI.
     /// </summary>
-    public static async Task<int> AdoptLegacyAsync(
-        NpgsqlDataSource admin, CancellationToken ct = default)
+    public static Task<int> AdoptLegacyAsync(
+        NpgsqlDataSource admin, CancellationToken ct = default) =>
+        AdoptLegacyCoreAsync(admin, preLease: false, ct);
+
+    /// <summary>
+    /// Explicitly recognize a single older shape: upload_intents has no lease
+    /// column/index. It must otherwise match V001 including RLS, ACL and
+    /// columns, and is repaired before writing V001 + V002 journal atomically.
+    /// Never called automatically by ordinary apply/adopt.
+    /// </summary>
+    public static Task<int> AdoptPreLeaseLegacyAsync(
+        NpgsqlDataSource admin, CancellationToken ct = default) =>
+        AdoptLegacyCoreAsync(admin, preLease: true, ct);
+
+    private static async Task<int> AdoptLegacyCoreAsync(
+        NpgsqlDataSource admin, bool preLease, CancellationToken ct)
     {
         var scripts = await LoadScriptsAsync(ct);
         await using var conn = await admin.OpenConnectionAsync(ct);
@@ -186,6 +207,7 @@ public static partial class SchemaMigrator
             await savepoint.ExecuteNonQueryAsync(ct);
         var scratch = "peritial_ref_" + Guid.NewGuid().ToString("N");
         string expected;
+        string? repairedExpected = null;
         try
         {
             // Generated identifier contains only [a-z0-9_]; no user input.
@@ -203,6 +225,23 @@ public static partial class SchemaMigrator
                 await createBaseline.ExecuteNonQueryAsync(ct);
 
             expected = await ReadCatalogSignatureAsync(conn, tx, scratch, ct);
+            if (preLease)
+            {
+                // Model only one reviewed historical variant. Dropping this
+                // last column also drops its dependent index and column ACL.
+                // No other drift is tolerated; reference DDL is rolled back.
+                await using (var oldShape = new NpgsqlCommand(
+                    "ALTER TABLE upload_intents DROP COLUMN lease_expires_at_utc",
+                    conn, tx))
+                    await oldShape.ExecuteNonQueryAsync(ct);
+                expected = await ReadCatalogSignatureAsync(conn, tx, scratch, ct);
+
+                // Capture the exact *post-repair* reference catalog too.
+                await using (var repairReference = new NpgsqlCommand(
+                    PreLeaseRestoreSql, conn, tx))
+                    await repairReference.ExecuteNonQueryAsync(ct);
+                repairedExpected = await ReadCatalogSignatureAsync(conn, tx, scratch, ct);
+            }
         }
         finally
         {
@@ -226,6 +265,21 @@ public static partial class SchemaMigrator
             throw new InvalidOperationException(
                 "Legacy schema differs from V001 in catalog categories: " +
                 string.Join(", ", differences) + ". Manual review required.");
+        }
+
+        if (preLease)
+        {
+            // Upgrade only after the old shape was strictly validated. The
+            // entire DDL/journal transaction rolls back on any failure.
+            await using (var repairTarget = new NpgsqlCommand(
+                PreLeaseRestoreSql, conn, tx))
+                await repairTarget.ExecuteNonQueryAsync(ct);
+
+            var upgraded = await ReadCatalogSignatureAsync(conn, tx, target, ct);
+            if (!string.Equals(upgraded, repairedExpected, StringComparison.Ordinal))
+                throw new InvalidOperationException(
+                    "Post-repair schema differs from the reviewed V001 equivalent. " +
+                    "Migration rolled back; manual review required.");
         }
 
         await using (var journal = new NpgsqlCommand(
