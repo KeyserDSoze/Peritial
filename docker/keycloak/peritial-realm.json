@@ -4,6 +4,27 @@
   "registrationAllowed": false,
   "clientScopes": [
     {
+      "name": "basic",
+      "description": "Access-token stable subject required for JWT authorization and audit",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "false",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "sub",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-sub-mapper",
+          "consentRequired": false,
+          "config": {
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
       "name": "peritial.read",
       "protocol": "openid-connect",
       "attributes": {
