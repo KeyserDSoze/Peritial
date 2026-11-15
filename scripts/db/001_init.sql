@@ -121,3 +121,41 @@ DROP POLICY IF EXISTS recovery_intents_delete ON upload_intents;
 CREATE POLICY recovery_intents_delete ON upload_intents FOR DELETE TO peritial_recovery USING (true);
 DROP POLICY IF EXISTS recovery_document_keys ON documents;
 CREATE POLICY recovery_document_keys ON documents FOR SELECT TO peritial_recovery USING (true);
+
+
+-- Tenant/actor-scoped idempotency. Store only SHA-256 digests of caller subject,
+-- client idempotency key and request fingerprint; never raw key, filename or body.
+-- Completed claims remain until an explicit, policy-controlled retention job.
+CREATE TABLE IF NOT EXISTS upload_request_keys (
+    tenant_id uuid NOT NULL,
+    subject_digest bytea NOT NULL CHECK (octet_length(subject_digest) = 32),
+    key_digest bytea NOT NULL CHECK (octet_length(key_digest) = 32),
+    request_digest bytea NOT NULL CHECK (octet_length(request_digest) = 32),
+    document_id uuid NOT NULL,
+    status varchar(16) NOT NULL CHECK (status IN ('pending','completed')),
+    created_at_utc timestamptz NOT NULL DEFAULT now(),
+    completed_at_utc timestamptz NULL,
+    PRIMARY KEY (tenant_id,subject_digest,key_digest),
+    UNIQUE (tenant_id,document_id)
+);
+CREATE INDEX IF NOT EXISTS ix_upload_requests_document ON upload_request_keys (tenant_id,document_id);
+REVOKE ALL ON upload_request_keys FROM PUBLIC;
+GRANT SELECT, INSERT, DELETE ON upload_request_keys TO peritial_app;
+GRANT UPDATE (status,completed_at_utc) ON upload_request_keys TO peritial_app;
+-- Recovery needs only tenant, document id and status, not digests of actor/key/body.
+GRANT SELECT (tenant_id,document_id,status) ON upload_request_keys TO peritial_recovery;
+GRANT DELETE ON upload_request_keys TO peritial_recovery;
+GRANT UPDATE (status,completed_at_utc) ON upload_request_keys TO peritial_recovery;
+ALTER TABLE upload_request_keys ENABLE ROW LEVEL SECURITY;
+ALTER TABLE upload_request_keys FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_upload_requests ON upload_request_keys;
+CREATE POLICY tenant_upload_requests ON upload_request_keys FOR ALL TO peritial_app
+    USING (tenant_id = NULLIF(current_setting('peritial.tenant_id', true), '')::uuid)
+    WITH CHECK (tenant_id = NULLIF(current_setting('peritial.tenant_id', true), '')::uuid);
+DROP POLICY IF EXISTS recovery_requests_select ON upload_request_keys;
+CREATE POLICY recovery_requests_select ON upload_request_keys FOR SELECT TO peritial_recovery USING (true);
+DROP POLICY IF EXISTS recovery_requests_update ON upload_request_keys;
+CREATE POLICY recovery_requests_update ON upload_request_keys FOR UPDATE TO peritial_recovery
+    USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS recovery_requests_delete ON upload_request_keys;
+CREATE POLICY recovery_requests_delete ON upload_request_keys FOR DELETE TO peritial_recovery USING (true);

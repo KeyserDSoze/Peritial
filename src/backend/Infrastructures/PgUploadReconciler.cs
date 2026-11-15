@@ -52,6 +52,21 @@ public sealed class PgUploadReconciler(NpgsqlDataSource recoverySource, IObjectS
             await objects.DeleteAsync(key, timeout.Token);
         }
 
+        // If the upload was not committed, release its idempotency key so a
+        // later retry can start afresh. If metadata exists (legacy/lost ACK),
+        // repair the completed claim while preserving the original blob.
+        var requestSql = referenced
+            ? "UPDATE upload_request_keys SET status='completed',completed_at_utc=now() " +
+              "WHERE tenant_id=@tenant AND document_id=@id AND status='pending'"
+            : "DELETE FROM upload_request_keys " +
+              "WHERE tenant_id=@tenant AND document_id=@id AND status='pending'";
+        await using (var request = new NpgsqlCommand(requestSql, conn, tx))
+        {
+            request.Parameters.AddWithValue("tenant", tenant);
+            request.Parameters.AddWithValue("id", id);
+            await request.ExecuteNonQueryAsync(ct);
+        }
+
         await using (var done = new NpgsqlCommand(
             "DELETE FROM upload_intents WHERE tenant_id=@tenant AND document_id=@id",
             conn, tx))

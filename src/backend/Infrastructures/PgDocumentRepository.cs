@@ -34,6 +34,18 @@ public sealed class PgDocumentRepository(NpgsqlDataSource dataSource) : IDocumen
         }
         await InsertAsync(scope, item, ct);
         await PgSecurityAuditTrail.AppendWithinScopeAsync(scope, audit, ct);
+        if (item.RequiresIdempotency)
+        {
+            // Must be part of the SAME commit: otherwise lost COMMIT ACK could
+            // show a pending key despite the document already being accepted.
+            await using var complete = scope.Command(
+                "UPDATE upload_request_keys SET status='completed',completed_at_utc=now() " +
+                "WHERE tenant_id=@tenant AND document_id=@id AND status='pending'");
+            complete.Parameters.AddWithValue("tenant", item.TenantId.Value);
+            complete.Parameters.AddWithValue("id", item.Id);
+            if (await complete.ExecuteNonQueryAsync(ct) != 1)
+                throw new InvalidOperationException("Idempotency reservation missing or already consumed.");
+        }
         await scope.CommitAsync(ct);
     }
 
