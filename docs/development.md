@@ -6,7 +6,7 @@ Ogni use case: test rosso (xUnit / Playwright), implementazione minima, test ver
 - Frontend: cd src/frontend && npm ci && npx playwright install chromium && npm run build && npm run test:e2e
 - CI: xUnit unitari e con PostgreSQL reale, build frontend, Playwright e smoke Docker Compose.
 - Lavorare solo su main. Non fondere death.
-- Debiti bloccanti produzione: pin digest delle immagini e supply-chain, quarantena persistente e signature freshness dello scanner, limitazione chiamate, audit completo, idempotenza, backup/migrazioni, provisioning e rotazione dei privilegi RLS in produzione, test OAuth/MCP su client reali, deploy automatizzato su Azure, secret vault.
+- Debiti bloccanti produzione: pin digest delle immagini e supply-chain, quarantena persistente e signature freshness dello scanner, limitazione chiamate, audit completo, idempotenza, backup/restore verificati e adozione legacy delle migrazioni, provisioning e rotazione dei privilegi RLS in produzione, test OAuth/MCP su client reali, deploy automatizzato su Azure, secret vault.
 
 La build iniziale CI ha guidato la correzione delle dipendenze e la scelta dell'immagine S3 open-source disponibile sul registry.
 
@@ -49,3 +49,7 @@ L'API richiede `Malware:Clamd:Host` e porta TCP privata (default 3310), con time
 ## Prova reale mid-PUT con proxy di caos (ADR 0014)
 
 Il job Compose esegue `bash tests/chaos/run_mid_put.sh` dopo le normali prove OAuth/MCP, storage e scanner. Un file PDF di test viene caricato con token Keycloak firmato e idempotency key locale; l'API usa il normale adapter AWS SDK ma punta temporaneamente a un **proxy TCP S3 di test**. Il proxy inoltra l'intestazione e un prefisso del **corpo HTTP PUT** al SeaweedFS reale, segnala l'avvenuto trasferimento e blocca il flusso. La pipeline verifica sia il segnale sia che la chiamata upload non sia terminata, invia `SIGKILL` all'API, fa scadere l'intento del processo morto, riavvia l'API standard e controlla che il worker abbia eliminato intent e chiave idempotente. Un test .NET verifica inoltre con SDK S3 autenticato il 404 del blob, l'assenza del documento e di audit di successo. Il file `docker/compose.chaos.yml` non va usato in produzione; la prova NON rappresenta Azure Blob, multi-replica o timeout DB reali.
+
+## Migrazioni PostgreSQL versionate (#6, ADR 0015)
+
+`SchemaMigrationTests` prova installazione V001/V002, re-run, drift checksum, schema preesistente non tracciato e concorrenza in PostgreSQL reale. Il migrator esplicito `scripts/db/Peritial.DbMigrator` non parte insieme all'API e richiede credenziali DDL indipendenti. Per il runbook e i limiti della demo Compose consultare `docs/database-migrations.md`. Non equiparare i test di schema nuovo a una prova di upgrade/restore del database legacy.
