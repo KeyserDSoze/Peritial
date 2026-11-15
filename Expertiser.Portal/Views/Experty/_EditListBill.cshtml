@@ -1,7 +1,0 @@
-﻿@model Expertiser.Database.Models.TableExpertise
-
-<partial name="_EditBill" model="new TableBill() { Id = 0, ExpertiseId = Model.Id}" />
-@foreach (var tableBill in Model.TableBill)
-{
-    <partial name="_EditBill" model="tableBill" />
-}

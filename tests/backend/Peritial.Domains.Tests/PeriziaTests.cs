@@ -1,0 +1,49 @@
+using Peritial.Domains;
+using Xunit;
+
+namespace Peritial.Domains.Tests;
+
+public sealed class PeriziaTests
+{
+    private static TenantId Tenant() => TenantId.From(Guid.NewGuid());
+
+    [Fact]
+    public void Nuova_perizia_si_avvia_in_stato_registered()
+    {
+        var perizia = Perizia.Create(Tenant(), "PER-2026-001");
+        Assert.Equal(PeriziaStatus.Registered, perizia.Status);
+        Assert.NotEqual(Guid.Empty, perizia.Id);
+    }
+
+    [Fact]
+    public void Assegnazione_richiede_utente_e_tenant_proprietario()
+    {
+        var tenant = Tenant();
+        var perizia = Perizia.Create(tenant, "PER-2026-002");
+
+        Assert.Throws<UnauthorizedAccessException>(() => perizia.Assign(Tenant(), "user1"));
+        Assert.Throws<ArgumentException>(() => perizia.Assign(tenant, " "));
+        perizia.Assign(tenant, "user1");
+
+        Assert.Equal(PeriziaStatus.Assigned, perizia.Status);
+        Assert.Equal("user1", perizia.AssignedTo);
+    }
+
+    [Fact]
+    public void Le_transizioni_non_possono_saltare_stati()
+    {
+        var tenant = Tenant();
+        var perizia = Perizia.Create(tenant, "PER-2026-003");
+        Assert.Throws<InvalidOperationException>(() => perizia.Advance(tenant, PeriziaStatus.Billed));
+        perizia.Assign(tenant, "user1");
+        perizia.Advance(tenant, PeriziaStatus.ToBeRevised);
+        Assert.Equal(PeriziaStatus.ToBeRevised, perizia.Status);
+    }
+
+    [Fact]
+    public void Tenant_vuoto_e_riferimento_vuoto_non_sono_ammessi()
+    {
+        Assert.Throws<ArgumentException>(() => TenantId.From(Guid.Empty));
+        Assert.Throws<ArgumentException>(() => Perizia.Create(Tenant(), " "));
+    }
+}
