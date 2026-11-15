@@ -90,6 +90,27 @@ public sealed class SecureRecoveryStagingTests
                     Path.Combine(root, "unsafe-output"), encryptionKey, s3Key));
             Assert.Contains("tmpfs", error.Message, StringComparison.OrdinalIgnoreCase);
             Assert.False(Directory.Exists(Path.Combine(root, "unsafe-output")));
+
+            // Check enforcement at the object-archive API boundary as well.
+            // No network/DB access is permitted before the scratch guard.
+            var exportError = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                ObjectRecoveryArchive.ExportAsync(
+                    null!, null!, "unused-bucket",
+                    Path.Combine(root, "unsafe-s3-archive"),
+                    System.Security.Cryptography.RandomNumberGenerator.GetBytes(32)));
+            Assert.Contains("tmpfs", exportError.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.False(Directory.Exists(Path.Combine(root, "unsafe-s3-archive")));
+
+            // Even a correctly keyed seal must not read a disk-backed PGDMP.
+            var pg = Path.Combine(root, "source.dump");
+            await File.WriteAllBytesAsync(pg, "PGDMP"u8.ToArray());
+            var sealError = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                SealedRecoveryBundle.SealAsync(
+                    pg, Path.Combine(root, "s3-plaintext"),
+                    Path.Combine(root, "sealed-output"),
+                    encryptionKey, s3Key));
+            Assert.Contains("tmpfs", sealError.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.False(Directory.Exists(Path.Combine(root, "sealed-output")));
         }
         finally
         {
