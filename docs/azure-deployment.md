@@ -34,3 +34,7 @@ Oltre alla connessione applicativa `ConnectionStrings__Postgres`, l'API ora rich
 ## Lease PostgreSQL per upload lenti (#21)
 
 L'upgrade deve aggiungere `upload_intents.lease_expires_at_utc` e il grant colonna `UPDATE (lease_expires_at_utc)` a `peritial_app`, mantenendo FORCE RLS. Una nuova versione applicativa senza questa migrazione rifiuterà il rinnovo e bloccherà gli upload: migrare prima e verificare backup/restore. Worker e API usano l'orologio PostgreSQL per determinare la scadenza. Le prove SIGKILL in Compose non sostituiscono le prove Azure Blob con reti interrotte e failover di più repliche (#17/#21).
+
+## Prova S3 mid-PUT non equivalente a test Azure
+
+La CI verifica SIGKILL durante un upload S3 effettivamente in corso (byte HTTP PUT inoltrati a SeaweedFS) e cleanup automatico dopo restart usando il worker e i ruoli PostgreSQL reali. Questo non prova i comportamenti specifici di Azure Blob, il failover multi-replica, le reti aziendali e il backup/restore: tali prove rimangono prerequisiti di rilascio (#17/#21). ADR 0014.

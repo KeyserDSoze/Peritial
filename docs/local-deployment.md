@@ -40,3 +40,7 @@ Lo schema crea `upload_intents` e due login **distinti** solo in sviluppo: `peri
 ## Lease e restart del worker
 
 Il bootstrap locale è compatibile con schema preesistente e aggiunge `lease_expires_at_utc` a `upload_intents`, con grant `UPDATE (lease_expires_at_utc)` riservato al ruolo applicativo. Prima dell'upgrade di una istanza con volume persistente, usare una migrazione verificata e backup del DB, senza cancellare i dati: il progetto non dispone ancora di migrazioni versionate (#6). In produzione monitorare rinnovi falliti e backlog del worker, non ridurre l'ora di grazia senza verificare PUT lunghi. In CI Compose viene eseguito un riavvio forzato SIGKILL con seed dell'orfano per verificare la persistenza.
+
+## Fault injection interruzione PUT (#21)
+
+La pipeline CI usa un overlay Compose separato, `docker/compose.chaos.yml`, che instrada il PUT S3 tramite un proxy Python capace di inoltrare i primi byte e bloccare il trasferimento. Solo dopo il segnale di byte inoltrati viene inviato SIGKILL al processo API; poi la stack standard viene riavviata ed è verificata la pulizia PostgreSQL/SeaweedFS. L'overlay è esclusivamente di **test**, non abilitarlo su installazioni operative e non esporre il proxy. ADR 0014.

@@ -33,4 +33,4 @@ Il branch `death` è una fonte di osservazione, non di codice. Identificare e sp
 
 - Gli upload REST e MCP condividono un registro `upload_request_keys` tenant/subject-scoped: SHA-256 di key/soggetto e fingerprint del contenuto canonico, unique index e `ON CONFLICT DO NOTHING` per la concorrenza; completamento atomico con document+audit; il worker libera richieste abbandonate. ADR 0012 / #21.
 
-- Upload lunghi protetti da lease PostgreSQL: `upload_intents.lease_expires_at_utc` rinnovabile per tenant durante PUT. Il worker usa sia la soglia di un'ora sia la scadenza della lease; il repository vieta metadata/audit se la lease non è più valida. Test SIGKILL/restart su Compose e ADR 0013; restano fault injection mid-PUT e replica failover (#21).
+- Upload lunghi protetti da lease PostgreSQL: `upload_intents.lease_expires_at_utc` rinnovabile per tenant durante PUT. Il worker usa sia la soglia di un'ora sia la scadenza della lease; il repository vieta metadata/audit se la lease non è più valida. Test SIGKILL/restart su Compose e ADR 0013; la fault injection mid-PUT su SeaweedFS è in ADR 0014; restano failover multi-replica e Azure reali (#21).
