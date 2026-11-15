@@ -41,7 +41,7 @@ public sealed class LegacySchemaAdoptionTests
                 "AND (SELECT count(*) FROM perizie WHERE tenant_id=@tenant AND id=@id AND reference='LEGACY-TEST')=1 " +
                 "AND to_regclass('ix_security_audit_tenant_action_time') IS NOT NULL " +
                 "AND (SELECT count(*) FROM pg_class WHERE relname IN ('perizie','documents','security_audit'," +
-                "'upload_intents','upload_request_keys') AND relrowsecurity AND relforcerowsecurity)=5",
+                "'upload_intents','upload_request_keys') AND relrowsecurity AND relforcerowsecurity AND relnamespace=current_schema()::regnamespace)=5",
                 verify);
             cmd.Parameters.AddWithValue("tenant", tenant);
             cmd.Parameters.AddWithValue("id", id);

@@ -9,7 +9,7 @@ namespace Peritial.Infrastructures;
 /// connection, never the application or recovery roles. Never runs at API startup.
 /// All scripts, checksums and journal entries commit atomically under an advisory lock.
 /// </summary>
-public static class SchemaMigrator
+public static partial class SchemaMigrator
 {
     private const long DdlLock = 4700039001;
 
