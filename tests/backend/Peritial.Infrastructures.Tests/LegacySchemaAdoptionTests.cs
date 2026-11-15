@@ -91,6 +91,98 @@ public sealed class LegacySchemaAdoptionTests
         });
     }
 
+
+    [Fact]
+    public async Task Prelease_legacy_schema_upgrades_missing_lease_atomically_without_rewriting_rows()
+    {
+        await InSchemaAsync(async db =>
+        {
+            await SchemaBootstrap.ApplyDevelopmentSchemaAsync(db);
+            var tenant = Guid.NewGuid();
+            var documentId = Guid.NewGuid();
+            await using (var conn = await db.OpenConnectionAsync())
+            {
+                await using var legacy = new NpgsqlCommand(
+                    "ALTER TABLE upload_intents DROP COLUMN lease_expires_at_utc; " +
+                    "INSERT INTO upload_intents(tenant_id,document_id,storage_key) " +
+                    "VALUES (@tenant,@doc,'legacy/key.pdf')", conn);
+                legacy.Parameters.AddWithValue("tenant", tenant);
+                legacy.Parameters.AddWithValue("doc", documentId);
+                await legacy.ExecuteNonQueryAsync();
+            }
+
+            // A distinct, explicit operator action is required for a pre-V001 variant.
+            await Assert.ThrowsAsync<InvalidOperationException>(() => SchemaMigrator.AdoptLegacyAsync(db));
+            await Assert.ThrowsAsync<InvalidOperationException>(() => SchemaMigrator.ApplyAsync(db));
+
+            Assert.Equal(1, await SchemaMigrator.AdoptPreLeaseLegacyAsync(db));
+            Assert.Equal(0, await SchemaMigrator.ApplyAsync(db));
+            await Assert.ThrowsAsync<InvalidOperationException>(() => SchemaMigrator.AdoptPreLeaseLegacyAsync(db));
+
+            await using var conn2 = await db.OpenConnectionAsync();
+            await using var check = new NpgsqlCommand(
+                "SELECT (SELECT count(*) FROM schema_migrations)=2 " +
+                "AND to_regclass('ix_upload_intents_lease') IS NOT NULL " +
+                "AND (SELECT count(*) FROM upload_intents WHERE tenant_id=@tenant " +
+                "  AND document_id=@doc AND storage_key='legacy/key.pdf' " +
+                "  AND lease_expires_at_utc > created_at_utc)=1 " +
+                "AND (SELECT relforcerowsecurity FROM pg_class " +
+                "  WHERE oid='upload_intents'::regclass)", conn2);
+            check.Parameters.AddWithValue("tenant", tenant);
+            check.Parameters.AddWithValue("doc", documentId);
+            Assert.True((bool)(await check.ExecuteScalarAsync())!);
+        });
+    }
+
+    [Theory]
+    [InlineData("ALTER TABLE documents NO FORCE ROW LEVEL SECURITY")]
+    [InlineData("GRANT SELECT ON security_audit TO peritial_app")]
+    [InlineData("DROP POLICY tenant_upload_requests ON upload_request_keys")]
+    [InlineData("CREATE TABLE unexpected_prelease_table (id int)")]
+    public async Task Prelease_adoption_rejects_other_drift_and_rolls_back_all_ddl(
+        string additionalDrift)
+    {
+        await InSchemaAsync(async db =>
+        {
+            await SchemaBootstrap.ApplyDevelopmentSchemaAsync(db);
+            await using (var conn = await db.OpenConnectionAsync())
+            await using (var alter = new NpgsqlCommand(
+                "ALTER TABLE upload_intents DROP COLUMN lease_expires_at_utc; " + additionalDrift, conn))
+                await alter.ExecuteNonQueryAsync();
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                SchemaMigrator.AdoptPreLeaseLegacyAsync(db));
+            await using var verify = await db.OpenConnectionAsync();
+            await using var check = new NpgsqlCommand(
+                "SELECT to_regclass('schema_migrations') IS NULL " +
+                "AND to_regclass('ix_upload_intents_lease') IS NULL " +
+                "AND NOT EXISTS (SELECT 1 FROM information_schema.columns " +
+                " WHERE table_schema=current_schema() AND table_name='upload_intents' " +
+                " AND column_name='lease_expires_at_utc')", verify);
+            Assert.True((bool)(await check.ExecuteScalarAsync())!);
+        });
+    }
+
+    [Fact]
+    public async Task Prelease_adoption_does_not_silently_accept_exact_V001_or_index_only_drift()
+    {
+        await InSchemaAsync(async db =>
+        {
+            await SchemaBootstrap.ApplyDevelopmentSchemaAsync(db);
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                SchemaMigrator.AdoptPreLeaseLegacyAsync(db));
+            await using (var conn = await db.OpenConnectionAsync())
+            await using (var drop = new NpgsqlCommand("DROP INDEX ix_upload_intents_lease", conn))
+                await drop.ExecuteNonQueryAsync();
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                SchemaMigrator.AdoptPreLeaseLegacyAsync(db));
+            await using var verify = await db.OpenConnectionAsync();
+            await using var check = new NpgsqlCommand(
+                "SELECT to_regclass('schema_migrations') IS NULL", verify);
+            Assert.True((bool)(await check.ExecuteScalarAsync())!);
+        });
+    }
+
     private static async Task InSchemaAsync(Func<NpgsqlDataSource, Task> test)
     {
         var cs = Environment.GetEnvironmentVariable("PERITIAL_TEST_POSTGRES")
