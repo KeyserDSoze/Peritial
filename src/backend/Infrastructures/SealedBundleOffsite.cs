@@ -23,12 +23,18 @@ public static class SealedBundleOffsite
 
     public static async Task UploadAsync(
         string sealedDirectory, IAmazonS3 destination, string bucket,
-        string backupId, byte[] encryptionKey, CancellationToken ct = default)
+        string backupId, byte[] encryptionKey, CancellationToken ct = default,
+        bool disposableUnprotectedDemo = false)
     {
         Validate(encryptionKey, bucket, backupId);
         // Authenticate every GCM tag in memory, with no temporary plaintext.
         var files = await SealedRecoveryBundle.ValidateEncryptedAsync(
             sealedDirectory, encryptionKey, ct);
+        // Production is fail-closed. The only opt-out is explicitly selected
+        // by disposable local tests; CLI restricts it to a fixed CI host.
+        if (!disposableUnprotectedDemo)
+            await OffsiteObjectLockPolicy.RequireCompliantBucketAsync(
+                destination, bucket, ct);
         var prefix = Prefix(backupId);
         if ((await destination.ListObjectsV2Async(new ListObjectsV2Request
             { BucketName = bucket, Prefix = prefix, MaxKeys = 1 }, ct))
@@ -59,21 +65,37 @@ public static class SealedBundleOffsite
                 entry.Name.Replace('/', Path.DirectorySeparatorChar));
             await using var stream = new FileStream(path, FileMode.Open,
                 FileAccess.Read, FileShare.Read);
-            await destination.PutObjectAsync(new PutObjectRequest
+            var started = DateTime.UtcNow;
+            var write = await destination.PutObjectAsync(new PutObjectRequest
             {
                 BucketName = bucket, Key = prefix + entry.Name,
                 InputStream = stream, AutoCloseStream = false,
                 ContentType = "application/octet-stream",
                 IfNoneMatch = "*"
             }, ct);
+            if (!disposableUnprotectedDemo)
+                await OffsiteObjectLockPolicy.RequireProtectedObjectVersionAsync(
+                    destination, bucket, prefix + entry.Name, write.VersionId, started, ct);
             var received = await HashRemoteAsync(destination, bucket,
                 prefix + entry.Name, ct);
             if (received.Length != entry.Length || received.Sha256 != entry.Sha256)
                 throw new InvalidOperationException(
                     "Remote ciphertext differs after upload; backup remains incomplete.");
         }
-        await PutBytesAsync(destination, bucket, prefix + InventoryName, inventory, ct);
-        await PutBytesAsync(destination, bucket, prefix + SignatureName, signature, ct);
+        var inventoryStarted = DateTime.UtcNow;
+        var inventoryVersion = await PutBytesAsync(
+            destination, bucket, prefix + InventoryName, inventory, ct);
+        if (!disposableUnprotectedDemo)
+            await OffsiteObjectLockPolicy.RequireProtectedObjectVersionAsync(
+                destination, bucket, prefix + InventoryName, inventoryVersion,
+                inventoryStarted, ct);
+        var signatureStarted = DateTime.UtcNow;
+        var signatureVersion = await PutBytesAsync(
+            destination, bucket, prefix + SignatureName, signature, ct);
+        if (!disposableUnprotectedDemo)
+            await OffsiteObjectLockPolicy.RequireProtectedObjectVersionAsync(
+                destination, bucket, prefix + SignatureName, signatureVersion,
+                signatureStarted, ct);
         var expectedComplete = CompletionDigest(inventory, signature);
         var remoteInventory = await GetBytesAsync(destination, bucket,
             prefix + InventoryName, MaxManifestBytes, ct);
@@ -82,7 +104,13 @@ public static class SealedBundleOffsite
         if (!CryptographicOperations.FixedTimeEquals(inventory, remoteInventory) ||
             !CryptographicOperations.FixedTimeEquals(signature, remoteSignature))
             throw new InvalidOperationException("Remote inventory was changed before completion.");
-        await PutBytesAsync(destination, bucket, prefix + CompletedName, expectedComplete, ct);
+        var completionStarted = DateTime.UtcNow;
+        var completionVersion = await PutBytesAsync(
+            destination, bucket, prefix + CompletedName, expectedComplete, ct);
+        if (!disposableUnprotectedDemo)
+            await OffsiteObjectLockPolicy.RequireProtectedObjectVersionAsync(
+                destination, bucket, prefix + CompletedName, completionVersion,
+                completionStarted, ct);
     }
 
     public static async Task DownloadAsync(
@@ -227,16 +255,17 @@ public static class SealedBundleOffsite
         }
     }
 
-    private static async Task PutBytesAsync(IAmazonS3 s3, string bucket,
+    private static async Task<string?> PutBytesAsync(IAmazonS3 s3, string bucket,
         string key, byte[] data, CancellationToken ct)
     {
         using var stream = new MemoryStream(data, writable: false);
-        await s3.PutObjectAsync(new PutObjectRequest
+        var response = await s3.PutObjectAsync(new PutObjectRequest
         {
             BucketName = bucket, Key = key, InputStream = stream,
             AutoCloseStream = false, ContentType = "application/octet-stream",
             IfNoneMatch = "*"
         }, ct);
+        return response.VersionId;
     }
 
     private static async Task<byte[]> GetBytesAsync(IAmazonS3 s3, string bucket,
