@@ -25,10 +25,80 @@ if [ "$ready" != true ]; then echo "Fresh restore PostgreSQL unavailable" >&2; e
 docker compose -f docker/compose.yml exec -T postgres \
   pg_dump -U peritial -d peritial -Fc --no-owner > "$dir/peritial.dump"
 (cd "$dir" && sha256sum peritial.dump | cut -d ' ' -f 1 > peritial.dump.sha256)
+# Before restoring ANY PostgreSQL data or writing to the second SeaweedFS,
+# seal the complete source PostgreSQL dump plus S3 byte archive with AES-GCM.
+# Both keys are generated ephemerally in CI and remain OUTSIDE the encrypted
+# bundle. The decrypted data is private and automatically removed at teardown.
+docker compose -f docker/compose.yml --profile test --profile recovery-test run -T --rm \
+  -v "$dir:/recovery" \
+  -e PERITIAL_CHECKPOINT_CONFIRM=WRITERS_STOPPED \
+  -e PERITIAL_CHECKPOINT_S3_BUCKET=peritial \
+  -e PERITIAL_CHECKPOINT_S3_ACCESS_KEY=localminio \
+  -e PERITIAL_CHECKPOINT_S3_SECRET_KEY=local-only-minio-secret \
+  -e PERITIAL_ARCHIVE_DIR=/tmp/peritial-offline-objects \
+  -e PERITIAL_BUNDLE_POSTGRES_DUMP=/recovery/peritial.dump \
+  -e PERITIAL_BUNDLE_DIR=/recovery/sealed \
+  -e PERITIAL_BUNDLE_UNSEAL_DIR=/recovery/unsealed \
+  tests sh -ec '
+    dd if=/dev/urandom of=/recovery/s3-hmac.key bs=32 count=1 status=none
+    dd if=/dev/urandom of=/recovery/aes-gcm.key bs=32 count=1 status=none
+    chmod 600 /recovery/s3-hmac.key /recovery/aes-gcm.key
+
+    export PERITIAL_CHECKPOINT_POSTGRES="Host=postgres;Port=5432;Database=peritial;Username=peritial;Password=local-only-postgres"
+    export PERITIAL_CHECKPOINT_S3_ENDPOINT=http://seaweedfs:8333
+    export PERITIAL_ARCHIVE_HMAC_KEY_FILE=/recovery/s3-hmac.key
+
+    # The existing S3 archive also refuses missing/weak signing keys.
+    unset PERITIAL_ARCHIVE_HMAC_KEY_FILE
+    if dotnet run --project scripts/recovery/Peritial.RecoveryCheckpoint -- export; then
+      echo "Unsigned S3 export unexpectedly succeeded" >&2; exit 1
+    fi
+    export PERITIAL_ARCHIVE_HMAC_KEY_FILE=/recovery/s3-hmac.key
+    chmod 644 "$PERITIAL_ARCHIVE_HMAC_KEY_FILE"
+    if dotnet run --project scripts/recovery/Peritial.RecoveryCheckpoint -- export; then
+      echo "Export accepted group-readable signing key" >&2; exit 1
+    fi
+    chmod 600 "$PERITIAL_ARCHIVE_HMAC_KEY_FILE"
+    dotnet run --project scripts/recovery/Peritial.RecoveryCheckpoint -- export
+
+    export PERITIAL_BUNDLE_CONFIRM=WRITERS_STOPPED
+    # The new full-bundle encryption key is separately mandatory/private.
+    unset PERITIAL_BUNDLE_AES_KEY_FILE
+    if dotnet run --project scripts/recovery/Peritial.RecoveryBundle -- seal; then
+      echo "Unencrypted multi-service backup unexpectedly succeeded" >&2; exit 1
+    fi
+    export PERITIAL_BUNDLE_AES_KEY_FILE=/recovery/aes-gcm.key
+    chmod 644 "$PERITIAL_BUNDLE_AES_KEY_FILE"
+    if dotnet run --project scripts/recovery/Peritial.RecoveryBundle -- seal; then
+      echo "Sealer accepted group-readable encryption key" >&2; exit 1
+    fi
+    chmod 600 "$PERITIAL_BUNDLE_AES_KEY_FILE"
+    dotnet run --project scripts/recovery/Peritial.RecoveryBundle -- seal
+    test ! -e /recovery/sealed/postgres/peritial.dump
+    test ! -e /recovery/sealed/s3/manifest.json
+
+    export PERITIAL_BUNDLE_CONFIRM=ISOLATED_RESTORE
+    dd if=/dev/urandom of=/recovery/wrong-gcm.key bs=32 count=1 status=none
+    chmod 600 /recovery/wrong-gcm.key
+    export PERITIAL_BUNDLE_AES_KEY_FILE=/recovery/wrong-gcm.key
+    if dotnet run --project scripts/recovery/Peritial.RecoveryBundle -- unseal; then
+      echo "Sealed recovery accepted wrong AES-GCM key" >&2; exit 1
+    fi
+    test ! -e /recovery/unsealed
+    export PERITIAL_BUNDLE_AES_KEY_FILE=/recovery/aes-gcm.key
+    dotnet run --project scripts/recovery/Peritial.RecoveryBundle -- unseal
+    cmp /recovery/peritial.dump /recovery/unsealed/postgres/peritial.dump
+    cmp /recovery/peritial.dump.sha256 /recovery/unsealed/postgres/peritial.dump.sha256
+    test -s /recovery/unsealed/s3/manifest.hmac
+    echo "PASS: authenticated AES-256-GCM bundle of PGDMP and S3 objects"
+  '
+
+# Only NOW use the independently decrypted PostgreSQL backup to provision
+# the new database. The archive bytes are not recovered from source S3 again.
 docker compose -f docker/compose.yml --profile recovery-test cp \
-  "$dir/peritial.dump" postgres-restore:/tmp/peritial.dump
+  "$dir/unsealed/postgres/peritial.dump" postgres-restore:/tmp/peritial.dump
 docker compose -f docker/compose.yml --profile recovery-test cp \
-  "$dir/peritial.dump.sha256" postgres-restore:/tmp/peritial.dump.sha256
+  "$dir/unsealed/postgres/peritial.dump.sha256" postgres-restore:/tmp/peritial.dump.sha256
 
 # pg_dump contains the ACLs but not cluster-global roles. No app login.
 docker compose -f docker/compose.yml --profile recovery-test exec -T postgres-restore \
@@ -60,56 +130,32 @@ docker compose -f docker/compose.yml --profile recovery-test exec -T \
   -e PERITIAL_RESTORE_CONFIRM=EMPTY_DATABASE \
   postgres-restore sh -s < scripts/db/restore.sh
 
-# The SDK container is ephemeral: the archive has the real object bytes but
-# is not stored in a CI artifact or permanent backup destination.
+# The destination S3 bucket must be empty; import only the S3 bytes
+# decrypted from the SAME sealed recovery bundle as the restored PGDMP.
 docker compose -f docker/compose.yml --profile test --profile recovery-test run -T --rm \
+  -v "$dir:/recovery" \
   -e PERITIAL_CHECKPOINT_CONFIRM=WRITERS_STOPPED \
   -e PERITIAL_CHECKPOINT_S3_BUCKET=peritial \
   -e PERITIAL_CHECKPOINT_S3_ACCESS_KEY=localminio \
   -e PERITIAL_CHECKPOINT_S3_SECRET_KEY=local-only-minio-secret \
-  -e PERITIAL_ARCHIVE_DIR=/tmp/peritial-offline-objects \
+  -e PERITIAL_ARCHIVE_DIR=/recovery/unsealed/s3 \
+  -e PERITIAL_ARCHIVE_HMAC_KEY_FILE=/recovery/s3-hmac.key \
   tests sh -ec '
-    # Disposable, cryptographically random 32-byte key. Never committed,
-    # included in the archive or printed in CI output. Production uses KMS.
-    dd if=/dev/urandom of=/tmp/peritial-archive-hmac-key bs=32 count=1 status=none
-    chmod 600 /tmp/peritial-archive-hmac-key
-    export PERITIAL_CHECKPOINT_POSTGRES="Host=postgres;Port=5432;Database=peritial;Username=peritial;Password=local-only-postgres"
-    export PERITIAL_CHECKPOINT_S3_ENDPOINT=http://seaweedfs:8333
-
-    # Missing key and group-readable key must fail BEFORE export.
-    unset PERITIAL_ARCHIVE_HMAC_KEY_FILE
-    if dotnet run --project scripts/recovery/Peritial.RecoveryCheckpoint -- export; then
-      echo "Unsigned archive export unexpectedly succeeded" >&2
-      exit 1
-    fi
-    export PERITIAL_ARCHIVE_HMAC_KEY_FILE=/tmp/peritial-archive-hmac-key
-    chmod 644 "$PERITIAL_ARCHIVE_HMAC_KEY_FILE"
-    if dotnet run --project scripts/recovery/Peritial.RecoveryCheckpoint -- export; then
-      echo "Export accepted a group-readable HMAC key" >&2
-      exit 1
-    fi
-    chmod 600 "$PERITIAL_ARCHIVE_HMAC_KEY_FILE"
-    dotnet run --project scripts/recovery/Peritial.RecoveryCheckpoint -- export
-
     export PERITIAL_CHECKPOINT_POSTGRES="Host=postgres-restore;Port=5432;Database=peritial;Username=peritial;Password=local-only-postgres"
     export PERITIAL_CHECKPOINT_S3_ENDPOINT=http://seaweedfs-restore:8333
     export PERITIAL_RESTORE_OBJECTS_CONFIRM=EMPTY_DESTINATION_BUCKET
-    dd if=/dev/urandom of=/tmp/peritial-wrong-hmac-key bs=32 count=1 status=none
-    chmod 600 /tmp/peritial-wrong-hmac-key
-    export PERITIAL_ARCHIVE_HMAC_KEY_FILE=/tmp/peritial-wrong-hmac-key
+    dd if=/dev/urandom of=/recovery/wrong-hmac.key bs=32 count=1 status=none
+    chmod 600 /recovery/wrong-hmac.key
+    export PERITIAL_ARCHIVE_HMAC_KEY_FILE=/recovery/wrong-hmac.key
     if dotnet run --project scripts/recovery/Peritial.RecoveryCheckpoint -- restore-objects; then
-      echo "Restore accepted an incorrect HMAC key" >&2
-      exit 1
+      echo "Restore accepted wrong independent S3 HMAC key" >&2; exit 1
     fi
-    export PERITIAL_ARCHIVE_HMAC_KEY_FILE=/tmp/peritial-archive-hmac-key
+    export PERITIAL_ARCHIVE_HMAC_KEY_FILE=/recovery/s3-hmac.key
     dotnet run --project scripts/recovery/Peritial.RecoveryCheckpoint -- restore-objects
 
-    # Repeating import must refuse any preexisting byte, not overwrite.
     if dotnet run --project scripts/recovery/Peritial.RecoveryCheckpoint -- restore-objects; then
-      echo "Unexpected overwrite of restored S3 bucket" >&2
-      exit 1
+      echo "Unexpected overwrite of restored S3 bucket" >&2; exit 1
     fi
-    rm -f /tmp/peritial-archive-hmac-key /tmp/peritial-wrong-hmac-key
   '
 
 # Verify RLS and durable metadata/audit still exist in the destination PG.
