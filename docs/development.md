@@ -9,3 +9,5 @@ Ogni use case: test rosso (xUnit / Playwright), implementazione minima, test ver
 - Debiti bloccanti produzione: lockfile npm e npm ci, scansione antivirus/validazione magic bytes, limitazione chiamate, audit completo, idempotenza, backup/migrazioni, database RLS, test OAuth/MCP su client reali, deploy automatizzato su Azure, secret vault.
 
 La build iniziale CI ha guidato la correzione delle dipendenze e la scelta dell'immagine S3 open-source disponibile sul registry.
+
+La CI Docker Compose esegue ora un test Playwright autenticato reale (Keycloak, creazione perizia, tool MCP) sia desktop sia mobile, e fallisce su errori OAuth o sulle chiamate non autorizzate. Dopo il ciclo Red→Green si eliminano stampe temporanee di pagine e credenziali dai test (Refactor).
