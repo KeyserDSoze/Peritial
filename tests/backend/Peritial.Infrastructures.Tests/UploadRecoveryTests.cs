@@ -67,6 +67,7 @@ public sealed class UploadRecoveryTests
         var blobs = new FakeBlobs();
         blobs.Stored.Add(key);
         await new PgUploadIntentLedger(db.App).RecordAsync(tenant, documentId, key);
+        await ExpireAsync(db.Admin, tenant, documentId);
 
         var worker = new PgUploadReconciler(db.Recovery, blobs);
         Assert.True(await worker.ReconcileOneAsync(DateTime.UtcNow.AddMinutes(5)));
@@ -103,6 +104,7 @@ public sealed class UploadRecoveryTests
         var blobs = new FakeBlobs();
         blobs.Stored.Add(key);
         await new PgUploadIntentLedger(db.App).RecordAsync(tenant, documentId, key);
+        await ExpireAsync(db.Admin, tenant, documentId);
         // Simulate an interrupted migration or lost-ACK state with a committed
         // metadata record AND a residual pending upload intent.
         await using (var cmd = db.Admin.CreateCommand(
@@ -131,6 +133,7 @@ public sealed class UploadRecoveryTests
         var blobs = new FakeBlobs { FailDeletion = true };
         blobs.Stored.Add(key);
         await new PgUploadIntentLedger(db.App).RecordAsync(tenant, documentId, key);
+        await ExpireAsync(db.Admin, tenant, documentId);
         var worker = new PgUploadReconciler(db.Recovery, blobs);
         await Assert.ThrowsAsync<IOException>(() => worker.ReconcileOneAsync(DateTime.UtcNow.AddMinutes(5)));
         Assert.Contains(key, blobs.Stored);
@@ -149,6 +152,17 @@ public sealed class UploadRecoveryTests
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             new PgDocumentRepository(db.App).AddAuditedAsync(
                 Record(tenant, id, $"{tenant.Value:N}/{id:N}.pdf"), Event(tenant, id)));
+    }
+
+    private static async Task ExpireAsync(NpgsqlDataSource admin, TenantId tenant, Guid id)
+    {
+        await using var cmd = admin.CreateCommand(
+            "UPDATE upload_intents SET created_at_utc=now()-interval '2 hours', " +
+            "lease_expires_at_utc=now()-interval '1 minute' " +
+            "WHERE tenant_id=@tenant AND document_id=@id");
+        cmd.Parameters.AddWithValue("tenant", tenant.Value);
+        cmd.Parameters.AddWithValue("id", id);
+        Assert.Equal(1, await cmd.ExecuteNonQueryAsync());
     }
 
     private static DocumentRecord Record(TenantId tenant, Guid id, string key) =>

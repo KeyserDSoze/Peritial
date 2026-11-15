@@ -124,6 +124,8 @@ public sealed class FileIngestionCompensationTests
     {
         public Task RecordAsync(TenantId tenant, Guid id, string key, CancellationToken ct = default) =>
             Task.CompletedTask;
+        public Task<bool> RenewAsync(TenantId tenant, Guid id, CancellationToken ct = default) =>
+            Task.FromResult(true);
         public Task ForgetAsync(TenantId tenant, Guid id, CancellationToken ct = default) =>
             Task.CompletedTask;
     }

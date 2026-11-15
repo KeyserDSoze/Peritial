@@ -105,6 +105,16 @@ public sealed class UploadIdempotencyTests
             (await store.ReserveAsync(tenant, "actor-A", Key, Digest, id)).State);
         await new PgUploadIntentLedger(db.App).RecordAsync(tenant, id, key);
 
+        await using (var expiry = db.Admin.CreateCommand(
+            "UPDATE upload_intents SET created_at_utc=now()-interval '2 hours', " +
+            "lease_expires_at_utc=now()-interval '1 minute' " +
+            "WHERE tenant_id=@tenant AND document_id=@id"))
+        {
+            expiry.Parameters.AddWithValue("tenant", tenant.Value);
+            expiry.Parameters.AddWithValue("id", id);
+            Assert.Equal(1, await expiry.ExecuteNonQueryAsync());
+        }
+
         var blobs = new InMemoryBlobs();
         await blobs.PutAsync(key, new MemoryStream("%PDF-1.7"u8.ToArray()), "application/pdf");
         var worker = new PgUploadReconciler(db.Recovery, blobs);
