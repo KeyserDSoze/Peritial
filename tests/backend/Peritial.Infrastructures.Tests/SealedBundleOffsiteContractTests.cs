@@ -79,12 +79,17 @@ public sealed class SealedBundleOffsiteContractTests
             await SealedBundleOffsite.UploadAsync(
                 encrypted, client, bucket, id, aesKey, disposableUnprotectedDemo: true);
 
-            // A second upload must not replace ciphertext, even if exactly equal.
+            // Production download also fails closed without proven Object Lock.
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                SealedBundleOffsite.UploadAsync(encrypted, client, bucket, id, aesKey));
+                SealedBundleOffsite.DownloadAsync(client, bucket, id, retrieved, aesKey));
+            Assert.False(Directory.Exists(retrieved));
+            // The disposable demo still rejects existing destination keys.
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                SealedBundleOffsite.UploadAsync(encrypted, client, bucket, id, aesKey,
+                    disposableUnprotectedDemo: true));
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 SealedBundleOffsite.DownloadAsync(client, bucket, id, retrieved,
-                    RandomNumberGenerator.GetBytes(32)));
+                    RandomNumberGenerator.GetBytes(32), disposableUnprotectedDemo: true));
             Assert.False(Directory.Exists(retrieved));
 
             // A copied bundle cannot impersonate another backup ID even when
@@ -111,7 +116,7 @@ public sealed class SealedBundleOffsiteContractTests
                 });
             }
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                SealedBundleOffsite.DownloadAsync(client, bucket, replayId, retrieved, aesKey));
+                SealedBundleOffsite.DownloadAsync(client, bucket, replayId, retrieved, aesKey, disposableUnprotectedDemo: true));
             Assert.False(Directory.Exists(retrieved));
 
             // An incomplete upload without the last-write completion marker
@@ -123,7 +128,7 @@ public sealed class SealedBundleOffsiteContractTests
             });
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 SealedBundleOffsite.DownloadAsync(client, bucket, incompleteId,
-                    retrieved, aesKey));
+                    retrieved, aesKey, disposableUnprotectedDemo: true));
             Assert.False(Directory.Exists(retrieved));
 
             // Same-length ciphertext corruption after the remote upload is
@@ -137,11 +142,11 @@ public sealed class SealedBundleOffsiteContractTests
             damaged[0] ^= 0x20;
             await PutAsync(client, bucket, remoteCipher, damaged);
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                SealedBundleOffsite.DownloadAsync(client, bucket, id, retrieved, aesKey));
+                SealedBundleOffsite.DownloadAsync(client, bucket, id, retrieved, aesKey, disposableUnprotectedDemo: true));
             Assert.False(Directory.Exists(retrieved));
             await PutAsync(client, bucket, remoteCipher, clean);
 
-            await SealedBundleOffsite.DownloadAsync(client, bucket, id, retrieved, aesKey);
+            await SealedBundleOffsite.DownloadAsync(client, bucket, id, retrieved, aesKey, disposableUnprotectedDemo: true);
             Assert.Equal(
                 await File.ReadAllBytesAsync(Path.Combine(encrypted, "payload", "00000000.enc")),
                 await File.ReadAllBytesAsync(Path.Combine(retrieved, "payload", "00000000.enc")));
@@ -150,7 +155,7 @@ public sealed class SealedBundleOffsiteContractTests
                 await File.ReadAllBytesAsync(Path.Combine(unsealed, "postgres", "peritial.dump")));
 
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                SealedBundleOffsite.DownloadAsync(client, bucket, id, retrieved, aesKey));
+                SealedBundleOffsite.DownloadAsync(client, bucket, id, retrieved, aesKey, disposableUnprotectedDemo: true));
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 SealedBundleOffsite.UploadAsync(encrypted, client, bucket, "../unsafe", aesKey,
                     disposableUnprotectedDemo: true));
