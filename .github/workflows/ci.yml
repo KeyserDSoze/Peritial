@@ -109,7 +109,7 @@ jobs:
             --logger "console;verbosity=normal"
       - name: Verify archive export/restore on independent PostgreSQL and SeaweedFS servers
         run: |
-          docker compose -f docker/compose.yml --profile recovery-test up -d postgres-restore seaweedfs-restore
+          docker compose -f docker/compose.yml --profile recovery-test up -d postgres-restore seaweedfs-restore seaweedfs-backup
           for i in $(seq 1 40); do
             if docker compose -f docker/compose.yml exec -T postgres-restore \
               pg_isready -h 127.0.0.1 -U peritial -d peritial >/dev/null 2>&1; then break; fi
@@ -118,9 +118,10 @@ jobs:
           docker compose -f docker/compose.yml --profile test --profile recovery-test run -T --rm \
             -e PERITIAL_TEST_S3_ENDPOINT=http://seaweedfs:8333 \
             -e PERITIAL_TEST_S3_RESTORE_ENDPOINT=http://seaweedfs-restore:8333 \
+            -e PERITIAL_TEST_OFFSITE_S3_ENDPOINT=http://seaweedfs-backup:8333 \
             -e PERITIAL_TEST_POSTGRES_RESTORE="Host=postgres-restore;Port=5432;Database=peritial;Username=peritial;Password=local-only-postgres" \
             tests dotnet test tests/backend/Peritial.Infrastructures.Tests/Peritial.Infrastructures.Tests.csproj \
-            --filter "FullyQualifiedName~ObjectRecoveryArchiveContractTests" \
+            --filter "FullyQualifiedName~ObjectRecoveryArchiveContractTests|FullyQualifiedName~SealedBundleOffsiteContractTests" \
             --logger "console;verbosity=normal"
       - name: Verify durable REST/MCP audit via privileged CI PostgreSQL role
         run: |

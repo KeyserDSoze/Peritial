@@ -17,7 +17,7 @@ trap cleanup EXIT
 
 # The live API/recovery worker must not mutate DB or S3 during the backup.
 docker compose -f docker/compose.yml stop api
-docker compose -f docker/compose.yml --profile recovery-test up -d postgres-restore seaweedfs-restore
+docker compose -f docker/compose.yml --profile recovery-test up -d postgres-restore seaweedfs-restore seaweedfs-backup
 ready=false
 for i in $(seq 1 60); do
   if docker compose -f docker/compose.yml --profile recovery-test exec -T postgres-restore \
@@ -47,6 +47,12 @@ docker compose -f docker/compose.yml --profile test --profile recovery-test run 
   -e PERITIAL_BUNDLE_POSTGRES_DUMP=/recovery/peritial.dump \
   -e PERITIAL_BUNDLE_DIR=/recovery/sealed \
   -e PERITIAL_BUNDLE_UNSEAL_DIR=/recovery/unsealed \
+  -e PERITIAL_BUNDLE_DOWNLOAD_DIR=/recovery/replicated \
+  -e PERITIAL_OFFSITE_S3_ENDPOINT=http://seaweedfs-backup:8333 \
+  -e PERITIAL_OFFSITE_S3_BUCKET=peritial \
+  -e PERITIAL_OFFSITE_S3_ACCESS_KEY=localminio \
+  -e PERITIAL_OFFSITE_S3_SECRET_KEY=local-only-minio-secret \
+  -e PERITIAL_OFFSITE_CI_HTTP=DISPOSABLE_TEST_ONLY \
   tests sh -ec '
     dd if=/dev/urandom of=/recovery/s3-hmac.key bs=32 count=1 status=none
     dd if=/dev/urandom of=/recovery/aes-gcm.key bs=32 count=1 status=none
@@ -84,6 +90,22 @@ docker compose -f docker/compose.yml --profile test --profile recovery-test run 
     dotnet run --project scripts/recovery/Peritial.RecoveryBundle -- seal
     test ! -e /recovery/sealed/postgres/peritial.dump
     test ! -e /recovery/sealed/s3/manifest.json
+
+    # A third dedicated SeaweedFS server receives ONLY encrypted bundle
+    # bytes; the remote commit marker is the LAST write. Download into
+    # a separate directory and use that copy for every restore step.
+    export PERITIAL_OFFSITE_BACKUP_ID="$(tr -d "-" </proc/sys/kernel/random/uuid)"
+    export PERITIAL_BUNDLE_CONFIRM=REMOTE_ENCRYPTED_UPLOAD
+    dotnet run --project scripts/recovery/Peritial.RecoveryBundle -- push-sealed
+    if dotnet run --project scripts/recovery/Peritial.RecoveryBundle -- push-sealed; then
+      echo "Remote encrypted bundle was unexpectedly overwritten" >&2; exit 1
+    fi
+    export PERITIAL_BUNDLE_CONFIRM=ISOLATED_ENCRYPTED_DOWNLOAD
+    dotnet run --project scripts/recovery/Peritial.RecoveryBundle -- pull-sealed
+    test -s /recovery/replicated/index.hmac
+    export PERITIAL_BUNDLE_DIR=/recovery/replicated
+    # Ensure no original encrypted source participates in the restore.
+    rm -rf /recovery/sealed
 
     export PERITIAL_BUNDLE_CONFIRM=ISOLATED_RESTORE
     dd if=/dev/urandom of=/recovery/wrong-gcm.key bs=32 count=1 status=none

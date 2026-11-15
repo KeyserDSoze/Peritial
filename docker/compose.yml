@@ -31,6 +31,17 @@ services:
       S3_BUCKET: peritial
       WEED_ADMIN_PASSWORD: local-only-admin
     volumes: ["seaweedrestoredata:/data"]
+  # Independent encrypted-backup server used ONLY in recovery CI; not the
+  # application's S3 store and not the restore destination bucket.
+  seaweedfs-backup:
+    profiles: ["recovery-test"]
+    image: chrislusf/seaweedfs:latest
+    environment:
+      AWS_ACCESS_KEY_ID: localminio
+      AWS_SECRET_ACCESS_KEY: local-only-minio-secret
+      S3_BUCKET: peritial
+      WEED_ADMIN_PASSWORD: local-only-admin
+    volumes: ["seaweedbackupdata:/data"]
   azurite:
     profiles: ["azure-test"]
     image: mcr.microsoft.com/azure-storage/azurite:3.37.0
@@ -100,3 +111,4 @@ volumes:
   seaweeddata:
   pgrestoredata:
   seaweedrestoredata:
+  seaweedbackupdata:
