@@ -15,7 +15,7 @@ Il comando `capture` costruisce un inventario ordinato dei documenti referenziat
 - .NET 10 e accesso al repository `main` alla stessa release del DB; PostgreSQL 17+ e bucket S3 SeaweedFS compatibile. Per Azure Blob serve un implementazione distinta.
 - Finestra di manutenzione: **fermare ogni writer** REST/MCP, worker di recovery, job schedulati e processi che scrivono al bucket; verificare che non ci siano operazioni in volo. Conservare separatamente il backup PostgreSQL `pg_dump -Fc` e **una copia durabile, cifrata e verificabile di tutti gli oggetti del bucket** a un punto concordato.
 - Credenziale PostgreSQL con SELECT su `documents`, `upload_intents` e `upload_request_keys`, LOCK su quelle tabelle e lettura di tutti i tenant senza filtro FORCE RLS (ruolo audit dedicato `BYPASSRLS` e senza DML, creato dall'amministratore e disabilitato dopo la manutenzione; in CI si usa il superuser demo). **Non** usare il ruolo applicativo `peritial_app`. Credenziale S3 di **sola lettura** per il bucket/oggetti.
-- Directory del manifest privata e già esistente; il comando salva il file con permessi 0600 su Unix, tramite file temporaneo e rename senza overwrite. Non inserirlo in Git, nei log o nel bucket pubblico. Sono presenti chiavi e identificativi riservati.
+- Directory del manifest privata e già esistente; il comando crea il file temporaneo con permessi **0600 fin dall'apertura** su Unix, poi usa rename senza overwrite. Non inserirlo in Git, nei log o nel bucket pubblico. Sono presenti chiavi e identificativi riservati.
 
 Impostare nel processo operatore (secret manager o ambiente protetto):
 
@@ -45,12 +45,14 @@ Solo dopo esito positivo controllare anche i record di audit, versioni schema, R
 
 ## Evidenze di test e limiti
 
-La suite `ObjectRecoveryCheckpointContractTests` usa PostgreSQL + SeaweedFS reali in Compose, con schema DB e chiave S3 isolati, e verifica:
-- manifest generato e validazione dei byte originali;
+La suite `ObjectRecoveryCheckpointContractTests` usa PostgreSQL + SeaweedFS reali in Compose, con schema DB e chiavi S3 isolati, e verifica:
+- manifest generato per **due tenant distinti** e validazione dei byte originali;
 - oggetto mancante rifiutato;
 - checksum diverso **a dimensione identica** rifiutato;
 - documento rimosso dal database rispetto al manifest rifiutato;
-- upload intent pendente rifiutato;
+- upload intent e chiave di idempotenza pendenti rifiutati;
+- riutilizzo della stessa chiave S3 tra tenant rifiutato;
+- credenziali applicative filtrate da FORCE RLS rifiutate;
 - versione manifest sconosciuta rifiutata.
 
 La CI backend compila anche il CLI ma non esegue un export di byte S3. Mancano: snapshot/restore realmente coordinati PostgreSQL+SeaweedFS/Azure, copie dei blob, test S3→S3 di migrazione, autenticazione del manifest, ripristino Keycloak, backup offsite, retention e recovery con failover. Per questi motivi #6/#18/#21 **restano aperte**.
