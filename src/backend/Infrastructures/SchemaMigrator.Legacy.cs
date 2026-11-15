@@ -1,4 +1,5 @@
 using Npgsql;
+using System.Text.Json;
 
 namespace Peritial.Infrastructures;
 
@@ -146,6 +147,24 @@ public static partial class SchemaMigrator
         if (!rolesSafe)
             throw new InvalidOperationException("Required independent nonprivileged database roles are missing or unsafe.");
 
+        // Do not proceed on an empty/partial database or resolve unrelated
+        // objects from search_path. An operator must first restore missing schema.
+        bool complete;
+        await using (var check = new NpgsqlCommand(
+            """
+            SELECT count(*)=5 FROM pg_class c
+            JOIN pg_namespace n ON n.oid=c.relnamespace
+            WHERE n.nspname=@schema AND c.relkind='r'
+              AND c.relname IN
+              ('perizie','documents','security_audit','upload_intents','upload_request_keys')
+            """, conn, tx))
+        {
+            check.Parameters.AddWithValue("schema", target);
+            complete = (bool)(await check.ExecuteScalarAsync(ct))!;
+        }
+        if (!complete)
+            throw new InvalidOperationException("Legacy schema missing one or more V001 tables.");
+
         // NOWAIT: fail rather than racing the application or blocking an
         // incident response. The operator must have stopped all writers.
         await using (var freeze = new NpgsqlCommand(
@@ -194,9 +213,19 @@ public static partial class SchemaMigrator
         }
 
         if (!string.Equals(observed, expected, StringComparison.Ordinal))
+        {
+            // Safe diagnostics: category names only, never tenant rows, tokens,
+            // full SQL, connection strings, or policy expressions.
+            using var original = JsonDocument.Parse(observed);
+            using var reference = JsonDocument.Parse(expected);
+            var differences = original.RootElement.EnumerateObject()
+                .Where(part => part.Value.GetRawText() !=
+                    reference.RootElement.GetProperty(part.Name).GetRawText())
+                .Select(part => part.Name);
             throw new InvalidOperationException(
-                "Legacy schema differs from V001 (tables, columns, indexes, RLS, ACL, " +
-                "constraints, policies, triggers or functions). Manual review required.");
+                "Legacy schema differs from V001 in catalog categories: " +
+                string.Join(", ", differences) + ". Manual review required.");
+        }
 
         await using (var journal = new NpgsqlCommand(
             """
