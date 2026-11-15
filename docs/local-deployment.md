@@ -28,7 +28,7 @@ Il realm dimostrativo importa intenzionalmente soltanto gli scope `peritial.read
 
 Il database viene inizializzato con `scripts/db/001_init.sql` (tabelle e policy `ENABLE/FORCE RLS`) e, **solo nella configurazione locale**, con `scripts/db/002_dev_app_role.sql` per l'account `peritial_app` a password di esempio. L'API usa il ruolo applicativo ristretto, non il superuser `peritial`. `Database:Bootstrap` resta disattivato nell'API.
 
-Dopo upgrade di un volume PostgreSQL preesistente, gli script in `docker-entrypoint-initdb.d` **non vengono rieseguiti**. Applicare lo schema e il provisioning del ruolo da un amministratore con backup prima dell'upgrade; cancellare i volumi solo se contengono dati effimeri. Il provisioning e le migrazioni versionate per installazioni persistenti appartengono alla issue #6.
+Dopo upgrade di un volume PostgreSQL preesistente, gli script in `docker-entrypoint-initdb.d` **non vengono rieseguiti**. Applicare lo schema e il provisioning del ruolo da un amministratore con backup prima dell'upgrade; cancellare i volumi solo se contengono dati effimeri. Il nuovo runner versionato per **database vuoti** è documentato in `docs/database-migrations.md` (ADR 0015); l'adozione di volumi persistenti già inizializzati è tuttora bloccata in sicurezza e resta nella issue #6.
 
 ## Scansione antivirus locale
 
@@ -40,7 +40,7 @@ Lo schema crea `upload_intents` e due login **distinti** solo in sviluppo: `peri
 
 ## Lease e restart del worker
 
-Il bootstrap locale è compatibile con schema preesistente e aggiunge `lease_expires_at_utc` a `upload_intents`, con grant `UPDATE (lease_expires_at_utc)` riservato al ruolo applicativo. Prima dell'upgrade di una istanza con volume persistente, usare una migrazione verificata e backup del DB, senza cancellare i dati: il progetto non dispone ancora di migrazioni versionate (#6). In produzione monitorare rinnovi falliti e backlog del worker, non ridurre l'ora di grazia senza verificare PUT lunghi. In CI Compose viene eseguito un riavvio forzato SIGKILL con seed dell'orfano per verificare la persistenza.
+Il bootstrap locale è compatibile con schema preesistente e aggiunge `lease_expires_at_utc` a `upload_intents`, con grant `UPDATE (lease_expires_at_utc)` riservato al ruolo applicativo. Prima dell'upgrade di una istanza con volume persistente, usare una migrazione verificata e backup del DB, senza cancellare i dati: la base delle migrazioni versionate esiste per DB nuovi, ma la baseline verificata e l'upgrade dei volumi legacy non sono ancora supportati (#6; `docs/database-migrations.md`). In produzione monitorare rinnovi falliti e backlog del worker, non ridurre l'ora di grazia senza verificare PUT lunghi. In CI Compose viene eseguito un riavvio forzato SIGKILL con seed dell'orfano per verificare la persistenza.
 
 ## Fault injection interruzione PUT (#21)
 
