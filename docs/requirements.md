@@ -14,3 +14,5 @@ Una funzionalità è completata solo quando dispone di: contratto API, modello/v
 
 ## Non obiettivi del primo vertical slice
 Non simulare o dichiarare implementati import XML Classic/Accertatore, report Word/PDF, fatturazione, email, KPI e riconciliazione dati del legacy: seguono iterazioni TDD dedicate.
+
+Per upload file, consultare docs/ingestion.md: la validazione dei contenuti, i limiti di byte effettivi e le autorizzazioni condivise REST/MCP sono parte dei requisiti di sicurezza (#2). Antivirus/quarantena, storage rollback e audit sono ancora da completare (#5).
