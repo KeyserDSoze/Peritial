@@ -167,6 +167,8 @@ jobs:
           dotnet-version: "10.0.x"
       - name: PostgreSQL backup and restore to a distinct new server
         run: bash tests/backup/run_postgres_restore.sh
+      - name: Legacy PostgreSQL baseline with verified backup and data preservation
+        run: bash tests/backup/run_legacy_adoption.sh
   terraform:
     runs-on: ubuntu-latest
     steps:
