@@ -10,7 +10,7 @@ Backend .NET 10 DDD (Domains / Business / Infrastructures / Applications), API R
 - API: http://localhost:8080/health/live
 - MCP: http://localhost:8080/mcp
 - docker compose -f docker/compose.yml --profile test run --rm tests
-- cd src/frontend && npm install && npx playwright install chromium && npm run test:e2e
+- cd src/frontend && npm ci && npx playwright install chromium && npm run test:e2e
 
 **Stato:** primo vertical slice perizie/ingestion, con E2E OAuth Keycloak, API REST e catalogo MCP verificati; NON è una riscrittura funzionalmente completa di death. Configurazione e credenziali Compose solo dimostrative, non per produzione.
 
