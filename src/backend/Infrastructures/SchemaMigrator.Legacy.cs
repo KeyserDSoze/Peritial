@@ -25,7 +25,9 @@ public static partial class SchemaMigrator
             WHERE n.nspname=@schema
               AND c.relkind IN ('r','p','v','m','f','S')
           ), '[]'::jsonb),
-          -- Physical attnum holes (DROP COLUMN tombstones) are not semantic.\n          -- The aggregate still preserves the relative order of live columns.\n          'columns', COALESCE((
+          -- Physical attnum holes (DROP COLUMN tombstones) are not semantic.
+          -- The aggregate still preserves the relative order of live columns.
+          'columns', COALESCE((
             SELECT jsonb_agg(jsonb_build_array(
               c.relname, a.attname, format_type(a.atttypid,a.atttypmod),
               a.attnotnull, a.attidentity::text, a.attgenerated::text,
