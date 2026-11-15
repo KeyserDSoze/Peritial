@@ -4,7 +4,10 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 dir="$(mktemp -d)"
-cleanup() { rm -rf "$dir"; }
+# The isolated SDK container owns the unsealed directories as root with 0700.
+# GitHub-hosted Ubuntu runners require sudo to read/remove those private paths.
+# Never relax the directory ACLs to make a test pass.
+cleanup() { sudo rm -rf -- "$dir"; }
 trap cleanup EXIT
 
 # The live API/recovery worker must not mutate DB or S3 during the backup.
@@ -95,9 +98,9 @@ docker compose -f docker/compose.yml --profile test --profile recovery-test run 
 
 # Only NOW use the independently decrypted PostgreSQL backup to provision
 # the new database. The archive bytes are not recovered from source S3 again.
-docker compose -f docker/compose.yml --profile recovery-test cp \
+sudo docker compose -f docker/compose.yml --profile recovery-test cp \
   "$dir/unsealed/postgres/peritial.dump" postgres-restore:/tmp/peritial.dump
-docker compose -f docker/compose.yml --profile recovery-test cp \
+sudo docker compose -f docker/compose.yml --profile recovery-test cp \
   "$dir/unsealed/postgres/peritial.dump.sha256" postgres-restore:/tmp/peritial.dump.sha256
 
 # pg_dump contains the ACLs but not cluster-global roles. No app login.
