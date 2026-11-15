@@ -30,3 +30,7 @@ Oltre alla connessione applicativa `ConnectionStrings__Postgres`, l'API ora rich
 ## Nuova tabella idempotenza upload (#21)
 
 È necessario migrare `upload_request_keys` con FORCE RLS e concedere a `peritial_app` accesso tenant-scoped e al worker recovery i soli campi `tenant_id`, `document_id` e `status` (mai digest di chiavi o soggetti). La tabella delle chiavi completate richiede retention e backup coordinati con la finestra dei retry client. Non usare la configurazione demo in produzione e non dichiarare il Terraform pronto prima delle migrazioni e dei segreti del worker.
+
+## Lease PostgreSQL per upload lenti (#21)
+
+L'upgrade deve aggiungere `upload_intents.lease_expires_at_utc` e il grant colonna `UPDATE (lease_expires_at_utc)` a `peritial_app`, mantenendo FORCE RLS. Una nuova versione applicativa senza questa migrazione rifiuterà il rinnovo e bloccherà gli upload: migrare prima e verificare backup/restore. Worker e API usano l'orologio PostgreSQL per determinare la scadenza. Le prove SIGKILL in Compose non sostituiscono le prove Azure Blob con reti interrotte e failover di più repliche (#17/#21).

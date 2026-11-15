@@ -1,3 +1,5 @@
+> Aggiornamento: per non recuperare upload ancora attivi oltre l'ora di grazia, ora si usa anche una lease rinnovabile, vedi ADR 0013. Il worker interviene solo quando intenzione vecchia **e** lease scaduta.
+
 # ADR 0011 — Intenzione di upload e reconciler con lock anti-race
 
 Stato: adottata nella stack Compose e nei test PostgreSQL; gate Azure/on-prem produzione ancora aperti (2026-11-15).

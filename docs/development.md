@@ -41,3 +41,7 @@ L'API richiede `Malware:Clamd:Host` e porta TCP privata (default 3310), con time
 ## E2E idempotenza upload (#21)
 
 `UploadIdempotencyTests` usa PostgreSQL reale con richieste concorrenti, identità separate, payload mismatch, replay con audit unico, rilascio su errore e worker recovery. `UploadFingerprintTests` verifica il digest di contenuto e metadati. Nel test Compose Playwright usa la medesima chiave in REST upload, retry REST e MCP ingest_file: stesso UUID, nessuna seconda riga audit; un payload differente riceve 409. L'asserzione SQL CI verifica due documenti/azioni di audit per i due browser, non sei eventi da retry.
+
+## Upload lease e prova riavvio reale (#21)
+
+`UploadLeaseTests` prova FORCE RLS e lease valida/scaduta usando PostgreSQL; `UploadLeaseHeartbeatTests` prova il rinnovo periodico durante uno storage PUT bloccato e l'annullamento fail-closed se non è più possibile estendere il lease. Nel job Compose `UploadRestartContractTests` ha due fasi: `docker compose kill --signal SIGKILL api`, seed di un oggetto reale SeaweedFS e di un intento PostgreSQL scaduto mentre API è ferma, poi `docker compose start api`, polling finché l'intento non viene rimosso e verifica finale che il blob non esista e che la key idempotente sia stata liberata. Nessun reset dei volumi per il recovery. Non equiparare questa prova a un HTTP upload spezzato *durante* PUT. Vedi ADR 0013.

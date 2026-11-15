@@ -36,3 +36,7 @@ Compose avvia un demone ClamAV `clamd` con immagini/firme pre-caricate, connessi
 ## Recupero durevole degli upload locali (#21)
 
 Lo schema crea `upload_intents` e due login **distinti** solo in sviluppo: `peritial_app` per le richieste e `peritial_recovery` per il worker. `UploadRecovery__ConnectionString` deve usare il secondo ruolo con privilegi ristretti, mai le credenziali amministrative. Il worker controlla gli intenti più vecchi di un'ora una volta al minuto (max 20 per ciclo), usa lock PostgreSQL per evitare doppi cleanup e verifica che non esista già un documento referenziante. In dev si può controllare *solo il conteggio* dei pendenti con `docker compose -f docker/compose.yml exec -T postgres psql -U peritial -d peritial -Atc 'SELECT count(*) FROM upload_intents;'`. Un volume preesistente richiede migrazione e aggiornamento del ruolo prima di avviare l'API: non eliminare volumi contenenti dati reali.
+
+## Lease e restart del worker
+
+Il bootstrap locale è compatibile con schema preesistente e aggiunge `lease_expires_at_utc` a `upload_intents`, con grant `UPDATE (lease_expires_at_utc)` riservato al ruolo applicativo. Prima dell'upgrade di una istanza con volume persistente, usare una migrazione verificata e backup del DB, senza cancellare i dati: il progetto non dispone ancora di migrazioni versionate (#6). In produzione monitorare rinnovi falliti e backlog del worker, non ridurre l'ora di grazia senza verificare PUT lunghi. In CI Compose viene eseguito un riavvio forzato SIGKILL con seed dell'orfano per verificare la persistenza.
