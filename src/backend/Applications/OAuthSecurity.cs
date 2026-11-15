@@ -6,10 +6,10 @@ namespace Peritial.Applications;
 public static class OAuthSecurity
 {
     public static bool HasSignedTenantAndSubject(ClaimsPrincipal? principal) =>
-        principal?.Identity?.IsAuthenticated == true &&
-        Guid.TryParse(principal.FindFirst("tenant_id")?.Value, out var tenant) &&
+        Guid.TryParse(principal?.FindFirst("tenant_id")?.Value, out var tenant) &&
         tenant != Guid.Empty &&
-        !string.IsNullOrWhiteSpace(principal.FindFirst("sub")?.Value);
+        !string.IsNullOrWhiteSpace(principal?.FindFirst("sub")?.Value ??
+                                   principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value);
 
     public static bool HasScope(ClaimsPrincipal principal, string expected) =>
         principal.FindAll("scope").Concat(principal.FindAll("scp"))

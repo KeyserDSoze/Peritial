@@ -50,7 +50,18 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 // Reject structurally valid tokens lacking a signed tenant/subject
                 // at authentication time, before endpoint selection or tool dispatch.
                 if (!OAuthSecurity.HasSignedTenantAndSubject(context.Principal))
-                    context.Fail("A valid signed tenant_id and sub claim are required.");
+                {
+                    var principal = context.Principal;
+                    context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>()
+                        .CreateLogger("Peritial.OAuth")
+                        .LogWarning(
+                            "JWT rejected (claims only): tenantClaim={TenantPresent}, subClaim={SubPresent}, nameIdentifier={NamePresent}, authenticated={Authenticated}",
+                            principal?.HasClaim(claim => claim.Type == "tenant_id") == true,
+                            principal?.HasClaim(claim => claim.Type == "sub") == true,
+                            principal?.HasClaim(claim => claim.Type == System.Security.Claims.ClaimTypes.NameIdentifier) == true,
+                            principal?.Identity?.IsAuthenticated == true);
+                    context.Fail("A valid signed tenant_id and subject claim are required.");
+                }
                 return Task.CompletedTask;
             },
             OnChallenge = context =>
