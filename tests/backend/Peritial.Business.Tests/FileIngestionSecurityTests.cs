@@ -196,6 +196,7 @@ public sealed class FileIngestionSecurityTests
             await content.CopyToAsync(memory, ct);
             LastBytes = memory.ToArray();
         }
+        public Task DeleteAsync(string key, CancellationToken ct = default) => Task.CompletedTask;
     }
 
     private sealed class NonSeekable(byte[] bytes) : Stream

@@ -24,6 +24,8 @@ public interface IPeriziaRepository
 public interface IObjectStore
 {
     Task PutAsync(string key, Stream content, string contentType, CancellationToken cancellationToken = default);
+    // Idempotent removal of a possibly partially uploaded object, for compensation.
+    Task DeleteAsync(string key, CancellationToken cancellationToken = default);
 }
 
 public interface IDocumentRepository

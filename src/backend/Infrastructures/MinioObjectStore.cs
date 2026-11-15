@@ -31,5 +31,15 @@ public sealed class MinioObjectStore : IObjectStore, IDisposable
         }, ct);
     }
 
+    public async Task DeleteAsync(string key, CancellationToken ct = default)
+    {
+        // S3 DeleteObject is idempotent when the key no longer exists.
+        await _client.DeleteObjectAsync(new DeleteObjectRequest
+        {
+            BucketName = _bucket,
+            Key = key
+        }, ct);
+    }
+
     public void Dispose() => _client.Dispose();
 }

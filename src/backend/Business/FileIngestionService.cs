@@ -71,14 +71,36 @@ public sealed class FileIngestionService(
 
         var id = Guid.NewGuid();
         var key = DocumentKeys.For(context.TenantId, id, safeName);
-        await objects.PutAsync(key, buffer, contentType, ct);
-
-        var record = new DocumentRecord(id, context.TenantId, periziaId, safeName,
-            contentType, total, key, DateTime.UtcNow);
-        await documents.AddAuditedAsync(record, new SecurityAuditEvent(
-            Guid.NewGuid(), context.TenantId, context.Subject, "document.ingest",
-            "succeeded", id, DateTime.UtcNow), ct);
-        return new DocumentDto(id, periziaId, safeName, contentType, total);
+        try
+        {
+            // The object may have been partially persisted even if PutAsync throws.
+            await objects.PutAsync(key, buffer, contentType, ct);
+            var record = new DocumentRecord(id, context.TenantId, periziaId, safeName,
+                contentType, total, key, DateTime.UtcNow);
+            await documents.AddAuditedAsync(record, new SecurityAuditEvent(
+                Guid.NewGuid(), context.TenantId, context.Subject, "document.ingest",
+                "succeeded", id, DateTime.UtcNow), ct);
+            return new DocumentDto(id, periziaId, safeName, contentType, total);
+        }
+        catch (Exception ingestionError)
+        {
+            // Best-effort synchronous compensation; use a separate bounded token.
+            // A canceled HTTP/MCP request must not cancel orphan cleanup.
+            using var cleanupTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            try
+            {
+                await objects.DeleteAsync(key, cleanupTimeout.Token);
+            }
+            catch (Exception cleanupError)
+            {
+                // Preserve both errors for operations. Never claim upload succeeded.
+                // Crash safety / durable retry of cleanup belongs to the outbox (#21).
+                throw new AggregateException(
+                    "Ingestion failed and object cleanup could not finish; reconciliation required.",
+                    ingestionError, cleanupError);
+            }
+            throw;
+        }
     }
 
     public async Task<DocumentDto> IngestBase64Async(

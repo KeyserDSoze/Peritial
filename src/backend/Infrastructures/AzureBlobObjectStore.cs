@@ -31,4 +31,11 @@ public sealed class AzureBlobObjectStore : IObjectStore
             HttpHeaders = new BlobHttpHeaders { ContentType = contentType }
         }, ct);
     }
+
+    public async Task DeleteAsync(string key, CancellationToken ct = default)
+    {
+        // DeleteIfExists is safe to retry; also remove snapshots if present.
+        await _container.GetBlobClient(key).DeleteIfExistsAsync(
+            DeleteSnapshotsOption.IncludeSnapshots, cancellationToken: ct);
+    }
 }
