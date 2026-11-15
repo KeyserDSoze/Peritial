@@ -42,6 +42,34 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     expect(goodFile.status(), await goodFile.text()).toBe(201);
     expect((await goodFile.json() as {fileName: string}).fileName).toBe("valid.pdf");
 
+    // Body-size enforcement is performed by ASP.NET, not only by the business service.
+    const tooLarge = await request.post("http://localhost:8080/api/files", {
+      headers: { Authorization: "Bearer " + accessToken },
+      multipart: {
+        file: { name: "oversized.pdf", mimeType: "application/pdf",
+          buffer: Buffer.concat([pdf, Buffer.alloc(25 * 1024 * 1024)]) }
+      }
+    });
+    expect(tooLarge.status()).toBe(413);
+
+    const invalidMcp = await request.post("http://localhost:8080/mcp", {
+      headers: {
+        Authorization: "Bearer " + accessToken,
+        Accept: "application/json,text/event-stream",
+        "Content-Type": "application/json"
+      },
+      data: {
+        jsonrpc: "2.0", id: 22, method: "tools/call",
+        params: { name: "ingest_file", arguments: {
+          fileName: "spoof.pdf", contentType: "application/pdf",
+          base64: Buffer.from("not really a PDF").toString("base64")
+        } }
+      }
+    });
+    expect(invalidMcp.ok(), await invalidMcp.text()).toBeTruthy();
+    expect(await invalidMcp.text()).toContain('"isError":true');
+
+
 
     const unauthenticated = await request.post("http://localhost:8080/mcp", {
       headers: {"Accept": "application/json,text/event-stream", "Content-Type": "application/json"},
