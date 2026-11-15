@@ -25,6 +25,8 @@ jobs:
         with:
           dotnet-version: "10.0.x"
       - run: dotnet restore Peritial.slnx
+      - name: Build API/MCP entrypoint explicitly
+        run: dotnet build src/backend/Applications/Peritial.Applications.csproj --configuration Release --no-restore
       - run: dotnet test Peritial.slnx --no-restore --configuration Release
         env:
           PERITIAL_TEST_POSTGRES: Host=localhost;Port=5432;Database=peritial;Username=peritial;Password=local-only-postgres

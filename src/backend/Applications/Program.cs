@@ -36,8 +36,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             options.BackchannelHttpHandler = new OidcDevelopmentBackchannelHandler(authIssuer, internalOrigin);
         }
         options.RequireHttpsMetadata = builder.Configuration.GetValue("Auth:RequireHttpsMetadata", true);
-        if (builder.Configuration["Auth:MetadataAddress"] is { Length: > 0 } metadata)
-            options.MetadataAddress = metadata;
+        if (builder.Configuration["Auth:MetadataAddress"] is { Length: > 0 } issuerMetadataAddress)
+            options.MetadataAddress = issuerMetadataAddress;
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true, ValidateAudience = true, ValidateLifetime = true,
