@@ -14,3 +14,7 @@ Le operazioni perizia.create, perizia.assign, perizia.advance e la persistenza d
 
 **Il file fisico non è atomico con PostgreSQL.** La FileIngestionService scrive prima l'oggetto S3/Azure Blob: un errore del successivo commit PostgreSQL, una disconnessione o un crash possono lasciare un oggetto orfano. Non presentare il percorso come totalmente transazionale o idempotente: prima della produzione occorrono staging/quarantena, outbox/compensazione, retry idempotenti e fault injection end-to-end (#5/#21/#6). Inoltre i metodi legacy AddAsync/UpdateAsync esistono per le fixture di test e non devono essere usati per nuove mutazioni applicative senza audit.
 Mancano inoltre retention con immutabilità esterna, audit di ogni futuro use case, tracing/alert e test con Entra e client MCP esterni (#4/#17/#19).
+
+## Compensazione degli oggetti dopo errore (#5/#21)
+
+Il servizio tenta la cancellazione della chiave S3/Azure Blob nuova se PutAsync o il commit metadata/audit lanciano un'eccezione. La cancellazione è idempotente e usa un timeout di 15 secondi distinto dal token richiesta. Un errore del cleanup viene restituito insieme a quello originale per attivare riconciliazione; non esiste ancora un worker che recuperi i file orfani lasciati da crash improvvisi. Gli acknowledgement di commit PostgreSQL persi richiedono riconciliazione prima di cancellare una possibile risorsa già referenziata. Non considerare questo flusso crash-safe o idempotente senza un registro transazionale di intenti e un worker di recovery (ADR 0009 e issue #21).

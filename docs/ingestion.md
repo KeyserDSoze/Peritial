@@ -18,7 +18,8 @@ REST: POST /api/files (multipart file, periziaId opzionale); MCP: tool ingest_fi
 
 ## Residui bloccanti (#5 e #2)
 - Antivirus e quarantena, validazione profonda del contenuto e protezione da zip bomb.
-- Metadata PostgreSQL e audit success sono ora commit/rollback in un'unica transazione RLS, ma l'oggetto S3/Azure Blob è scritto **prima** del commit. Mancano staging/quarantena, compensazione per oggetti orfani, idempotenza/rate limiting e test upload/failure-injection su entrambi gli adapter Azure/S3 (#5/#21).
+- Metadata PostgreSQL + audit success sono atomici sotto RLS. Se PUT dello storage (anche parziale) o commit PostgreSQL fallisce, FileIngestionService tenta di eliminare la chiave appena generata usando IObjectStore.DeleteAsync (implementato per S3/SeaweedFS e Azure Blob); il cleanup ignora la cancellazione della richiesta in ingresso ed è limitato a 15 secondi. In caso di errore del cleanup, l'eccezione aggregata include errore primario ed errore di cancellazione, senza dichiarare successo. I test xUnit coprono upload parziale, errore DB, cancellazione fallita, request cancellata e retry dopo cleanup.
+- Questa compensazione è **best-effort**, non è un outbox. Un crash di processo prima del cleanup lascia comunque un oggetto orfano; un esito di commit DB incerto (ack perso) può rendere pericoloso cancellare senza riconciliare il metadata. Mancano staging/quarantena, antivirus, idempotency key, scansione storage, retry persistente, rate limiting e test reali di entrambi gli adapter Azure/S3 (#5/#21).
 - Introduzione di limite globale di concorrenza/stream su endpoint e verifica REST/MCP attraverso test API reali.
 
 ## Limite HTTP prima del Business

@@ -41,6 +41,23 @@ public sealed class FileIngestionCompensationTests
     }
 
     [Fact]
+    public async Task A_retry_after_failed_commit_does_not_leave_the_previous_orphan()
+    {
+        var (service, store, documents) = NewService();
+        documents.FailCommit = true;
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.IngestAsync("proof.pdf", "application/pdf", new MemoryStream(Pdf), Pdf.Length));
+
+        documents.FailCommit = false;
+        var saved = await service.IngestAsync(
+            "proof.pdf", "application/pdf", new MemoryStream(Pdf), Pdf.Length);
+        Assert.Equal(2, store.Puts);
+        Assert.Equal(1, store.Deletes);
+        Assert.Single(store.BytesByKey);
+        Assert.Equal(saved.Id, Assert.Single(documents.Committed).Id);
+    }
+
+    [Fact]
     public async Task Cleanup_failure_does_not_hide_original_commit_failure()
     {
         var (service, store, documents) = NewService();
