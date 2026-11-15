@@ -115,7 +115,8 @@ public static class SealedBundleOffsite
 
     public static async Task DownloadAsync(
         IAmazonS3 source, string bucket, string backupId,
-        string destinationDirectory, byte[] encryptionKey, CancellationToken ct = default)
+        string destinationDirectory, byte[] encryptionKey, CancellationToken ct = default,
+        bool disposableUnprotectedDemo = false)
     {
         Validate(encryptionKey, bucket, backupId);
         if (!Path.IsPathFullyQualified(destinationDirectory) ||
@@ -124,6 +125,12 @@ public static class SealedBundleOffsite
             throw new InvalidOperationException(
                 "Downloaded encrypted bundle must have a new absolute destination.");
 
+        // Production download must validate WORM policy again. Compliance
+        // default on the bucket alone is not sufficient; check EVERY current
+        // version after authenticating the full transfer inventory.
+        if (!disposableUnprotectedDemo)
+            await OffsiteObjectLockPolicy.RequireCompliantBucketAsync(
+                source, bucket, ct);
         var prefix = Prefix(backupId);
         // No completion marker means a partial/crashed transfer, not a backup.
         var completed = await GetBytesAsync(source, bucket,
@@ -149,6 +156,7 @@ public static class SealedBundleOffsite
         };
         foreach (var item in inventory!.Files)
             expected.Add(prefix + item.Name);
+        var authenticatedKeys = expected.ToArray();
         // Detect unexpected objects, duplicate or stale keys in the snapshot.
         string? continuation = null;
         do
@@ -165,6 +173,16 @@ public static class SealedBundleOffsite
         } while (continuation is not null);
         if (expected.Count != 0)
             throw new InvalidOperationException("Remote encrypted backup is missing objects.");
+
+        // Object Lock protects individual VERSIONS, not key names. Inspect
+        // the current version of each encrypted file and all three markers:
+        // a delete marker or unprotected replacement must not be accepted.
+        if (!disposableUnprotectedDemo)
+        {
+            foreach (var key in authenticatedKeys)
+                await OffsiteObjectLockPolicy.RequireCurrentProtectedVersionAsync(
+                    source, bucket, key, ct);
+        }
 
         var stage = destinationDirectory + ".partial-" + Guid.NewGuid().ToString("N");
         try
