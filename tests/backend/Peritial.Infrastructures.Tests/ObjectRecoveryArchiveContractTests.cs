@@ -2,6 +2,7 @@ using Amazon.Runtime;
 using Amazon.S3;
 using Amazon.S3.Model;
 using Npgsql;
+using System.Security.Cryptography;
 using Peritial.Infrastructures;
 using Xunit;
 
@@ -33,6 +34,8 @@ public sealed class ObjectRecoveryArchiveContractTests
         byte[] first = "%PDF-1.7\nfirst tenant\n%%EOF\n"u8.ToArray();
         byte[] second = "%PDF-1.7\nsecond tenant\n%%EOF\n"u8.ToArray();
         const string bucket = "peritial";
+        var signingKey = RandomNumberGenerator.GetBytes(32);
+        var wrongKey = RandomNumberGenerator.GetBytes(32);
 
         await using var sourceAdmin = NpgsqlDataSource.Create(sourcePg);
         await using var destAdmin = NpgsqlDataSource.Create(destPg);
@@ -76,9 +79,11 @@ public sealed class ObjectRecoveryArchiveContractTests
 
             await PutAsync(original, bucket, keyOne, first);
             await PutAsync(original, bucket, keyTwo, second);
-            var exported = await ObjectRecoveryArchive.ExportAsync(sourceDb, original, bucket, archive);
+            var exported = await ObjectRecoveryArchive.ExportAsync(sourceDb, original, bucket, archive, signingKey);
             Assert.Equal(2, exported.Checkpoint.Documents.Count);
             Assert.Equal(1, exported.ArchiveVersion);
+            var authenticationPath = Path.Combine(archive, "manifest.hmac");
+            Assert.True(File.Exists(authenticationPath));
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 ObjectRecoveryArchive.ExportAsync(sourceDb, original, bucket, archive));
 
@@ -87,7 +92,7 @@ public sealed class ObjectRecoveryArchiveContractTests
             bytes[7] ^= 0x20; // same length; invalid digest
             await File.WriteAllBytesAsync(blob0, bytes);
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                ObjectRecoveryArchive.ImportAsync(destDb, restored, bucket, archive));
+                ObjectRecoveryArchive.ImportAsync(destDb, restored, bucket, archive, signingKey));
             var empty = await restored.ListObjectsV2Async(new ListObjectsV2Request { BucketName = bucket });
             Assert.True(empty.S3Objects is null || empty.S3Objects.Count == 0); // SDK v4 returns null for no keys
 
@@ -105,6 +110,26 @@ public sealed class ObjectRecoveryArchiveContractTests
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 ObjectRecoveryArchive.ImportAsync(destDb, restored, bucket, archive));
             await File.WriteAllBytesAsync(mpath, manifestBytes);
+
+            // The real bytes and matching DB references are not sufficient
+            // without the operator's independent authentication key.
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                ObjectRecoveryArchive.ImportAsync(destDb, restored, bucket, archive, wrongKey));
+            var originalAuthentication = await File.ReadAllBytesAsync(authenticationPath);
+            var alteredAuthentication = originalAuthentication.ToArray();
+            alteredAuthentication[0] = alteredAuthentication[0] == (byte)'a' ? (byte)'b' : (byte)'a';
+            await File.WriteAllBytesAsync(authenticationPath, alteredAuthentication);
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                ObjectRecoveryArchive.ImportAsync(destDb, restored, bucket, archive, signingKey));
+            await File.WriteAllBytesAsync(authenticationPath, originalAuthentication);
+
+            File.Move(authenticationPath, authenticationPath + ".held");
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                ObjectRecoveryArchive.ImportAsync(destDb, restored, bucket, archive, signingKey));
+            File.Move(authenticationPath + ".held", authenticationPath);
+            var noObjects = await restored.ListObjectsV2Async(
+                new ListObjectsV2Request { BucketName = bucket });
+            Assert.True(noObjects.S3Objects is null || noObjects.S3Objects.Count == 0);
 
             var imported = await ObjectRecoveryArchive.ImportAsync(destDb, restored, bucket, archive);
             Assert.Equal(2, imported);
