@@ -117,6 +117,40 @@ jobs:
               "SELECT action,outcome,count(*) FROM security_audit GROUP BY action,outcome ORDER BY action,outcome"
             exit 1
           fi
+      - name: Verify recovery after abrupt API kill against PostgreSQL and real SeaweedFS
+        run: |
+          # The API/worker are stopped with SIGKILL, then an abandoned
+          # uploaded object and expired durable intent are seeded using the
+          # same app role and S3 adapter. Restart should recover on startup.
+          docker compose -f docker/compose.yml kill --signal SIGKILL api
+          docker compose -f docker/compose.yml --profile test run -T --rm \
+            -e PERITIAL_TEST_RESTART=1 \
+            -e PERITIAL_TEST_S3_ENDPOINT=http://seaweedfs:8333 \
+            tests dotnet test tests/backend/Peritial.Infrastructures.Tests/Peritial.Infrastructures.Tests.csproj \
+            --filter FullyQualifiedName~UploadRestartContractTests.Seed_abandoned_object_after_api_is_abruptly_stopped \
+            --logger "console;verbosity=normal"
+          docker compose -f docker/compose.yml start api
+          ready=0
+          for i in $(seq 1 60); do
+            if curl --fail --silent http://localhost:8080/health/live >/dev/null; then ready=1; break; fi
+            sleep 2
+          done
+          test "$ready" = "1"
+          recovered=0
+          for i in $(seq 1 60); do
+            count=$(docker compose -f docker/compose.yml exec -T postgres \
+              psql -U peritial -d peritial -Atqc \
+              "SELECT count(*) FROM upload_intents WHERE tenant_id='55f4fddc-dca2-4c30-bef7-a8fcaf4ae611' AND document_id='eb02935f-119a-4ed2-8a60-144eed92e6a9'")
+            if [ "$count" = "0" ]; then recovered=1; break; fi
+            sleep 2
+          done
+          test "$recovered" = "1"
+          docker compose -f docker/compose.yml --profile test run -T --rm \
+            -e PERITIAL_TEST_RESTART=1 \
+            -e PERITIAL_TEST_S3_ENDPOINT=http://seaweedfs:8333 \
+            tests dotnet test tests/backend/Peritial.Infrastructures.Tests/Peritial.Infrastructures.Tests.csproj \
+            --filter FullyQualifiedName~UploadRestartContractTests.Restarted_worker_removed_orphan_and_released_pending_key \
+            --logger "console;verbosity=normal"
       - name: API diagnostics on failed full-stack tests (no tokens or secret values)
         if: failure()
         run: docker compose -f docker/compose.yml logs --tail=160 api
