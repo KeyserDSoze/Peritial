@@ -103,7 +103,8 @@ jobs:
                 AND (SELECT count(*) FROM security_audit WHERE action='document.scan' AND outcome='denied') >= 1
                 AND (SELECT count(*) FROM security_audit WHERE action='authorization.forbidden' AND outcome='denied') >= 1
                 AND (SELECT count(*) FROM security_audit WHERE action='perizia.create' AND outcome='denied') >= 1
-                AND (SELECT count(*) FROM security_audit WHERE subject = '') = 0;
+                AND (SELECT count(*) FROM security_audit WHERE subject = '') = 0
+                AND (SELECT count(*) FROM upload_intents) = 0;
             ")
           if [ "$result" != "t" ]; then
             echo "Required persisted REST/MCP security audit events are missing."

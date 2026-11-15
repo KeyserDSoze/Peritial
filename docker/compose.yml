@@ -43,6 +43,7 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=peritial;Username=peritial_app;Password=local-only-app
       Database__Bootstrap: "false"
+      UploadRecovery__ConnectionString: Host=postgres;Port=5432;Database=peritial;Username=peritial_recovery;Password=local-only-recovery
       Auth__Authority: http://localhost:8081/realms/peritial
       Auth__MetadataAddress: http://keycloak:8080/realms/peritial/.well-known/openid-configuration
       Auth__DevelopmentBackchannelOrigin: http://keycloak:8080

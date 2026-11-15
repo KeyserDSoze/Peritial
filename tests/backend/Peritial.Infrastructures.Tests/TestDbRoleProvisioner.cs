@@ -16,7 +16,8 @@ internal static class TestDbRoleProvisioner
             "SELECT pg_advisory_xact_lock(4700039001)", conn, tx))
             await lockCmd.ExecuteNonQueryAsync();
         await using (var cmd = new NpgsqlCommand(
-            "ALTER ROLE peritial_app WITH LOGIN PASSWORD 'local-only-app' NOSUPERUSER NOBYPASSRLS",
+            "ALTER ROLE peritial_app WITH LOGIN PASSWORD 'local-only-app' NOSUPERUSER NOBYPASSRLS; " +
+            "ALTER ROLE peritial_recovery WITH LOGIN PASSWORD 'local-only-recovery' NOSUPERUSER NOBYPASSRLS",
             conn, tx))
             await cmd.ExecuteNonQueryAsync();
         await tx.CommitAsync();

@@ -38,3 +38,11 @@ public interface IDocumentRepository
 public sealed record DocumentRecord(
     Guid Id, TenantId TenantId, Guid? PeriziaId, string FileName, string ContentType,
     long Length, string StorageKey, DateTime CreatedAtUtc);
+
+
+/// <summary>Durable reservation before PUT, not a client-provided storage key.</summary>
+public interface IUploadIntentLedger
+{
+    Task RecordAsync(TenantId tenant, Guid documentId, string storageKey, CancellationToken ct = default);
+    Task ForgetAsync(TenantId tenant, Guid documentId, CancellationToken ct = default);
+}

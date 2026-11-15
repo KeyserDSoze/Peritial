@@ -78,3 +78,46 @@ ALTER TABLE security_audit FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_append_audit ON security_audit;
 CREATE POLICY tenant_append_audit ON security_audit FOR INSERT TO peritial_app
     WITH CHECK (tenant_id = NULLIF(current_setting('peritial.tenant_id', true), '')::uuid);
+
+
+-- Durable upload intent written before object-store PUT, removed transactionally
+-- with documents+audit. No file contents, filename, access tokens, or PII.
+CREATE TABLE IF NOT EXISTS upload_intents (
+    tenant_id uuid NOT NULL,
+    document_id uuid NOT NULL,
+    storage_key text NOT NULL,
+    created_at_utc timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (tenant_id, document_id),
+    UNIQUE (tenant_id, storage_key)
+);
+CREATE INDEX IF NOT EXISTS ix_upload_intents_created ON upload_intents (created_at_utc);
+
+-- Dedicated, non-BYPASSRLS worker: globally sees only pending upload keys and
+-- the minimum document columns needed to decide whether deletion is safe.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'peritial_recovery') THEN
+    CREATE ROLE peritial_recovery NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+  END IF;
+END $$;
+GRANT USAGE ON SCHEMA public TO peritial_recovery;
+REVOKE ALL ON upload_intents FROM PUBLIC;
+GRANT SELECT, INSERT, DELETE ON upload_intents TO peritial_app;
+GRANT SELECT, UPDATE, DELETE ON upload_intents TO peritial_recovery;
+GRANT SELECT (tenant_id, storage_key) ON documents TO peritial_recovery;
+
+ALTER TABLE upload_intents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE upload_intents FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_upload_intents ON upload_intents;
+CREATE POLICY tenant_upload_intents ON upload_intents FOR ALL TO peritial_app
+    USING (tenant_id = NULLIF(current_setting('peritial.tenant_id', true), '')::uuid)
+    WITH CHECK (tenant_id = NULLIF(current_setting('peritial.tenant_id', true), '')::uuid);
+DROP POLICY IF EXISTS recovery_intents_select ON upload_intents;
+CREATE POLICY recovery_intents_select ON upload_intents FOR SELECT TO peritial_recovery USING (true);
+DROP POLICY IF EXISTS recovery_intents_update ON upload_intents;
+CREATE POLICY recovery_intents_update ON upload_intents FOR UPDATE TO peritial_recovery
+    USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS recovery_intents_delete ON upload_intents;
+CREATE POLICY recovery_intents_delete ON upload_intents FOR DELETE TO peritial_recovery USING (true);
+DROP POLICY IF EXISTS recovery_document_keys ON documents;
+CREATE POLICY recovery_document_keys ON documents FOR SELECT TO peritial_recovery USING (true);

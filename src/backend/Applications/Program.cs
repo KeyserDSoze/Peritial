@@ -109,9 +109,16 @@ builder.Services.AddSingleton(NpgsqlDataSource.Create(connectionString));
 builder.Services.AddScoped<ITenantContext, TenantContext>();
 builder.Services.AddScoped<IPeriziaRepository, PgPeriziaRepository>();
 builder.Services.AddScoped<IDocumentRepository, PgDocumentRepository>();
+builder.Services.AddScoped<IUploadIntentLedger, PgUploadIntentLedger>();
 builder.Services.AddScoped<ISecurityAuditTrail, PgSecurityAuditTrail>();
 builder.Services.AddScoped<PeriziaService>();
 builder.Services.AddSingleton<IFileMalwareScanner, ClamdFileMalwareScanner>();
+var recoveryConnectionString = builder.Configuration["UploadRecovery:ConnectionString"];
+if (string.IsNullOrWhiteSpace(recoveryConnectionString))
+    throw new InvalidOperationException("Independent least-privilege upload recovery connection is required.");
+builder.Services.AddSingleton(sp => new PgUploadReconciler(
+    NpgsqlDataSource.Create(recoveryConnectionString), sp.GetRequiredService<IObjectStore>()));
+builder.Services.AddHostedService<UploadRecoveryWorker>();
 builder.Services.AddScoped<FileIngestionService>();
 if (string.Equals(builder.Configuration["Storage:Provider"], "Azure", StringComparison.OrdinalIgnoreCase))
     builder.Services.AddSingleton<IObjectStore, AzureBlobObjectStore>();

@@ -21,6 +21,17 @@ public sealed class PgDocumentRepository(NpgsqlDataSource dataSource) : IDocumen
             throw new ArgumentException("Audit must describe this successful document ingestion.", nameof(audit));
 
         await using var scope = await TenantDbScope.OpenAsync(dataSource, item.TenantId, ct);
+        // Arbitrates with SELECT ... FOR UPDATE by the reconciler. If cleanup
+        // won, the intent is gone and no metadata/audit success may commit.
+        await using (var take = scope.Command(
+            "DELETE FROM upload_intents WHERE tenant_id=@tenant AND document_id=@id AND storage_key=@key"))
+        {
+            take.Parameters.AddWithValue("tenant", item.TenantId.Value);
+            take.Parameters.AddWithValue("id", item.Id);
+            take.Parameters.AddWithValue("key", item.StorageKey);
+            if (await take.ExecuteNonQueryAsync(ct) != 1)
+                throw new InvalidOperationException("Document upload intent missing or already recovered.");
+        }
         await InsertAsync(scope, item, ct);
         await PgSecurityAuditTrail.AppendWithinScopeAsync(scope, audit, ct);
         await scope.CommitAsync(ct);
