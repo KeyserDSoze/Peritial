@@ -10,7 +10,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     client_id={import.meta.env.VITE_OIDC_CLIENT || "peritial-web"}
     redirect_uri={window.location.origin + "/"}
     response_type="code"
-    scope="openid profile email peritial.read peritial.write"
+    scope={import.meta.env.VITE_OIDC_SCOPES || "openid peritial.read peritial.write"}
     onSigninCallback={() => window.history.replaceState({}, document.title, window.location.pathname)}
   ><App/></AuthProvider></React.StrictMode>
 );

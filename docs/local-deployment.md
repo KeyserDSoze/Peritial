@@ -20,3 +20,5 @@ Le richieste di metadata OpenID partono dall'indirizzo interno configurato in `A
 Test E2E reale: `E2E_FULL_STACK=1 E2E_BASE_URL=http://localhost:5173 npm run test:e2e` da `src/frontend` dopo avvio Compose. Questa verifica fa parte della CI Compose.
 
 In produzione usare sempre OIDC HTTPS raggiungibile sia dai client che dall'applicazione, e vietare i rewrite di sviluppo.
+
+Il realm dimostrativo importa intenzionalmente soltanto gli scope `peritial.read`, `peritial.write` e il meta-scope OIDC `openid`; `profile`/`email` non sono disponibili in questa configurazione. Il frontend richiede soltanto gli scope supportati per default; in altri ambienti personalizzare `VITE_OIDC_SCOPES` durante la build.
