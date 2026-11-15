@@ -53,7 +53,8 @@ public static partial class SchemaMigrator
           'indexes', COALESCE((
             SELECT jsonb_agg(jsonb_build_array(
               t.relname, idx.relname, i.indisunique, i.indisprimary,
-              i.indisvalid, i.indisready, pg_get_indexdef(i.indexrelid)
+              i.indisvalid, i.indisready,
+              replace(pg_get_indexdef(i.indexrelid), quote_ident(@schema) || '.', '')
             ) ORDER BY t.relname, idx.relname)
             FROM pg_index i
             JOIN pg_class t ON t.oid=i.indrelid
