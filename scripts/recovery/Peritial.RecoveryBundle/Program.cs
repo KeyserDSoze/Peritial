@@ -1,11 +1,13 @@
 using System.Security.Cryptography;
 using Peritial.Infrastructures;
+using Amazon.S3;
+using Amazon.Runtime;
 
 // Manual security boundary: two independent 32-byte keys in secret-managed
 // files outside the backup; no plaintext secrets in argv, logs or Git.
-if (args.Length != 1 || args[0] is not ("seal" or "unseal"))
+if (args.Length != 1 || args[0] is not ("seal" or "unseal" or "push-sealed" or "pull-sealed"))
 {
-    Console.Error.WriteLine("Usage: dotnet run --project scripts/recovery/Peritial.RecoveryBundle -- seal|unseal");
+    Console.Error.WriteLine("Usage: dotnet run --project scripts/recovery/Peritial.RecoveryBundle -- seal|unseal|push-sealed|pull-sealed");
     return 2;
 }
 static string Required(string key) =>
@@ -36,8 +38,13 @@ byte[]? master = null;
 byte[]? s3SigningKey = null;
 try
 {
-    var expectedConfirmation = args[0] == "seal"
-        ? "WRITERS_STOPPED" : "ISOLATED_RESTORE";
+    var expectedConfirmation = args[0] switch
+    {
+        "seal" => "WRITERS_STOPPED",
+        "unseal" => "ISOLATED_RESTORE",
+        "push-sealed" => "REMOTE_ENCRYPTED_UPLOAD",
+        _ => "ISOLATED_ENCRYPTED_DOWNLOAD"
+    };
     if (Environment.GetEnvironmentVariable("PERITIAL_BUNDLE_CONFIRM") != expectedConfirmation)
         throw new InvalidOperationException("Explicit offline recovery confirmation required.");
 
@@ -55,12 +62,43 @@ try
             bundle, master, s3SigningKey);
         Console.WriteLine("Private, authenticated encrypted PostgreSQL+S3 recovery bundle sealed.");
     }
-    else
+    else if (args[0] == "unseal")
     {
         await SealedRecoveryBundle.UnsealAsync(
             bundle, Required("PERITIAL_BUNDLE_UNSEAL_DIR"),
             master, s3SigningKey);
         Console.WriteLine("Encrypted recovery bundle authenticated and unsealed to isolated private directory.");
+    }
+    else
+    {
+        var endpoint = Required("PERITIAL_OFFSITE_S3_ENDPOINT");
+        if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var uri) ||
+            uri.Scheme is not ("http" or "https") || string.IsNullOrEmpty(uri.Host))
+            throw new InvalidOperationException("Remote encrypted backup endpoint is invalid.");
+        // Credentials should NEVER traverse HTTP on any real remote.
+        // The only exception is the specifically named disposable CI container.
+        if (uri.Scheme != "https" &&
+            !(uri.Scheme == "http" && uri.Host == "seaweedfs-backup" &&
+              Environment.GetEnvironmentVariable("PERITIAL_OFFSITE_CI_HTTP") == "DISPOSABLE_TEST_ONLY"))
+            throw new InvalidOperationException("Remote encrypted backups require HTTPS.");
+        var bucket = Required("PERITIAL_OFFSITE_S3_BUCKET");
+        var backupId = Required("PERITIAL_OFFSITE_BACKUP_ID");
+        using var remote = new AmazonS3Client(
+            new BasicAWSCredentials(
+                Required("PERITIAL_OFFSITE_S3_ACCESS_KEY"),
+                Required("PERITIAL_OFFSITE_S3_SECRET_KEY")),
+            new AmazonS3Config { ServiceURL = endpoint, ForcePathStyle = true });
+        if (args[0] == "push-sealed")
+        {
+            await SealedBundleOffsite.UploadAsync(bundle, remote, bucket, backupId, master);
+            Console.WriteLine("Encrypted backup copied, integrity verified, and remote completion marker published.");
+        }
+        else
+        {
+            await SealedBundleOffsite.DownloadAsync(remote, bucket, backupId,
+                Required("PERITIAL_BUNDLE_DOWNLOAD_DIR"), master);
+            Console.WriteLine("Remote encrypted backup authenticated and recovered to a private directory.");
+        }
     }
     return 0;
 }
