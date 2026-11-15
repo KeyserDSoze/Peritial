@@ -2,10 +2,11 @@ using Npgsql;
 using Peritial.Infrastructures;
 
 // Standalone administration command. Never run automatically in the API process.
-// The DDL owner connection string is supplied only through the environment.
-if (args.Length != 1 || args[0] != "apply")
+// DDL-owner credentials, maintenance confirmation and backup proof are supplied
+// through protected environment variables, not CLI arguments or source files.
+if (args.Length != 1 || args[0] is not ("apply" or "adopt"))
 {
-    Console.Error.WriteLine("Usage: PERITIAL_MIGRATOR_POSTGRES=<privileged connection> dotnet run --project scripts/db/Peritial.DbMigrator -- apply");
+    Console.Error.WriteLine("Usage: dotnet run --project scripts/db/Peritial.DbMigrator -- apply|adopt");
     return 2;
 }
 var connectionString = Environment.GetEnvironmentVariable("PERITIAL_MIGRATOR_POSTGRES");
@@ -19,14 +20,33 @@ try
     var options = new NpgsqlConnectionStringBuilder(connectionString);
     if (options.Username is "peritial_app" or "peritial_recovery")
         throw new InvalidOperationException("Migration requires a distinct DDL-owning role.");
+
+    if (args[0] == "adopt")
+    {
+        if (Environment.GetEnvironmentVariable("PERITIAL_LEGACY_CONFIRM") != "OFFLINE_BACKUP_VERIFIED")
+            throw new InvalidOperationException("Legacy adoption requires explicit offline maintenance confirmation.");
+        var backup = Environment.GetEnvironmentVariable("PERITIAL_LEGACY_BACKUP_FILE");
+        if (string.IsNullOrWhiteSpace(backup))
+            throw new InvalidOperationException("Legacy adoption requires a verified backup archive.");
+        await LegacyBackupProof.VerifyAsync(backup);
+    }
+
     await using var admin = NpgsqlDataSource.Create(options.ConnectionString);
-    var applied = await SchemaMigrator.ApplyAsync(admin);
-    Console.WriteLine($"Schema migrations committed: {applied}");
+    if (args[0] == "apply")
+    {
+        var applied = await SchemaMigrator.ApplyAsync(admin);
+        Console.WriteLine($"Schema migrations committed: {applied}");
+    }
+    else
+    {
+        var applied = await SchemaMigrator.AdoptLegacyAsync(admin);
+        Console.WriteLine($"Legacy V001 verified/adopted; pending migrations committed: {applied}");
+    }
     return 0;
 }
 catch (Exception ex)
 {
-    // No connection strings, raw SQL, parameter values, or passwords in logs.
+    // No connection strings, SQL, tenant rows, archive path or secrets in logs.
     Console.Error.WriteLine("Schema migration failed closed (" + ex.GetType().Name + ").");
     return 1;
 }
