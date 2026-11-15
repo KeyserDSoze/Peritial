@@ -128,7 +128,7 @@ public sealed class FileIngestionSecurityTests
         var foreign = Perizia.Create(TenantId.From(Guid.NewGuid()), "FOREIGN");
         var store = new SpyStore();
         var docs = new SpyDocuments();
-        var service = new FileIngestionService(new FakeTenant(true), new FakePerizie(foreign), docs, store, new FakeAudit(), new CleanScanner());
+        var service = new FileIngestionService(new FakeTenant(true), new FakePerizie(foreign), docs, store, new FakeAudit(), new CleanScanner(), new FakeIntents());
 
         await Assert.ThrowsAsync<KeyNotFoundException>(() =>
             service.IngestAsync("fattura.pdf", "application/pdf",
@@ -141,13 +141,21 @@ public sealed class FileIngestionSecurityTests
     {
         var store = new SpyStore();
         var docs = new SpyDocuments();
-        return (new FileIngestionService(new FakeTenant(canWrite), new FakePerizie(), docs, store, new FakeAudit(), new CleanScanner()), store, docs);
+        return (new FileIngestionService(new FakeTenant(canWrite), new FakePerizie(), docs, store, new FakeAudit(), new CleanScanner(), new FakeIntents()), store, docs);
     }
 
     private sealed class CleanScanner : IFileMalwareScanner
     {
         public Task<MalwareScanResult> ScanAsync(ReadOnlyMemory<byte> data, CancellationToken ct = default) =>
             Task.FromResult(MalwareScanResult.Clean);
+    }
+
+    private sealed class FakeIntents : IUploadIntentLedger
+    {
+        public Task RecordAsync(TenantId tenant, Guid id, string key, CancellationToken ct = default) =>
+            Task.CompletedTask;
+        public Task ForgetAsync(TenantId tenant, Guid id, CancellationToken ct = default) =>
+            Task.CompletedTask;
     }
 
     private sealed class FakeAudit : ISecurityAuditTrail

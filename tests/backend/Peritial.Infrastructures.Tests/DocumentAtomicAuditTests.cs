@@ -15,6 +15,7 @@ public sealed class DocumentAtomicAuditTests
         var tenant = TenantId.From(Guid.NewGuid());
         var record = Record(tenant);
         var audit = Event(tenant, record.Id);
+        await new PgUploadIntentLedger(databases.App).RecordAsync(tenant, record.Id, record.StorageKey);
         await new PgDocumentRepository(databases.App).AddAuditedAsync(record, audit);
 
         await using var cmd = databases.Admin.CreateCommand(
@@ -36,6 +37,7 @@ public sealed class DocumentAtomicAuditTests
         var tenant = TenantId.From(Guid.NewGuid());
         var record = Record(tenant);
         var audit = Event(tenant, record.Id);
+        await new PgUploadIntentLedger(databases.App).RecordAsync(tenant, record.Id, record.StorageKey);
         await new PgSecurityAuditTrail(databases.App).AppendAsync(audit);
 
         var repo = new PgDocumentRepository(databases.App);

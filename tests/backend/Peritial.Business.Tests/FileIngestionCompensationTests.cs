@@ -11,7 +11,7 @@ public sealed class FileIngestionCompensationTests
         Encoding.ASCII.GetBytes("%PDF-1.7\n1 0 obj\n<<>>\nendobj\n%%EOF\n");
 
     [Fact]
-    public async Task Database_failure_after_successful_upload_deletes_orphaned_object()
+    public async Task Ambiguous_database_commit_never_deletes_possibly_referenced_object()
     {
         var (service, store, documents) = NewService();
         documents.FailCommit = true;
@@ -20,8 +20,8 @@ public sealed class FileIngestionCompensationTests
             () => service.IngestAsync("proof.pdf", "application/pdf", new MemoryStream(Pdf), Pdf.Length));
 
         Assert.Equal(1, store.Puts);
-        Assert.Equal(1, store.Deletes);
-        Assert.Empty(store.BytesByKey);
+        Assert.Equal(0, store.Deletes);
+        Assert.Single(store.BytesByKey); // Durable intent for recovery after commit-ACK uncertainty
         Assert.Empty(documents.Committed);
     }
 
@@ -41,7 +41,7 @@ public sealed class FileIngestionCompensationTests
     }
 
     [Fact]
-    public async Task A_retry_after_failed_commit_does_not_leave_the_previous_orphan()
+    public async Task Retry_after_ambiguous_commit_preserves_previous_object_for_recovery()
     {
         var (service, store, documents) = NewService();
         documents.FailCommit = true;
@@ -52,28 +52,29 @@ public sealed class FileIngestionCompensationTests
         var saved = await service.IngestAsync(
             "proof.pdf", "application/pdf", new MemoryStream(Pdf), Pdf.Length);
         Assert.Equal(2, store.Puts);
-        Assert.Equal(1, store.Deletes);
-        Assert.Single(store.BytesByKey);
+        Assert.Equal(0, store.Deletes);
+        Assert.Equal(2, store.BytesByKey.Count); // stale intent cleaned by worker
         Assert.Equal(saved.Id, Assert.Single(documents.Committed).Id);
     }
 
     [Fact]
-    public async Task Cleanup_failure_does_not_hide_original_commit_failure()
+    public async Task Partial_put_and_cleanup_failure_keep_intent_for_retry()
     {
         var (service, store, documents) = NewService();
-        documents.FailCommit = true;
+        store.FailAfterPartialPut = true;
         store.FailDelete = true;
 
         var error = await Assert.ThrowsAsync<AggregateException>(
             () => service.IngestAsync("proof.pdf", "application/pdf", new MemoryStream(Pdf), Pdf.Length));
-        Assert.Contains(error.InnerExceptions, e => e is InvalidOperationException);
-        Assert.Contains(error.InnerExceptions, e => e is IOException);
+        Assert.Equal(2, error.InnerExceptions.Count);
+        Assert.All(error.InnerExceptions, ex => Assert.IsType<IOException>(ex));
         Assert.Equal(1, store.Deletes);
-        Assert.Single(store.BytesByKey); // Pending reconciliation; never report success
+        Assert.Single(store.BytesByKey);
+        Assert.Empty(documents.Committed);
     }
 
     [Fact]
-    public async Task Cleanup_ignores_cancelled_request_token_after_failed_commit()
+    public async Task Cancelled_metadata_commit_leaves_object_for_safe_recovery()
     {
         using var cancellation = new CancellationTokenSource();
         var (service, store, documents) = NewService();
@@ -84,9 +85,8 @@ public sealed class FileIngestionCompensationTests
                 new MemoryStream(Pdf), Pdf.Length, ct: cancellation.Token));
 
         Assert.True(cancellation.IsCancellationRequested);
-        Assert.Equal(1, store.Deletes);
-        Assert.False(store.CleanupWasCanceled);
-        Assert.Empty(store.BytesByKey);
+        Assert.Equal(0, store.Deletes);
+        Assert.Single(store.BytesByKey);
     }
 
     [Fact]
@@ -107,8 +107,16 @@ public sealed class FileIngestionCompensationTests
         var store = new TrackingStore();
         var documents = new Documents();
         var service = new FileIngestionService(
-            new Tenant(), new Perizie(), documents, store, new Audit(), new CleanScanner());
+            new Tenant(), new Perizie(), documents, store, new Audit(), new CleanScanner(), new FakeIntents());
         return (service, store, documents);
+    }
+
+    private sealed class FakeIntents : IUploadIntentLedger
+    {
+        public Task RecordAsync(TenantId tenant, Guid id, string key, CancellationToken ct = default) =>
+            Task.CompletedTask;
+        public Task ForgetAsync(TenantId tenant, Guid id, CancellationToken ct = default) =>
+            Task.CompletedTask;
     }
 
     private sealed class TrackingStore : IObjectStore

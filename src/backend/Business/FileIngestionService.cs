@@ -6,7 +6,7 @@ public sealed record DocumentDto(Guid Id, Guid? PeriziaId, string FileName, stri
 
 public sealed class FileIngestionService(
     ITenantContext context, IPeriziaRepository perizie, IDocumentRepository documents, IObjectStore objects,
-    ISecurityAuditTrail audit, IFileMalwareScanner scanner)
+    ISecurityAuditTrail audit, IFileMalwareScanner scanner, IUploadIntentLedger uploadIntents)
 {
     public const long MaxUploadBytes = 25 * 1024 * 1024;
     public const int MaxMcpBytes = 4 * 1024 * 1024;
@@ -86,36 +86,43 @@ public sealed class FileIngestionService(
 
         var id = Guid.NewGuid();
         var key = DocumentKeys.For(context.TenantId, id, safeName);
+        // Commit a durable reservation BEFORE PUT. If the process dies at any
+        // point afterwards, the recovery role can find this storage key.
+        await uploadIntents.RecordAsync(context.TenantId, id, key, ct);
         try
         {
-            // The object may have been partially persisted even if PutAsync throws.
+            // A PUT error cannot have committed metadata (metadata is written
+            // only after this call returns). Synchronous cleanup is safe here.
             await objects.PutAsync(key, buffer, contentType, ct);
-            var record = new DocumentRecord(id, context.TenantId, periziaId, safeName,
-                contentType, total, key, DateTime.UtcNow);
-            await documents.AddAuditedAsync(record, new SecurityAuditEvent(
-                Guid.NewGuid(), context.TenantId, context.Subject, "document.ingest",
-                "succeeded", id, DateTime.UtcNow), ct);
-            return new DocumentDto(id, periziaId, safeName, contentType, total);
         }
-        catch (Exception ingestionError)
+        catch (Exception putError)
         {
-            // Best-effort synchronous compensation; use a separate bounded token.
-            // A canceled HTTP/MCP request must not cancel orphan cleanup.
             using var cleanupTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
             try
             {
                 await objects.DeleteAsync(key, cleanupTimeout.Token);
+                await uploadIntents.ForgetAsync(context.TenantId, id, cleanupTimeout.Token);
             }
             catch (Exception cleanupError)
             {
-                // Preserve both errors for operations. Never claim upload succeeded.
-                // Crash safety / durable retry of cleanup belongs to the outbox (#21).
+                // Leave the durable reservation for automatic future retry.
                 throw new AggregateException(
-                    "Ingestion failed and object cleanup could not finish; reconciliation required.",
-                    ingestionError, cleanupError);
+                    "Object upload failed and cleanup is pending recovery.",
+                    putError, cleanupError);
             }
             throw;
         }
+
+        // The repository consumes the reservation in the SAME transaction as
+        // document metadata + audit. If the database commit acknowledgement
+        // is lost, deleting this blob here would be dangerous: it may already
+        // be a valid, referenced document. Keep it for row-locked recovery.
+        var record = new DocumentRecord(id, context.TenantId, periziaId, safeName,
+            contentType, total, key, DateTime.UtcNow);
+        await documents.AddAuditedAsync(record, new SecurityAuditEvent(
+            Guid.NewGuid(), context.TenantId, context.Subject, "document.ingest",
+            "succeeded", id, DateTime.UtcNow), ct);
+        return new DocumentDto(id, periziaId, safeName, contentType, total);
     }
 
     public async Task<DocumentDto> IngestBase64Async(
