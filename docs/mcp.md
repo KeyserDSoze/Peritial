@@ -19,3 +19,7 @@ Esporre le funzionalità tramite Model Context Protocol (SDK ufficiale .NET, HTT
 | Sinistri, anagrafiche, stati, import XML, documenti, report, messaggi, contabilità, KPI | tool dedicati per ciascun use case | iterazioni successive |
 
 Per file grandi: non trasportare payload di gigabyte via JSON MCP; fornire un tool per ottenere URL di upload firmati/scoped e una procedura di completamento (da implementare). Una tool call MCP non equivale ad accesso indiscriminato al filesystem.
+
+## E2E e compatibilità
+
+Il test in `tests/frontend/authenticated.spec.ts` verifica il token OAuth reale, l'autorizzazione MCP e il catalogo tool con il protocollo Streamable HTTP, contro l'intera stack Docker Compose. Questo non sostituisce test con più client MCP esterni e più tenant.

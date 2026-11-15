@@ -18,7 +18,7 @@ services:
   keycloak:
     image: quay.io/keycloak/keycloak:26.4
     command: ["start-dev", "--import-realm"]
-    environment: {KC_HOSTNAME: "http://localhost:8081", KC_BOOTSTRAP_ADMIN_USERNAME: localadmin, KC_BOOTSTRAP_ADMIN_PASSWORD: local-only-admin}
+    environment: {KC_HOSTNAME: "http://keycloak.localhost:8081", KC_BOOTSTRAP_ADMIN_USERNAME: localadmin, KC_BOOTSTRAP_ADMIN_PASSWORD: local-only-admin}
     ports: ["8081:8080"]
     volumes: ["./keycloak/peritial-realm.json:/opt/keycloak/data/import/peritial-realm.json:ro"]
   api:
@@ -27,8 +27,7 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=peritial;Username=peritial;Password=local-only-postgres
       Database__Bootstrap: "true"
-      Auth__Authority: http://localhost:8081/realms/peritial
-      Auth__MetadataAddress: http://keycloak:8080/realms/peritial/.well-known/openid-configuration
+      Auth__Authority: http://keycloak.localhost:8081/realms/peritial
       Auth__Audience: peritial-api
       Auth__Resource: http://localhost:8080
       Auth__RequireHttpsMetadata: "false"
@@ -38,6 +37,7 @@ services:
       Storage__Minio__SecretKey: local-only-minio-secret
       Storage__Minio__Bucket: peritial
       Cors__Origin: http://localhost:5173
+    extra_hosts: ["keycloak.localhost:host-gateway"]
     ports: ["8080:8080"]
     depends_on:
       postgres: {condition: service_healthy}

@@ -6,7 +6,7 @@ import "./i18n";
 import "./styles.css";
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode><AuthProvider
-    authority={import.meta.env.VITE_OIDC_AUTHORITY || "http://localhost:8081/realms/peritial"}
+    authority={import.meta.env.VITE_OIDC_AUTHORITY || "http://keycloak.localhost:8081/realms/peritial"}
     client_id={import.meta.env.VITE_OIDC_CLIENT || "peritial-web"}
     redirect_uri={window.location.origin + "/"}
     response_type="code"
