@@ -48,12 +48,19 @@ try
         var partialFile = checkpointFile + ".part-" + Guid.NewGuid().ToString("N");
         try
         {
-            await using (var output = new FileStream(
-                partialFile, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            // The manifest includes tenant IDs and storage keys. Request 0600
+            // at creation time, not after an initially world-readable file
+            // was created (chmod would expose a short but real leak window).
+            var fileOptions = new FileStreamOptions
             {
-                if (!OperatingSystem.IsWindows())
-                    File.SetUnixFileMode(partialFile,
-                        UnixFileMode.UserRead | UnixFileMode.UserWrite);
+                Mode = FileMode.CreateNew,
+                Access = FileAccess.Write,
+                Share = FileShare.None
+            };
+            if (!OperatingSystem.IsWindows())
+                fileOptions.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+            await using (var output = new FileStream(partialFile, fileOptions))
+            {
                 await JsonSerializer.SerializeAsync(output, manifest);
                 await output.FlushAsync();
             }
