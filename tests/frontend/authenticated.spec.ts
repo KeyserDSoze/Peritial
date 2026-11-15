@@ -63,6 +63,53 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     expect(goodFile.status(), await goodFile.text()).toBe(201);
     expect((await goodFile.json() as {fileName: string}).fileName).toBe("valid.pdf");
 
+    // REST and MCP share one idempotency ledger per signed tenant and subject.
+    const retryKey = "retry-e2e-" + Date.now() + "-" + Math.round(Math.random() * 100000);
+    const retryBytes = Buffer.from("%PDF-1.7\n1 0 obj\n<<>>\nendobj\n%%EOF\n");
+    const retryFile = {
+      file: { name: "retry-proof.pdf", mimeType: "application/pdf", buffer: retryBytes }
+    };
+    const firstProof = await request.post("http://localhost:8080/api/files", {
+      headers: { Authorization: "Bearer " + accessToken, "Idempotency-Key": retryKey },
+      multipart: retryFile
+    });
+    expect(firstProof.status(), await firstProof.text()).toBe(201);
+    const originalId = (await firstProof.json() as {id: string}).id;
+    expect(originalId).toBeTruthy();
+
+    const restRetry = await request.post("http://localhost:8080/api/files", {
+      headers: { Authorization: "Bearer " + accessToken, "Idempotency-Key": retryKey },
+      multipart: retryFile
+    });
+    expect(restRetry.status(), await restRetry.text()).toBe(201);
+    expect((await restRetry.json() as {id: string}).id).toBe(originalId);
+
+    const mcpRetry = await request.post("http://localhost:8080/mcp", {
+      headers: {
+        Authorization: "Bearer " + accessToken,
+        Accept: "application/json,text/event-stream",
+        "Content-Type": "application/json"
+      },
+      data: {jsonrpc: "2.0", id: 48, method: "tools/call", params: {
+        name: "ingest_file", arguments: {
+          fileName: "retry-proof.pdf", contentType: "application/pdf",
+          base64: retryBytes.toString("base64"), idempotencyKey: retryKey
+        }
+      }}
+    });
+    expect(mcpRetry.ok(), await mcpRetry.text()).toBeTruthy();
+    expect(await mcpRetry.text()).toContain(originalId);
+    expect(await mcpRetry.text()).not.toContain('"isError":true');
+
+    const changedProof = await request.post("http://localhost:8080/api/files", {
+      headers: { Authorization: "Bearer " + accessToken, "Idempotency-Key": retryKey },
+      multipart: {
+        file: { name: "retry-proof.pdf", mimeType: "application/pdf",
+          buffer: Buffer.from("%PDF-1.7\nDifferent PDF bytes\n%%EOF\n") }
+      }
+    });
+    expect(changedProof.status(), await changedProof.text()).toBe(409);
+
     // Safe EICAR test string is an entire stored file inside a minimal DOCX ZIP.
     // Appending it to a synthetic PDF is NOT reliable: ClamAV's PDF decoder
     // can legitimately skip bytes not referenced by the PDF structure.
