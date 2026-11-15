@@ -158,6 +158,15 @@ jobs:
         run: docker compose -f docker/compose.yml logs --tail=160 api
       - if: always()
         run: docker compose -f docker/compose.yml -f docker/compose.chaos.yml --profile azure-test --profile chaos down -v
+  database-recovery:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - name: PostgreSQL backup and restore to a distinct new server
+        run: bash tests/backup/run_postgres_restore.sh
   terraform:
     runs-on: ubuntu-latest
     steps:
