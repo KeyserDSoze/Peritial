@@ -26,6 +26,14 @@ variable "postgres_password" {
   type = string
   sensitive = true
 }
+variable "postgres_app_login" {
+  type = string
+  default = "peritial_app"
+}
+variable "postgres_app_password" {
+  type = string
+  sensitive = true
+}
 variable "oidc_authority" {
   type = string
 }

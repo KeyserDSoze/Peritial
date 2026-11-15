@@ -22,3 +22,9 @@ Test E2E reale: `E2E_FULL_STACK=1 E2E_BASE_URL=http://localhost:5173 npm run tes
 In produzione usare sempre OIDC HTTPS raggiungibile sia dai client che dall'applicazione, e vietare i rewrite di sviluppo.
 
 Il realm dimostrativo importa intenzionalmente soltanto gli scope `peritial.read`, `peritial.write` e il meta-scope OIDC `openid`; `profile`/`email` non sono disponibili in questa configurazione. Il frontend richiede soltanto gli scope supportati per default; in altri ambienti personalizzare `VITE_OIDC_SCOPES` durante la build.
+
+## Database multi-tenant con RLS
+
+Il database viene inizializzato con `scripts/db/001_init.sql` (tabelle e policy `ENABLE/FORCE RLS`) e, **solo nella configurazione locale**, con `scripts/db/002_dev_app_role.sql` per l'account `peritial_app` a password di esempio. L'API usa il ruolo applicativo ristretto, non il superuser `peritial`. `Database:Bootstrap` resta disattivato nell'API.
+
+Dopo upgrade di un volume PostgreSQL preesistente, gli script in `docker-entrypoint-initdb.d` **non vengono rieseguiti**. Applicare lo schema e il provisioning del ruolo da un amministratore con backup prima dell'upgrade; cancellare i volumi solo se contengono dati effimeri. Il provisioning e le migrazioni versionate per installazioni persistenti appartengono alla issue #6.

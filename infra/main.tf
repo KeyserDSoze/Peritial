@@ -127,7 +127,7 @@ resource "azurerm_container_app" "api" {
   }
   secret {
     name = "postgres-connection"
-    value = "Host=${azurerm_postgresql_flexible_server.db.fqdn};Database=peritial;Username=${var.postgres_admin_login};Password=${var.postgres_password};SSL Mode=Require"
+    value = "Host=${azurerm_postgresql_flexible_server.db.fqdn};Database=peritial;Username=${var.postgres_app_login};Password=${var.postgres_app_password};SSL Mode=Require"
   }
   template {
     min_replicas = 1

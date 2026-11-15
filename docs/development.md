@@ -6,7 +6,7 @@ Ogni use case: test rosso (xUnit / Playwright), implementazione minima, test ver
 - Frontend: cd src/frontend && npm install && npx playwright install chromium && npm run build && npm run test:e2e
 - CI: xUnit unitari e con PostgreSQL reale, build frontend, Playwright e smoke Docker Compose.
 - Lavorare solo su main. Non fondere death.
-- Debiti bloccanti produzione: lockfile npm e npm ci, scansione antivirus/validazione magic bytes, limitazione chiamate, audit completo, idempotenza, backup/migrazioni, database RLS, test OAuth/MCP su client reali, deploy automatizzato su Azure, secret vault.
+- Debiti bloccanti produzione: lockfile npm e npm ci, scansione antivirus/validazione magic bytes, limitazione chiamate, audit completo, idempotenza, backup/migrazioni, provisioning e rotazione dei privilegi RLS in produzione, test OAuth/MCP su client reali, deploy automatizzato su Azure, secret vault.
 
 La build iniziale CI ha guidato la correzione delle dipendenze e la scelta dell'immagine S3 open-source disponibile sul registry.
 

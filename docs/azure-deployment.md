@@ -9,8 +9,8 @@ Non usare immagini né credenziali del Compose locale in Azure.
 2. Provisionare Entra ID: app registration, scope peritial.read/peritial.write, audience e tenant_id firmato.
 3. Configurare backend Terraform remoto cifrato e segreti da fonte protetta, non da file versionati.
 4. terraform -chdir=infra init && terraform -chdir=infra plan && terraform -chdir=infra apply.
-5. Applicare scripts/db/001_init.sql tramite runner/job con accesso alla VNet privata; la procedura automatica versionata è ancora da completare.
+5. Applicare `scripts/db/001_init.sql` come amministratore tramite runner/job su VNet privata. Il ruolo `peritial_app` nasce NOLOGIN e senza privilegi elevati: abilitarlo con una credenziale generata e gestita separatamente, senza BYPASSRLS, prima di attivare l'API. Il container usa `postgres_app_login` e `postgres_app_password`, mai le credenziali amministrative. L'automazione delle migrazioni e del provisioning è ancora da completare (#6, #17); non applicare `002_dev_app_role.sql` ad Azure.
 6. Verificare API, MCP OAuth discovery, client MCP e test cross-tenant prima di approvare il rilascio.
 
 ## Gate mancanti prima della produzione
-Terraform non è stato applicato a una subscription; servono pipeline immagini, deploy automatico, firma/scanning, configurazione frontend runtime, migrazioni controllate, least-privilege DB, RLS, gestione chiavi e rotazione, backup/restore, antivirus file, audit e integrazione OIDC/MCP. Il segreto DB appare nello state Terraform: richiedere backend cifrato e ACL restrittive.
+Terraform non è stato applicato a una subscription; servono pipeline immagini, deploy automatico, firma/scanning, configurazione frontend runtime, migrazioni controllate, provisioning privilegi RLS e rotazione credenziali, gestione chiavi e rotazione, backup/restore, antivirus file, audit e integrazione OIDC/MCP. Il segreto DB appare nello state Terraform: richiedere backend cifrato e ACL restrittive.
