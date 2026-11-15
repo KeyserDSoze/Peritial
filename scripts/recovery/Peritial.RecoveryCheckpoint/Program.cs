@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Security.Cryptography;
 using Amazon.Runtime;
 using Amazon.S3;
 using Npgsql;
@@ -43,16 +44,34 @@ try
     if (args[0] == "export")
     {
         var archive = Required("PERITIAL_ARCHIVE_DIR");
-        var manifest = await ObjectRecoveryArchive.ExportAsync(db, s3, bucket, archive);
-        Console.WriteLine($"Object archive exported: {manifest.Checkpoint.Documents.Count} S3 blobs. Secure and preserve the directory.");
+        var signingKey = ArchiveHmacKey.Load();
+        try
+        {
+            var manifest = await ObjectRecoveryArchive.ExportAsync(
+                db, s3, bucket, archive, signingKey);
+            Console.WriteLine($"Object archive exported: {manifest.Checkpoint.Documents.Count} S3 blobs. Secure and preserve the directory.");
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(signingKey);
+        }
     }
     else if (args[0] == "restore-objects")
     {
         if (Environment.GetEnvironmentVariable("PERITIAL_RESTORE_OBJECTS_CONFIRM") != "EMPTY_DESTINATION_BUCKET")
             throw new InvalidOperationException("Restoring object bytes requires empty destination confirmation.");
         var archive = Required("PERITIAL_ARCHIVE_DIR");
-        var imported = await ObjectRecoveryArchive.ImportAsync(db, s3, bucket, archive);
-        Console.WriteLine($"Object archive restored and verified: {imported} S3 blobs.");
+        var signingKey = ArchiveHmacKey.Load();
+        try
+        {
+            var imported = await ObjectRecoveryArchive.ImportAsync(
+                db, s3, bucket, archive, signingKey);
+            Console.WriteLine($"Object archive restored and verified: {imported} S3 blobs.");
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(signingKey);
+        }
     }
     else if (args[0] == "capture")
     {
