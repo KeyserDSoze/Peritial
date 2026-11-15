@@ -110,6 +110,7 @@ END $$;
 GRANT USAGE ON SCHEMA public TO peritial_recovery;
 REVOKE ALL ON upload_intents FROM PUBLIC;
 GRANT SELECT, INSERT, DELETE ON upload_intents TO peritial_app;
+GRANT UPDATE (lease_expires_at_utc) ON upload_intents TO peritial_app;
 GRANT SELECT, UPDATE, DELETE ON upload_intents TO peritial_recovery;
 GRANT SELECT (tenant_id, storage_key) ON documents TO peritial_recovery;
 
