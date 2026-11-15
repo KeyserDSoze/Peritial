@@ -20,6 +20,10 @@ public static class ObjectRecoveryArchive
         IReadOnlyList<string> ContentTypes);
 
     private const string ManifestName = "manifest.json";
+    private const string AuthenticatorName = "manifest.hmac";
+    // Domain separation ensures a key used for another purpose cannot
+    // accidentally authenticate these exact bytes under a different protocol.
+    private static ReadOnlySpan<byte> AuthenticationContext => "Peritial.S3Archive.Manifest.HMACSHA256.v1\n"u8;
     private const string ObjectDirectory = "objects";
     private const long MaxManifestBytes = 50_000_000;
 
@@ -30,8 +34,9 @@ public static class ObjectRecoveryArchive
     /// </summary>
     public static async Task<ArchiveManifest> ExportAsync(
         NpgsqlDataSource administrator, IAmazonS3 source, string bucket,
-        string destinationDirectory, CancellationToken ct = default)
+        string destinationDirectory, byte[] signingKey, CancellationToken ct = default)
     {
+        RequireSigningKey(signingKey);
         CheckNewDestination(destinationDirectory);
         var checkpoint = await ObjectRecoveryCheckpoint.CaptureAsync(
             administrator, source, bucket, ct);
@@ -63,10 +68,23 @@ public static class ObjectRecoveryArchive
                         "Source S3 object changed during archive export; discard checkpoint.");
             }
             var bundle = new ArchiveManifest(1, checkpoint, contentTypes);
+            var json = JsonSerializer.SerializeToUtf8Bytes(bundle);
+            if (json.Length is <= 0 or > MaxManifestBytes)
+                throw new InvalidOperationException("Archive metadata exceeds allowed size.");
             await using (var stream = new FileStream(
                 Path.Combine(stage, ManifestName), PrivateWriteOptions()))
             {
-                await JsonSerializer.SerializeAsync(stream, bundle, cancellationToken: ct);
+                await stream.WriteAsync(json, ct);
+                await stream.FlushAsync(ct);
+            }
+            // Authenticate the exact serialized bytes, including tenant IDs,
+            // storage keys, digests, content types and their order. The key is
+            // never included in the archive and is held outside backup media.
+            var authenticator = SignManifest(signingKey, json);
+            await using (var stream = new FileStream(
+                Path.Combine(stage, AuthenticatorName), PrivateWriteOptions()))
+            {
+                await stream.WriteAsync(authenticator, ct);
                 await stream.FlushAsync(ct);
             }
             CheckNewDestination(destinationDirectory);
@@ -88,9 +106,9 @@ public static class ObjectRecoveryArchive
     /// </summary>
     public static async Task<int> ImportAsync(
         NpgsqlDataSource restoredDatabase, IAmazonS3 destination, string bucket,
-        string archiveDirectory, CancellationToken ct = default)
+        string archiveDirectory, byte[] signingKey, CancellationToken ct = default)
     {
-        var manifest = await ReadAndValidateAsync(archiveDirectory, ct);
+        var manifest = await ReadAndValidateAsync(archiveDirectory, signingKey, ct);
         await ObjectRecoveryCheckpoint.VerifyMetadataAsync(
             restoredDatabase, manifest.Checkpoint, ct);
 
@@ -141,30 +159,41 @@ public static class ObjectRecoveryArchive
     }
 
     public static async Task<ArchiveManifest> ReadAndValidateAsync(
-        string archiveDirectory, CancellationToken ct = default)
+        string archiveDirectory, byte[] signingKey, CancellationToken ct = default)
     {
+        RequireSigningKey(signingKey);
         if (!Path.IsPathFullyQualified(archiveDirectory) ||
             !Directory.Exists(archiveDirectory) ||
             IsLink(archiveDirectory))
             throw new InvalidOperationException("Archive directory is missing or unsafe.");
 
         var manifestPath = Path.Combine(archiveDirectory, ManifestName);
+        var authenticatorPath = Path.Combine(archiveDirectory, AuthenticatorName);
         var objectDir = Path.Combine(archiveDirectory, ObjectDirectory);
         if (!File.Exists(manifestPath) || IsLink(manifestPath) ||
+            !File.Exists(authenticatorPath) || IsLink(authenticatorPath) ||
+            new FileInfo(authenticatorPath).Length != 32 ||
             !Directory.Exists(objectDir) || IsLink(objectDir) ||
             new FileInfo(manifestPath).Length is <= 0 or > MaxManifestBytes)
-            throw new InvalidOperationException("Archive manifest or content directory is unsafe.");
+            throw new InvalidOperationException("Archive manifest, authentication or content directory is unsafe.");
 
         var topEntries = Directory.EnumerateFileSystemEntries(archiveDirectory)
             .Select(Path.GetFileName).ToArray();
-        if (topEntries.Length != 2 ||
+        if (topEntries.Length != 3 ||
             !topEntries.Contains(ManifestName, StringComparer.Ordinal) ||
+            !topEntries.Contains(AuthenticatorName, StringComparer.Ordinal) ||
             !topEntries.Contains(ObjectDirectory, StringComparer.Ordinal))
             throw new InvalidOperationException("Archive directory has unexpected entries.");
 
-        await using var stream = new FileStream(
-            manifestPath, FileMode.Open, FileAccess.Read, FileShare.Read);
-        var manifest = await JsonSerializer.DeserializeAsync<ArchiveManifest>(stream, cancellationToken: ct);
+        // Verify BEFORE deserialization, DB access or the first S3 PUT. Use the
+        // same byte buffer for authentication and parsing to avoid a second
+        // read of potentially modified manifest bytes.
+        var raw = await File.ReadAllBytesAsync(manifestPath, ct);
+        var stored = await File.ReadAllBytesAsync(authenticatorPath, ct);
+        var expected = SignManifest(signingKey, raw);
+        if (stored.Length != 32 || !CryptographicOperations.FixedTimeEquals(stored, expected))
+            throw new InvalidOperationException("Archive manifest authentication failed.");
+        var manifest = JsonSerializer.Deserialize<ArchiveManifest>(raw);
         if (manifest is null || manifest.ArchiveVersion != 1 ||
             manifest.Checkpoint is null || manifest.Checkpoint.FormatVersion != 1 ||
             manifest.Checkpoint.Documents is null || manifest.ContentTypes is null ||
@@ -188,6 +217,22 @@ public static class ObjectRecoveryArchive
                 throw new InvalidOperationException("Archive object entry invalid or incomplete.");
         }
         return manifest;
+    }
+
+    private static void RequireSigningKey(byte[] key)
+    {
+        if (key is null || key.Length != 32)
+            throw new InvalidOperationException(
+                "An independent, exactly 32-byte archive HMAC key is required.");
+    }
+
+    private static byte[] SignManifest(byte[] key, ReadOnlySpan<byte> bytes)
+    {
+        RequireSigningKey(key);
+        using var hmac = IncrementalHash.CreateHMAC(HashAlgorithmName.SHA256, key);
+        hmac.AppendData(AuthenticationContext);
+        hmac.AppendData(bytes);
+        return hmac.GetHashAndReset();
     }
 
     private static string NameFor(int index) =>
