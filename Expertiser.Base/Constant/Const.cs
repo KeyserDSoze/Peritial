@@ -7,11 +7,11 @@ namespace Expertiser
     public static class Const
     {
 #if DEBUG
-        public const string DatabaseConnectionString = "Server=tcp:expertydb.database.windows.net;Initial Catalog=Experty;Persist Security Info=True;User ID=experty;Password=REDACTED;MultipleActiveResultSets=True;Connection Timeout=30;";
-        public const string StorageConnectionString = "DefaultEndpointsProtocol=https;AccountName=expertysa;AccountKey=REDACTED;EndpointSuffix=core.windows.net";
+        public static string DatabaseConnectionString => System.Environment.GetEnvironmentVariable("EXPERTISER_DATABASE_CONNECTION_STRING") ?? string.Empty;
+        public static string StorageConnectionString => System.Environment.GetEnvironmentVariable("EXPERTISER_STORAGE_CONNECTION_STRING") ?? string.Empty;
 #else
-        public const string DatabaseConnectionString = "Server=tcp:expertydb.database.windows.net;Initial Catalog=Experty;Persist Security Info=True;User ID=experty;Password=REDACTED;MultipleActiveResultSets=True;Connection Timeout=30;";
-        public const string StorageConnectionString = "DefaultEndpointsProtocol=https;AccountName=expertysa;AccountKey=REDACTED;EndpointSuffix=core.windows.net";
+        public static string DatabaseConnectionString => System.Environment.GetEnvironmentVariable("EXPERTISER_DATABASE_CONNECTION_STRING") ?? string.Empty;
+        public static string StorageConnectionString => System.Environment.GetEnvironmentVariable("EXPERTISER_STORAGE_CONNECTION_STRING") ?? string.Empty;
 #endif
         public static class Email
         {
