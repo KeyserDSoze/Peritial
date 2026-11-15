@@ -24,6 +24,23 @@ public sealed class PgUploadIntentLedger(NpgsqlDataSource dataSource) : IUploadI
         await scope.CommitAsync(ct);
     }
 
+    public async Task<bool> RenewAsync(TenantId tenant, Guid id, CancellationToken ct = default)
+    {
+        await using var scope = await TenantDbScope.OpenAsync(dataSource, tenant, ct);
+        int updated;
+        await using (var cmd = scope.Command(
+            "UPDATE upload_intents SET lease_expires_at_utc = clock_timestamp() + interval '2 minutes' " +
+            "WHERE tenant_id=@tenant AND document_id=@id " +
+            "AND lease_expires_at_utc > clock_timestamp()"))
+        {
+            cmd.Parameters.AddWithValue("tenant", tenant.Value);
+            cmd.Parameters.AddWithValue("id", id);
+            updated = await cmd.ExecuteNonQueryAsync(ct);
+        }
+        await scope.CommitAsync(ct);
+        return updated == 1;
+    }
+
     public async Task ForgetAsync(TenantId tenant, Guid id, CancellationToken ct = default)
     {
         await using var scope = await TenantDbScope.OpenAsync(dataSource, tenant, ct);

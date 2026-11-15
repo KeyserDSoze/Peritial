@@ -121,7 +121,9 @@ public sealed class FileIngestionService(
         {
             // A PUT error cannot have committed metadata (metadata is written
             // only after this call returns). Synchronous cleanup is safe here.
-            await objects.PutAsync(key, buffer, contentType, ct);
+            await new UploadLeaseHeartbeat(uploadIntents).RunPutAsync(
+                context.TenantId, id,
+                uploadToken => objects.PutAsync(key, buffer, contentType, uploadToken), ct);
         }
         catch (Exception putError)
         {

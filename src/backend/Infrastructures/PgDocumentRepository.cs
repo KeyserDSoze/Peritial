@@ -24,7 +24,7 @@ public sealed class PgDocumentRepository(NpgsqlDataSource dataSource) : IDocumen
         // Arbitrates with SELECT ... FOR UPDATE by the reconciler. If cleanup
         // won, the intent is gone and no metadata/audit success may commit.
         await using (var take = scope.Command(
-            "DELETE FROM upload_intents WHERE tenant_id=@tenant AND document_id=@id AND storage_key=@key"))
+            "DELETE FROM upload_intents WHERE tenant_id=@tenant AND document_id=@id AND storage_key=@key AND lease_expires_at_utc > clock_timestamp()"))
         {
             take.Parameters.AddWithValue("tenant", item.TenantId.Value);
             take.Parameters.AddWithValue("id", item.Id);

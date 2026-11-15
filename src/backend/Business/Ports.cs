@@ -44,5 +44,7 @@ public sealed record DocumentRecord(
 public interface IUploadIntentLedger
 {
     Task RecordAsync(TenantId tenant, Guid documentId, string storageKey, CancellationToken ct = default);
+    // Returns false if intent was removed/expired. Never resurrect an expired lease.
+    Task<bool> RenewAsync(TenantId tenant, Guid documentId, CancellationToken ct = default);
     Task ForgetAsync(TenantId tenant, Guid documentId, CancellationToken ct = default);
 }

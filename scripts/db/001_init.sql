@@ -87,10 +87,17 @@ CREATE TABLE IF NOT EXISTS upload_intents (
     document_id uuid NOT NULL,
     storage_key text NOT NULL,
     created_at_utc timestamptz NOT NULL DEFAULT now(),
+    lease_expires_at_utc timestamptz NOT NULL DEFAULT (now() + interval '2 minutes'),
     PRIMARY KEY (tenant_id, document_id),
     UNIQUE (tenant_id, storage_key)
 );
 CREATE INDEX IF NOT EXISTS ix_upload_intents_created ON upload_intents (created_at_utc);
+-- Re-runnable bootstrap for an existing local database with older intents.
+ALTER TABLE upload_intents ADD COLUMN IF NOT EXISTS lease_expires_at_utc
+    timestamptz NOT NULL DEFAULT (now() + interval '2 minutes');
+CREATE INDEX IF NOT EXISTS ix_upload_intents_lease
+    ON upload_intents (created_at_utc, lease_expires_at_utc);
+
 
 -- Dedicated, non-BYPASSRLS worker: globally sees only pending upload keys and
 -- the minimum document columns needed to decide whether deletion is safe.

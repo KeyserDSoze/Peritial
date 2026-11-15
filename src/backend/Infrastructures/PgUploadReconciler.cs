@@ -22,7 +22,7 @@ public sealed class PgUploadReconciler(NpgsqlDataSource recoverySource, IObjectS
         string key;
         await using (var pick = new NpgsqlCommand(
             "SELECT tenant_id, document_id, storage_key FROM upload_intents " +
-            "WHERE created_at_utc < @cutoff ORDER BY created_at_utc LIMIT 1 FOR UPDATE SKIP LOCKED",
+            "WHERE created_at_utc < @cutoff AND lease_expires_at_utc < clock_timestamp() ORDER BY created_at_utc LIMIT 1 FOR UPDATE SKIP LOCKED",
             conn, tx))
         {
             pick.Parameters.AddWithValue("cutoff", olderThanUtc);
