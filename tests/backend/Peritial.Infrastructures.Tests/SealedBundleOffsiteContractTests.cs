@@ -19,6 +19,7 @@ public sealed class SealedBundleOffsiteContractTests
 
         var id = Guid.NewGuid().ToString("N");
         var incompleteId = Guid.NewGuid().ToString("N");
+        var replayId = Guid.NewGuid().ToString("N");
         var scratch = Path.Combine("/dev/shm", "peritial-offsite-" + id);
         var disk = Path.Combine(Path.GetTempPath(), "peritial-offsite-encrypted-" + id);
         Directory.CreateDirectory(scratch, UnixFileMode.UserRead |
@@ -74,6 +75,33 @@ public sealed class SealedBundleOffsiteContractTests
                     RandomNumberGenerator.GetBytes(32)));
             Assert.False(Directory.Exists(retrieved));
 
+            // A copied bundle cannot impersonate another backup ID even when
+            // all ciphertext files and their SHA-256 digests still match.
+            var originalPrefix = "sealed-v1/" + id + "/";
+            var replayPrefix = "sealed-v1/" + replayId + "/";
+            var listing = await client.ListObjectsV2Async(new ListObjectsV2Request
+            {
+                BucketName = bucket, Prefix = originalPrefix
+            });
+            foreach (var item in listing.S3Objects ?? [])
+            {
+                using var from = await client.GetObjectAsync(bucket, item.Key);
+                await using var copied = new MemoryStream();
+                await from.ResponseStream.CopyToAsync(copied);
+                copied.Position = 0;
+                await client.PutObjectAsync(new PutObjectRequest
+                {
+                    BucketName = bucket,
+                    Key = replayPrefix + item.Key[originalPrefix.Length..],
+                    InputStream = copied,
+                    AutoCloseStream = false,
+                    IfNoneMatch = "*"
+                });
+            }
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                SealedBundleOffsite.DownloadAsync(client, bucket, replayId, retrieved, aesKey));
+            Assert.False(Directory.Exists(retrieved));
+
             // An incomplete upload without the last-write completion marker
             // is not a valid remote backup and must never publish local files.
             await client.PutObjectAsync(new PutObjectRequest
@@ -116,7 +144,7 @@ public sealed class SealedBundleOffsiteContractTests
         }
         finally
         {
-            foreach (var prefix in new[] { id, incompleteId })
+            foreach (var prefix in new[] { id, incompleteId, replayId })
             {
                 string token = null!;
                 do
