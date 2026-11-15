@@ -5,7 +5,8 @@ namespace Peritial.Business;
 public sealed record DocumentDto(Guid Id, Guid? PeriziaId, string FileName, string ContentType, long Length);
 
 public sealed class FileIngestionService(
-    ITenantContext context, IPeriziaRepository perizie, IDocumentRepository documents, IObjectStore objects)
+    ITenantContext context, IPeriziaRepository perizie, IDocumentRepository documents, IObjectStore objects,
+    ISecurityAuditTrail audit)
 {
     public const long MaxUploadBytes = 25 * 1024 * 1024;
     public const int MaxMcpBytes = 4 * 1024 * 1024;
@@ -25,7 +26,12 @@ public sealed class FileIngestionService(
         CancellationToken ct = default)
     {
         if (!context.HasScope("peritial.write"))
+        {
+            await audit.AppendAsync(new SecurityAuditEvent(
+                Guid.NewGuid(), context.TenantId, context.Subject, "document.ingest",
+                "denied", null, DateTime.UtcNow), ct);
             throw new UnauthorizedAccessException("Insufficient OAuth scope.");
+        }
 
         if (size is <= 0 or > MaxUploadBytes)
             throw new ArgumentException("Invalid file size.", nameof(size));
@@ -70,6 +76,9 @@ public sealed class FileIngestionService(
         var record = new DocumentRecord(id, context.TenantId, periziaId, safeName,
             contentType, total, key, DateTime.UtcNow);
         await documents.AddAsync(record, ct);
+        await audit.AppendAsync(new SecurityAuditEvent(
+            Guid.NewGuid(), context.TenantId, context.Subject, "document.ingest",
+            "succeeded", id, DateTime.UtcNow), ct);
         return new DocumentDto(id, periziaId, safeName, contentType, total);
     }
 
@@ -77,7 +86,12 @@ public sealed class FileIngestionService(
         string name, string contentType, string base64, Guid? periziaId = null, CancellationToken ct = default)
     {
         if (!context.HasScope("peritial.write"))
+        {
+            await audit.AppendAsync(new SecurityAuditEvent(
+                Guid.NewGuid(), context.TenantId, context.Subject, "document.ingest",
+                "denied", null, DateTime.UtcNow), ct);
             throw new UnauthorizedAccessException("Insufficient OAuth scope.");
+        }
         if (string.IsNullOrEmpty(base64) || base64.Length > ((MaxMcpBytes + 2) / 3 * 4 + 8))
             throw new ArgumentException("MCP upload exceeds the limit.");
 

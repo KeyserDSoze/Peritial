@@ -64,6 +64,21 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 }
                 return Task.CompletedTask;
             },
+            OnForbidden = async context =>
+            {
+                // Only validated signed identity is logged. No HTTP body, token,
+                // reference, document name or MCP arguments are ever persisted.
+                if (Guid.TryParse(context.Principal?.FindFirst("tenant_id")?.Value, out var tenant) &&
+                    tenant != Guid.Empty &&
+                    context.Principal?.FindFirst("sub")?.Value is { Length: > 0 } actor)
+                {
+                    await context.HttpContext.RequestServices
+                        .GetRequiredService<ISecurityAuditTrail>()
+                        .AppendAsync(new SecurityAuditEvent(
+                            Guid.NewGuid(), TenantId.From(tenant), actor, "authorization.forbidden",
+                            "denied", null, DateTime.UtcNow), context.HttpContext.RequestAborted);
+                }
+            },
             OnChallenge = context =>
             {
                 if (context.Request.Path.StartsWithSegments("/mcp"))
@@ -91,6 +106,7 @@ builder.Services.AddSingleton(NpgsqlDataSource.Create(connectionString));
 builder.Services.AddScoped<ITenantContext, TenantContext>();
 builder.Services.AddScoped<IPeriziaRepository, PgPeriziaRepository>();
 builder.Services.AddScoped<IDocumentRepository, PgDocumentRepository>();
+builder.Services.AddScoped<ISecurityAuditTrail, PgSecurityAuditTrail>();
 builder.Services.AddScoped<PeriziaService>();
 builder.Services.AddScoped<FileIngestionService>();
 if (string.Equals(builder.Configuration["Storage:Provider"], "Azure", StringComparison.OrdinalIgnoreCase))

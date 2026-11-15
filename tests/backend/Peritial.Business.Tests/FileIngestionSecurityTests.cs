@@ -124,7 +124,7 @@ public sealed class FileIngestionSecurityTests
         var foreign = Perizia.Create(TenantId.From(Guid.NewGuid()), "FOREIGN");
         var store = new SpyStore();
         var docs = new SpyDocuments();
-        var service = new FileIngestionService(new FakeTenant(true), new FakePerizie(foreign), docs, store);
+        var service = new FileIngestionService(new FakeTenant(true), new FakePerizie(foreign), docs, store, new FakeAudit());
 
         await Assert.ThrowsAsync<KeyNotFoundException>(() =>
             service.IngestAsync("fattura.pdf", "application/pdf",
@@ -137,7 +137,12 @@ public sealed class FileIngestionSecurityTests
     {
         var store = new SpyStore();
         var docs = new SpyDocuments();
-        return (new FileIngestionService(new FakeTenant(canWrite), new FakePerizie(), docs, store), store, docs);
+        return (new FileIngestionService(new FakeTenant(canWrite), new FakePerizie(), docs, store, new FakeAudit()), store, docs);
+    }
+
+    private sealed class FakeAudit : ISecurityAuditTrail
+    {
+        public Task AppendAsync(SecurityAuditEvent entry, CancellationToken ct = default) => Task.CompletedTask;
     }
 
     private sealed class FakeTenant(bool canWrite) : ITenantContext
