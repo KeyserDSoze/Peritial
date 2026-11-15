@@ -49,7 +49,7 @@ public static class SealedBundleOffsite
         var inventory = JsonSerializer.SerializeToUtf8Bytes(new Inventory(1, entries));
         if (inventory.Length == 0 || inventory.Length > MaxManifestBytes)
             throw new InvalidOperationException("Encrypted inventory exceeds maximum length.");
-        var signature = Sign(encryptionKey, inventory);
+        var signature = Sign(encryptionKey, backupId, inventory);
 
         // Fail closed on any 412/preexisting key: never overwrite a sealed
         // backup. The sole completion marker is written LAST.
@@ -107,7 +107,7 @@ public static class SealedBundleOffsite
         if (completed.Length != 32 || signed.Length != 32 ||
             !CryptographicOperations.FixedTimeEquals(
                 completed, CompletionDigest(raw, signed)) ||
-            !CryptographicOperations.FixedTimeEquals(signed, Sign(encryptionKey, raw)))
+            !CryptographicOperations.FixedTimeEquals(signed, Sign(encryptionKey, backupId, raw)))
             throw new InvalidOperationException("Remote encrypted inventory authentication failed.");
 
         Inventory? inventory;
@@ -178,11 +178,20 @@ public static class SealedBundleOffsite
 
     private static string Prefix(string id) => "sealed-v1/" + id + "/";
 
-    private static byte[] Sign(byte[] key, byte[] raw)
+    private static byte[] Sign(byte[] key, string backupId, byte[] raw)
     {
         var derived = HMACSHA256.HashData(key,
             "Peritial.SealedBundle.OffsiteTransfer.HMACSHA256.v1"u8);
-        try { return HMACSHA256.HashData(derived, raw); }
+        try
+        {
+            using var mac = IncrementalHash.CreateHMAC(HashAlgorithmName.SHA256, derived);
+            // The backup identity is authenticated as part of the protocol,
+            // preventing re-labeling old ciphertext under a fresh backup ID.
+            // Backup IDs are fixed-length 32-character ASCII hex strings.
+            mac.AppendData(System.Text.Encoding.ASCII.GetBytes(backupId));
+            mac.AppendData(raw);
+            return mac.GetHashAndReset();
+        }
         finally { CryptographicOperations.ZeroMemory(derived); }
     }
 
