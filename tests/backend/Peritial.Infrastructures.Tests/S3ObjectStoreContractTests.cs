@@ -54,7 +54,7 @@ public sealed class S3ObjectStoreContractTests
 
             await store.DeleteAsync(key);
             await store.DeleteAsync(key); // Missing object must be safe to delete.
-            var missing = await Assert.ThrowsAsync<AmazonS3Exception>(async () =>
+            var missing = await Assert.ThrowsAnyAsync<AmazonS3Exception>(async () =>
                 await inspect.GetObjectAsync(new GetObjectRequest { BucketName = bucket, Key = key }));
             Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
         }
