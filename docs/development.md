@@ -19,3 +19,7 @@ La CI Docker Compose esegue ora un test Playwright autenticato reale (Keycloak, 
 ## Test audit
 
 SecurityAuditUseCaseTests verifica tenant, subject, azione ed esito senza riferimenti o payload. SecurityAuditRepositoryTests usa PostgreSQL reale e il ruolo INSERT-only per verificare RLS. La CI Docker Compose verifica audit realmente persistito dopo REST e MCP. Le fixture DDL/ruoli PostgreSQL usano un advisory lock per impedire corse del catalogo tra test paralleli. Vedere docs/audit.md.
+
+## Transazioni atomiche audit/metadata (#21)
+
+PeriziaAtomicAuditTests prova su PostgreSQL reale che INSERT/UPDATE perizie e audit si committano insieme, che un audit duplicato annulla CREATE o UPDATE, e che gli eventi cross-tenant non modificano dati. DocumentAtomicAuditTests applica gli stessi controlli ai metadata dei file. Tutte le mutazioni REST/MCP usano i metodi AddAuditedAsync/UpdateAuditedAsync delle porte Business; il ruolo DB resta soggetto a FORCE RLS. La lettura degli oggetti esterni e la loro compensazione in caso di errore restano fuori dalla transazione PostgreSQL: ADR 0008 e issue #5/#21.

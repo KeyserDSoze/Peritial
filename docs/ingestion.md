@@ -18,7 +18,7 @@ REST: POST /api/files (multipart file, periziaId opzionale); MCP: tool ingest_fi
 
 ## Residui bloccanti (#5 e #2)
 - Antivirus e quarantena, validazione profonda del contenuto e protezione da zip bomb.
-- Compensazione storage/database, audit e rate limiting, test upload reale su entrambi gli adapter Azure/S3.
+- Metadata PostgreSQL e audit success sono ora commit/rollback in un'unica transazione RLS, ma l'oggetto S3/Azure Blob è scritto **prima** del commit. Mancano staging/quarantena, compensazione per oggetti orfani, idempotenza/rate limiting e test upload/failure-injection su entrambi gli adapter Azure/S3 (#5/#21).
 - Introduzione di limite globale di concorrenza/stream su endpoint e verifica REST/MCP attraverso test API reali.
 
 ## Limite HTTP prima del Business
