@@ -2,7 +2,7 @@
 
 La vecchia app è conservata in death come documentazione funzionale. Sviluppo soltanto su main, senza merge.
 
-Backend .NET 10 DDD (Domains / Business / Infrastructures / Applications), API REST e Model Context Protocol con OAuth; frontend React/TypeScript PWA con shadcn-style components, i18n (it/en), dark/light. PostgreSQL + Azure Blob o MinIO; Keycloak locale, Entra ID Azure.
+Backend .NET 10 DDD (Domains / Business / Infrastructures / Applications), API REST e Model Context Protocol con OAuth; frontend React/TypeScript PWA con shadcn-style components, i18n (it/en), dark/light. PostgreSQL + Azure Blob o SeaweedFS (S3); Keycloak locale, Entra ID Azure.
 
 ## Esecuzione e test
 - docker compose -f docker/compose.yml up --build -d

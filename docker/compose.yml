@@ -6,17 +6,15 @@ services:
     ports: ["5432:5432"]
     volumes: ["pgdata:/var/lib/postgresql/data", "../scripts/db/001_init.sql:/docker-entrypoint-initdb.d/001_init.sql:ro"]
     healthcheck: {test: ["CMD-SHELL", "pg_isready -U peritial -d peritial"], interval: 5s, timeout: 3s, retries: 20}
-  minio:
-    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
-    command: server /data --console-address ":9001"
-    environment: {MINIO_ROOT_USER: localminio, MINIO_ROOT_PASSWORD: local-only-minio-secret}
-    ports: ["9000:9000", "9001:9001"]
-    volumes: ["miniodata:/data"]
-  minio-init:
-    image: minio/mc:latest
-    depends_on: [minio]
-    entrypoint: ["/bin/sh", "-c"]
-    command: ["until mc alias set local http://minio:9000 localminio local-only-minio-secret; do sleep 2; done; mc mb --ignore-existing local/peritial;"]
+  seaweedfs:
+    image: chrislusf/seaweedfs:latest
+    environment:
+      AWS_ACCESS_KEY_ID: localminio
+      AWS_SECRET_ACCESS_KEY: local-only-minio-secret
+      S3_BUCKET: peritial
+      WEED_ADMIN_PASSWORD: local-only-admin
+    ports: ["8333:8333"]
+    volumes: ["seaweeddata:/data"]
   keycloak:
     image: quay.io/keycloak/keycloak:26.4
     command: ["start-dev", "--import-realm"]
@@ -35,7 +33,7 @@ services:
       Auth__Resource: http://localhost:8080
       Auth__RequireHttpsMetadata: "false"
       Storage__Provider: Minio
-      Storage__Minio__Endpoint: http://minio:9000
+      Storage__Minio__Endpoint: http://seaweedfs:8333
       Storage__Minio__AccessKey: localminio
       Storage__Minio__SecretKey: local-only-minio-secret
       Storage__Minio__Bucket: peritial
@@ -43,7 +41,7 @@ services:
     ports: ["8080:8080"]
     depends_on:
       postgres: {condition: service_healthy}
-      minio-init: {condition: service_completed_successfully}
+      seaweedfs: {condition: service_started}
       keycloak: {condition: service_started}
   frontend:
     build: {context: .., dockerfile: src/frontend/Dockerfile}
@@ -61,4 +59,4 @@ services:
       postgres: {condition: service_healthy}
 volumes:
   pgdata:
-  miniodata:
+  seaweeddata:

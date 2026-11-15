@@ -11,7 +11,7 @@ ASP.NET Core Applications (.NET 10) ---- MCP Streamable HTTP (/mcp)
 Business (use cases) --> Domains (perizie / stati / invarianti)
     |
     v
-Infrastructures (repository PostgreSQL; object store Azure Blob o MinIO)
+Infrastructures (repository PostgreSQL; object store Azure Blob o S3 compatibile (SeaweedFS))
 ```
 
 - Un dominio: gestione di sinistri e perizie; codice organizzato per responsabilità.
