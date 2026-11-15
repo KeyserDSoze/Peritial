@@ -63,18 +63,30 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     expect(goodFile.status(), await goodFile.text()).toBe(201);
     expect((await goodFile.json() as {fileName: string}).fileName).toBe("valid.pdf");
 
-    // EICAR is a harmless industry-standard malware-test signature. Even with
-    // a valid PDF prefix and a signed write token it MUST never enter storage.
-    const eicar = "X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*";
-    const infectedPdf = Buffer.concat([
-      Buffer.from("%PDF-1.7\n"), Buffer.from(eicar, "ascii"), Buffer.from("\n%%EOF\n")
-    ]);
+    // Safe EICAR test string is an entire stored file inside a minimal DOCX ZIP.
+    // Appending it to a synthetic PDF is NOT reliable: ClamAV's PDF decoder
+    // can legitimately skip bytes not referenced by the PDF structure.
+    const infectedDocx = Buffer.from([
+      "UEsDBBQAAAAAAHx0b10Uo0WfVAAAAFQAAAATAAAAW0NvbnRlbnRfVHlwZXNdLnhtbDxUeXBlcyB4bWxucz0iaHR0cDovL3NjaGVtYXMub3BlbnhtbGZvcm1h",
+      "dHMub3JnL3BhY2thZ2UvMjAwNi9jb250ZW50LXR5cGVzIj48L1R5cGVzPlBLAwQUAAAAAAB8dG9dTNdhw2kAAABpAAAAEQAAAHdvcmQvZG9jdW1lbnQueG1s",
+      "PHc6ZG9jdW1lbnQgeG1sbnM6dz0iaHR0cDovL3NjaGVtYXMub3BlbnhtbGZvcm1hdHMub3JnL3dvcmRwcm9jZXNzaW5nbWwvMjAwNi9tYWluIj48dzpib2R5",
+      "Lz48L3c6ZG9jdW1lbnQ+UEsDBBQAAAAAAHx0b108z1FoRAAAAEQAAAAJAAAAZWljYXIuY29tWDVPIVAlQEFQWzRcUFpYNTQoUF4pN0NDKTd9JEVJQ0FSLVNU",
+      "QU5EQVJELUFOVElWSVJVUy1URVNULUZJTEUhJEgrSCpQSwECFAMUAAAAAAB8dG9dFKNFn1QAAABUAAAAEwAAAAAAAAAAAAAAgAEAAAAAW0NvbnRlbnRfVHlw",
+      "ZXNdLnhtbFBLAQIUAxQAAAAAAHx0b11M12HDaQAAAGkAAAARAAAAAAAAAAAAAACAAYUAAAB3b3JkL2RvY3VtZW50LnhtbFBLAQIUAxQAAAAAAHx0b108z1Fo",
+      "RAAAAEQAAAAJAAAAAAAAAAAAAACAAR0BAABlaWNhci5jb21QSwUGAAAAAAMAAwC3AAAAiAEAAAAA"
+    ].join(""), "base64");
     const blockedFile = await request.post("http://localhost:8080/api/files", {
       headers: { Authorization: "Bearer " + accessToken },
-      multipart: { file: { name: "scan-test.pdf", mimeType: "application/pdf", buffer: infectedPdf } }
+      multipart: {
+        file: {
+          name: "scan-test.docx",
+          mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          buffer: infectedDocx
+        }
+      }
     });
     expect(blockedFile.status(), await blockedFile.text()).toBe(422);
-    expect(await blockedFile.text()).not.toContain(eicar);
+    expect(await blockedFile.text()).not.toContain("EICAR-STANDARD-ANTIVIRUS-TEST-FILE");
 
     // Body-size enforcement is performed by ASP.NET, not only by the business service.
     const tooLarge = await request.post("http://localhost:8080/api/files", {
