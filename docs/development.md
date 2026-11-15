@@ -6,7 +6,7 @@ Ogni use case: test rosso (xUnit / Playwright), implementazione minima, test ver
 - Frontend: cd src/frontend && npm ci && npx playwright install chromium && npm run build && npm run test:e2e
 - CI: xUnit unitari e con PostgreSQL reale, build frontend, Playwright, smoke Docker Compose e job isolato `database-recovery` (backup/restore su due server PG17 più adozione V001 legacy con backup reale, consenso e drift check).
 - Lavorare solo su main. Non fondere death.
-- Debiti bloccanti produzione: pin digest delle immagini e supply-chain, quarantena persistente e signature freshness dello scanner, limitazione chiamate, audit completo, idempotenza, backup/restore integrati con object storage verificati e upgrade di schemi legacy divergenti dalle V001, provisioning e rotazione dei privilegi RLS in produzione, test OAuth/MCP su client reali, deploy automatizzato su Azure, secret vault.
+- Debiti bloccanti produzione: pin digest delle immagini e supply-chain, quarantena persistente e signature freshness dello scanner, limitazione chiamate, audit completo, idempotenza, backup/restore integrati con object storage verificati e upgrade di altre varianti legacy non riconosciute, provisioning e rotazione dei privilegi RLS in produzione, test OAuth/MCP su client reali, deploy automatizzato su Azure, secret vault.
 
 La build iniziale CI ha guidato la correzione delle dipendenze e la scelta dell'immagine S3 open-source disponibile sul registry.
 
@@ -56,4 +56,4 @@ Il job Compose esegue `bash tests/chaos/run_mid_put.sh` dopo le normali prove OA
 
 ## Adozione V001 legacy verificata (#6, ADR 0017)
 
-`LegacySchemaAdoptionTests` genera schemi isolati tramite `SchemaBootstrap` e prova la baseline di dati reali, il journal V001/V002, il rifiuto di modifiche a colonne, indici, grants, policy FORCE RLS e oggetti aggiuntivi. Il job `database-recovery` esegue inoltre `tests/backup/run_legacy_adoption.sh` con PostgreSQL 17 reale, `pg_dump -Fc`, convalida SHA-256 e `pg_restore --list`, conferma operativa e fail-closed. Il comando `adopt` resta **offline e manuale**, non passa dall'avvio API; vedere `docs/database-migrations.md`. Non è ancora un restore DB+S3 né un test di upgrade di un ambiente produttivo.
+`LegacySchemaAdoptionTests` genera schemi isolati tramite `SchemaBootstrap` e prova la baseline di dati reali, il journal V001/V002, il rifiuto di modifiche a colonne, indici, grants, policy FORCE RLS e oggetti aggiuntivi. Il job `database-recovery` esegue inoltre `tests/backup/run_legacy_adoption.sh` e `tests/backup/run_prelease_adoption.sh` con PostgreSQL 17 reale, `pg_dump -Fc`, convalida SHA-256 e `pg_restore --list`, conferma operativa e fail-closed. I comandi `adopt` e `adopt-prelease` restano **offline e manuali**, non passa dall'avvio API; vedere `docs/database-migrations.md`. Non è ancora un restore DB+S3 né un test di upgrade di un ambiente produttivo.

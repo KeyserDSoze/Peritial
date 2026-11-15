@@ -1,6 +1,6 @@
 # Migrazioni PostgreSQL versionate — fase iniziale (#6)
 
-**Stato:** `apply` gestisce i database nuovi e già versionati; il nuovo comando **esplicito** `adopt` permette la baseline **solo per database preesistenti identici alla V001 `001_init.sql`**, con un archivio PostgreSQL integro, conferma di manutenzione e confronto esaustivo del catalogo. Non supporta schemi divergenti, aggiornamento automatico di volumi legacy o rollback/DR di produzione.
+**Stato:** `apply` gestisce i database nuovi e già versionati; il nuovo comando **esplicito** `adopt` permette la baseline **solo per database preesistenti identici alla V001 `001_init.sql`**, con un archivio PostgreSQL integro, conferma di manutenzione e confronto esaustivo del catalogo. La variante storica senza colonna/indice lease è ora supportata da un **comando distinto** `adopt-prelease`. Nessun altro drift, upgrade automatico o rollback/DR di produzione è supportato.
 
 ## Confini e identità
 
@@ -32,7 +32,7 @@
 
 ## Upgrade di un database esistente: blocco intenzionale
 
-Se il database contiene tabelle Peritial senza journal, **`apply` le rifiuta**. Per un'installazione con l'esatto schema V001 verificato, esiste un percorso amministrativo, **mai automatico**: `adopt`. Se lo schema ha colonne/indici/policy differenti, fermarsi e pianificare una migrazione specifica; non applicare `001_init.sql` di nuovo, non cancellare volumi e non creare un falso journal.
+Se il database contiene tabelle Peritial senza journal, **`apply` le rifiuta**. Per un'installazione con l'esatto schema V001 verificato, esiste un percorso amministrativo, **mai automatico**: `adopt`. Se lo schema è privo della sola colonna `upload_intents.lease_expires_at_utc` e del relativo indice/grant, usare **soltanto** `adopt-prelease` (vedere sotto). Per qualunque altra divergenza, fermarsi e pianificare una migrazione specifica; non applicare `001_init.sql` di nuovo, non cancellare volumi e non creare un falso journal.
 
 ### Procedura V001 esatta: `adopt`
 
@@ -54,12 +54,24 @@ Se il database contiene tabelle Peritial senza journal, **`apply` le rifiuta**. 
 
 La CLI è testata in `tests/backup/run_legacy_adoption.sh` contro **un PostgreSQL 17 isolato con righe di due tenant**. Questa è una prova locale/CI, non un upgrade provato su un volume Azure/on-prem reale. Tra le lacune: firme del backup, snapshot PostgreSQL/S3 coordinati, rollback integrale, prerequisiti segreti e test di failover.
 
+### Variante storica pre-lease: `adopt-prelease`
+
+Per database PostgreSQL precedenti all'introduzione del lease degli upload, con tutte le altre tabelle, policy FORCE RLS e ACL equivalenti alla V001, è disponibile un comando **manuale distinto**. Non è un riparatore generico di schemi.
+
+1. Fermare completamente API REST/MCP, worker di recovery e writer DB, predisporre il backup PostgreSQL e la copia separata dei blob, verificare il punto di ripristino. Come per `adopt`, impostare tramite ambiente amministrativo protetto `PERITIAL_MIGRATOR_POSTGRES`, `PERITIAL_LEGACY_BACKUP_FILE` (file assoluto PGDMP con `.sha256`) e `PERITIAL_LEGACY_CONFIRM=OFFLINE_BACKUP_VERIFIED`.
+2. Invocare: `dotnet run --project scripts/db/Peritial.DbMigrator -- adopt-prelease`.
+3. Il runner confronta tutto il catalogo esistente con una V001 temporanea, a cui è stata rimossa **solo** la colonna `lease_expires_at_utc` di `upload_intents` (insieme a indice e grant dipendenti). Se differisce altro, rifiuta l'adozione prima di creare il journal.
+4. Dopo match esatto, aggiunge nella stessa transazione la colonna `timestamptz NOT NULL DEFAULT (now() + interval '2 minutes')`, `ix_upload_intents_lease` e `GRANT UPDATE (lease_expires_at_utc)` al ruolo app; verifica ancora il catalogo ricostruito; registra V001 e applica V002. In caso di errore torna allo schema precedente, senza perdere intenti/documenti. `apply` deve poi applicare 0 versioni.
+5. Prima di riavviare il recovery worker, controllare gli intenti già pendenti e gli oggetti nello storage: il lease assegnato ai record storici **non prova che i blob esistano** o che il restore sia coerente con S3/Azure.
+
+`adopt` rifiuta questa variante; `adopt-prelease` rifiuta una V001 già completa, la sola assenza dell'indice con colonna presente, qualunque ACL/RLS alterata e la presenza di un journal. I test xUnit e `tests/backup/run_prelease_adoption.sh` esercitano i casi con PostgreSQL 17 reale e backup PGDMP verificato. Restano mancanti firme dei backup, restore DB+blob coordinato, upgrade reali Azure/on-prem e supporto di altre varianti legacy (ADR 0018).
+
 ## Rollback, ripristino, test
 
 - Script forward-only; non esiste un "down" automatico né rollback inter-app/oggetti. In caso di errore SQL prima del COMMIT, PostgreSQL ripristina tutte le modifiche e il journal; in caso di upgrade già committato, fermare i servizi e **ripristinare il backup** approvato mantenendo coerenza con l'object storage.
 - La suite `SchemaMigrationTests` prova su PostgreSQL reale: prima installazione, re-run idempotente, rilevazione checksum modificato, schema legacy non tracciato senza journal, migrazioni concorrenti serializzate.
-- CI: `dotnet test Peritial.slnx` con `PERITIAL_TEST_POSTGRES`; le prove avvengono in schemi isolati e non modificano dati dei tenant del test condiviso. Il job `database-recovery` ora prova backup/restore **solo PostgreSQL** su due server reali con ruoli RLS, audit e journal verificati (`docs/database-backup-restore.md`, ADR 0016). Il nuovo job CI prova anche la **baseline esplicita V001 di una demo legacy** con archivio PostgreSQL reale, rifiuto del consenso/manifest alterato, drift strutturale e conservazione dei dati. Restano privi di prova il restore coordinato dei blob, gli upgrade di schemi legacy divergenti, upgrade multi-release, Azure effettivo e rollback complessivo.
+- CI: `dotnet test Peritial.slnx` con `PERITIAL_TEST_POSTGRES`; le prove avvengono in schemi isolati e non modificano dati dei tenant del test condiviso. Il job `database-recovery` ora prova backup/restore **solo PostgreSQL** su due server reali con ruoli RLS, audit e journal verificati (`docs/database-backup-restore.md`, ADR 0016). Il nuovo job CI prova anche la **baseline esplicita V001 di una demo legacy** con archivio PostgreSQL reale, rifiuto del consenso/manifest alterato, drift strutturale e conservazione dei dati. Restano privi di prova il restore coordinato dei blob, gli upgrade di **altre** varianti legacy divergenti, upgrade multi-release, Azure effettivo e rollback complessivo.
 
 ## Ambienti Compose demo
 
-Il Compose corrente usa gli script `docker-entrypoint-initdb.d` per una **demo** e può montare volumi esistenti. Il percorso **manuale** di adozione V001 esatta è ora documentato sopra; non eseguirlo a stack attivo né su database con drift non risolto. I due meccanismi non sono intercambiabili. La sostituzione del bootstrap Compose con un servizio migrator e il percorso di upgrade completo di volumi persistenti sono attività residue della #6/#18.
+Il Compose corrente usa gli script `docker-entrypoint-initdb.d` per una **demo** e può montare volumi esistenti. I percorsi **manuali** V001 esatta e pre-lease riconosciuto sono documentati sopra; non eseguirlo a stack attivo né su database con drift non risolto. I due meccanismi non sono intercambiabili. La sostituzione del bootstrap Compose con un servizio migrator e il percorso di upgrade completo di volumi persistenti sono attività residue della #6/#18.
