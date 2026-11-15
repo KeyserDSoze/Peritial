@@ -29,6 +29,8 @@ public interface IObjectStore
 public interface IDocumentRepository
 {
     Task AddAsync(DocumentRecord record, CancellationToken cancellationToken = default);
+    // A successful ingestion MUST commit metadata + audit in the same PG transaction.
+    Task AddAuditedAsync(DocumentRecord record, SecurityAuditEvent audit, CancellationToken cancellationToken = default);
 }
 
 public sealed record DocumentRecord(

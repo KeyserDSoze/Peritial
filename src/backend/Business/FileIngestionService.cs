@@ -75,8 +75,7 @@ public sealed class FileIngestionService(
 
         var record = new DocumentRecord(id, context.TenantId, periziaId, safeName,
             contentType, total, key, DateTime.UtcNow);
-        await documents.AddAsync(record, ct);
-        await audit.AppendAsync(new SecurityAuditEvent(
+        await documents.AddAuditedAsync(record, new SecurityAuditEvent(
             Guid.NewGuid(), context.TenantId, context.Subject, "document.ingest",
             "succeeded", id, DateTime.UtcNow), ct);
         return new DocumentDto(id, periziaId, safeName, contentType, total);

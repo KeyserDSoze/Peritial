@@ -65,6 +65,10 @@ public sealed class FileIngestionSecurityTests
         Assert.Equal(1, store.Uploads);
         Assert.Equal(Pdf, store.LastBytes);
         Assert.Equal(saved.Id, Assert.Single(docs.Records).Id);
+        var auditEvent = Assert.Single(docs.AuditEvents);
+        Assert.Equal("document.ingest", auditEvent.Action);
+        Assert.Equal("succeeded", auditEvent.Outcome);
+        Assert.Equal(saved.Id, auditEvent.ResourceId);
     }
 
     [Fact]
@@ -171,6 +175,13 @@ public sealed class FileIngestionSecurityTests
         {
             Records.Add(item);
             return Task.CompletedTask;
+        }
+
+        public List<SecurityAuditEvent> AuditEvents { get; } = [];
+        public async Task AddAuditedAsync(DocumentRecord item, SecurityAuditEvent entry, CancellationToken ct = default)
+        {
+            AuditEvents.Add(entry);
+            await AddAsync(item, ct);
         }
     }
 
