@@ -69,13 +69,39 @@ docker compose -f docker/compose.yml --profile test --profile recovery-test run 
   -e PERITIAL_CHECKPOINT_S3_SECRET_KEY=local-only-minio-secret \
   -e PERITIAL_ARCHIVE_DIR=/tmp/peritial-offline-objects \
   tests sh -ec '
+    # Disposable, cryptographically random 32-byte key. Never committed,
+    # included in the archive or printed in CI output. Production uses KMS.
+    dd if=/dev/urandom of=/tmp/peritial-archive-hmac-key bs=32 count=1 status=none
+    chmod 600 /tmp/peritial-archive-hmac-key
     export PERITIAL_CHECKPOINT_POSTGRES="Host=postgres;Port=5432;Database=peritial;Username=peritial;Password=local-only-postgres"
     export PERITIAL_CHECKPOINT_S3_ENDPOINT=http://seaweedfs:8333
+
+    # Missing key and group-readable key must fail BEFORE export.
+    unset PERITIAL_ARCHIVE_HMAC_KEY_FILE
+    if dotnet run --project scripts/recovery/Peritial.RecoveryCheckpoint -- export; then
+      echo "Unsigned archive export unexpectedly succeeded" >&2
+      exit 1
+    fi
+    export PERITIAL_ARCHIVE_HMAC_KEY_FILE=/tmp/peritial-archive-hmac-key
+    chmod 644 "$PERITIAL_ARCHIVE_HMAC_KEY_FILE"
+    if dotnet run --project scripts/recovery/Peritial.RecoveryCheckpoint -- export; then
+      echo "Export accepted a group-readable HMAC key" >&2
+      exit 1
+    fi
+    chmod 600 "$PERITIAL_ARCHIVE_HMAC_KEY_FILE"
     dotnet run --project scripts/recovery/Peritial.RecoveryCheckpoint -- export
 
     export PERITIAL_CHECKPOINT_POSTGRES="Host=postgres-restore;Port=5432;Database=peritial;Username=peritial;Password=local-only-postgres"
     export PERITIAL_CHECKPOINT_S3_ENDPOINT=http://seaweedfs-restore:8333
     export PERITIAL_RESTORE_OBJECTS_CONFIRM=EMPTY_DESTINATION_BUCKET
+    dd if=/dev/urandom of=/tmp/peritial-wrong-hmac-key bs=32 count=1 status=none
+    chmod 600 /tmp/peritial-wrong-hmac-key
+    export PERITIAL_ARCHIVE_HMAC_KEY_FILE=/tmp/peritial-wrong-hmac-key
+    if dotnet run --project scripts/recovery/Peritial.RecoveryCheckpoint -- restore-objects; then
+      echo "Restore accepted an incorrect HMAC key" >&2
+      exit 1
+    fi
+    export PERITIAL_ARCHIVE_HMAC_KEY_FILE=/tmp/peritial-archive-hmac-key
     dotnet run --project scripts/recovery/Peritial.RecoveryCheckpoint -- restore-objects
 
     # Repeating import must refuse any preexisting byte, not overwrite.
@@ -83,6 +109,7 @@ docker compose -f docker/compose.yml --profile test --profile recovery-test run 
       echo "Unexpected overwrite of restored S3 bucket" >&2
       exit 1
     fi
+    rm -f /tmp/peritial-archive-hmac-key /tmp/peritial-wrong-hmac-key
   '
 
 # Verify RLS and durable metadata/audit still exist in the destination PG.
