@@ -25,3 +25,5 @@ Il bundle offline **PostgreSQL + S3 cifrato AES-256-GCM** (con chiavi indipenden
 Il recovery cifrato richiede ora **staging temporaneo Linux `tmpfs` privato, senza swap** prima di `pg_dump`/export e dopo l'unseal; workflow completo e limiti: `docs/sealed-multiservice-recovery.md`, ADR 0023. Non è un backup automatico o certificato per produzione.
 
 Il bundle AES-256-GCM può ora essere replicato **solo cifrato** su uno storage S3 indipendente, con inventario autenticato e completamento verificato (ADR 0024). Il test usa una terza istanza SeaweedFS e non costituisce un servizio di backup offsite, retention o KMS di produzione; vedere `docs/sealed-multiservice-recovery.md`.
+
+La replica cifrata verso un vero S3 richiede ora **Object Lock COMPLIANCE con versioning e almeno 30 giorni** (gate fail-closed, ADR 0025). Il server locale SeaweedFS della CI usa solo un bypass dimostrativo esplicito: **non** è un deposito WORM/backup di produzione. Runbook in `docs/sealed-multiservice-recovery.md`.
