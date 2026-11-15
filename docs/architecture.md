@@ -19,7 +19,7 @@ Infrastructures (repository PostgreSQL; object store Azure Blob o S3 compatibile
 - PostgreSQL come database comune per evitare divergenze nelle query e nelle migrazioni; provider di storage sostituibili.
 - Tenant ID derivato **esclusivamente** da JWT validato (`tenant_id` in ambito on-prem, oppure claim mappato ed emesso dal provider aziendale). Mai fidarsi di un header `X-Tenant` o di un parametro MCP.
 - Ogni query, mutazione, nome di oggetto, indice unico e audit è tenant scoped; il database applica policy PostgreSQL FORCE RLS con un ruolo non privilegiato e contesto tenant locale alla transazione. Il tenant continua a provenire dal JWT firmato; vedere ADR 0006.
-- OIDC e JWT Bearer con HTTPS, controllo issuer/audience/firma/scadenza, scope e ruoli; nessuna autenticazione anonima su dati e MCP.
+- OIDC e JWT Bearer con HTTPS, controllo issuer/audience/firma/scadenza, claim di tenant e soggetto e policy scope a livello REST/MCP, con autorizzazioni aggiuntive negli use case. Vedere ADR 0007; nessuna autenticazione anonima su dati e MCP.
 - Le risorse Azure hanno secret gestiti con Key Vault/Managed Identity prima del rollout; sviluppo locale con credenziali effimere di esempio.
 - REST e MCP condividono Business: nessun secondo percorso privilegiato per i tool.
 - Le operazioni irreversibili o sensibili richiedono autorizzazioni specifiche, audit e idempotenza.

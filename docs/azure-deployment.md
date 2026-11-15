@@ -14,3 +14,7 @@ Non usare immagini né credenziali del Compose locale in Azure.
 
 ## Gate mancanti prima della produzione
 Terraform non è stato applicato a una subscription; servono pipeline immagini, deploy automatico, firma/scanning, configurazione frontend runtime, migrazioni controllate, provisioning privilegi RLS e rotazione credenziali, gestione chiavi e rotazione, backup/restore, antivirus file, audit e integrazione OIDC/MCP. Il segreto DB appare nello state Terraform: richiedere backend cifrato e ACL restrittive.
+
+## Endpoint MCP OAuth
+
+La variabile `resource_url` deve essere l'URL HTTPS canonico dell'endpoint MCP pubblico, **incluso `/mcp`** (es. `https://api.example.org/mcp`). Il documento RFC 9728 si trova a `https://api.example.org/.well-known/oauth-protected-resource/mcp` e l'issuer di Entra deve emettere token con audience configurata, claim tenant e subject firmati e scope Peritial appropriati. La conformance con client MCP esterni e l'app registration Entra sono ancora gate aperti (#4 e #17).
