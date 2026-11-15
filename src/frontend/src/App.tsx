@@ -18,7 +18,11 @@ export default function App() {
   useEffect(() => {
     if (!token) return;
     let active = true;
-    listPerizie(token).then(data => { if(active) setItems(data); }).catch(() => { if(active) setError(t("error")); });
+    listPerizie(token).then(data => { if (active) setItems(current => {
+        // A slow initial GET must not overwrite a perizia just created by POST.
+        const incoming = new Set(data.map(item => item.id));
+        return [...current.filter(item => !incoming.has(item.id)), ...data];
+      }); }).catch(() => { if(active) setError(t("error")); });
     return () => { active = false; };
   }, [token, t]);
   async function create(event:FormEvent) {

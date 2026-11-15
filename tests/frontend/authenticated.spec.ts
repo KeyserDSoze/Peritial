@@ -16,7 +16,11 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
 
     const reference = "E2E-" + Date.now().toString() + "-" + Math.round(Math.random() * 10000);
     await page.locator("#reference").fill(reference);
+    const creation = page.waitForResponse(response =>
+      response.url().endsWith("/api/perizie") && response.request().method() === "POST");
     await page.getByRole("button", {name: "Crea"}).click();
+    const created = await creation;
+    expect(created.status(), await created.text()).toBe(201);
     await expect(page.getByText(reference)).toBeVisible({timeout: 30_000});
 
     const accessToken = await page.evaluate(() => {
