@@ -11,7 +11,7 @@ public sealed class UploadLeaseTests
     [Fact]
     public async Task Worker_does_not_delete_old_blob_while_its_upload_lease_is_live()
     {
-        await using var db = await OpenAsync();
+        await using var db = await Db.OpenAsync();
         var tenant = TenantId.From(Guid.NewGuid());
         var id = Guid.NewGuid();
         var key = $"{tenant.Value:N}/{id:N}.pdf";
@@ -40,7 +40,7 @@ public sealed class UploadLeaseTests
     [Fact]
     public async Task Expired_lease_can_be_recovered_after_grace_period()
     {
-        await using var db = await OpenAsync();
+        await using var db = await Db.OpenAsync();
         var tenant = TenantId.From(Guid.NewGuid());
         var id = Guid.NewGuid();
         var key = $"{tenant.Value:N}/{id:N}.pdf";
@@ -61,7 +61,7 @@ public sealed class UploadLeaseTests
     [Fact]
     public async Task Lease_renewal_is_tenant_scoped_and_refuses_expired_or_removed_intents()
     {
-        await using var db = await OpenAsync();
+        await using var db = await Db.OpenAsync();
         var tenant = TenantId.From(Guid.NewGuid());
         var foreign = TenantId.From(Guid.NewGuid());
         var id = Guid.NewGuid();
@@ -99,7 +99,7 @@ public sealed class UploadLeaseTests
     [Fact]
     public async Task Expired_lease_prevents_late_metadata_and_audit_commit()
     {
-        await using var db = await OpenAsync();
+        await using var db = await Db.OpenAsync();
         var tenant = TenantId.From(Guid.NewGuid());
         var id = Guid.NewGuid();
         var key = $"{tenant.Value:N}/{id:N}.pdf";
