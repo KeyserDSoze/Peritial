@@ -92,6 +92,9 @@ jobs:
             ")
           if [ "$result" != "t" ]; then
             echo "Required persisted REST/MCP security audit events are missing."
+            docker compose -f docker/compose.yml exec -T postgres \
+              psql -U peritial -d peritial -Atc \
+              "SELECT action,outcome,count(*) FROM security_audit GROUP BY action,outcome ORDER BY action,outcome"
             exit 1
           fi
       - name: API diagnostics on failed full-stack tests (no tokens or secret values)

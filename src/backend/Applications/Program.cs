@@ -66,11 +66,12 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             },
             OnForbidden = async context =>
             {
-                // Only validated signed identity is logged. No HTTP body, token,
-                // reference, document name or MCP arguments are ever persisted.
-                if (Guid.TryParse(context.Principal?.FindFirst("tenant_id")?.Value, out var tenant) &&
+                // ForbiddenContext.Principal is not populated by the JwtBearer
+                // handler; HttpContext.User is the authenticated, validated actor.
+                // Never persist HTTP payload, file content or bearer tokens.
+                if (Guid.TryParse(context.HttpContext.User.FindFirst("tenant_id")?.Value, out var tenant) &&
                     tenant != Guid.Empty &&
-                    context.Principal?.FindFirst("sub")?.Value is { Length: > 0 } actor)
+                    context.HttpContext.User.FindFirst("sub")?.Value is { Length: > 0 } actor)
                 {
                     await context.HttpContext.RequestServices
                         .GetRequiredService<ISecurityAuditTrail>()
