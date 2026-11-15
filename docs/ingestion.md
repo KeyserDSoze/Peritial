@@ -26,3 +26,7 @@ REST: POST /api/files (multipart file, periziaId opzionale); MCP: tool ingest_fi
 ASP.NET Core applica `FormOptions.MultipartBodyLengthLimit = 25 MiB` e una soglia di dimensione complessiva HTTP di 25 MiB + 1 MiB di overhead per l'endpoint POST /api/files. Le richieste che superano i limiti multipart sono restituite come HTTP 413; i payload ammessi sono comunque rivalidati in Business anche per tool MCP o altri ingressi.
 
 Il test Playwright autenticato copre upload multipart valido, PDF falsificato, limite 413 e chiamata MCP con file non valido. Il limite effettivo rimane verificato in CI contro Docker Compose.
+
+## Verifica reale della cancellazione S3
+
+La pipeline Compose invoca `S3ObjectStoreContractTests` in un container .NET 10 contro il vero endpoint S3 SeaweedFS: PUT, lettura tramite SDK AWS, DELETE, DELETE ripetuto e verifica HTTP 404 dell'oggetto assente. Questo verifica l'adapter on-prem S3 e la semantica idempotente su questo backend, non ancora l'integrazione Azure Blob o il recupero persistente dopo crash. Non interpretare il test unitario con finti storage come prova di entrambe le piattaforme.

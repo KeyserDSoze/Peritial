@@ -79,6 +79,13 @@ jobs:
         env:
           E2E_FULL_STACK: "1"
           E2E_BASE_URL: http://localhost:5173
+      - name: Verify real S3 Put/Delete and idempotent cleanup against SeaweedFS
+        run: |
+          docker compose -f docker/compose.yml --profile test run -T --rm \
+            -e PERITIAL_TEST_S3_ENDPOINT=http://seaweedfs:8333 \
+            tests dotnet test tests/backend/Peritial.Infrastructures.Tests/Peritial.Infrastructures.Tests.csproj \
+            --filter FullyQualifiedName~S3ObjectStoreContractTests \
+            --logger "console;verbosity=normal"
       - name: Verify durable REST/MCP audit via privileged CI PostgreSQL role
         run: |
           result=$(docker compose -f docker/compose.yml exec -T postgres \
