@@ -61,6 +61,28 @@ public sealed class SchemaMigrationTests
         });
     }
 
+    [Fact]
+    public async Task Failed_later_migration_rolls_back_initial_schema_and_journal()
+    {
+        await WithIsolatedSchemaAsync(async db =>
+        {
+            // Deliberate name collision: V001 executes, then V002 must fail.
+            await using (var conn = await db.OpenConnectionAsync())
+            await using (var conflict = new NpgsqlCommand(
+                "CREATE TABLE ix_security_audit_tenant_action_time (id integer)", conn))
+                await conflict.ExecuteNonQueryAsync();
+
+            await Assert.ThrowsAsync<PostgresException>(() => SchemaMigrator.ApplyAsync(db));
+
+            await using var verify = await db.OpenConnectionAsync();
+            await using var check = new NpgsqlCommand(
+                "SELECT to_regclass('perizie') IS NULL AND " +
+                "to_regclass('schema_migrations') IS NULL AND " +
+                "to_regclass('ix_security_audit_tenant_action_time') IS NOT NULL", verify);
+            Assert.True((bool)(await check.ExecuteScalarAsync())!);
+        });
+    }
+
     private static async Task WithIsolatedSchemaAsync(Func<NpgsqlDataSource, Task> test)
     {
         var cs = Environment.GetEnvironmentVariable("PERITIAL_TEST_POSTGRES")
