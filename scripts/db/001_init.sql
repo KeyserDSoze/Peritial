@@ -27,3 +27,31 @@ CREATE TABLE IF NOT EXISTS documents (
     UNIQUE (tenant_id, storage_key)
 );
 CREATE INDEX IF NOT EXISTS ix_documents_perizia ON documents (tenant_id, perizia_id);
+
+
+-- The application role is separate from the privileged schema/migration owner.
+-- Production must provision its credentials securely; never store them here.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'peritial_app') THEN
+    CREATE ROLE peritial_app NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+  END IF;
+END $$;
+GRANT USAGE ON SCHEMA public TO peritial_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON perizie, documents TO peritial_app;
+
+ALTER TABLE perizie ENABLE ROW LEVEL SECURITY;
+ALTER TABLE perizie FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_perizie ON perizie;
+CREATE POLICY tenant_isolation_perizie ON perizie
+  FOR ALL TO peritial_app
+  USING (tenant_id = NULLIF(current_setting('peritial.tenant_id', true), '')::uuid)
+  WITH CHECK (tenant_id = NULLIF(current_setting('peritial.tenant_id', true), '')::uuid);
+
+ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE documents FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_documents ON documents;
+CREATE POLICY tenant_isolation_documents ON documents
+  FOR ALL TO peritial_app
+  USING (tenant_id = NULLIF(current_setting('peritial.tenant_id', true), '')::uuid)
+  WITH CHECK (tenant_id = NULLIF(current_setting('peritial.tenant_id', true), '')::uuid);

@@ -8,43 +8,58 @@ public sealed class PgPeriziaRepository(NpgsqlDataSource dataSource) : IPeriziaR
 {
     public async Task<IReadOnlyList<Perizia>> ListAsync(TenantId tenant, CancellationToken ct = default)
     {
+        await using var scope = await TenantDbScope.OpenAsync(dataSource, tenant, ct);
         var result = new List<Perizia>();
-        await using var conn = await dataSource.OpenConnectionAsync(ct);
-        await using var cmd = new NpgsqlCommand(
-            "SELECT id, tenant_id, reference, status, assigned_to, created_at_utc FROM perizie WHERE tenant_id = @tenant ORDER BY created_at_utc DESC", conn);
-        cmd.Parameters.AddWithValue("tenant", tenant.Value);
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        while (await reader.ReadAsync(ct)) result.Add(Read(reader));
+        await using (var cmd = scope.Command(
+            "SELECT id, tenant_id, reference, status, assigned_to, created_at_utc FROM perizie WHERE tenant_id = @tenant ORDER BY created_at_utc DESC"))
+        {
+            cmd.Parameters.AddWithValue("tenant", tenant.Value);
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct)) result.Add(Read(reader));
+        }
+        await scope.CommitAsync(ct);
         return result;
     }
 
     public async Task<Perizia?> FindAsync(TenantId tenant, Guid id, CancellationToken ct = default)
     {
-        await using var conn = await dataSource.OpenConnectionAsync(ct);
-        await using var cmd = new NpgsqlCommand(
-            "SELECT id, tenant_id, reference, status, assigned_to, created_at_utc FROM perizie WHERE tenant_id = @tenant AND id = @id", conn);
-        cmd.Parameters.AddWithValue("tenant", tenant.Value);
-        cmd.Parameters.AddWithValue("id", id);
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        return await reader.ReadAsync(ct) ? Read(reader) : null;
+        await using var scope = await TenantDbScope.OpenAsync(dataSource, tenant, ct);
+        Perizia? result = null;
+        await using (var cmd = scope.Command(
+            "SELECT id, tenant_id, reference, status, assigned_to, created_at_utc FROM perizie WHERE tenant_id = @tenant AND id = @id"))
+        {
+            cmd.Parameters.AddWithValue("tenant", tenant.Value);
+            cmd.Parameters.AddWithValue("id", id);
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            if (await reader.ReadAsync(ct)) result = Read(reader);
+        }
+        await scope.CommitAsync(ct);
+        return result;
     }
 
     public async Task AddAsync(Perizia item, CancellationToken ct = default)
     {
-        await using var conn = await dataSource.OpenConnectionAsync(ct);
-        await using var cmd = new NpgsqlCommand(
-            "INSERT INTO perizie (tenant_id, id, reference, status, assigned_to, created_at_utc) VALUES (@tenant,@id,@reference,@status,@assignee,@created)", conn);
-        Fill(cmd, item);
-        await cmd.ExecuteNonQueryAsync(ct);
+        await using var scope = await TenantDbScope.OpenAsync(dataSource, item.TenantId, ct);
+        await using (var cmd = scope.Command(
+            "INSERT INTO perizie (tenant_id,id,reference,status,assigned_to,created_at_utc) VALUES (@tenant,@id,@reference,@status,@assignee,@created)"))
+        {
+            Fill(cmd, item);
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
+        await scope.CommitAsync(ct);
     }
 
     public async Task UpdateAsync(Perizia item, CancellationToken ct = default)
     {
-        await using var conn = await dataSource.OpenConnectionAsync(ct);
-        await using var cmd = new NpgsqlCommand(
-            "UPDATE perizie SET status=@status, assigned_to=@assignee WHERE tenant_id=@tenant AND id=@id", conn);
-        Fill(cmd, item);
-        if (await cmd.ExecuteNonQueryAsync(ct) != 1) throw new KeyNotFoundException("Perizia not found.");
+        await using var scope = await TenantDbScope.OpenAsync(dataSource, item.TenantId, ct);
+        await using (var cmd = scope.Command(
+            "UPDATE perizie SET status=@status, assigned_to=@assignee WHERE tenant_id=@tenant AND id=@id"))
+        {
+            Fill(cmd, item);
+            if (await cmd.ExecuteNonQueryAsync(ct) != 1)
+                throw new KeyNotFoundException("Perizia not found.");
+        }
+        await scope.CommitAsync(ct);
     }
 
     private static Perizia Read(NpgsqlDataReader reader) => Perizia.Restore(
