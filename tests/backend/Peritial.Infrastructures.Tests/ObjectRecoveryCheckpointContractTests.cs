@@ -27,6 +27,9 @@ public sealed class ObjectRecoveryCheckpointContractTests
         var key = "checkpoint-contract/" + Guid.NewGuid().ToString("N") + ".pdf";
         var tenant = Guid.NewGuid();
         var doc = Guid.NewGuid();
+        var secondTenant = Guid.NewGuid();
+        var secondDocument = Guid.NewGuid();
+        var secondKey = "checkpoint-contract/" + Guid.NewGuid().ToString("N") + ".pdf";
         var pending = Guid.NewGuid();
         byte[] original = "%PDF-1.7\ncheckpoint-content\n%%EOF\n"u8.ToArray();
         byte[] tampered = original.ToArray();
@@ -50,13 +53,18 @@ public sealed class ObjectRecoveryCheckpointContractTests
                 INSERT INTO documents(tenant_id,id,perizia_id,file_name,content_type,
                                       length_bytes,storage_key,created_at_utc)
                 VALUES(@tenant,@doc,NULL,'checkpoint.pdf','application/pdf',
-                       @length,@key,now())
+                       @length,@key,now()),
+                      (@tenant2,@doc2,NULL,'second-checkpoint.pdf','application/pdf',
+                       @length,@key2,now())
                 """, conn))
             {
                 insert.Parameters.AddWithValue("tenant", tenant);
                 insert.Parameters.AddWithValue("doc", doc);
+                insert.Parameters.AddWithValue("tenant2", secondTenant);
+                insert.Parameters.AddWithValue("doc2", secondDocument);
                 insert.Parameters.AddWithValue("length", (long)original.Length);
                 insert.Parameters.AddWithValue("key", key);
+                insert.Parameters.AddWithValue("key2", secondKey);
                 await insert.ExecuteNonQueryAsync();
             }
 
@@ -76,16 +84,38 @@ public sealed class ObjectRecoveryCheckpointContractTests
             await using (var clear = new NpgsqlCommand("DELETE FROM upload_intents", conn))
                 await clear.ExecuteNonQueryAsync();
 
+            // In-progress idempotency records also mean the checkpoint is unsafe.
+            await using (var conn = await db.OpenConnectionAsync())
+            await using (var pendingKey = new NpgsqlCommand(
+                """
+                INSERT INTO upload_request_keys(
+                    tenant_id,subject_digest,key_digest,request_digest,document_id,status)
+                VALUES (@tenant, decode(repeat('aa',32),'hex'),
+                        decode(repeat('bb',32),'hex'), decode(repeat('cc',32),'hex'),
+                        @id, 'pending')
+                """, conn))
+            {
+                pendingKey.Parameters.AddWithValue("tenant", tenant);
+                pendingKey.Parameters.AddWithValue("id", pending);
+                await pendingKey.ExecuteNonQueryAsync();
+            }
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                ObjectRecoveryCheckpoint.CaptureAsync(db, storage, bucket));
+            await using (var conn = await db.OpenConnectionAsync())
+            await using (var clear = new NpgsqlCommand("DELETE FROM upload_request_keys", conn))
+                await clear.ExecuteNonQueryAsync();
+
             // Referenced object missing: fail, do not report a recoverable point.
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 ObjectRecoveryCheckpoint.CaptureAsync(db, storage, bucket));
 
             await PutAsync(storage, bucket, key, original);
+            await PutAsync(storage, bucket, secondKey, original);
             var checkpoint = await ObjectRecoveryCheckpoint.CaptureAsync(db, storage, bucket);
             Assert.Equal(1, checkpoint.FormatVersion);
-            Assert.Single(checkpoint.Documents);
-            Assert.Equal(tenant, checkpoint.Documents[0].TenantId);
-            Assert.Equal(doc, checkpoint.Documents[0].DocumentId);
+            Assert.Equal(2, checkpoint.Documents.Count);
+            Assert.Contains(checkpoint.Documents, x => x.TenantId == tenant && x.DocumentId == doc);
+            Assert.Contains(checkpoint.Documents, x => x.TenantId == secondTenant && x.DocumentId == secondDocument);
             await ObjectRecoveryCheckpoint.VerifyAsync(db, storage, bucket, checkpoint);
 
             await PutAsync(storage, bucket, key, tampered);
@@ -93,6 +123,29 @@ public sealed class ObjectRecoveryCheckpointContractTests
                 ObjectRecoveryCheckpoint.VerifyAsync(db, storage, bucket, checkpoint));
             await PutAsync(storage, bucket, key, original);
             await ObjectRecoveryCheckpoint.VerifyAsync(db, storage, bucket, checkpoint);
+
+            // Identical S3 key reused across tenants is ambiguous even though
+            // PostgreSQL uniqueness is scoped by tenant; reject the checkpoint.
+            await using (var conn = await db.OpenConnectionAsync())
+            await using (var collide = new NpgsqlCommand(
+                "UPDATE documents SET storage_key=@same WHERE tenant_id=@tenant AND id=@id", conn))
+            {
+                collide.Parameters.AddWithValue("same", key);
+                collide.Parameters.AddWithValue("tenant", secondTenant);
+                collide.Parameters.AddWithValue("id", secondDocument);
+                Assert.Equal(1, await collide.ExecuteNonQueryAsync());
+            }
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                ObjectRecoveryCheckpoint.CaptureAsync(db, storage, bucket));
+            await using (var conn = await db.OpenConnectionAsync())
+            await using (var recover = new NpgsqlCommand(
+                "UPDATE documents SET storage_key=@original WHERE tenant_id=@tenant AND id=@id", conn))
+            {
+                recover.Parameters.AddWithValue("original", secondKey);
+                recover.Parameters.AddWithValue("tenant", secondTenant);
+                recover.Parameters.AddWithValue("id", secondDocument);
+                await recover.ExecuteNonQueryAsync();
+            }
 
             // A DB-only restore missing metadata must never pass the checkpoint.
             await using (var conn = await db.OpenConnectionAsync())
@@ -109,6 +162,7 @@ public sealed class ObjectRecoveryCheckpointContractTests
         finally
         {
             await storage.DeleteObjectAsync(new DeleteObjectRequest { BucketName = bucket, Key = key });
+            await storage.DeleteObjectAsync(new DeleteObjectRequest { BucketName = bucket, Key = secondKey });
             await using var conn = await admin.OpenConnectionAsync();
             await using var drop = new NpgsqlCommand($"DROP SCHEMA IF EXISTS {schema} CASCADE", conn);
             await drop.ExecuteNonQueryAsync();
