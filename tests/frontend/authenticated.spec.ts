@@ -12,6 +12,9 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     await page.locator("#username").fill("localuser");
     await page.locator("#password").fill("local-only-user");
     await page.locator("#kc-login").click();
+    await page.waitForTimeout(1500);
+    console.log("OIDC post-login path:", new URL(page.url()).pathname);
+    console.log("OIDC post-login page:", (await page.locator("body").innerText()).slice(0, 550));
     await expect(page.getByRole("button", {name: "Esci"})).toBeVisible({timeout: 30_000});
 
     const reference = "E2E-" + Date.now().toString() + "-" + Math.round(Math.random() * 10000);

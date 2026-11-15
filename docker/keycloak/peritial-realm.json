@@ -83,7 +83,12 @@
           "value": "local-only-user",
           "temporary": false
         }
-      ]
+      ],
+      "email": "localuser@example.invalid",
+      "firstName": "Local",
+      "lastName": "Tester",
+      "emailVerified": true,
+      "requiredActions": []
     }
   ]
 }
