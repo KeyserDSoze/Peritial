@@ -58,3 +58,13 @@ jobs:
           exit 1
       - if: always()
         run: docker compose -f docker/compose.yml down -v
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - name: Format check / validate
+        run: |
+          terraform -chdir=infra fmt
+          terraform -chdir=infra init -backend=false
+          terraform -chdir=infra validate

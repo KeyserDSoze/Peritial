@@ -137,24 +137,63 @@ resource "azurerm_container_app" "api" {
       image = var.api_image
       cpu = 0.5
       memory = "1Gi"
-      env { name = "ASPNETCORE_ENVIRONMENT"; value = "Production" }
-      env { name = "ConnectionStrings__Postgres"; secret_name = "postgres-connection" }
-      env { name = "Database__Bootstrap"; value = "false" }
-      env { name = "Auth__Authority"; value = var.oidc_authority }
-      env { name = "Auth__Audience"; value = var.oidc_audience }
-      env { name = "Auth__Resource"; value = var.resource_url }
-      env { name = "Auth__RequireHttpsMetadata"; value = "true" }
-      env { name = "Cors__Origin"; value = var.frontend_origin }
-      env { name = "Storage__Provider"; value = "Azure" }
-      env { name = "Storage__Azure__ServiceUri"; value = azurerm_storage_account.documents.primary_blob_endpoint }
-      env { name = "Storage__Azure__Container"; value = azurerm_storage_container.documents.name }
-      env { name = "AZURE_CLIENT_ID"; value = azurerm_user_assigned_identity.api.client_id }
+      env {
+        name = "ASPNETCORE_ENVIRONMENT"
+        value = "Production"
+      }
+      env {
+        name = "ConnectionStrings__Postgres"
+        secret_name = "postgres-connection"
+      }
+      env {
+        name = "Database__Bootstrap"
+        value = "false"
+      }
+      env {
+        name = "Auth__Authority"
+        value = var.oidc_authority
+      }
+      env {
+        name = "Auth__Audience"
+        value = var.oidc_audience
+      }
+      env {
+        name = "Auth__Resource"
+        value = var.resource_url
+      }
+      env {
+        name = "Auth__RequireHttpsMetadata"
+        value = "true"
+      }
+      env {
+        name = "Cors__Origin"
+        value = var.frontend_origin
+      }
+      env {
+        name = "Storage__Provider"
+        value = "Azure"
+      }
+      env {
+        name = "Storage__Azure__ServiceUri"
+        value = azurerm_storage_account.documents.primary_blob_endpoint
+      }
+      env {
+        name = "Storage__Azure__Container"
+        value = azurerm_storage_container.documents.name
+      }
+      env {
+        name = "AZURE_CLIENT_ID"
+        value = azurerm_user_assigned_identity.api.client_id
+      }
     }
   }
   ingress {
     external_enabled = true
     target_port = 8080
-    traffic_weight { latest_revision = true; percentage = 100 }
+    traffic_weight {
+      latest_revision = true
+      percentage = 100
+    }
   }
   tags = local.tags
   depends_on = [azurerm_role_assignment.blob]
@@ -178,7 +217,10 @@ resource "azurerm_container_app" "web" {
   ingress {
     external_enabled = true
     target_port = 80
-    traffic_weight { latest_revision = true; percentage = 100 }
+    traffic_weight {
+      latest_revision = true
+      percentage = 100
+    }
   }
   tags = local.tags
 }
