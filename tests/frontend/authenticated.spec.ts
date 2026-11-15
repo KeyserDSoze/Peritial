@@ -27,6 +27,22 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     });
     expect(accessToken).toBeTruthy();
 
+    // Actual REST multipart ingestion uses the same OAuth identity as the UI and MCP.
+    const badFile = await request.post("http://localhost:8080/api/files", {
+      headers: { Authorization: "Bearer " + accessToken },
+      multipart: { file: { name: "fake.pdf", mimeType: "application/pdf", buffer: Buffer.from("this is not a PDF") } }
+    });
+    expect(badFile.status(), await badFile.text()).toBe(400);
+
+    const pdf = Buffer.from("%PDF-1.7\n1 0 obj\n<<>>\nendobj\n%%EOF\n");
+    const goodFile = await request.post("http://localhost:8080/api/files", {
+      headers: { Authorization: "Bearer " + accessToken },
+      multipart: { file: { name: "valid.pdf", mimeType: "application/pdf", buffer: pdf } }
+    });
+    expect(goodFile.status(), await goodFile.text()).toBe(201);
+    expect((await goodFile.json() as {fileName: string}).fileName).toBe("valid.pdf");
+
+
     const unauthenticated = await request.post("http://localhost:8080/mcp", {
       headers: {"Accept": "application/json,text/event-stream", "Content-Type": "application/json"},
       data: {jsonrpc: "2.0", id: 1, method: "tools/list"}
