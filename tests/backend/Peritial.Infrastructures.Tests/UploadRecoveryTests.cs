@@ -19,10 +19,20 @@ public sealed class UploadRecoveryTests
         blobs.Stored.Add(key);
         await new PgUploadIntentLedger(db.App).RecordAsync(tenant, id, key);
 
-        Assert.False(await new PgUploadReconciler(db.Recovery, blobs)
-            .ReconcileOneAsync(DateTime.UtcNow.AddHours(-1)));
-        Assert.Contains(key, blobs.Stored);
-        Assert.Equal(0, blobs.Deletions);
+        try
+        {
+            Assert.False(await new PgUploadReconciler(db.Recovery, blobs)
+                .ReconcileOneAsync(DateTime.UtcNow.AddHours(-1)));
+            Assert.Contains(key, blobs.Stored);
+            Assert.Equal(0, blobs.Deletions);
+        }
+        finally
+        {
+            // The integration test database is shared between test methods.
+            // This deliberately-fresh intent must not be picked up by another
+            // test with an artificially future recovery cutoff.
+            await new PgUploadIntentLedger(db.App).ForgetAsync(tenant, id);
+        }
     }
 
     [Fact]
