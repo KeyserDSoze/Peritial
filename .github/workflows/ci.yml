@@ -1,0 +1,60 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: peritial
+          POSTGRES_PASSWORD: local-only-postgres
+          POSTGRES_DB: peritial
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U peritial -d peritial"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - run: dotnet restore Peritial.slnx
+      - run: dotnet test Peritial.slnx --no-restore --configuration Release
+        env:
+          PERITIAL_TEST_POSTGRES: Host=localhost;Port=5432;Database=peritial;Username=peritial;Password=local-only-postgres
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install --no-audit --no-fund
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+  compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose -f docker/compose.yml config --quiet
+      - run: docker compose -f docker/compose.yml up --build -d
+      - name: HTTP readiness
+        run: |
+          for i in $(seq 1 40); do
+            if curl --fail --silent http://localhost:8080/health/live; then exit 0; fi
+            sleep 5
+          done
+          docker compose -f docker/compose.yml logs
+          exit 1
+      - if: always()
+        run: docker compose -f docker/compose.yml down -v
