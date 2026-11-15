@@ -22,6 +22,8 @@ async function tokenFor(request: APIRequestContext, clientId: string): Promise<s
   expect(response.status(), await response.text()).toBe(200);
   const json = await response.json() as { access_token: string };
   expect(json.access_token).toBeTruthy();
+  const claims = JSON.parse(Buffer.from(json.access_token.split(".")[1], "base64url").toString("utf-8")) as {sub?: string};
+  expect(claims.sub, "A signed subject is required for authorization/audit").toBeTruthy();
   return json.access_token;
 }
 

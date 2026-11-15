@@ -30,6 +30,8 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
       return user.access_token || null;
     });
     expect(accessToken).toBeTruthy();
+    const signedClaims = JSON.parse(Buffer.from(accessToken!.split(".")[1], "base64url").toString("utf-8")) as {sub?: string};
+    expect(signedClaims.sub, "PKCE access token must include signed sub claim").toBeTruthy();
 
     // Actual REST multipart ingestion uses the same OAuth identity as the UI and MCP.
     const badFile = await request.post("http://localhost:8080/api/files", {
