@@ -76,10 +76,16 @@ try
             uri.Scheme is not ("http" or "https") || string.IsNullOrEmpty(uri.Host))
             throw new InvalidOperationException("Remote encrypted backup endpoint is invalid.");
         // Credentials should NEVER traverse HTTP on any real remote.
-        // The only exception is the specifically named disposable CI container.
-        if (uri.Scheme != "https" &&
-            !(uri.Scheme == "http" && uri.Host == "seaweedfs-backup" &&
-              Environment.GetEnvironmentVariable("PERITIAL_OFFSITE_CI_HTTP") == "DISPOSABLE_TEST_ONLY"))
+        // The only exception is a specifically named disposable CI container.
+        var demoRequested =
+            Environment.GetEnvironmentVariable("PERITIAL_OFFSITE_CI_HTTP") ==
+                "DISPOSABLE_TEST_ONLY";
+        var disposableDemo = demoRequested && uri.Scheme == "http" &&
+            uri.Host == "seaweedfs-backup";
+        if (demoRequested && !disposableDemo)
+            throw new InvalidOperationException(
+                "Disposable retention bypass is restricted to the named CI server.");
+        if (uri.Scheme != "https" && !disposableDemo)
             throw new InvalidOperationException("Remote encrypted backups require HTTPS.");
         var bucket = Required("PERITIAL_OFFSITE_S3_BUCKET");
         var backupId = Required("PERITIAL_OFFSITE_BACKUP_ID");
@@ -90,7 +96,8 @@ try
             new AmazonS3Config { ServiceURL = endpoint, ForcePathStyle = true });
         if (args[0] == "push-sealed")
         {
-            await SealedBundleOffsite.UploadAsync(bundle, remote, bucket, backupId, master);
+            await SealedBundleOffsite.UploadAsync(bundle, remote, bucket, backupId,
+                master, disposableUnprotectedDemo: disposableDemo);
             Console.WriteLine("Encrypted backup copied, integrity verified, and remote completion marker published.");
         }
         else
