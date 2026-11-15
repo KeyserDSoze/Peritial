@@ -37,3 +37,7 @@ L'API richiede `Malware:Clamd:Host` e porta TCP privata (default 3310), con time
 ## Upload recovery con intenzioni durevoli (#21)
 
 `UploadIntentOrderingTests` verifica che l'intento sia persistito prima di PUT e che un errore metadata non avvii una cancellazione rischiosa. `UploadRecoveryTests` usa PostgreSQL reale e ruoli separati: crash simulato, cleanup ritentato dopo errore storage, preservazione blob referenziato quando il commit ACK è incerto, consumo atomico dell'intento con metadata+audit, rispetto del grace period e accessi recovery a colonne ristrette. In CI il job Compose controlla che, dopo Playwright REST/MCP, non rimangano intenti pendenti. Le prove reali di kill/restart multi-replica e l'idempotenza HTTP restano aperte (#21).
+
+## E2E idempotenza upload (#21)
+
+`UploadIdempotencyTests` usa PostgreSQL reale con richieste concorrenti, identità separate, payload mismatch, replay con audit unico, rilascio su errore e worker recovery. `UploadFingerprintTests` verifica il digest di contenuto e metadati. Nel test Compose Playwright usa la medesima chiave in REST upload, retry REST e MCP ingest_file: stesso UUID, nessuna seconda riga audit; un payload differente riceve 409. L'asserzione SQL CI verifica due documenti/azioni di audit per i due browser, non sei eventi da retry.

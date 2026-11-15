@@ -26,3 +26,7 @@ Le build API ora richiedono `Malware__Clamd__Host` (hostname/DNS del servizio `c
 ## Account recovery separato obbligatorio (#21)
 
 Oltre alla connessione applicativa `ConnectionStrings__Postgres`, l'API ora richiede `UploadRecovery__ConnectionString`, autenticata con il ruolo dedicato `peritial_recovery` (`NOSUPERUSER`, `NOBYPASSRLS`). Lo schema/ruolo deve essere migrato da un operatore privilegiato prima del rollout: **mai** usare il superuser né riutilizzare `peritial_app` per il worker. Il ruolo recovery ha solo visibilità cross-tenant sulle chiavi degli upload pendenti e sulle colonne `documents(tenant_id,storage_key)`, non su nomi/documenti/audit. Configurare credenziali in secret manager e rete privata. L'infrastruttura Terraform attuale non provisiona ancora questo segreto/ruolo: Azure non è pronto per il rilascio. Monitorare backlog/errori worker e pianificare prove failover/restore (#6/#17/#19/#21).
+
+## Nuova tabella idempotenza upload (#21)
+
+È necessario migrare `upload_request_keys` con FORCE RLS e concedere a `peritial_app` accesso tenant-scoped e al worker recovery i soli campi `tenant_id`, `document_id` e `status` (mai digest di chiavi o soggetti). La tabella delle chiavi completate richiede retention e backup coordinati con la finestra dei retry client. Non usare la configurazione demo in produzione e non dichiarare il Terraform pronto prima delle migrazioni e dei segreti del worker.

@@ -31,3 +31,7 @@ Keycloak 26 richiede il client scope `basic` con mapper `oidc-sub-mapper` per il
 ## Audit mutazioni
 
 Tool MCP e API REST condividono eventi audit RLS append-only, per ogni mutazione e diniego di scope. Il database non espone queste righe tramite endpoint cliente. La CI full-stack verifica i record dopo Playwright. Consultare docs/audit.md per limiti di atomicità, retention e prerequisiti produttivi.
+
+## Retry con chiave idempotente
+
+Il tool `ingest_file` accetta `idempotencyKey` opzionale (16–128 ASCII consentiti). Ripetere lo stesso file, MIME, nome e periziaId con la stessa chiave e la stessa identità tenant/subject restituisce lo stesso UUID e non crea un audit duplicato; chiave pendente o dati diversi producono errore MCP. Per REST usare `Idempotency-Key`. Le richieste senza chiave rimangono non idempotenti e i tool mutativi non documentali non sono ancora coperti.
