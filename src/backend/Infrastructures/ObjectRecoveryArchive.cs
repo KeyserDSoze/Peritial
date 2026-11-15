@@ -69,7 +69,7 @@ public static class ObjectRecoveryArchive
             }
             var bundle = new ArchiveManifest(1, checkpoint, contentTypes);
             var json = JsonSerializer.SerializeToUtf8Bytes(bundle);
-            if (json.Length is <= 0 or > MaxManifestBytes)
+            if (json.LongLength is <= 0 or > MaxManifestBytes)
                 throw new InvalidOperationException("Archive metadata exceeds allowed size.");
             await using (var stream = new FileStream(
                 Path.Combine(stage, ManifestName), PrivateWriteOptions()))
