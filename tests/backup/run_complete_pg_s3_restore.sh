@@ -33,8 +33,25 @@ docker compose -f docker/compose.yml --profile recovery-test cp \
 # pg_dump contains the ACLs but not cluster-global roles. No app login.
 docker compose -f docker/compose.yml --profile recovery-test exec -T postgres-restore \
   psql -X -U peritial -d peritial -v ON_ERROR_STOP=1 >/dev/null <<'SQL'
-CREATE ROLE peritial_app NOLOGIN NOSUPERUSER NOBYPASSRLS;
-CREATE ROLE peritial_recovery NOLOGIN NOSUPERUSER NOBYPASSRLS;
+DO $roles$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='peritial_app') THEN
+    CREATE ROLE peritial_app NOLOGIN NOSUPERUSER NOBYPASSRLS;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='peritial_recovery') THEN
+    CREATE ROLE peritial_recovery NOLOGIN NOSUPERUSER NOBYPASSRLS;
+  END IF;
+END
+$roles$;
+DO $safety$
+BEGIN
+  IF (SELECT count(*) FROM pg_roles
+      WHERE rolname IN ('peritial_app','peritial_recovery')
+        AND NOT rolsuper AND NOT rolbypassrls AND NOT rolcreatedb AND NOT rolcreaterole) <> 2 THEN
+    RAISE EXCEPTION 'Required roles are missing or overprivileged';
+  END IF;
+END
+$safety$;
 SQL
 
 docker compose -f docker/compose.yml --profile recovery-test exec -T \
