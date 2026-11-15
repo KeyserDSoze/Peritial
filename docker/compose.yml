@@ -15,6 +15,22 @@ services:
       WEED_ADMIN_PASSWORD: local-only-admin
     ports: ["8333:8333"]
     volumes: ["seaweeddata:/data"]
+  # Two independent, ephemeral recovery destinations, never used by the API.
+  postgres-restore:
+    profiles: ["recovery-test"]
+    image: postgres:17-alpine
+    environment: {POSTGRES_DB: peritial, POSTGRES_USER: peritial, POSTGRES_PASSWORD: local-only-postgres}
+    volumes: ["pgrestoredata:/var/lib/postgresql/data"]
+    healthcheck: {test: ["CMD-SHELL", "pg_isready -U peritial -d peritial"], interval: 5s, timeout: 3s, retries: 20}
+  seaweedfs-restore:
+    profiles: ["recovery-test"]
+    image: chrislusf/seaweedfs:latest
+    environment:
+      AWS_ACCESS_KEY_ID: localminio
+      AWS_SECRET_ACCESS_KEY: local-only-minio-secret
+      S3_BUCKET: peritial
+      WEED_ADMIN_PASSWORD: local-only-admin
+    volumes: ["seaweedrestoredata:/data"]
   azurite:
     profiles: ["azure-test"]
     image: mcr.microsoft.com/azure-storage/azurite:3.37.0
@@ -82,3 +98,5 @@ services:
 volumes:
   pgdata:
   seaweeddata:
+  pgrestoredata:
+  seaweedrestoredata:
