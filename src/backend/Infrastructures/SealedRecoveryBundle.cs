@@ -10,7 +10,7 @@ namespace Peritial.Infrastructures;
 /// already HMAC-authenticated S3 object archive. The two source archives MUST
 /// represent the same stopped-writer recovery point. No database or S3 writes.
 /// </summary>
-public static class SealedRecoveryBundle
+public static partial class SealedRecoveryBundle
 {
     private const int ChunkBytes = 1024 * 1024;
     private const int TagBytes = 16;
