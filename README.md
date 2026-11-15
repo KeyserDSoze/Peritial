@@ -17,3 +17,5 @@ Backend .NET 10 DDD (Domains / Business / Infrastructures / Applications), API R
 Documenti: docs/requirements.md, docs/legacy-inventory.md, docs/architecture.md, docs/mcp.md, docs/development.md, docs/local-deployment.md, docs/database-migrations.md, docs/database-backup-restore.md (adozione legacy V001 o pre-lease solo offline), adr/.
 
 La verifica offline dei riferimenti PostgreSQL↔SeaweedFS S3 con digest SHA-256 è documentata in `docs/object-recovery-checkpoint.md` (ADR 0019): il manifest **non contiene il backup dei byte** e non sostituisce snapshot/coordinamento cross-sistema.
+
+Recovery offline: `docs/object-recovery-checkpoint.md` (checkpoint + export/import dei byte su nuovo SeaweedFS; laboratorio con PostgreSQL reale, non backup produttivo coordinato), ADR 0020.

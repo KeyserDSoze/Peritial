@@ -42,7 +42,7 @@ Richiedono i client PostgreSQL **17** compatibili e un account privilegiato per 
 - cinque tabelle con FORCE RLS, grants minimi e assenza dati visibili all'app senza tenant context;
 - rifiuto di rieseguire restore su database non vuoto.
 
-Il job indipendente `database-recovery` di `.github/workflows/ci.yml` rende questa prova obbligatoria ad ogni push su `main`. Il test non include SeaweedFS/Azure Blob, snapshot durante upload reali, replica/failover, chiavi e credenziali reali né ripristino on-prem/Azure. **Non dichiarare soddisfatto il requisito di disaster recovery completo** in #6/#18 prima di tali prove.
+Il job indipendente `database-recovery` di `.github/workflows/ci.yml` rende questa prova obbligatoria ad ogni push su `main`. In aggiunta, il job Compose esegue un drill **offline** di ripristino PostgreSQL e dei **byte effettivi SeaweedFS S3** verso server e bucket distinti (vedere `tests/backup/run_complete_pg_s3_restore.sh` e `docs/object-recovery-checkpoint.md`). Il test del job `database-recovery` riguarda solo PostgreSQL; quello Compose include anche i byte SeaweedFS S3 referenziati. Non sono coperti Azure Blob, orfani/versioni del bucket, snapshot durante upload reali, replica/failover, Keycloak, backup offsite cifrato/firma, credenziali reali né ripristino on-prem/Azure produttivo. **Non dichiarare soddisfatto il requisito di disaster recovery completo** in #6/#18 prima di tali prove.
 
 ## Checkpoint integrità S3 (nuova tranche #6, ADR 0019)
 

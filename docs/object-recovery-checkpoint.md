@@ -1,6 +1,6 @@
 # Checkpoint offline DB ↔ SeaweedFS S3 — integrità, **non backup** (#6/#21)
 
-**Stato:** verificatore read-only S3/PostgreSQL testato su servizi reali. Nessun export dei contenuti, nessun ripristino di oggetti S3/Azure Blob. Non eseguire su un ambiente con API, MCP o worker in scrittura. Manifest e credenziali contengono dati riservati; non condividerli né committarli.
+**Stato:** verificatore read-only più export/import offline dei **byte reali SeaweedFS S3** verso un bucket vuoto su istanza separata, con prove PostgreSQL e S3 reali. Non sono coperti Azure Blob, snapshot atomici cross-sistema, restore Keycloak o produzione. Non eseguire su un ambiente con API, MCP o worker in scrittura. Manifest e credenziali contengono dati riservati; non condividerli né committarli.
 
 ## A cosa serve
 
@@ -8,7 +8,7 @@ Il comando `capture` costruisce un inventario ordinato dei documenti referenziat
 
 `verify` confronta un manifest precedente con **tutti** i riferimenti del database destinazione e rilegge ogni blob S3 per confrontare dimensioni e SHA-256. Rifiuta differenze di cardinalità, tenant/ID/chiave/metadati, bytes alterati anche a dimensione invariata e manifest versionati diversamente. Il numero di documenti validati è l'unica informazione stampata: mai nomi, tenant, chiavi o dati.
 
-**Importante:** non c'è una transazione comune tra S3 e PostgreSQL. Il lock `SHARE NOWAIT` su `documents` e i registri di upload limita corse durante l'inventario DB, ma è rilasciato prima della lettura dei blob. La conferma `WRITERS_STOPPED` **non rileva da sola** processi ancora attivi: l'operatore deve fermarli realmente. Il manifest non contiene i byte degli oggetti, non li salva e non prova l'autenticità del dump o la consistenza temporale con il bucket.
+**Importante:** non c'è una transazione comune tra S3 e PostgreSQL. Il lock `SHARE NOWAIT` su `documents` e i registri di upload limita corse durante l'inventario DB, ma è rilasciato prima della lettura dei blob. La conferma `WRITERS_STOPPED` **non rileva da sola** processi ancora attivi: l'operatore deve fermarli realmente. Il semplice manifest di `capture` continua a **non contenere** i byte degli oggetti. Per salvare i byte, usare `export`: la cartella di archive contiene un manifest distinto e i file binari. Né il manifest né la cartella sono firmati, cifrati o una garanzia di snapshot atomico con PostgreSQL.
 
 ## Prerequisiti operatore
 
@@ -55,4 +55,41 @@ La suite `ObjectRecoveryCheckpointContractTests` usa PostgreSQL + SeaweedFS real
 - credenziali applicative filtrate da FORCE RLS rifiutate;
 - versione manifest sconosciuta rifiutata.
 
-La CI backend compila anche il CLI ma non esegue un export di byte S3. Mancano: snapshot/restore realmente coordinati PostgreSQL+SeaweedFS/Azure, copie dei blob, test S3→S3 di migrazione, autenticazione del manifest, ripristino Keycloak, backup offsite, retention e recovery con failover. Per questi motivi #6/#18/#21 **restano aperte**.
+La CI Compose esegue un test indipendente di export/import reale dei byte con destinazioni PostgreSQL e SeaweedFS separate, più un drill che combina `pg_dump`/`pg_restore` con la migrazione S3. Mancano: garanzia atomica di snapshot cross-sistema senza fermare tutti i writer, esportazione di oggetti non referenziati/versioni del bucket, Azure Blob, firma/cifratura/autenticazione dell'archivio, ripristino Keycloak, backup offsite, retention e recovery con failover. Per questi motivi #6/#18/#21 **restano aperte**.
+
+## Archiviazione dei byte e restore su un nuovo SeaweedFS (ADR 0020)
+
+**Operazione distinta dal checkpoint.** I nuovi comandi `export` e `restore-objects` salvano/ripristinano **veramente** i byte dei soli oggetti **attualmente referenziati** da `documents`, senza usare le chiavi S3 come nomi dei file locali. L'archive è una directory privata, con `manifest.json` e `objects/00000000.blob`, `00000001.blob`, ecc. Il manifest v1 include i riferimenti DB, gli hash SHA-256 e i Content-Type S3. Ogni byte viene letto da S3 in streaming, salvato su disco e confrontato di nuovo con il checkpoint prima della pubblicazione della directory; i file temporanei sono creati con permessi 0600 e le directory con 0700 su Unix. Non sovrascrive una directory già esistente; se un'esportazione fallisce elimina la directory parziale.
+
+### Backup offline
+
+1. **Fermare completamente** API REST/MCP, upload, recovery worker, job schedulati e tutte le altre scritture al database e al bucket. Il flag `WRITERS_STOPPED` è soltanto una attestazione manuale, non un lock S3. Nessun tool garantisce uno snapshot atomico DB↔bucket durante scritture.
+2. Preparare e verificare il backup PostgreSQL con `scripts/db/backup.sh`, annotando istante/versione e mantenendolo con l'archivio S3 nello stesso set di recovery. Non usare credenziali API soggette a FORCE RLS: serve un'identità audit read-only con `BYPASSRLS` e S3 GET/LIST.
+3. Impostare le variabili `PERITIAL_CHECKPOINT_*` della sezione precedente, più una directory **assoluta che non esiste**, sotto una directory privata:
+
+   ```bash
+   export PERITIAL_ARCHIVE_DIR=/secure/backups/peritial-objects-YYYYMMDD
+   dotnet run --project scripts/recovery/Peritial.RecoveryCheckpoint -- export
+   ```
+
+4. Proteggere **tutti** i file insieme: dump PostgreSQL, relativo checksum, archive completo, versioni e configurazione della release, più export Keycloak/segreti in canali separati. Non lasciare la copia primaria soltanto su disco locale. Per sicurezza produttiva sono obbligatori firma, cifratura e destinazione offsite immutabile.
+
+### Ripristino offline
+
+1. Creare una **nuova istanza PostgreSQL 17** e un **nuovo server/bucket S3 completamente vuoto e non esposto**. Provisionare ruoli PostgreSQL minimi; `scripts/db/restore.sh` applica il dump custom PostgreSQL sul database vuoto in un'unica transazione. Non riavviare API/worker.
+2. Impostare `PERITIAL_CHECKPOINT_POSTGRES` per il database **restaurato**, `PERITIAL_CHECKPOINT_S3_ENDPOINT`, bucket e credenziali per lo storage **di destinazione**, `PERITIAL_ARCHIVE_DIR` per la copia locale invariata, `PERITIAL_CHECKPOINT_CONFIRM=WRITERS_STOPPED`. Questo comando richiede una seconda conferma esplicita:
+
+   ```bash
+   export PERITIAL_RESTORE_OBJECTS_CONFIRM=EMPTY_DESTINATION_BUCKET
+   dotnet run --project scripts/recovery/Peritial.RecoveryCheckpoint -- restore-objects
+   ```
+
+3. Prima della prima PUT, il comando valida la struttura/manifests dei file, *tutti* gli hash e le dimensioni, la **corrispondenza esatta** dei metadati nel DB di destinazione (inclusi tenant, ID e chiavi), lo stato senza upload pendenti e l'**assenza di qualsiasi oggetto** nel bucket di destinazione. Le PUT usano `If-None-Match: *` per non sovrascrivere in caso di concorrenza. Dopo il trasferimento, legge nuovamente tutti i byte S3 e verifica SHA-256 e metadati; un secondo import viene rifiutato.
+4. **Non esiste un commit distribuito tra PostgreSQL e S3:** se l'import fallisce durante una PUT, il bucket di destinazione può essere parzialmente scritto. **Scartare interamente il bucket di prova e ricominciare su un altro vuoto**, mai riavviare worker o API su un import incompleto. Accertare separatamente che non esistano oggetti S3 orfani, upload multipart incompleti o versioni di oggetti che il manifest non può rappresentare.
+5. Verificare ruoli, credenziali, policy FORCE RLS, audit, Keycloak, ACL bucket, idempotenza e schema; la verifica dei soli blob referenziati non equivale al recovery completo.
+
+Il test `ObjectRecoveryArchiveContractTests` parte su **due server PostgreSQL e due SeaweedFS distinti** in Compose: dati di due tenant, export in file reali, rifiuto di manomissione anche a lunghezza invariata, chiave S3 nel manifest contraffatta, import e verifica SHA-256, rifiuto di secondo import e corruzione del bucket destinazione. `tests/backup/run_complete_pg_s3_restore.sh` ferma l'API e porta avanti un `pg_dump` del DB usato da REST/MCP, un `pg_restore` su PostgreSQL nuovo e un export/import degli oggetti su SeaweedFS nuovo. Sono **drill di laboratorio**, non una dimostrazione di recupero di istanze produttive o di snapshot immutabile con traffico live.
+
+### Confini ancora aperti
+
+L'archive non è firmato, cifrato, versionato fuori sito o dotato di retention automatica. Include **solo** i documenti che hanno metadati PostgreSQL; non enumera orfani, incomplete multipart, versioni storiche o metadati S3 non rappresentati, e non ripristina la configurazione Keycloak. L'identità DB con `BYPASSRLS` è di alto privilegio e deve essere limitata a manutenzioni supervisionate. Non usare questo flusso su Azure Blob senza un'implementazione e test separati. #6/#18/#21 rimangono aperte per questi requisiti.
