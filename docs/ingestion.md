@@ -20,3 +20,8 @@ REST: POST /api/files (multipart file, periziaId opzionale); MCP: tool ingest_fi
 - Antivirus e quarantena, validazione profonda del contenuto e protezione da zip bomb.
 - Compensazione storage/database, audit e rate limiting, test upload reale su entrambi gli adapter Azure/S3.
 - Introduzione di limite globale di concorrenza/stream su endpoint e verifica REST/MCP attraverso test API reali.
+
+## Limite HTTP prima del Business
+ASP.NET Core applica `FormOptions.MultipartBodyLengthLimit = 25 MiB` e una soglia di dimensione complessiva HTTP di 25 MiB + 1 MiB di overhead per l'endpoint POST /api/files. Le richieste che superano i limiti multipart sono restituite come HTTP 413; i payload ammessi sono comunque rivalidati in Business anche per tool MCP o altri ingressi.
+
+Il test Playwright autenticato copre upload multipart valido, PDF falsificato, limite 413 e chiamata MCP con file non valido. Il limite effettivo rimane verificato in CI contro Docker Compose.

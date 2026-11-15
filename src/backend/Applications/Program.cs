@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.IdentityModel.Tokens;
 using ModelContextProtocol.Server;
 using Npgsql;
@@ -10,6 +11,12 @@ using Peritial.Infrastructures;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddHttpContextAccessor();
+// Reject oversized multipart sections before they reach the Business ingestion service.
+builder.Services.Configure<FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = FileIngestionService.MaxUploadBytes;
+    options.MultipartHeadersLengthLimit = 16 * 1024;
+});
 
 var authIssuer = builder.Configuration["Auth:Authority"] ?? throw new InvalidOperationException("Auth:Authority required.");
 var audience = builder.Configuration["Auth:Audience"] ?? throw new InvalidOperationException("Auth:Audience required.");
@@ -80,6 +87,8 @@ app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
     var status = error switch
     {
         UnauthorizedAccessException => StatusCodes.Status403Forbidden,
+        InvalidDataException => StatusCodes.Status413PayloadTooLarge,
+        BadHttpRequestException badRequest when badRequest.StatusCode == 413 => StatusCodes.Status413PayloadTooLarge,
         KeyNotFoundException => StatusCodes.Status404NotFound,
         ArgumentException or InvalidOperationException => StatusCodes.Status400BadRequest,
         _ => StatusCodes.Status500InternalServerError
@@ -87,6 +96,18 @@ app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
     context.Response.StatusCode = status;
     await context.Response.WriteAsJsonAsync(new { error = status == 500 ? "Internal server error." : error?.Message });
 }));
+
+// Limit the entire multipart HTTP request, not only the individual file section.
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.Equals("/api/files", StringComparison.OrdinalIgnoreCase))
+    {
+        var feature = context.Features.Get<IHttpMaxRequestBodySizeFeature>();
+        if (feature is { IsReadOnly: false })
+            feature.MaxRequestBodySize = FileIngestionService.MaxUploadBytes + 1024 * 1024;
+    }
+    await next(context);
+});
 
 app.UseCors("web");
 app.UseAuthentication();
