@@ -5,6 +5,7 @@
   <Project Path="src/backend/Applications/Peritial.Applications.csproj" />
   <Project Path="scripts/db/Peritial.DbMigrator/Peritial.DbMigrator.csproj" />
   <Project Path="scripts/recovery/Peritial.RecoveryCheckpoint/Peritial.RecoveryCheckpoint.csproj" />
+  <Project Path="scripts/recovery/Peritial.RecoveryBundle/Peritial.RecoveryBundle.csproj" />
   <Project Path="tests/backend/Peritial.Domains.Tests/Peritial.Domains.Tests.csproj" />
   <Project Path="tests/backend/Peritial.Business.Tests/Peritial.Business.Tests.csproj" />
   <Project Path="tests/backend/Peritial.Infrastructures.Tests/Peritial.Infrastructures.Tests.csproj" />
