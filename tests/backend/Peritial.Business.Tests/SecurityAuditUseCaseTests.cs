@@ -10,8 +10,8 @@ public sealed class SecurityAuditUseCaseTests
     public async Task Successful_mutations_are_audited_without_reference_or_payload()
     {
         var tenant = new ActingTenant(true);
-        var perizie = new MemoryPerizie(audit);
         var audit = new SpyAudit();
+        var perizie = new MemoryPerizie(audit);
         var service = new PeriziaService(tenant, perizie, audit);
 
         var created = await service.CreateAsync("PRIVATE-CLAIM-REF");
@@ -34,8 +34,8 @@ public sealed class SecurityAuditUseCaseTests
     public async Task Denied_mcp_mutation_is_recorded_and_does_not_change_data()
     {
         var actor = new ActingTenant(false);
-        var perizie = new MemoryPerizie(audit);
         var audit = new SpyAudit();
+        var perizie = new MemoryPerizie(audit);
         var service = new PeriziaService(actor, perizie, audit);
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.CreateAsync("PRIVATE-DENIED"));
