@@ -14,4 +14,4 @@ Backend .NET 10 DDD (Domains / Business / Infrastructures / Applications), API R
 
 **Stato:** primo vertical slice perizie/ingestion, con E2E OAuth Keycloak, API REST e catalogo MCP verificati; NON è una riscrittura funzionalmente completa di death. Configurazione e credenziali Compose solo dimostrative, non per produzione.
 
-Documenti: docs/requirements.md, docs/legacy-inventory.md, docs/architecture.md, docs/mcp.md, docs/development.md, docs/local-deployment.md, docs/database-migrations.md, docs/database-backup-restore.md, adr/.
+Documenti: docs/requirements.md, docs/legacy-inventory.md, docs/architecture.md, docs/mcp.md, docs/development.md, docs/local-deployment.md, docs/database-migrations.md, docs/database-backup-restore.md (inclusa adozione V001 legacy offline), adr/.
