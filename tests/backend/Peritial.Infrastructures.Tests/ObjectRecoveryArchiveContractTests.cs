@@ -24,7 +24,13 @@ public sealed class ObjectRecoveryArchiveContractTests
             return;
 
         var schema = "archive_" + Guid.NewGuid().ToString("N");
-        var archive = Path.Combine(Path.GetTempPath(), "archive-" + Guid.NewGuid().ToString("N"));
+        // Plaintext S3 bytes are isolated in private swap-free tmpfs.
+        // The runtime guard makes a disk-backed test fixture fail closed.
+        var scratch = Path.Combine("/dev/shm",
+            "peritial-object-contract-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(scratch, UnixFileMode.UserRead |
+            UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        var archive = Path.Combine(scratch, "archive");
         var tenantOne = Guid.NewGuid();
         var tenantTwo = Guid.NewGuid();
         var docOne = Guid.NewGuid();
@@ -160,8 +166,8 @@ public sealed class ObjectRecoveryArchiveContractTests
                 await using var drop = new NpgsqlCommand($"DROP SCHEMA IF EXISTS {schema} CASCADE", conn);
                 await drop.ExecuteNonQueryAsync();
             }
-            if (Directory.Exists(archive))
-                Directory.Delete(archive, true);
+            if (Directory.Exists(scratch))
+                Directory.Delete(scratch, true);
         }
     }
 

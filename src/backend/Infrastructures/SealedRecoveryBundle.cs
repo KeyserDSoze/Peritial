@@ -33,6 +33,11 @@ public static class SealedRecoveryBundle
         CancellationToken ct = default)
     {
         ValidateKeys(encryptionKey, s3SigningKey);
+        // Reject plaintext PGDMP or S3 archives on disk-backed staging
+        // BEFORE reading them or starting the encrypted publication.
+        SecureRecoveryStaging.RequirePrivateTmpfsFile(postgresDump);
+        SecureRecoveryStaging.RequirePrivateTmpfsFile(postgresDump + ".sha256");
+        SecureRecoveryStaging.RequirePrivateTmpfsDirectory(s3Archive);
         CheckNewDirectory(destination);
         await VerifyPostgresAsync(postgresDump, ct);
         var objects = await ObjectRecoveryArchive.ReadAndValidateAsync(
@@ -104,6 +109,9 @@ public static class SealedRecoveryBundle
         byte[] encryptionKey, byte[] s3SigningKey, CancellationToken ct = default)
     {
         ValidateKeys(encryptionKey, s3SigningKey);
+        // The target will contain the full decrypted PostgreSQL database and
+        // every document. Never publish it on overlay/ext4 by accident.
+        SecureRecoveryStaging.RequirePrivateTmpfsParent(destination);
         CheckNewDirectory(destination);
         if (!Path.IsPathFullyQualified(bundleDirectory) ||
             !Directory.Exists(bundleDirectory) || IsLink(bundleDirectory))

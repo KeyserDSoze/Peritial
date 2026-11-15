@@ -16,8 +16,11 @@ public sealed class SealedRecoveryBundleTests
     [Fact]
     public async Task Both_Postgres_and_S3_bytes_are_sealed_and_restored_after_authentication()
     {
-        var baseDir = Path.Combine(Path.GetTempPath(), "sealed-test-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(baseDir);
+        if (!OperatingSystem.IsLinux() || !Directory.Exists("/dev/shm"))
+            return;
+        var baseDir = Path.Combine("/dev/shm", "sealed-test-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(baseDir, UnixFileMode.UserRead |
+            UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         try
         {
             var sourceDump = Path.Combine(baseDir, "source.dump");
@@ -34,7 +37,10 @@ public sealed class SealedRecoveryBundleTests
             await File.WriteAllBytesAsync(sourceDump, postgres);
             await File.WriteAllTextAsync(sourceDump + ".sha256",
                 Convert.ToHexString(SHA256.HashData(postgres)).ToLowerInvariant() + "\n");
-            Directory.CreateDirectory(Path.Combine(s3Archive, "objects"));
+            Directory.CreateDirectory(s3Archive, UnixFileMode.UserRead |
+                UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            Directory.CreateDirectory(Path.Combine(s3Archive, "objects"),
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
             await File.WriteAllBytesAsync(Path.Combine(s3Archive, "objects", "00000000.blob"), blob);
 
             var checkpoint = new ObjectRecoveryCheckpoint.Manifest(1,
@@ -125,15 +131,19 @@ public sealed class SealedRecoveryBundleTests
     [Fact]
     public async Task Unauthenticated_postgres_digest_or_s3_manifest_cannot_be_sealed()
     {
-        var baseDir = Path.Combine(Path.GetTempPath(), "sealed-reject-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(baseDir);
+        if (!OperatingSystem.IsLinux() || !Directory.Exists("/dev/shm"))
+            return;
+        var baseDir = Path.Combine("/dev/shm", "sealed-reject-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(baseDir, UnixFileMode.UserRead |
+            UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         try
         {
             var pg = Path.Combine(baseDir, "db.dump");
             await File.WriteAllBytesAsync(pg, "PGDMPnot-a-real-dump-for-format-check"u8.ToArray());
             await File.WriteAllTextAsync(pg + ".sha256", new string('0', 64) + "\n");
             var archive = Path.Combine(baseDir, "s3");
-            Directory.CreateDirectory(archive);
+            Directory.CreateDirectory(archive, UnixFileMode.UserRead |
+                UnixFileMode.UserWrite | UnixFileMode.UserExecute);
             var bundle = Path.Combine(baseDir, "bundle");
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 SealedRecoveryBundle.SealAsync(

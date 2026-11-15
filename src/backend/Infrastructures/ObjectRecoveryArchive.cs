@@ -37,6 +37,8 @@ public static class ObjectRecoveryArchive
         string destinationDirectory, byte[] signingKey, CancellationToken ct = default)
     {
         RequireSigningKey(signingKey);
+        // Fail before any S3 GET or local plaintext write on persistent disk.
+        SecureRecoveryStaging.RequirePrivateTmpfsParent(destinationDirectory);
         CheckNewDestination(destinationDirectory);
         var checkpoint = await ObjectRecoveryCheckpoint.CaptureAsync(
             administrator, source, bucket, ct);
@@ -162,6 +164,8 @@ public static class ObjectRecoveryArchive
         string archiveDirectory, byte[] signingKey, CancellationToken ct = default)
     {
         RequireSigningKey(signingKey);
+        // Archive contains plaintext S3 documents, not merely an index.
+        SecureRecoveryStaging.RequirePrivateTmpfsDirectory(archiveDirectory);
         if (!Path.IsPathFullyQualified(archiveDirectory) ||
             !Directory.Exists(archiveDirectory) ||
             IsLink(archiveDirectory))

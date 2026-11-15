@@ -3,7 +3,12 @@
 # servers. CI only: all credentials are disposable Compose demo credentials.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
-dir="$(mktemp -d)"
+# Host tmpfs is bind-mounted into the SDK container. Neither PGDMP nor the
+# S3 blob archive nor the decrypted restore stage may touch the runner disk.
+dir="$(mktemp -d /dev/shm/peritial-recovery.XXXXXXXX)"
+test "$(stat -f -c %T "$dir")" = "tmpfs" || { echo "Scratch must be tmpfs" >&2; exit 1; }
+test "$(wc -l </proc/swaps)" -eq 1 || { echo "Host swap must be disabled" >&2; exit 1; }
+umask 077
 # The isolated SDK container owns the unsealed directories as root with 0700.
 # GitHub-hosted Ubuntu runners require sudo to read/remove those private paths.
 # Never relax the directory ACLs to make a test pass.
@@ -38,7 +43,7 @@ docker compose -f docker/compose.yml --profile test --profile recovery-test run 
   -e PERITIAL_CHECKPOINT_S3_BUCKET=peritial \
   -e PERITIAL_CHECKPOINT_S3_ACCESS_KEY=localminio \
   -e PERITIAL_CHECKPOINT_S3_SECRET_KEY=local-only-minio-secret \
-  -e PERITIAL_ARCHIVE_DIR=/tmp/peritial-offline-objects \
+  -e PERITIAL_ARCHIVE_DIR=/recovery/source-objects \
   -e PERITIAL_BUNDLE_POSTGRES_DUMP=/recovery/peritial.dump \
   -e PERITIAL_BUNDLE_DIR=/recovery/sealed \
   -e PERITIAL_BUNDLE_UNSEAL_DIR=/recovery/unsealed \
