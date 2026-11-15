@@ -31,7 +31,7 @@ services:
       Auth__MetadataAddress: http://keycloak:8080/realms/peritial/.well-known/openid-configuration
       Auth__DevelopmentBackchannelOrigin: http://keycloak:8080
       Auth__Audience: peritial-api
-      Auth__Resource: http://localhost:8080
+      Auth__Resource: http://localhost:8080/mcp
       Auth__RequireHttpsMetadata: "false"
       Storage__Provider: Minio
       Storage__Minio__Endpoint: http://seaweedfs:8333

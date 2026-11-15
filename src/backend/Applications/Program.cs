@@ -20,7 +20,8 @@ builder.Services.Configure<FormOptions>(options =>
 
 var authIssuer = builder.Configuration["Auth:Authority"] ?? throw new InvalidOperationException("Auth:Authority required.");
 var audience = builder.Configuration["Auth:Audience"] ?? throw new InvalidOperationException("Auth:Audience required.");
-var publicResource = builder.Configuration["Auth:Resource"] ?? "http://localhost:5173/mcp";
+var publicResource = builder.Configuration["Auth:Resource"] ?? "http://localhost:8080/mcp";
+var metadata = new OAuthProtectedResource(publicResource, builder.Environment.IsDevelopment());
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -44,15 +45,34 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
         options.Events = new JwtBearerEvents
         {
+            OnTokenValidated = context =>
+            {
+                // Reject structurally valid tokens lacking a signed tenant/subject
+                // at authentication time, before endpoint selection or tool dispatch.
+                if (!OAuthSecurity.HasSignedTenantAndSubject(context.Principal))
+                    context.Fail("A valid signed tenant_id and sub claim are required.");
+                return Task.CompletedTask;
+            },
             OnChallenge = context =>
             {
-                context.Response.Headers.Append("WWW-Authenticate",
-                    $"Bearer resource_metadata=\"{publicResource.TrimEnd('/')}/.well-known/oauth-protected-resource\"");
+                if (context.Request.Path.StartsWithSegments("/mcp"))
+                    context.Response.Headers.Append("WWW-Authenticate",
+                        $"Bearer resource_metadata=\"{metadata.McpMetadataUrl}\"");
                 return Task.CompletedTask;
             }
         };
     });
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("peritial.read", policy => policy.RequireAuthenticatedUser()
+        .RequireAssertion(context => OAuthSecurity.HasAnyScope(
+            context.User, "peritial.read", "peritial.write")));
+    options.AddPolicy("peritial.write", policy => policy.RequireAuthenticatedUser()
+        .RequireAssertion(context => OAuthSecurity.HasAnyScope(context.User, "peritial.write")));
+    options.AddPolicy("peritial.access", policy => policy.RequireAuthenticatedUser()
+        .RequireAssertion(context => OAuthSecurity.HasAnyScope(
+            context.User, "peritial.read", "peritial.write")));
+});
 
 var connectionString = builder.Configuration.GetConnectionString("Postgres")
     ?? throw new InvalidOperationException("ConnectionStrings:Postgres required.");
@@ -114,25 +134,25 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapGet("/health/live", () => Results.Ok(new { status = "healthy" }));
-app.MapGet("/.well-known/oauth-protected-resource", () => Results.Json(new
-{
-    resource = publicResource,
-    authorization_servers = new[] { authIssuer },
-    scopes_supported = new[] { "peritial.read", "peritial.write" },
-    bearer_methods_supported = new[] { "header" }
-}));
+// RFC 9728: resource metadata must match the canonical protected resource URI.
+// Clients visiting /mcp get the path-specific /.well-known/.../mcp metadata.
+app.MapGet("/.well-known/oauth-protected-resource/mcp", () =>
+    Results.Json(metadata.AsMcpMetadata(authIssuer)));
+app.MapGet("/.well-known/oauth-protected-resource", () =>
+    Results.Json(metadata.AsApiMetadata(authIssuer)));
 
 var api = app.MapGroup("/api").RequireAuthorization();
-api.MapGet("/perizie", (PeriziaService service, CancellationToken ct) => service.ListAsync(ct));
+api.MapGet("/perizie", (PeriziaService service, CancellationToken ct) => service.ListAsync(ct))
+    .RequireAuthorization("peritial.read");
 api.MapPost("/perizie", async (CreatePeriziaRequest input, PeriziaService service, CancellationToken ct) =>
 {
     var created = await service.CreateAsync(input.Reference, ct);
     return Results.Created($"/api/perizie/{created.Id}", created);
-});
+}).RequireAuthorization("peritial.write");
 api.MapPost("/perizie/{id:guid}/assign", (Guid id, AssignPeriziaRequest request, PeriziaService service, CancellationToken ct) =>
-    service.AssignAsync(id, request.Assignee, ct));
+    service.AssignAsync(id, request.Assignee, ct)).RequireAuthorization("peritial.write");
 api.MapPost("/perizie/{id:guid}/advance", (Guid id, AdvancePeriziaRequest request, PeriziaService service, CancellationToken ct) =>
-    service.AdvanceAsync(id, request.Target, ct));
+    service.AdvanceAsync(id, request.Target, ct)).RequireAuthorization("peritial.write");
 
 api.MapPost("/files", async (HttpRequest request, FileIngestionService service, CancellationToken ct) =>
 {
@@ -144,9 +164,9 @@ api.MapPost("/files", async (HttpRequest request, FileIngestionService service, 
     await using var stream = file.OpenReadStream();
     var uploaded = await service.IngestAsync(file.FileName, file.ContentType, stream, file.Length, periziaId, ct);
     return Results.Created($"/api/files/{uploaded.Id}", uploaded);
-}).DisableAntiforgery();
+}).DisableAntiforgery().RequireAuthorization("peritial.write");
 
-app.MapMcp("/mcp").RequireAuthorization();
+app.MapMcp("/mcp").RequireAuthorization("peritial.access");
 app.Run();
 
 public sealed record CreatePeriziaRequest(string Reference);

@@ -25,8 +25,6 @@ public sealed class TenantContext(IHttpContextAccessor httpContextAccessor) : IT
 
     public bool HasScope(string scope)
     {
-        var raw = User.FindAll("scope").Concat(User.FindAll("scp")).Select(c => c.Value);
-        return raw.SelectMany(s => s.Split(' ', StringSplitOptions.RemoveEmptyEntries))
-            .Contains(scope, StringComparer.Ordinal);
+        return OAuthSecurity.HasScope(User, scope);
     }
 }
