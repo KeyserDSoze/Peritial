@@ -6,7 +6,7 @@ public sealed record DocumentDto(Guid Id, Guid? PeriziaId, string FileName, stri
 
 public sealed class FileIngestionService(
     ITenantContext context, IPeriziaRepository perizie, IDocumentRepository documents, IObjectStore objects,
-    ISecurityAuditTrail audit)
+    ISecurityAuditTrail audit, IFileMalwareScanner scanner)
 {
     public const long MaxUploadBytes = 25 * 1024 * 1024;
     public const int MaxMcpBytes = 4 * 1024 * 1024;
@@ -67,6 +67,15 @@ public sealed class FileIngestionService(
             throw new ArgumentException("File stream is shorter than declared.", nameof(size));
 
         UploadedDocumentValidation.ValidateContent(ext, buffer.GetBuffer().AsSpan(0, (int)total));
+
+        // No unscanned file is allowed in permanent object storage, metadata,
+        // or the success audit. No fallbacks when clamd is down or inconclusive.
+        var verdict = await scanner.ScanAsync(buffer.GetBuffer().AsMemory(0, (int)total), ct);
+        if (verdict == MalwareScanResult.Infected)
+            throw new FileThreatDetectedException();
+        if (verdict != MalwareScanResult.Clean)
+            throw new MalwareScannerUnavailableException();
+
         buffer.Position = 0;
 
         var id = Guid.NewGuid();

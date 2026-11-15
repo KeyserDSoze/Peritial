@@ -107,7 +107,7 @@ public sealed class FileIngestionCompensationTests
         var store = new TrackingStore();
         var documents = new Documents();
         var service = new FileIngestionService(
-            new Tenant(), new Perizie(), documents, store, new Audit());
+            new Tenant(), new Perizie(), documents, store, new Audit(), new CleanScanner());
         return (service, store, documents);
     }
 
@@ -178,6 +178,12 @@ public sealed class FileIngestionCompensationTests
         public Task UpdateAsync(Perizia perizia, CancellationToken ct = default) => Task.CompletedTask;
         public Task AddAuditedAsync(Perizia perizia, SecurityAuditEvent audit, CancellationToken ct = default) => Task.CompletedTask;
         public Task UpdateAuditedAsync(Perizia perizia, SecurityAuditEvent audit, CancellationToken ct = default) => Task.CompletedTask;
+    }
+
+    private sealed class CleanScanner : IFileMalwareScanner
+    {
+        public Task<MalwareScanResult> ScanAsync(ReadOnlyMemory<byte> data, CancellationToken ct = default) =>
+            Task.FromResult(MalwareScanResult.Clean);
     }
 
     private sealed class Audit : ISecurityAuditTrail

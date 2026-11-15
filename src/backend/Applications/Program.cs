@@ -109,6 +109,7 @@ builder.Services.AddScoped<IPeriziaRepository, PgPeriziaRepository>();
 builder.Services.AddScoped<IDocumentRepository, PgDocumentRepository>();
 builder.Services.AddScoped<ISecurityAuditTrail, PgSecurityAuditTrail>();
 builder.Services.AddScoped<PeriziaService>();
+builder.Services.AddSingleton<IFileMalwareScanner, ClamdFileMalwareScanner>();
 builder.Services.AddScoped<FileIngestionService>();
 if (string.Equals(builder.Configuration["Storage:Provider"], "Azure", StringComparison.OrdinalIgnoreCase))
     builder.Services.AddSingleton<IObjectStore, AzureBlobObjectStore>();
@@ -135,6 +136,8 @@ app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
     var status = error switch
     {
         UnauthorizedAccessException => StatusCodes.Status403Forbidden,
+        FileThreatDetectedException => StatusCodes.Status422UnprocessableEntity,
+        MalwareScannerUnavailableException => StatusCodes.Status503ServiceUnavailable,
         InvalidDataException => StatusCodes.Status413PayloadTooLarge,
         BadHttpRequestException badRequest when badRequest.StatusCode == 413 => StatusCodes.Status413PayloadTooLarge,
         KeyNotFoundException => StatusCodes.Status404NotFound,

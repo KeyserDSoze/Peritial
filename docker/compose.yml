@@ -19,6 +19,18 @@ services:
     profiles: ["azure-test"]
     image: mcr.microsoft.com/azure-storage/azurite:3.37.0
     ports: ["10000:10000"]
+  clamav:
+    # Official image with preloaded signatures. Clamd listens on the internal
+    # Compose network only: never publish unauthenticated port 3310.
+    image: clamav/clamav:1.5
+    environment:
+      CLAMAV_NO_FRESHCLAMD: "true"
+    healthcheck:
+      test: ["CMD", "clamdscan", "--ping", "1"]
+      interval: 10s
+      timeout: 5s
+      retries: 40
+      start_period: 60s
   keycloak:
     image: quay.io/keycloak/keycloak:26.4
     command: ["start-dev", "--import-realm"]
@@ -37,6 +49,9 @@ services:
       Auth__Audience: peritial-api
       Auth__Resource: http://localhost:8080/mcp
       Auth__RequireHttpsMetadata: "false"
+      Malware__Clamd__Host: clamav
+      Malware__Clamd__Port: "3310"
+      Malware__Clamd__TimeoutSeconds: "30"
       Storage__Provider: Minio
       Storage__Minio__Endpoint: http://seaweedfs:8333
       Storage__Minio__AccessKey: localminio
@@ -48,6 +63,7 @@ services:
       postgres: {condition: service_healthy}
       seaweedfs: {condition: service_started}
       keycloak: {condition: service_started}
+      clamav: {condition: service_healthy}
   frontend:
     build: {context: .., dockerfile: src/frontend/Dockerfile}
     environment: {API_UPSTREAM: "http://api:8080"}
