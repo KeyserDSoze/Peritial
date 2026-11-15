@@ -15,9 +15,7 @@ public sealed class SecurityAuditRepositoryTests
             ?? throw new InvalidOperationException("PERITIAL_TEST_POSTGRES required");
         await using var admin = NpgsqlDataSource.Create(adminConnection);
         await SchemaBootstrap.ApplyDevelopmentSchemaAsync(admin);
-        await using (var cmd = admin.CreateCommand(
-            "ALTER ROLE peritial_app WITH LOGIN PASSWORD 'local-only-app' NOSUPERUSER NOBYPASSRLS"))
-            await cmd.ExecuteNonQueryAsync();
+        await TestDbRoleProvisioner.ConfigureAsync(admin);
 
         var a = TenantId.From(Guid.NewGuid());
         var b = TenantId.From(Guid.NewGuid());

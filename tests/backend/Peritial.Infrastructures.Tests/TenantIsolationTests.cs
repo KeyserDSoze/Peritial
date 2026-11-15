@@ -161,13 +161,7 @@ public sealed class TenantIsolationTests
             ?? throw new InvalidOperationException("PERITIAL_TEST_POSTGRES required.");
         var admin = NpgsqlDataSource.Create(connection);
         await SchemaBootstrap.ApplyDevelopmentSchemaAsync(admin);
-        await using var cmd = admin.CreateCommand(
-            "DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'peritial_app') THEN " +
-            "CREATE ROLE peritial_app NOSUPERUSER NOBYPASSRLS NOLOGIN; END IF; END $$; " +
-            "ALTER ROLE peritial_app WITH LOGIN PASSWORD 'local-only-app' NOSUPERUSER NOBYPASSRLS; " +
-            "GRANT USAGE ON SCHEMA public TO peritial_app; " +
-            "GRANT SELECT, INSERT, UPDATE, DELETE ON perizie, documents TO peritial_app;");
-        await cmd.ExecuteNonQueryAsync();
+        await TestDbRoleProvisioner.ConfigureAsync(admin);
         return admin;
     }
 
