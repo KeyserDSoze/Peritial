@@ -104,7 +104,11 @@ jobs:
                 AND (SELECT count(*) FROM security_audit WHERE action='authorization.forbidden' AND outcome='denied') >= 1
                 AND (SELECT count(*) FROM security_audit WHERE action='perizia.create' AND outcome='denied') >= 1
                 AND (SELECT count(*) FROM security_audit WHERE subject = '') = 0
-                AND (SELECT count(*) FROM upload_intents) = 0;
+                AND (SELECT count(*) FROM upload_intents) = 0
+                AND (SELECT count(*) FROM documents WHERE file_name='retry-proof.pdf') = 2
+                AND (SELECT count(*) FROM security_audit WHERE action='document.ingest'
+                     AND outcome='succeeded' AND resource_id IN
+                       (SELECT id FROM documents WHERE file_name='retry-proof.pdf')) = 2;
             ")
           if [ "$result" != "t" ]; then
             echo "Required persisted REST/MCP security audit events are missing."

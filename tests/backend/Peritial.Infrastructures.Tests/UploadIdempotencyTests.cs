@@ -94,6 +94,43 @@ public sealed class UploadIdempotencyTests
     }
 
     [Fact]
+    public async Task Recovery_releases_stale_pending_key_for_safe_retry()
+    {
+        await using var db = await TestDb.OpenAsync();
+        var tenant = TenantId.From(Guid.NewGuid());
+        var id = Guid.NewGuid();
+        var key = $"{tenant.Value:N}/{id:N}.pdf";
+        var store = new PgUploadIdempotencyStore(db.App);
+        Assert.Equal(UploadIdempotencyState.Acquired,
+            (await store.ReserveAsync(tenant, "actor-A", Key, Digest, id)).State);
+        await new PgUploadIntentLedger(db.App).RecordAsync(tenant, id, key);
+
+        var blobs = new InMemoryBlobs();
+        await blobs.PutAsync(key, new MemoryStream("%PDF-1.7"u8.ToArray()), "application/pdf");
+        var worker = new PgUploadReconciler(db.Recovery, blobs);
+        Assert.True(await worker.ReconcileOneAsync(DateTime.UtcNow.AddMinutes(5)));
+        Assert.False(blobs.Contains(key));
+        Assert.Equal(UploadIdempotencyState.Acquired,
+            (await store.ReserveAsync(tenant, "actor-A", Key, Digest, Guid.NewGuid())).State);
+    }
+
+    private sealed class InMemoryBlobs : IObjectStore
+    {
+        private readonly HashSet<string> _keys = [];
+        public bool Contains(string key) => _keys.Contains(key);
+        public Task PutAsync(string key, Stream bytes, string mime, CancellationToken ct = default)
+        {
+            _keys.Add(key);
+            return Task.CompletedTask;
+        }
+        public Task DeleteAsync(string key, CancellationToken ct = default)
+        {
+            _keys.Remove(key);
+            return Task.CompletedTask;
+        }
+    }
+
+    [Fact]
     public async Task Recovery_role_cannot_read_subject_or_request_digest()
     {
         await using var db = await TestDb.OpenAsync();
