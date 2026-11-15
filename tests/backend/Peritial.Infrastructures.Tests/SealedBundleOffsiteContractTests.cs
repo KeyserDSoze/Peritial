@@ -62,10 +62,22 @@ public sealed class SealedBundleOffsiteContractTests
             }
 
             await SealedRecoveryBundle.SealAsync(pg, archive, encrypted, aesKey, s3Key);
+            // Fail closed by default: SeaweedFS CI has NO verified S3 Object
+            // Lock COMPLIANCE retention. A production upload must write nothing.
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                SealedBundleOffsite.UploadAsync(encrypted, client, bucket, id, aesKey,
+                    disposableUnprotectedDemo: true));
+            var before = await client.ListObjectsV2Async(new ListObjectsV2Request
+            {
+                BucketName = bucket, Prefix = "sealed-v1/" + id + "/"
+            });
+            Assert.True(before.S3Objects is null || before.S3Objects.Count == 0);
+            // Only this explicitly disposable CI server can use the opt-out.
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 SealedBundleOffsite.UploadAsync(encrypted, client, bucket, id,
-                    RandomNumberGenerator.GetBytes(32)));
-            await SealedBundleOffsite.UploadAsync(encrypted, client, bucket, id, aesKey);
+                    RandomNumberGenerator.GetBytes(32), disposableUnprotectedDemo: true));
+            await SealedBundleOffsite.UploadAsync(
+                encrypted, client, bucket, id, aesKey, disposableUnprotectedDemo: true);
 
             // A second upload must not replace ciphertext, even if exactly equal.
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
@@ -140,7 +152,8 @@ public sealed class SealedBundleOffsiteContractTests
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 SealedBundleOffsite.DownloadAsync(client, bucket, id, retrieved, aesKey));
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                SealedBundleOffsite.UploadAsync(encrypted, client, bucket, "../unsafe", aesKey));
+                SealedBundleOffsite.UploadAsync(encrypted, client, bucket, "../unsafe", aesKey,
+                    disposableUnprotectedDemo: true));
         }
         finally
         {
