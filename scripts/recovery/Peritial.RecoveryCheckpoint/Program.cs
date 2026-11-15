@@ -6,9 +6,9 @@ using Peritial.Infrastructures;
 
 // The checkpoint is a read-only integrity proof, not a backup of object bytes
 // or an authenticated snapshot. All application writers MUST be stopped.
-if (args.Length != 1 || args[0] is not ("capture" or "verify"))
+if (args.Length != 1 || args[0] is not ("capture" or "verify" or "export" or "restore-objects"))
 {
-    Console.Error.WriteLine("Usage: dotnet run --project scripts/recovery/Peritial.RecoveryCheckpoint -- capture|verify");
+    Console.Error.WriteLine("Usage: dotnet run --project scripts/recovery/Peritial.RecoveryCheckpoint -- capture|verify|export|restore-objects");
     return 2;
 }
 
@@ -22,8 +22,9 @@ try
             ? value
             : throw new InvalidOperationException("Missing checkpoint configuration.");
 
-    var checkpointFile = Required("PERITIAL_CHECKPOINT_FILE");
-    if (!Path.IsPathFullyQualified(checkpointFile))
+    var checkpointFile = args[0] is "capture" or "verify"
+        ? Required("PERITIAL_CHECKPOINT_FILE") : null;
+    if (checkpointFile is not null && !Path.IsPathFullyQualified(checkpointFile))
         throw new InvalidOperationException("Checkpoint filename must be absolute.");
     var endpoint = Required("PERITIAL_CHECKPOINT_S3_ENDPOINT");
     if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var endpointUri) ||
@@ -39,7 +40,21 @@ try
         new AmazonS3Config { ServiceURL = endpoint, ForcePathStyle = true });
     await using var db = NpgsqlDataSource.Create(pg);
 
-    if (args[0] == "capture")
+    if (args[0] == "export")
+    {
+        var archive = Required("PERITIAL_ARCHIVE_DIR");
+        var manifest = await ObjectRecoveryArchive.ExportAsync(db, s3, bucket, archive);
+        Console.WriteLine($"Object archive exported: {manifest.Checkpoint.Documents.Count} S3 blobs. Secure and preserve the directory.");
+    }
+    else if (args[0] == "restore-objects")
+    {
+        if (Environment.GetEnvironmentVariable("PERITIAL_RESTORE_OBJECTS_CONFIRM") != "EMPTY_DESTINATION_BUCKET")
+            throw new InvalidOperationException("Restoring object bytes requires empty destination confirmation.");
+        var archive = Required("PERITIAL_ARCHIVE_DIR");
+        var imported = await ObjectRecoveryArchive.ImportAsync(db, s3, bucket, archive);
+        Console.WriteLine($"Object archive restored and verified: {imported} S3 blobs.");
+    }
+    else if (args[0] == "capture")
     {
         if (File.Exists(checkpointFile))
             throw new InvalidOperationException("Refusing to overwrite existing checkpoint.");
