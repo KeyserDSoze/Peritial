@@ -97,6 +97,42 @@ public sealed class FileIngestionSecurityTests
         Assert.Empty(docs.Records);
     }
 
+    [Fact]
+    public async Task File_vuoto_e_rifiutato_prima_di_scrivere()
+    {
+        var (service, store, docs) = NewService();
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.IngestAsync("vuoto.pdf", "application/pdf", new MemoryStream(), 0));
+        Assert.Equal(0, store.Uploads);
+        Assert.Empty(docs.Records);
+    }
+
+    [Fact]
+    public async Task Lunghezza_dichiarata_oltre_il_limite_e_rifiutata_prima_di_leggere()
+    {
+        var (service, store, docs) = NewService();
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.IngestAsync("enorme.pdf", "application/pdf", new MemoryStream(),
+                FileIngestionService.MaxUploadBytes + 1));
+        Assert.Equal(0, store.Uploads);
+        Assert.Empty(docs.Records);
+    }
+
+    [Fact]
+    public async Task Perizia_di_altro_tenant_blocca_ingestion_e_non_scrive_file()
+    {
+        var foreign = Perizia.Create(TenantId.From(Guid.NewGuid()), "FOREIGN");
+        var store = new SpyStore();
+        var docs = new SpyDocuments();
+        var service = new FileIngestionService(new FakeTenant(true), new FakePerizie(foreign), docs, store);
+
+        await Assert.ThrowsAsync<KeyNotFoundException>(() =>
+            service.IngestAsync("fattura.pdf", "application/pdf",
+                new MemoryStream(Pdf), Pdf.Length, foreign.Id));
+        Assert.Equal(0, store.Uploads);
+        Assert.Empty(docs.Records);
+    }
+
     private static (FileIngestionService Service, SpyStore Store, SpyDocuments Docs) NewService(bool canWrite = true)
     {
         var store = new SpyStore();
@@ -111,12 +147,12 @@ public sealed class FileIngestionSecurityTests
         public bool HasScope(string scope) => canWrite && scope == "peritial.write";
     }
 
-    private sealed class FakePerizie : IPeriziaRepository
+    private sealed class FakePerizie(Perizia? existing = null) : IPeriziaRepository
     {
         public Task<IReadOnlyList<Perizia>> ListAsync(TenantId tenant, CancellationToken ct = default) =>
             Task.FromResult<IReadOnlyList<Perizia>>(Array.Empty<Perizia>());
         public Task<Perizia?> FindAsync(TenantId tenant, Guid id, CancellationToken ct = default) =>
-            Task.FromResult<Perizia?>(null);
+            Task.FromResult<Perizia?>(existing is not null && existing.Id == id && existing.TenantId == tenant ? existing : null);
         public Task AddAsync(Perizia item, CancellationToken ct = default) => Task.CompletedTask;
         public Task UpdateAsync(Perizia item, CancellationToken ct = default) => Task.CompletedTask;
     }
