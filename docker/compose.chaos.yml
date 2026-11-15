@@ -1,0 +1,14 @@
+# Deliberate network fault injection, CI only; never used in production.
+services:
+  s3-chaos-proxy:
+    profiles: ["chaos"]
+    image: python:3.12-alpine
+    command: ["python", "-u", "/repo/tests/chaos/s3_gate.py"]
+    volumes:
+      - "..:/repo:ro"
+      - "s3chaossignals:/signals"
+  api:
+    environment:
+      Storage__Minio__Endpoint: http://s3-chaos-proxy:8334
+volumes:
+  s3chaossignals:
