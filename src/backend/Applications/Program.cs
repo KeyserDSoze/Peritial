@@ -21,6 +21,12 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         options.Authority = authIssuer;
         options.Audience = audience;
         options.MapInboundClaims = false;
+        if (builder.Configuration["Auth:DevelopmentBackchannelOrigin"] is { Length: > 0 } internalOrigin)
+        {
+            if (!builder.Environment.IsDevelopment())
+                throw new InvalidOperationException("Development backchannel rewrite is prohibited outside Development.");
+            options.BackchannelHttpHandler = new OidcDevelopmentBackchannelHandler(authIssuer, internalOrigin);
+        }
         options.RequireHttpsMetadata = builder.Configuration.GetValue("Auth:RequireHttpsMetadata", true);
         if (builder.Configuration["Auth:MetadataAddress"] is { Length: > 0 } metadata)
             options.MetadataAddress = metadata;

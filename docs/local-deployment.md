@@ -13,8 +13,10 @@ ATTENZIONE: i segreti dimostrativi e il singolo tenant hardcoded nel realm Keycl
 
 ## Login OAuth end-to-end
 
-Per l'ambiente Docker locale, l'issuer OIDC è `http://keycloak.localhost:8081/realms/peritial`. È **lo stesso URL** per browser, token JWT e validazione lato API: l'alias `keycloak.localhost` risolve localmente sul browser, mentre `extra_hosts` mappa l'alias al gateway host nel container API. Evita il caso in cui la validazione JWT non possa scaricare le chiavi JWKS esposte da un issuer raggiungibile solo dal browser.
+Il browser e i token usano `http://localhost:8081/realms/peritial`, l'issuer configurato in Keycloak. Per l'API, che gira in un container, `localhost` indica il container stesso: solo nell'ambiente Development il `OidcDevelopmentBackchannelHandler` reindirizza le richieste di retrieval JWKS verso `http://keycloak:8080`, lasciando intatto l'issuer e la validazione di firma, audience e scadenza.
 
-Test di login, creazione perizia, Bearer auth e tool MCP: `E2E_FULL_STACK=1 E2E_BASE_URL=http://localhost:5173 npm run test:e2e` in `src/frontend`, dopo l'avvio Compose. I test con OAuth sono eseguiti anche nella job `compose` di GitHub Actions.
+Le richieste di metadata OpenID partono dall'indirizzo interno configurato in `Auth:MetadataAddress`. Il rewrite è rifiutato in Production.
 
-In produzione usare un issuer **HTTPS** risolvibile sia dai client che dall'applicazione, senza alias di sviluppo, e vietare `RequireHttpsMetadata=false`.
+Test E2E reale: `E2E_FULL_STACK=1 E2E_BASE_URL=http://localhost:5173 npm run test:e2e` da `src/frontend` dopo avvio Compose. Questa verifica fa parte della CI Compose.
+
+In produzione usare sempre OIDC HTTPS raggiungibile sia dai client che dall'applicazione, e vietare i rewrite di sviluppo.

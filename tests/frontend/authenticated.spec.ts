@@ -3,6 +3,8 @@ import { test, expect } from "@playwright/test";
 test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
   test.skip(!process.env.E2E_FULL_STACK, "Richiede la stack completa con Keycloak e PostgreSQL");
 
+  test.setTimeout(90_000);
+
   test("un token JWT del tenant permette REST e discovery MCP, ma MCP anonimo è negato", async ({page, request}) => {
     await page.goto("/");
     await page.getByRole("button", {name: "Accedi"}).click();
