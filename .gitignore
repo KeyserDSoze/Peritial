@@ -1,0 +1,14 @@
+**/bin/
+**/obj/
+**/node_modules/
+**/dist/
+**/playwright-report/
+**/test-results/
+*.user
+.env
+.env.*
+!.env.example
+terraform.tfstate*
+.terraform/
+*.tfvars
+.DS_Store
