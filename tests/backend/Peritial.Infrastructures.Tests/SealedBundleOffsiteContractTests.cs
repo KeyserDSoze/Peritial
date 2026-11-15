@@ -65,8 +65,7 @@ public sealed class SealedBundleOffsiteContractTests
             // Fail closed by default: SeaweedFS CI has NO verified S3 Object
             // Lock COMPLIANCE retention. A production upload must write nothing.
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                SealedBundleOffsite.UploadAsync(encrypted, client, bucket, id, aesKey,
-                    disposableUnprotectedDemo: true));
+                SealedBundleOffsite.UploadAsync(encrypted, client, bucket, id, aesKey));
             var before = await client.ListObjectsV2Async(new ListObjectsV2Request
             {
                 BucketName = bucket, Prefix = "sealed-v1/" + id + "/"
