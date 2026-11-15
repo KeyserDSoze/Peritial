@@ -33,3 +33,7 @@ I test in Peritial.Infrastructures.Tests riutilizzano un database PostgreSQL con
 ## Scanner documentale (#5)
 
 L'API richiede `Malware:Clamd:Host` e porta TCP privata (default 3310), con timeout configurabile 1–120 s. Nessun fallback permissivo: `IFileMalwareScanner` restituisce `Clean` solo per la risposta esatta `stream: OK`. In CI `MalwareAdmissionTests`, `ClamdScannerContractTests` e Playwright EICAR verificano che i file infetti/non verificati non raggiungano la persistenza. Per produzione, gestire update firme e quarantena persistente: ADR 0010.
+
+## Upload recovery con intenzioni durevoli (#21)
+
+`UploadIntentOrderingTests` verifica che l'intento sia persistito prima di PUT e che un errore metadata non avvii una cancellazione rischiosa. `UploadRecoveryTests` usa PostgreSQL reale e ruoli separati: crash simulato, cleanup ritentato dopo errore storage, preservazione blob referenziato quando il commit ACK è incerto, consumo atomico dell'intento con metadata+audit, rispetto del grace period e accessi recovery a colonne ristrette. In CI il job Compose controlla che, dopo Playwright REST/MCP, non rimangano intenti pendenti. Le prove reali di kill/restart multi-replica e l'idempotenza HTTP restano aperte (#21).

@@ -1,3 +1,5 @@
+> **Parzialmente superata da ADR 0011:** la compensazione sincrona è ora limitata ai PUT falliti (in cui nessun commit metadata è stato avviato). Un esito di commit PostgreSQL ambiguo non autorizza DELETE immediato: la pulizia deve essere affidata al worker con intento persistente.
+
 # ADR 0009 — Compensazione sincrona dello storage durante ingestion
 
 Stato: adottata come misura **best-effort**, non idonea a garantire integrità cross-system dopo crash (2026-11-15).

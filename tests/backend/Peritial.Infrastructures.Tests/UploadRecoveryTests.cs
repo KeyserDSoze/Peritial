@@ -9,6 +9,45 @@ namespace Peritial.Infrastructures.Tests;
 public sealed class UploadRecoveryTests
 {
     [Fact]
+    public async Task Fresh_upload_intent_is_not_recovered_prematurely()
+    {
+        await using var db = await Databases.OpenAsync();
+        var tenant = TenantId.From(Guid.NewGuid());
+        var id = Guid.NewGuid();
+        var key = $"{tenant.Value:N}/{id:N}.pdf";
+        var blobs = new FakeBlobs();
+        blobs.Stored.Add(key);
+        await new PgUploadIntentLedger(db.App).RecordAsync(tenant, id, key);
+
+        Assert.False(await new PgUploadReconciler(db.Recovery, blobs)
+            .ReconcileOneAsync(DateTime.UtcNow.AddHours(-1)));
+        Assert.Contains(key, blobs.Stored);
+        Assert.Equal(0, blobs.Deletions);
+    }
+
+    [Fact]
+    public async Task Dedicated_recovery_role_cannot_read_pii_or_security_audit()
+    {
+        await using var db = await Databases.OpenAsync();
+        await using var conn = await db.Recovery.OpenConnectionAsync();
+        await using (var names = new NpgsqlCommand("SELECT file_name FROM documents", conn))
+        {
+            var error = await Assert.ThrowsAsync<PostgresException>(
+                async () => await names.ExecuteScalarAsync());
+            Assert.Equal(PostgresErrorCodes.InsufficientPrivilege, error.SqlState);
+        }
+        await using (var audit = new NpgsqlCommand("SELECT * FROM security_audit", conn))
+        {
+            var error = await Assert.ThrowsAsync<PostgresException>(
+                async () => await audit.ExecuteScalarAsync());
+            Assert.Equal(PostgresErrorCodes.InsufficientPrivilege, error.SqlState);
+        }
+        await using var role = db.Admin.CreateCommand(
+            "SELECT rolbypassrls FROM pg_roles WHERE rolname='peritial_recovery'");
+        Assert.Equal(false, await role.ExecuteScalarAsync());
+    }
+
+    [Fact]
     public async Task Crashed_upload_is_deleted_after_grace_period_and_intent_is_removed()
     {
         await using var db = await Databases.OpenAsync();

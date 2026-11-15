@@ -28,3 +28,5 @@ Infrastructures (repository PostgreSQL; object store Azure Blob o S3 compatibile
 Il branch `death` è una fonte di osservazione, non di codice. Identificare e specificare i comportamenti prima della reimplementazione. `main` sarà avviato con snapshot pulito.
 
 - Registro audit persistente security_audit: ruolo applicativo INSERT-only con FORCE RLS, accesso amministrativo separato per ispezione, nessuna API pubblica. Perizie e metadata documentali sono committati insieme all'audit del successo, con una sola TenantDbScope transazionale (ADR 0008). La consistenza con lo storage S3/Azure Blob esterno, l'idempotenza e la retention certificata restano da implementare (#5/#6/#19/#21).
+
+- Recovery degli upload con `upload_intents` (tenant-scoped, FORCE RLS). Il commit `documents` + `security_audit` consuma l'intento in un'unica transazione. Un `PgUploadReconciler` in background con ruolo `peritial_recovery` distinto, senza BYPASSRLS e senza privilegi sui nomi file/audit, usa `FOR UPDATE SKIP LOCKED` per recuperare chiavi scadute e verifica prima l'assenza di referenze. ADR 0011; restano da provare idempotenza, kill/restart e provisioning cloud (#21).
