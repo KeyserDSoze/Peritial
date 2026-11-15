@@ -169,6 +169,8 @@ jobs:
         run: bash tests/backup/run_postgres_restore.sh
       - name: Legacy PostgreSQL baseline with verified backup and data preservation
         run: bash tests/backup/run_legacy_adoption.sh
+      - name: Pre-lease legacy upgrade with verified backup and pending intents
+        run: bash tests/backup/run_prelease_adoption.sh
   terraform:
     runs-on: ubuntu-latest
     steps:
