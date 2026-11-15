@@ -27,3 +27,5 @@ PeriziaAtomicAuditTests prova su PostgreSQL reale che INSERT/UPDATE perizie e au
 ## Fault injection documentale (#5/#21)
 
 FileIngestionCompensationTests esercita lo storage fake con upload parziale, errore metadata dopo PUT, cleanup fallito, cancellazione HTTP a metà commit, retry dopo errore e successo senza cancellazione. L'adapter S3 e quello Azure implementano DeleteAsync, con cancellazione idempotente. Le prove reali contro entrambi i provider e il recupero persistente dopo crash non sono ancora completati: ADR 0009.
+
+I test in Peritial.Infrastructures.Tests riutilizzano un database PostgreSQL condiviso: oltre al lock di bootstrap SQL, la suite xUnit è serializzata a livello di assembly. Il lock da solo non impedisce che DDL del test successivo interferisca con la transazione RLS di un test in esecuzione. La serializzazione riguarda solo l'assembly di integrazione, non i test Business o Domain.
