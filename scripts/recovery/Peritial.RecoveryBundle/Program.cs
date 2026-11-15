@@ -103,7 +103,8 @@ try
         else
         {
             await SealedBundleOffsite.DownloadAsync(remote, bucket, backupId,
-                Required("PERITIAL_BUNDLE_DOWNLOAD_DIR"), master);
+                Required("PERITIAL_BUNDLE_DOWNLOAD_DIR"), master,
+                disposableUnprotectedDemo: disposableDemo);
             Console.WriteLine("Remote encrypted backup authenticated and recovered to a private directory.");
         }
     }
