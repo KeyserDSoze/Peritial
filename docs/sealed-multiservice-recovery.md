@@ -86,3 +86,43 @@ Non ripetere un restore su database o bucket non vuoti. Un errore dopo una PUT p
 `SealedRecoveryBundleTests` in backend usa dati multi-MiB per collaudare AES-GCM multiblocco, chiavi errate/identiche, SHA-256 PGDMP, sidecar HMAC e rifiuto di indice/ciphertext alterati senza pubblicare plaintext. La pipeline Compose usa invece **PGDMP reale e blob SeaweedFS reali**, verificando che le directory plaintext siano `tmpfs` privato con swap spento (suite `SecureRecoveryStagingTests`), generando chiavi effimere, eseguendo `seal`/`unseal`, verificando rifiuti di chiave assente o group-readable e importando il dump e gli oggetti **dal solo output del bundle decifrato** su due destinazioni separate. Il test è isolato e usa credenziali dimostrative.
 
 Non sono coperte: unità di transazione PostgreSQL↔S3 durante upload live, S3 versioning e oggetti orfani/multipart, Azure Blob, Keycloak e secret backup, scheduling automatico, retention e cifratura end-to-end senza plaintext stage, verifica di ripristino a un punto RPO/RTO definito, audit KMS e rotazione chiavi, disaster recovery in produzione. **#6, #18 e #21 rimangono aperte.**
+
+## Trasferimento crittografico verso deposito S3 indipendente (ADR 0024)
+
+Dopo `seal`, il bundle contiene **solo ciphertext AES-256-GCM**, un index HMAC e metadati tecnici. Per replicare questo bundle cifrato in un bucket S3 dedicato su altro server/account, usare `Peritial.RecoveryBundle push-sealed`, seguito eventualmente da `pull-sealed` su un host di recupero. Nessun PGDMP/documento in chiaro viene inviato tramite questo trasporto.
+
+Il comando `push-sealed` ricalcola/verifica **tutti i tag AES-GCM senza pubblicare plaintext**, controlla il MAC dell'index e poi invia tutti i file cifrati tramite PUT con `If-None-Match: *` sotto `sealed-v1/<backup-id>/`. Per ogni file verifica SHA-256 e dimensione rileggendo il byte stream dal server remoto. Invia `transfer.json` (nomi canonici, SHA-256 e lunghezze) autenticato da `transfer.hmac` con sottochiave derivata dalla chiave AES, e **soltanto alla fine** pubblica `complete`. Un prefisso in cui `complete` non esiste, o il cui inventario/oggetto non verifica MAC e hash, **non è un backup scaricabile**.
+
+`pull-sealed` verifica il marker, il MAC, la lista esatta degli oggetti remoti, tutti gli hash SHA-256 e i tag AES-GCM. Scrive inizialmente in una nuova directory privata 0700 con file 0600, e rinomina nella destinazione soltanto quando tutti i controlli sono superati. Un remote download non produce **mai** dump o documenti plaintext; quelli diventano disponibili soltanto tramite il successivo `unseal` in `tmpfs` protetto. Il token di backup ID è un UUID senza trattini, con **32 caratteri esadecimali minuscoli**, ed è univoco per ogni tentativo.
+
+### Esempio di replica e download
+
+Richiede endpoint `https://`, credenziali S3 ottenute da secret manager, bucket di backup dedicato preprovisionato, ACL minime, identità diversa da quella applicativa e accesso alle due chiavi indipendenti fuori dal bundle (file `0600`). I seguenti valori sono soltanto esempi e **non** credenziali utilizzabili:
+
+```bash
+export PERITIAL_BUNDLE_AES_KEY_FILE=/secure/keys/pg-s3-bundle.key
+export PERITIAL_ARCHIVE_HMAC_KEY_FILE=/secure/keys/s3-manifest.key
+export PERITIAL_OFFSITE_S3_ENDPOINT=https://remote-backup.example.invalid
+export PERITIAL_OFFSITE_S3_BUCKET=peritial-encrypted-recovery
+export PERITIAL_OFFSITE_S3_ACCESS_KEY='(dal secret manager)'
+export PERITIAL_OFFSITE_S3_SECRET_KEY='(dal secret manager)'
+export PERITIAL_OFFSITE_BACKUP_ID=0123456789abcdef0123456789abcdef
+export PERITIAL_BUNDLE_DIR=/secure/backup-sets/recovery-001.sealed
+
+export PERITIAL_BUNDLE_CONFIRM=REMOTE_ENCRYPTED_UPLOAD
+dotnet run --project scripts/recovery/Peritial.RecoveryBundle -- push-sealed
+```
+
+Per la prova di download **su un host separato** mantenere endpoint, bucket, backup ID e chiavi corretti, scegliere una directory nuova su storage protetto e richiedere il consenso specifico:
+
+```bash
+export PERITIAL_BUNDLE_CONFIRM=ISOLATED_ENCRYPTED_DOWNLOAD
+export PERITIAL_BUNDLE_DOWNLOAD_DIR=/secure/restore-staging/recovery-001.encrypted
+dotnet run --project scripts/recovery/Peritial.RecoveryBundle -- pull-sealed
+```
+
+Proseguire con `unseal` usando `PERITIAL_BUNDLE_DIR=/secure/restore-staging/recovery-001.encrypted`, e `PERITIAL_BUNDLE_UNSEAL_DIR` sotto il `tmpfs` privato swap-free dell'host di recovery; poi eseguire i restore PostgreSQL/S3 nelle destinazioni vuote. Il download del solo bundle cifrato **può** stare su disco persistente; l'output decifrato **no**.
+
+La sola eccezione a HTTPS è il server usa-e-getta **`seaweedfs-backup`** nella CI Compose con conferma `PERITIAL_OFFSITE_CI_HTTP=DISPOSABLE_TEST_ONLY`. Non c'è un bypass HTTP per altri server. Per CI vengono usate tre istanze SeaweedFS: S3 applicativo, destinazione backup cifrato, e S3 del restore; la CI cancella la prima copia locale cifrata prima di eseguire `unseal` sul bundle scaricato.
+
+**Confini di sicurezza:** il codice blocca overwrite per singolo oggetto e non pubblica un backup incompleto, ma non attiva né impone **S3 Object Lock, bucket versioning, retention legale, Object Lock compliance, distribuzione geografica, replica cloud, policy IAM o KMS**. Un amministratore remoto con DELETE/PUT può ancora cancellare/corrompere il backup; la verifica ne rileva la corruzione ma non ne garantisce la disponibilità. Un tentativo fallito prima di `complete` lascia oggetti remoti parziali: non riprovare sullo stesso backup ID, non cancellare automaticamente in modo pericoloso; creare un nuovo ID ed effettuare riconciliazione supervisionata del prefisso incompleto. Per grandi backup i singoli PUT S3 possono incontrare limiti provider; non sono ancora disponibili multipart upload, resume o una policy di capacity e retention. Questo è **un drill di replica remota**, non un backup offsite produttivo certificato.
