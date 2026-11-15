@@ -37,9 +37,10 @@ public static class OffsiteObjectLockPolicy
             string.Equals(versionId, "null", StringComparison.OrdinalIgnoreCase) ||
             !string.Equals(mode, "COMPLIANCE", StringComparison.Ordinal) ||
             retainedUntil is null ||
-            minimumDays < 1 ||
+            minimumDays < 0 ||
             retainedUntil.Value.ToUniversalTime() <
-                observedUtc.ToUniversalTime().AddDays(minimumDays).AddMinutes(-5))
+                observedUtc.ToUniversalTime().AddDays(minimumDays)
+                    .AddMinutes(minimumDays == 0 ? 0 : -5))
             throw new InvalidOperationException(
                 "A remote encrypted object version lacks verified COMPLIANCE retention.");
     }
@@ -71,9 +72,36 @@ public static class OffsiteObjectLockPolicy
         }
     }
 
+    /// <summary>
+    /// Audit the CURRENT object version, not merely a bucket's default rule.
+    /// A delete marker, overwritten object, missing permission or missing
+    /// version identifier must never be interpreted as immutable storage.
+    /// </summary>
+    public static async Task RequireCurrentProtectedVersionAsync(
+        IAmazonS3 s3, string bucket, string key, CancellationToken ct = default)
+    {
+        string? versionId;
+        try
+        {
+            var head = await s3.GetObjectMetadataAsync(new GetObjectMetadataRequest
+            {
+                BucketName = bucket, Key = key
+            }, ct);
+            versionId = head.VersionId;
+        }
+        catch (AmazonServiceException)
+        {
+            throw new InvalidOperationException(
+                "Cannot read the current locked object version.");
+        }
+        await RequireProtectedObjectVersionAsync(
+            s3, bucket, key, versionId, DateTime.UtcNow, ct, 0);
+    }
+
     public static async Task RequireProtectedObjectVersionAsync(
         IAmazonS3 s3, string bucket, string key, string? versionId,
-        DateTime observedUtc, CancellationToken ct = default)
+        DateTime observedUtc, CancellationToken ct = default,
+        int minimumRemainingDays = MinimumRetentionDays)
     {
         // If S3 lacks versioning it is unsafe even to request a retention
         // check without explicit VersionId.
@@ -88,7 +116,7 @@ public static class OffsiteObjectLockPolicy
             }, ct);
             RequireProtectedVersion(versionId,
                 result.Retention?.Mode?.ToString(),
-                result.Retention?.RetainUntilDate, observedUtc);
+                result.Retention?.RetainUntilDate, observedUtc, minimumRemainingDays);
         }
         catch (AmazonServiceException)
         {
