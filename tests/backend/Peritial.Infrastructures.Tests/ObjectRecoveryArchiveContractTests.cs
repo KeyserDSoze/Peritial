@@ -85,7 +85,7 @@ public sealed class ObjectRecoveryArchiveContractTests
             var authenticationPath = Path.Combine(archive, "manifest.hmac");
             Assert.True(File.Exists(authenticationPath));
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                ObjectRecoveryArchive.ExportAsync(sourceDb, original, bucket, archive));
+                ObjectRecoveryArchive.ExportAsync(sourceDb, original, bucket, archive, signingKey));
 
             var blob0 = Path.Combine(archive, "objects", "00000000.blob");
             var bytes = await File.ReadAllBytesAsync(blob0);
@@ -108,7 +108,7 @@ public sealed class ObjectRecoveryArchiveContractTests
             Assert.NotEqual(System.Text.Encoding.UTF8.GetString(manifestBytes), altered);
             await File.WriteAllTextAsync(mpath, altered);
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                ObjectRecoveryArchive.ImportAsync(destDb, restored, bucket, archive));
+                ObjectRecoveryArchive.ImportAsync(destDb, restored, bucket, archive, signingKey));
             await File.WriteAllBytesAsync(mpath, manifestBytes);
 
             // The real bytes and matching DB references are not sufficient
@@ -131,13 +131,13 @@ public sealed class ObjectRecoveryArchiveContractTests
                 new ListObjectsV2Request { BucketName = bucket });
             Assert.True(noObjects.S3Objects is null || noObjects.S3Objects.Count == 0);
 
-            var imported = await ObjectRecoveryArchive.ImportAsync(destDb, restored, bucket, archive);
+            var imported = await ObjectRecoveryArchive.ImportAsync(destDb, restored, bucket, archive, signingKey);
             Assert.Equal(2, imported);
             await ObjectRecoveryCheckpoint.VerifyAsync(destDb, restored, bucket, exported.Checkpoint);
 
             // A second import must not overwrite any previously restored bytes.
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                ObjectRecoveryArchive.ImportAsync(destDb, restored, bucket, archive));
+                ObjectRecoveryArchive.ImportAsync(destDb, restored, bucket, archive, signingKey));
 
             // Destination corruption is detected from persisted bytes, not ETags.
             var corrupt = first.ToArray();
