@@ -190,6 +190,50 @@ jobs:
         run: docker compose -f docker/compose.yml logs --tail=160 api
       - if: always()
         run: docker compose -f docker/compose.yml -f docker/compose.chaos.yml --profile azure-test --profile chaos --profile recovery-test down -v
+  worm-recovery:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start isolated S3 implementation with REAL COMPLIANCE Object Lock
+        run: |
+          # MinIO community reference image is historical and unmaintained:
+          # CI-only disposable instance, not a production dependency.
+          docker run -d --name peritial-worm \
+            -p 127.0.0.1:9000:9000 \
+            -e MINIO_ROOT_USER=peritialworm \
+            -e MINIO_ROOT_PASSWORD=local-only-test-worm-password \
+            quay.io/minio/minio:RELEASE.2025-10-15T17-29-55Z server /data
+          ready=0
+          for i in $(seq 1 40); do
+            if curl --fail --silent --max-time 2 http://127.0.0.1:9000/minio/health/ready > /dev/null; then
+              ready=1; break
+            fi
+            sleep 2
+          done
+          test "$ready" = 1
+      - name: Verify no host swap for private tmpfs plaintext
+        run: |
+          sudo swapoff --all
+          awk 'NR>1 && NF { count++ } END { exit (count == 0 ? 0 : 1) }' /proc/swaps
+          test "$(stat -f -c %T /dev/shm)" = tmpfs
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - run: dotnet restore Peritial.slnx
+      - name: Real S3 COMPLIANCE 32-day retention, version DELETE denied and recovery
+        run: |
+          dotnet test tests/backend/Peritial.Infrastructures.Tests/Peritial.Infrastructures.Tests.csproj \
+            --no-restore --configuration Release \
+            --filter FullyQualifiedName~ObjectLockWormIntegrationTests \
+            --logger "console;verbosity=normal"
+        env:
+          PERITIAL_TEST_WORM_S3_ENDPOINT: http://127.0.0.1:9000
+      - name: Local WORM server diagnostics
+        if: failure()
+        run: docker logs --tail=100 peritial-worm
+      - name: Tear down disposable test server including protected versions
+        if: always()
+        run: docker rm -f peritial-worm || true
   database-recovery:
     runs-on: ubuntu-latest
     steps:
