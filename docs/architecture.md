@@ -26,3 +26,5 @@ Infrastructures (repository PostgreSQL; object store Azure Blob o S3 compatibile
 
 ## Punti di attenzione
 Il branch `death` è una fonte di osservazione, non di codice. Identificare e specificare i comportamenti prima della reimplementazione. `main` sarà avviato con snapshot pulito.
+
+- Registro audit persistente security_audit: ruolo applicativo INSERT-only con FORCE RLS, accesso amministrativo separato per ispezione, nessuna API pubblica. La transazione atomica tra dato e audit e la retention certificata restano da implementare (#6/#19).

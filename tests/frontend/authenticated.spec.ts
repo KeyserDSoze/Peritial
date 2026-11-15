@@ -33,6 +33,21 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     const signedClaims = JSON.parse(Buffer.from(accessToken!.split(".")[1], "base64url").toString("utf-8")) as {sub?: string};
     expect(signedClaims.sub, "PKCE access token must include signed sub claim").toBeTruthy();
 
+    // A successful MCP mutation must be audited through the same Business layer as REST.
+    const mcpReference = "E2E-MCP-" + Date.now() + "-" + Math.round(Math.random() * 100000);
+    const mcpCreated = await request.post("http://localhost:8080/mcp", {
+      headers: {
+        Authorization: "Bearer " + accessToken,
+        Accept: "application/json,text/event-stream",
+        "Content-Type": "application/json"
+      },
+      data: {jsonrpc: "2.0", id: 44, method: "tools/call",
+        params: {name: "create_perizia", arguments: {reference: mcpReference}}}
+    });
+    expect(mcpCreated.ok(), await mcpCreated.text()).toBeTruthy();
+    expect(await mcpCreated.text()).toContain(mcpReference);
+    expect(await mcpCreated.text()).not.toContain('"isError":true');
+
     // Actual REST multipart ingestion uses the same OAuth identity as the UI and MCP.
     const badFile = await request.post("http://localhost:8080/api/files", {
       headers: { Authorization: "Bearer " + accessToken },
