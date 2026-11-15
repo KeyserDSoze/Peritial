@@ -95,3 +95,7 @@ Il test `ObjectRecoveryArchiveContractTests` parte su **due server PostgreSQL e 
 ### Confini ancora aperti
 
 L'archive è **autenticato con HMAC simmetrico**, ma non è firmato con chiave asimmetrica, cifrato, versionato fuori sito o dotato di retention automatica. Il MAC non protegge da un attaccante che possiede la chiave: servono segregazione/rotazione/segreti KMS e prove di firma/offsite. Include **solo** i documenti che hanno metadati PostgreSQL; non enumera orfani, incomplete multipart, versioni storiche o metadati S3 non rappresentati, e non ripristina la configurazione Keycloak. L'identità DB con `BYPASSRLS` è di alto privilegio e deve essere limitata a manutenzioni supervisionate. Non usare questo flusso su Azure Blob senza un'implementazione e test separati. #6/#18/#21 rimangono aperte per questi requisiti.
+
+## Protezione esterna del set PostgreSQL+S3 (ADR 0022)
+
+L'archive S3 `manifest.hmac` è **un input intermedio in chiaro** al nuovo `SealedRecoveryBundle`. I comandi separati `seal` e `unseal` confezionano dump PostgreSQL, checksum e archive S3 nel medesimo set AES-256-GCM autenticato. Il bundle di destinazione non contiene il dump né i byte S3 in chiaro; l'index conserva solo nomi di file tecnici e dimensioni (metadata parzialmente osservabili). Entrambi i segreti — chiave AES e chiave HMAC S3 — devono essere protetti e consegnati fuori dal bundle. Non scambiare questo controllo con cifratura automatica degli originali temporanei o una prova di DR produttivo. Vedere la [procedura dedicata](sealed-multiservice-recovery.md).

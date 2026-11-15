@@ -19,3 +19,5 @@ Documenti: docs/requirements.md, docs/legacy-inventory.md, docs/architecture.md,
 La verifica offline dei riferimenti PostgreSQL↔SeaweedFS S3 con digest SHA-256 è documentata in `docs/object-recovery-checkpoint.md` (ADR 0019): il manifest **non contiene il backup dei byte** e non sostituisce snapshot/coordinamento cross-sistema.
 
 Recovery offline: `docs/object-recovery-checkpoint.md` (checkpoint + export/import HMAC-SHA256 dei byte su nuovo SeaweedFS con chiave esterna; laboratorio con PostgreSQL reale, non backup produttivo coordinato), ADR 0020 e 0021.
+
+Il bundle offline **PostgreSQL + S3 cifrato AES-256-GCM** (con chiavi indipendenti da secret manager) è descritto in `docs/sealed-multiservice-recovery.md`, ADR 0022. È un drill di laboratorio: backup on-prem/Azure gestiti, Keycloak e offsite restano aperti.
