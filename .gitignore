@@ -12,3 +12,5 @@ terraform.tfstate*
 .terraform/
 *.tfvars
 .DS_Store
+
+**/.playwright-specs/
