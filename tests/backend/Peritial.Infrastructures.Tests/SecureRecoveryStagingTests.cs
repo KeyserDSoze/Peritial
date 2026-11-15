@@ -114,7 +114,7 @@ public sealed class SecureRecoveryStagingTests
         }
         finally
         {
-            Directory.Delete(root);
+            Directory.Delete(root, recursive: true);
         }
     }
 }
