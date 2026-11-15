@@ -47,6 +47,19 @@ public sealed class ObjectRecoveryCheckpointContractTests
             var builder = new NpgsqlConnectionStringBuilder(cs) { SearchPath = schema };
             await using var db = NpgsqlDataSource.Create(builder.ConnectionString);
             await SchemaBootstrap.ApplyDevelopmentSchemaAsync(db);
+
+            // An ordinary application login must not be allowed to capture an
+            // apparently empty subset of a FORCE-RLS tenant database.
+            var ordinaryApp = new NpgsqlConnectionStringBuilder(cs)
+            {
+                Username = "peritial_app",
+                Password = "local-only-app",
+                SearchPath = schema
+            };
+            await using (var restricted = NpgsqlDataSource.Create(ordinaryApp.ConnectionString))
+                await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    ObjectRecoveryCheckpoint.CaptureAsync(restricted, storage, bucket));
+
             await using (var conn = await db.OpenConnectionAsync())
             await using (var insert = new NpgsqlCommand(
                 """
