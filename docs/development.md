@@ -3,10 +3,10 @@
 Ogni use case: test rosso (xUnit / Playwright), implementazione minima, test verde, refactoring, aggiornamento docs/ e adr/.
 
 - Backend completo: docker compose -f docker/compose.yml --profile test run --rm tests
-- Frontend: cd src/frontend && npm install && npx playwright install chromium && npm run build && npm run test:e2e
+- Frontend: cd src/frontend && npm ci && npx playwright install chromium && npm run build && npm run test:e2e
 - CI: xUnit unitari e con PostgreSQL reale, build frontend, Playwright e smoke Docker Compose.
 - Lavorare solo su main. Non fondere death.
-- Debiti bloccanti produzione: lockfile npm e npm ci, quarantena persistente e signature freshness dello scanner, limitazione chiamate, audit completo, idempotenza, backup/migrazioni, provisioning e rotazione dei privilegi RLS in produzione, test OAuth/MCP su client reali, deploy automatizzato su Azure, secret vault.
+- Debiti bloccanti produzione: pin digest delle immagini e supply-chain, quarantena persistente e signature freshness dello scanner, limitazione chiamate, audit completo, idempotenza, backup/migrazioni, provisioning e rotazione dei privilegi RLS in produzione, test OAuth/MCP su client reali, deploy automatizzato su Azure, secret vault.
 
 La build iniziale CI ha guidato la correzione delle dipendenze e la scelta dell'immagine S3 open-source disponibile sul registry.
 
