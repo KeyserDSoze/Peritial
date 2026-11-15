@@ -43,3 +43,7 @@ Richiedono i client PostgreSQL **17** compatibili e un account privilegiato per 
 - rifiuto di rieseguire restore su database non vuoto.
 
 Il job indipendente `database-recovery` di `.github/workflows/ci.yml` rende questa prova obbligatoria ad ogni push su `main`. Il test non include SeaweedFS/Azure Blob, snapshot durante upload reali, replica/failover, chiavi e credenziali reali né ripristino on-prem/Azure. **Non dichiarare soddisfatto il requisito di disaster recovery completo** in #6/#18 prima di tali prove.
+
+## Checkpoint integrità S3 (nuova tranche #6, ADR 0019)
+
+A complemento del backup PostgreSQL, è disponibile `scripts/recovery/Peritial.RecoveryCheckpoint`: genera un manifest protetto di SHA-256 calcolati dai **byte reali S3** e verifica successivamente che i riferimenti del DB e i blob ripristinati corrispondano esattamente. Richiede ambiente offline, ruolo DB di audit che non sia filtrato da RLS, nessun upload/idempotenza pending e accesso S3 read-only. Non esporta i blob: per la copia e l'eventuale riavvio dei servizi attenersi al piano di recupero esterno. Guida e requisiti: `docs/object-recovery-checkpoint.md`.
