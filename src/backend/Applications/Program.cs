@@ -10,6 +10,11 @@ using Peritial.Domains;
 using Peritial.Infrastructures;
 
 var builder = WebApplication.CreateBuilder(args);
+// Disabled by default. HTTPS collector required outside Development; do not
+// enable generic ASP.NET instrumentation or export logs/user request payloads.
+var otlp = ReadinessOtlpSettings.FromConfiguration(
+    builder.Configuration, builder.Environment.IsDevelopment());
+builder.Services.AddReadinessOtlpExporter(otlp);
 builder.Services.AddHttpContextAccessor();
 // Reject oversized multipart sections before they reach the Business ingestion service.
 builder.Services.Configure<FormOptions>(options =>
