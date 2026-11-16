@@ -33,6 +33,44 @@ public sealed class PgSinistroRepository(NpgsqlDataSource dataSource) : ISinistr
         return items;
     }
 
+    /// <summary>
+    /// Prefix matching happens in PostgreSQL before ORDER/LIMIT; the pattern
+    /// treats user-supplied percent, underscore and ! as literal characters.
+    /// A separate explicit tenant predicate complements FORCE RLS.
+    /// </summary>
+    public async Task<IReadOnlyList<Sinistro>> SearchAsync(
+        TenantId tenant, string prefix, DateOnly? occurredFrom = null,
+        DateOnly? occurredTo = null, int limit = 10, CancellationToken ct = default)
+    {
+        var filter = SinistroSearchFilter.Create(prefix, occurredFrom, occurredTo, limit);
+        // '!' is the SQL LIKE escape to avoid backslash/standard_conforming_strings
+        // assumptions. Escape the escape first, then the two pattern metacharacters.
+        var literalPrefix = filter.Prefix.Replace("!", "!!")
+            .Replace("%", "!%").Replace("_", "!_") + "%";
+        await using var scope = await TenantDbScope.OpenAsync(dataSource, tenant, ct);
+        var items = new List<Sinistro>();
+        await using (var command = scope.Command(
+            "SELECT id, tenant_id, external_reference, occurred_on, reported_on, " +
+            "created_at_utc, version FROM sinistri " +
+            "WHERE tenant_id=@tenant AND external_reference ILIKE @pattern ESCAPE '!' " +
+            "AND (@dateFrom IS NULL OR occurred_on >= @dateFrom) " +
+            "AND (@dateTo IS NULL OR occurred_on <= @dateTo) " +
+            "ORDER BY occurred_on DESC, id LIMIT @limit"))
+        {
+            command.Parameters.AddWithValue("tenant", tenant.Value);
+            command.Parameters.AddWithValue("pattern", literalPrefix);
+            command.Parameters.Add("dateFrom", NpgsqlDbType.Date).Value =
+                (object?)filter.OccurredFrom ?? DBNull.Value;
+            command.Parameters.Add("dateTo", NpgsqlDbType.Date).Value =
+                (object?)filter.OccurredTo ?? DBNull.Value;
+            command.Parameters.AddWithValue("limit", filter.Limit);
+            await using var reader = await command.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct)) items.Add(Read(reader));
+        }
+        await scope.CommitAsync(ct);
+        return items;
+    }
+
     public async Task<Sinistro?> FindAsync(TenantId tenant, Guid id, CancellationToken ct = default)
     {
         await using var scope = await TenantDbScope.OpenAsync(dataSource, tenant, ct);
