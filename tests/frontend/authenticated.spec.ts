@@ -166,6 +166,48 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     await expect(row.locator("a,button")).toHaveCount(0);
   });
 
+  test("PWA collega un upload alla perizia scelta senza esporre chiavi storage", async ({page}) => {
+    await page.goto("/");
+    await page.getByRole("button", {name: "Accedi"}).click();
+    await expect(page.locator("#username")).toBeVisible({timeout: 30_000});
+    await page.locator("#username").fill("localuser");
+    await page.locator("#password").fill("local-only-user");
+    await page.locator("#kc-login").click();
+    await expect(page.getByRole("button", {name: "Esci"})).toBeVisible({timeout: 30_000});
+
+    const reference = "DOC-LINK-" + Date.now() + "-" + Math.round(Math.random() * 100000);
+    const create = page.waitForResponse(response =>
+      response.url().endsWith("/api/perizie") && response.request().method() === "POST");
+    await page.locator("#reference").fill(reference);
+    await page.getByRole("button", {name: "Crea"}).click();
+    const created = await create;
+    expect(created.status(), await created.text()).toBe(201);
+    const perizia = await created.json() as {id: string};
+
+    const selector = page.getByRole("combobox", {name: "Perizia collegata"});
+    await expect(selector).toBeVisible();
+    await expect(selector).toHaveValue("");
+    await selector.selectOption({label: reference});
+
+    const name = "pwa-linked-" + Date.now() + ".pdf";
+    const pdf = Buffer.from("%PDF-1.7\n1 0 obj\n<<>>\nendobj\n%%EOF\n");
+    await page.locator("#file").setInputFiles({
+      name, mimeType: "application/pdf", buffer: pdf
+    });
+    const upload = page.waitForResponse(response =>
+      response.url().endsWith("/api/files") && response.request().method() === "POST");
+    await page.getByRole("button", {name: "Carica documento"}).click();
+    const uploaded = await upload;
+    expect(uploaded.status(), await uploaded.text()).toBe(201);
+    const record = await uploaded.json() as {periziaId: string | null};
+    expect(record.periziaId).toBe(perizia.id);
+
+    const docs = page.getByRole("list", {name: "Documenti caricati"});
+    const row = docs.locator("li").filter({hasText: name});
+    await expect(row).toContainText(reference);
+    await expect(row.locator("a,button")).toHaveCount(0);
+  });
+
   test("workflow perizia UI: assign, advance, cancel con conferma e i18n", async ({page}) => {
     await page.goto("/");
     await page.getByRole("button", {name: "Accedi"}).click();
