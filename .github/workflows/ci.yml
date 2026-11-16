@@ -7,7 +7,7 @@ permissions:
   contents: read
 jobs:
   backend:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     services:
       postgres:
         image: postgres:17-alpine@sha256:a77aa70e641402a21411b92b721c58d10f23b50ae5fdd2333efd22d166e1e5f7
@@ -32,7 +32,7 @@ jobs:
           fi
       - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9
         with:
-          dotnet-version: "10.0.x"
+          dotnet-version: "10.0.404"
       - run: dotnet restore Peritial.slnx
       - name: Build API/MCP entrypoint explicitly
         run: dotnet build src/backend/Applications/Peritial.Applications.csproj --configuration Release --no-restore
@@ -40,7 +40,7 @@ jobs:
         env:
           PERITIAL_TEST_POSTGRES: Host=localhost;Port=5432;Database=peritial;Username=peritial;Password=local-only-postgres
   frontend:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     defaults:
       run:
         working-directory: src/frontend
@@ -48,13 +48,13 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: "22"
+          node-version: "22.23.4"
       - run: npm ci --no-audit --no-fund
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
   compose:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Disable host swap before private tmpfs recovery drill
@@ -108,7 +108,7 @@ jobs:
           test "$ready" = "1"
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: "22"
+          node-version: "22.23.4"
       - run: npm ci --no-audit --no-fund
         working-directory: src/frontend
       - run: npx playwright install --with-deps chromium
@@ -270,7 +270,7 @@ jobs:
       - if: always()
         run: docker compose -f docker/compose.yml -f docker/compose.chaos.yml -f docker/compose.observability.yml -f docker/compose.prometheus.yml --profile azure-test --profile chaos --profile recovery-test down -v
   worm-recovery:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Start isolated S3 implementation with REAL COMPLIANCE Object Lock
@@ -320,7 +320,7 @@ jobs:
           test "$(stat -f -c %T /dev/shm)" = tmpfs
       - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9
         with:
-          dotnet-version: "10.0.x"
+          dotnet-version: "10.0.404"
       - run: dotnet restore Peritial.slnx
       - name: Real S3 COMPLIANCE 32-day retention, version DELETE denied and recovery
         run: |
@@ -339,12 +339,12 @@ jobs:
         if: always()
         run: docker rm -f peritial-worm || true
   database-recovery:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9
         with:
-          dotnet-version: "10.0.x"
+          dotnet-version: "10.0.404"
       - name: PostgreSQL backup and restore to a distinct new server
         run: bash tests/backup/run_postgres_restore.sh
       - name: Legacy PostgreSQL baseline with verified backup and data preservation
@@ -352,7 +352,7 @@ jobs:
       - name: Pre-lease legacy upgrade with verified backup and pending intents
         run: bash tests/backup/run_prelease_adoption.sh
   observability-rules:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Verify webhook data minimization and rejection rules
@@ -376,14 +376,14 @@ jobs:
             --entrypoint /bin/promtool prom/prometheus:v3.5.0@sha256:63805ebb8d2b3920190daf1cb14a60871b16fd38bed42b857a3182bc621f4996 \
             test rules /work/tests/observability/prometheus-alerts.test.yml
   clamav-signatures:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Validate opt-in FreshClam Compose merge and fail-closed invariants
         run: python3 -m unittest discover -s tests/security -p 'test_clamav_update_overlay.py' -v
 
   supply-chain-actions:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Reject unpinned, mutable or unreviewed GitHub Actions
@@ -396,7 +396,7 @@ jobs:
         run: python3 -m unittest discover -s tests/security -p 'test_ci_toolchain_pins.py' -v
 
   terraform:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd
