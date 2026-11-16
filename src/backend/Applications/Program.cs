@@ -120,6 +120,8 @@ builder.Services.AddSingleton(NpgsqlDataSource.Create(connectionString));
 builder.Services.AddScoped<ITenantContext, TenantContext>();
 builder.Services.AddScoped<IPeriziaRepository, PgPeriziaRepository>();
 builder.Services.AddScoped<IDocumentRepository, PgDocumentRepository>();
+builder.Services.AddScoped<IDocumentCatalogRepository, PgDocumentCatalogRepository>();
+builder.Services.AddScoped<DocumentCatalogService>();
 builder.Services.AddScoped<IUploadIntentLedger, PgUploadIntentLedger>();
 builder.Services.AddScoped<IUploadIdempotencyStore, PgUploadIdempotencyStore>();
 builder.Services.AddScoped<ISecurityAuditTrail, PgSecurityAuditTrail>();
@@ -272,6 +274,13 @@ api.MapPost("/perizie/{id:guid}/advance", (Guid id, AdvancePeriziaRequest reques
     service.AdvanceAsync(id, PeriziaAdvanceTarget.Parse(request.Target), ct)).RequireAuthorization("peritial.write");
 api.MapPost("/perizie/{id:guid}/cancel", (Guid id, PeriziaService service, CancellationToken ct) =>
     service.CancelAsync(id, ct)).RequireAuthorization("peritial.write");
+
+// Read-only document catalog returns an allowlisted metadata projection:
+ // never storage keys, scanned bytes, internal object URLs, or tenant IDs.
+api.MapGet("/files", (Guid? periziaId, int? limit, DocumentCatalogService service, CancellationToken ct) =>
+    service.ListAsync(periziaId, limit ?? 50, ct)).RequireAuthorization("peritial.read");
+api.MapGet("/files/{id:guid}", (Guid id, DocumentCatalogService service, CancellationToken ct) =>
+    service.GetAsync(id, ct)).RequireAuthorization("peritial.read");
 
 api.MapPost("/files", async (HttpRequest request, FileIngestionService service, CancellationToken ct) =>
 {
