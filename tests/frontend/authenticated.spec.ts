@@ -5,6 +5,60 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
 
   test.setTimeout(90_000);
 
+  test("API down while browser stays online hides cases and blocks writes until retry", async ({page}) => {
+    await page.goto("/");
+    await page.getByRole("button", {name: "Accedi"}).click();
+    await expect(page.locator("#username")).toBeVisible({timeout: 30_000});
+    await page.locator("#username").fill("localuser");
+    await page.locator("#password").fill("local-only-user");
+    await page.locator("#kc-login").click();
+    await expect(page.getByRole("button", {name: "Esci"})).toBeVisible({timeout: 30_000});
+
+    const ref = "API-DOWN-" + Date.now() + "-" + Math.round(Math.random() * 100000);
+    await page.locator("#reference").fill(ref);
+    await page.getByRole("button", {name: "Crea"}).click();
+    await expect(page.getByText(ref, {exact: true})).toBeVisible();
+
+    await page.route("**/api/perizie", async route => {
+      if (route.request().method() === "GET") {
+        await route.fulfill({status: 503, body: "Backend unavailable"});
+      } else {
+        await route.continue();
+      }
+    });
+    await page.getByRole("button", {name: "Aggiorna elenco"}).click();
+    await expect(page.getByRole("alert")).toContainText("Servizio perizie non disponibile");
+    await expect(page.getByText(ref, {exact: true})).toHaveCount(0);
+    await expect(page.getByRole("button", {name: "Crea"})).toHaveCount(0);
+    await expect(page.getByRole("button", {name: "Carica documento"})).toHaveCount(0);
+    expect(await page.evaluate(() => navigator.onLine)).toBe(true);
+
+    await page.unroute("**/api/perizie");
+    await page.getByRole("button", {name: "Riprova"}).click();
+    await expect(page.getByText(ref, {exact: true})).toBeVisible();
+    await expect(page.getByRole("button", {name: "Crea"})).toBeEnabled();
+
+    const otherRef = "API-DOWN-WRITE-" + Date.now();
+    await page.route("**/api/perizie", async route => {
+      if (route.request().method() === "POST") {
+        await route.fulfill({status: 503, body: "Backend unavailable"});
+      } else {
+        await route.continue();
+      }
+    });
+    await page.locator("#reference").fill(otherRef);
+    await page.getByRole("button", {name: "Crea"}).click();
+    await expect(page.getByRole("alert")).toContainText("Servizio perizie non disponibile");
+    await expect(page.getByText(ref, {exact: true})).toHaveCount(0);
+    await expect(page.getByRole("button", {name: "Crea"})).toHaveCount(0);
+    expect(await page.evaluate(() => navigator.onLine)).toBe(true);
+
+    await page.unroute("**/api/perizie");
+    await page.getByRole("button", {name: "Riprova"}).click();
+    await expect(page.getByText(ref, {exact: true})).toBeVisible();
+    await expect(page.getByText(otherRef, {exact: true})).toHaveCount(0);
+  });
+
   test("workflow perizia UI: assign, advance, cancel con conferma e i18n", async ({page}) => {
     await page.goto("/");
     await page.getByRole("button", {name: "Accedi"}).click();
