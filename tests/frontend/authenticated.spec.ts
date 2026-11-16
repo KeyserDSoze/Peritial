@@ -76,6 +76,59 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     await expect(page.getByText(otherRef, {exact: true})).toHaveCount(0);
   });
 
+  test("a stale GET never restores protected rows after a concurrent failed mutation", async ({page}) => {
+    await page.goto("/");
+    await page.getByRole("button", {name: "Accedi"}).click();
+    await expect(page.locator("#username")).toBeVisible({timeout: 30_000});
+    await page.locator("#username").fill("localuser");
+    await page.locator("#password").fill("local-only-user");
+    await page.locator("#kc-login").click();
+    await expect(page.getByRole("button", {name: "Esci"})).toBeVisible({timeout: 30_000});
+
+    const ref = "API-RACE-" + Date.now() + "-" + Math.round(Math.random() * 100000);
+    await page.locator("#reference").fill(ref);
+    await page.getByRole("button", {name: "Crea"}).click();
+    const row = page.locator("li").filter({hasText: ref});
+    await expect(row).toBeVisible();
+    await row.getByRole("textbox", {name: "Assegnatario " + ref}).fill("race-assignee");
+
+    let failMutation: () => void = () => undefined;
+    let completeOldRead: () => void = () => undefined;
+    const mutationGate = new Promise<void>(resolve => {failMutation = resolve;});
+    const readGate = new Promise<void>(resolve => {completeOldRead = resolve;});
+    await page.route("**/api/perizie/*/assign", async route => {
+      await mutationGate;
+      await route.fulfill({status: 503, body: "API unavailable"});
+    });
+    await page.route("**/api/perizie", async route => {
+      if (route.request().method() === "GET") {
+        await readGate;
+      }
+      await route.continue();
+    });
+
+    await row.getByRole("button", {name: "Assegna"}).click();
+    await page.getByRole("button", {name: "Aggiorna elenco"}).click();
+    failMutation();
+    await expect(page.getByRole("alert")).toContainText("Servizio perizie non disponibile");
+
+    // The GET began before the failed POST. Completing it afterwards must
+    // NOT re-enable mutations or display possibly stale tenant records.
+    const oldRead = page.waitForResponse(response =>
+      response.url().endsWith("/api/perizie") && response.request().method() === "GET");
+    completeOldRead();
+    await oldRead;
+    await expect(page.getByRole("button", {name: "Riprova"})).toBeVisible();
+    await expect(page.getByText(ref, {exact: true})).toHaveCount(0);
+    await expect(page.getByRole("button", {name: "Crea"})).toHaveCount(0);
+
+    await page.unroute("**/api/perizie");
+    await page.unroute("**/api/perizie/*/assign");
+    await page.getByRole("button", {name: "Riprova"}).click();
+    await expect(page.getByText(ref, {exact: true})).toBeVisible();
+    await expect(row.getByText("Registrata")).toBeVisible();
+  });
+
   test("workflow perizia UI: assign, advance, cancel con conferma e i18n", async ({page}) => {
     await page.goto("/");
     await page.getByRole("button", {name: "Accedi"}).click();
