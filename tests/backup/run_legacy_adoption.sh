@@ -86,10 +86,10 @@ result="$(docker exec "$name" psql -X -qAt -v ON_ERROR_STOP=1 -U peritial -d per
    AND (SELECT count(DISTINCT tenant_id) FROM perizie)=2
    AND (SELECT count(*) FROM documents WHERE file_name='legacy.pdf')=1
    AND (SELECT count(*) FROM security_audit WHERE action='document.ingest')=1
-   AND (SELECT count(*) FROM schema_migrations)=2
+   AND (SELECT count(*) FROM schema_migrations)=3
    AND (SELECT count(*) FROM pg_class
-     WHERE relname IN ('perizie','documents','security_audit','upload_intents','upload_request_keys')
-       AND relrowsecurity AND relforcerowsecurity)=5
+     WHERE relname IN ('perizie','documents','security_audit','upload_intents','upload_request_keys','sinistri')
+       AND relrowsecurity AND relforcerowsecurity)=6
    AND to_regclass('ix_security_audit_tenant_action_time') IS NOT NULL;
 ")"
 if [ "$result" != "t" ]; then
