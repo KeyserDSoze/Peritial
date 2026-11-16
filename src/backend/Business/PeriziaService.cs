@@ -16,6 +16,18 @@ public sealed class PeriziaService(ITenantContext context, IPeriziaRepository re
         return items.Select(PeriziaDto.From).ToArray();
     }
 
+    /// <summary>
+    /// Read one visible perizia. Authorize before looking up its ID and let
+    /// tenant-scoped RLS make missing and foreign IDs indistinguishable.
+    /// Read-only operations never append mutation-success audit events.
+    /// </summary>
+    public async Task<PeriziaDto> GetAsync(Guid id, CancellationToken ct = default)
+    {
+        RequireRead();
+        var item = await GetRequiredAsync(id, ct);
+        return PeriziaDto.From(item);
+    }
+
     public async Task<PeriziaDto> CreateAsync(string reference, CancellationToken ct = default)
     {
         await RequireWriteAsync("perizia.create", ct);
