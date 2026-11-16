@@ -7,7 +7,7 @@ Backend .NET 10 DDD (Domains / Business / Infrastructures / Applications), API R
 ## Esecuzione e test
 - docker compose -f docker/compose.yml up --build -d
 - PWA: http://localhost:5173
-- API liveness: http://localhost:8080/health/live ; readiness parziale PostgreSQL + ClamAV + OIDC: http://localhost:8080/health/ready
+- API liveness: http://localhost:8080/health/live ; readiness parziale PostgreSQL + ClamAV + OIDC + storage S3/Azure: http://localhost:8080/health/ready
 - MCP: http://localhost:8080/mcp
 - docker compose -f docker/compose.yml --profile test run --rm tests
 - cd src/frontend && npm ci && npx playwright install chromium && npm run test:e2e
