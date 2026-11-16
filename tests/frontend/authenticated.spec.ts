@@ -381,6 +381,93 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     await expect(page.getByRole("button", {name: "Crea"})).toBeEnabled();
   });
 
+  test("sinistri REST e MCP condividono JWT, tenant, audit e conflitto CAS", async ({page, request}) => {
+    await page.goto("/");
+    await page.getByRole("button", {name: "Accedi"}).click();
+    await expect(page.locator("#username")).toBeVisible({timeout: 30_000});
+    await page.locator("#username").fill("localuser");
+    await page.locator("#password").fill("local-only-user");
+    await page.locator("#kc-login").click();
+    await expect(page.getByRole("button", {name: "Esci"})).toBeVisible({timeout: 30_000});
+    const token = await page.evaluate(() => {
+      const key = Object.keys(sessionStorage).find(k => k.startsWith("oidc.user:"));
+      if (!key) return null;
+      const data = JSON.parse(sessionStorage.getItem(key) || "{}") as {access_token?: string};
+      return data.access_token || null;
+    });
+    expect(token).toBeTruthy();
+    const headers = {Authorization: "Bearer " + token};
+    const path = "http://localhost:8080/api/sinistri";
+    const reference = "E2E-SIN-" + Date.now() + "-" + Math.round(Math.random() * 100000);
+    const created = await request.post(path, {headers, data: {
+      externalReference: reference, occurredOn: "2026-11-01", reportedOn: "2026-11-03"
+    }});
+    expect(created.status(), await created.text()).toBe(201);
+    expect(created.headers()["cache-control"]).toContain("no-store");
+    const initial = await created.json() as {id:string;externalReference:string;version:number;reportedOn:string};
+    expect(initial.externalReference).toBe(reference);
+    expect(initial.reportedOn).toBe("2026-11-03");
+    expect(initial.version).toBe(1);
+    expect(await created.text()).not.toContain("tenantId");
+
+    const get = await request.get(path + "/" + initial.id, {headers});
+    expect(get.status()).toBe(200);
+    expect((await get.json() as {version: number}).version).toBe(1);
+    const list = await request.get(path + "?limit=10", {headers});
+    expect(list.status()).toBe(200);
+    expect(await list.text()).toContain(reference);
+    const badLimit = await request.get(path + "?limit=101", {headers});
+    expect(badLimit.status()).toBe(400);
+
+    // The exact same signed token invokes MCP, and the tool sees only
+    // the server-computed tenant context, never a tenant parameter.
+    async function mcp(name: string, args: Record<string, unknown>, id: number) {
+      const response = await request.post("http://localhost:8080/mcp", {
+        headers: {
+          ...headers, Accept: "application/json,text/event-stream",
+          "Content-Type": "application/json"
+        },
+        data: {jsonrpc: "2.0", id, method: "tools/call",
+          params: {name, arguments: args}}
+      });
+      expect(response.ok(), await response.text()).toBeTruthy();
+      const body = await response.text();
+      expect(body).not.toContain('"isError":true');
+      return body;
+    }
+    expect(await mcp("get_sinistro", {id: initial.id}, 601)).toContain(reference);
+    expect(await mcp("list_sinistri", {limit: 10}, 602)).toContain(reference);
+
+    const updated = await request.put(path + "/" + initial.id, {headers, data: {
+      externalReference: reference + "-EDIT", occurredOn: "2026-11-02",
+      reportedOn: null, expectedVersion: initial.version
+    }});
+    expect(updated.status(), await updated.text()).toBe(200);
+    const next = await updated.json() as {version:number;externalReference:string;reportedOn:null};
+    expect(next.version).toBe(2);
+    expect(next.reportedOn).toBeNull();
+    const stale = await request.put(path + "/" + initial.id, {headers, data: {
+      externalReference: "STALE-SIN", occurredOn: "2026-11-03",
+      reportedOn: null, expectedVersion: 1
+    }});
+    expect(stale.status()).toBe(409);
+    const persisted = await request.get(path + "/" + initial.id, {headers});
+    expect((await persisted.json() as {externalReference:string}).externalReference).toBe(reference + "-EDIT");
+
+    const mcpChanged = await mcp("update_sinistro", {
+      id: initial.id, externalReference: reference + "-MCP", occurredOn: "2026-11-04",
+      expectedVersion: 2, reportedOn: null
+    }, 603);
+    expect(mcpChanged).toContain(reference + "-MCP");
+    const final = await request.get(path + "/" + initial.id, {headers});
+    expect((await final.json() as {version:number}).version).toBe(3);
+
+    const anonymous = await request.get(path + "/" + initial.id);
+    expect(anonymous.status()).toBe(401);
+    const missing = await request.get(path + "/00000000-0000-0000-0000-000000000001", {headers});
+    expect(missing.status()).toBe(404);
+  });
+
   test("un token JWT del tenant permette REST e discovery MCP, ma MCP anonimo è negato", async ({page, request}) => {
     await page.goto("/");
     await page.getByRole("button", {name: "Accedi"}).click();
