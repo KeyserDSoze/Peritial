@@ -41,6 +41,34 @@ public sealed class FileIngestionSecurityTests
     }
 
     [Fact]
+    public async Task Docx_con_troppe_entry_zip_e_rifiutato()
+    {
+        var (service, store, docs) = NewService();
+        var entries = Enumerable.Range(0, 1023)
+            .Select(i => ($"word/media/entry-{i}.bin", Array.Empty<byte>()))
+            .ToArray();
+        // Two mandatory OOXML files + 1023 additional files = 1025 entries.
+        var bytes = CreateDocx(entries);
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.IngestAsync("rapporto.docx", DocxMime,
+                new MemoryStream(bytes), bytes.Length));
+        Assert.Equal(0, store.Uploads);
+        Assert.Empty(docs.Records);
+    }
+
+    [Fact]
+    public async Task Docx_con_backslash_zip_path_e_rifiutato()
+    {
+        var (service, store, docs) = NewService();
+        var bytes = CreateDocx(("word\\..\\outside.xml", "<x/>"u8.ToArray()));
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.IngestAsync("rapporto.docx", DocxMime,
+                new MemoryStream(bytes), bytes.Length));
+        Assert.Equal(0, store.Uploads);
+        Assert.Empty(docs.Records);
+    }
+
+    [Fact]
     public async Task Docx_con_zip_slip_path_e_bloccato_prima_dello_storage()
     {
         var (service, store, docs) = NewService();
