@@ -43,8 +43,10 @@ exported=0
 for i in $(seq 1 65); do
   curl --fail --silent --max-time 6 http://localhost:8080/health/ready >/dev/null
   logs=$("${compose[@]}" logs --no-color otel-collector 2>&1)
+  # Observe the collector's signal type instead of relying on an
+  # unstable rendering of individual span names in debug log lines.
   if grep -Fq 'peritial.readiness.requests' <<<"$logs" &&
-     grep -Eq 'Name[[:space:]]*:[[:space:]]*peritial\.readiness[[:space:]]*$' <<<"$logs"; then
+     grep -Eq 'otelcol.signal.*traces' <<<"$logs"; then
     exported=1
     break
   fi
@@ -53,7 +55,10 @@ done
 
 if [ "$exported" != "1" ]; then
   echo "OTLP receiver did not confirm both metric and trace delivery" >&2
-  "${compose[@]}" logs --tail=100 otel-collector >&2
+  # Limit diagnostics to signal identifiers and readiness names.
+  "${compose[@]}" logs --no-color otel-collector 2>&1 |
+    grep -E 'otelcol.signal|ResourceSpans|Span #|Name[[:space:]]*:.*peritial.readiness' |
+    tail -60 >&2 || true
   exit 1
 fi
 echo "Verified OTLP metrics and spans delivered to isolated collector"
