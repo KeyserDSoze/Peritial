@@ -582,6 +582,79 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
       .toMatchObject({externalReference: bReference, version: 1});
   });
 
+  test("search_sinistri autocomplete filters literal prefixes and dates server-side without cross-tenant leaks", async ({request}) => {
+    const a = await tokenFor(request, "peritial-test-write");
+    const b = await tokenFor(request, "peritial-test-write-tenant-b", "otheruser", "local-only-other-user");
+    const reader = await tokenFor(request, "peritial-test-readonly");
+    const path = api + "/api/sinistri";
+    const prefix = "SR_%"+Date.now()+"-";
+    async function create(token: string, reference: string, occurredOn: string) {
+      const response = await request.post(path, {
+        headers: {Authorization: "Bearer " + token},
+        data: {externalReference: reference, occurredOn, reportedOn: null}
+      });
+      expect(response.status(), await response.text()).toBe(201);
+      return response.json() as Promise<{id: string}>;
+    }
+    const recordA = await create(a, prefix + "PRIVATE-A", "2040-01-16");
+    const recordB = await create(b, prefix + "PRIVATE-B", "2040-01-17");
+    await create(a, "SRXXX" + Date.now() + "-DECOY", "2040-02-20");
+    const url = path + "/search?prefix=" + encodeURIComponent(prefix.toLowerCase()) +
+      "&occurredFrom=2040-01-01&occurredTo=2040-01-31&limit=1";
+    const responseA = await request.get(url, {headers: {Authorization: "Bearer " + reader}});
+    expect(responseA.status(), await responseA.text()).toBe(200);
+    expect(responseA.headers()["cache-control"]).toContain("no-store");
+    const matchesA = await responseA.json() as {id:string;externalReference:string;version:number}[];
+    expect(matchesA).toHaveLength(1);
+    expect(matchesA[0].id).toBe(recordA.id);
+    expect(matchesA[0].externalReference).toBe(prefix + "PRIVATE-A");
+    expect(await responseA.text()).not.toContain("tenantId");
+    expect(await responseA.text()).not.toContain("PRIVATE-B");
+
+    const responseB = await request.get(url, {headers: {Authorization: "Bearer " + b}});
+    expect(responseB.status(), await responseB.text()).toBe(200);
+    const matchesB = await responseB.json() as {id:string}[];
+    expect(matchesB.map(x => x.id)).toEqual([recordB.id]);
+    expect(await responseB.text()).not.toContain("PRIVATE-A");
+
+    const mcp = async (token: string, id: number) => {
+      const response = await request.post(api + "/mcp", {
+        headers: mcpHeaders(token),
+        data: {jsonrpc: "2.0", id, method: "tools/call",
+          params: {name: "search_sinistri", arguments: {
+            prefix: prefix.toLowerCase(), occurredFrom: "2040-01-01",
+            occurredTo: "2040-01-31", limit: 1}}}
+      });
+      expect(response.ok(), await response.text()).toBeTruthy();
+      return response.text();
+    };
+    const mcpA = await mcp(reader, 1101);
+    expect(mcpA).toContain(prefix + "PRIVATE-A");
+    expect(mcpA).not.toContain("PRIVATE-B");
+    expect(mcpA).not.toContain('"isError":true');
+    const mcpB = await mcp(b, 1102);
+    expect(mcpB).toContain(prefix + "PRIVATE-B");
+    expect(mcpB).not.toContain("PRIVATE-A");
+    expect(mcpB).not.toContain('"isError":true');
+
+    // Reject expensive/invalid queries before touching the database.
+    for (const bad of [
+      "?prefix=X",
+      "?prefix=" + encodeURIComponent(prefix) + "&limit=51",
+      "?prefix=" + encodeURIComponent(prefix) + "&occurredFrom=2040-03-01&occurredTo=2040-01-01"
+    ]) {
+      const result = await request.get(path + "/search" + bad, {
+        headers: {Authorization: "Bearer " + reader}
+      });
+      expect(result.status(), await result.text()).toBe(400);
+    }
+    const noAuth = await request.get(url);
+    expect(noAuth.status()).toBe(401);
+    const noScope = await tokenFor(request, "peritial-test-no-scope");
+    const forbidden = await request.get(url, {headers: {Authorization: "Bearer " + noScope}});
+    expect(forbidden.status()).toBe(403);
+  });
+
   test("Keycloak-signed expired access tokens deny REST and MCP after configured clock skew", async ({request}) => {
     // The API intentionally allows 60 s clock skew. Test the real issuer's
     // short-lived, correctly signed token rather than forging a JWT payload.
