@@ -93,7 +93,7 @@ public sealed class ServiceReadinessProbeTests
             await using var stream = client.GetStream();
             var ping = new byte[6];
             await stream.ReadExactlyAsync(ping, deadline.Token);
-            await stream.WriteAsync("PONG\\0"u8.ToArray(), deadline.Token);
+            await stream.WriteAsync("PONG\0"u8.ToArray(), deadline.Token);
         }, deadline.Token);
 
         var probe = new ServiceReadinessProbe(database, "127.0.0.1", port, new FixedIdentity(false));
