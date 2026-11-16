@@ -80,3 +80,18 @@ test("preferenze in sessione funzionano con accesso alle chiavi UI negato", asyn
   await expect(page.locator("html")).toHaveAttribute("lang", "it");
   await expect(page.locator("html")).not.toHaveClass(/dark/);
 });
+
+
+test("modalità offline dichiara il limite, nasconde il login e recupera online", async ({page, context}) => {
+  await page.goto("/");
+  await page.getByRole("button", {name: "Lingua"}).click();
+  await expect(page.getByRole("heading", {name: "Appraisal management"})).toBeVisible();
+  await context.setOffline(true);
+  await expect(page.getByRole("status")).toContainText("offline");
+  await expect(page.getByRole("status")).toContainText("No changes");
+  await expect(page.getByRole("button", {name: "Sign in"})).toHaveCount(0);
+  await expect(page.getByRole("button", {name: "Upload document"})).toHaveCount(0);
+  await context.setOffline(false);
+  await expect(page.getByRole("status")).toHaveCount(0);
+  await expect(page.getByRole("button", {name: "Sign in"})).toBeVisible();
+});
