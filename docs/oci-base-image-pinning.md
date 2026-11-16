@@ -58,12 +58,53 @@ verde e che Compose costruisca API e frontend ed esegua tutti gli smoke.
    eventuali roll-back. Conservare un percorso di ripristino funzionante
    per immagini non più disponibili.
 
+## Pin selettivo delle immagini infrastrutturali PostgreSQL e Prometheus (#6)
+
+La policy addizionale `scripts/security/infra_oci_policy.py` blocca esattamente
+**sei occorrenze** in tre sorgenti (non tutte le immagini Compose):
+
+| Immagine | Riferimento OCI verificato | Ambito controllato |
+| --- | --- | --- |
+| PostgreSQL 17 Alpine | `postgres:17-alpine@sha256:a77aa70e641402a21411b92b721c58d10f23b50ae5fdd2333efd22d166e1e5f7` | `docker/compose.yml` (postgres e postgres-restore), service PostgreSQL del backend in `.github/workflows/ci.yml` |
+| Prometheus 3.5.0 | `prom/prometheus:v3.5.0@sha256:63805ebb8d2b3920190daf1cb14a60871b16fd38bed42b857a3182bc621f4996` | `docker/compose.prometheus.yml` e due invocazioni `docker run --entrypoint /bin/promtool` in CI |
+
+La provenienza *osservabile* dei riferimenti è circoscritta: il primo digest
+compare nel `docker pull postgres:17-alpine` del job `backend` di
+[CI #43872211334](https://github.com/KeyserDSoze/Peritial/actions/runs/43872211334);
+il secondo nel `docker pull prom/prometheus:v3.5.0` del job
+`observability-rules` verde di
+[CI #43868851989](https://github.com/KeyserDSoze/Peritial/actions/runs/43868851989).
+Entrambi sono stati osservati su runner Linux amd64: **non equivalgono a
+verifica ARM64, firma, certificazione della distribuzione o immutabilità di
+tutte le dipendenze**.
+
+Il job `supply-chain-actions` esegue:
+
+```sh
+python3 -m unittest discover -s tests/security -p test_infra_oci_pins.py -v
+```
+
+I sette test richiedono i file e il numero esatto delle occorrenze
+approvate, respingendo drift, digest errati, tag mobili, rimozioni,
+duplicazioni e commenti che tentano di sostituire una definizione.
+**RED verificato**: [CI #43873317873](https://github.com/KeyserDSoze/Peritial/actions/runs/43873317873),
+sei test passati e rifiuto dei riferimenti non ancora fissati.
+Il blocco non costituisce un parser YAML completo o una garanzia che nuovi
+servizi Docker Compose siano approvati: i nuovi servizi e container invocati
+dagli script richiedono un inventario supply-chain completo.
+
+Per aggiornare un digest: verificare release e immagine sul registry,
+testare compatibilità, aggiornare sia manifest sia costanti della policy,
+rieseguire i sette test, l'intera CI Compose e il controllo `promtool`,
+quindi registrare nella issue SHA/URL e limitazioni. Non sostituire digest
+con tag mobili per aggirare un errore di pull.
+
 ## Limiti non risolti
 
 **Non equivale a una release di produzione riproducibile.** Le immagini
-di servizi Compose (PostgreSQL, SeaweedFS, ClamAV, Keycloak, Azurite e
-test SDK), i container eseguiti dagli script CI e altre dipendenze non sono
-ancora tutti bloccati: fra questi rimane `chrislusf/seaweedfs:latest` nella
+di diversi servizi Compose (SeaweedFS, ClamAV, Keycloak, Azurite,
+test SDK e servizi dell'overlay di osservabilità), ulteriori container
+invocati dagli script CI e altre dipendenze non sono ancora tutti bloccati: fra questi rimane `chrislusf/seaweedfs:latest` nella
 Compose dimostrativa. Anche `runs-on: ubuntu-latest`, tooling
 `dotnet-version: 10.0.x`, registri, provenance/firme, SBOM/attestation e
 recovery Azure/on-prem sono lavori separati. Un digest impedisce il drift
