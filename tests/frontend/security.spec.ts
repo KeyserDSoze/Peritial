@@ -118,6 +118,12 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
       expect(invalid.status(), await invalid.text()).toBe(400);
     }
 
+    const malformed = await request.post(api + "/api/perizie/" + id + "/advance", {
+      headers: {...headers, "Content-Type": "application/json"},
+      data: '{"target":'
+    });
+    expect(malformed.status(), await malformed.text()).toBe(400);
+
     const advanced = await request.post(api + "/api/perizie/" + id + "/advance", {
       headers, data: {target: "ToBeRevised"}
     });
