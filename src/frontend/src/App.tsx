@@ -68,7 +68,9 @@ export default function App() {
     let active = true;
     setDataStatus("loading");
     const revisionsAtStart = new Map(mutations.current);
-    listPerizie(token).then(data => { if (active) setItems(current => {
+    listPerizie(token).then(data => {
+      if (!active) return;
+      setItems(current => {
         const changedAfterFetch = new Set([...mutations.current].filter(
           ([id, version]) => version !== (revisionsAtStart.get(id) ?? 0)
         ).map(([id]) => id));
