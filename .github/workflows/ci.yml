@@ -212,6 +212,28 @@ jobs:
             sleep 2
           done
           test "$ready" = 1
+      - name: Provision separate scoped WORM upload and recovery identities
+        run: |
+          python3 -m unittest discover -s tests/backup -p test_worm_iam_policies.py -v
+          python3 scripts/recovery/render_worm_iam.py \
+            --bucket peritial-worm-ci \
+            --output /tmp/peritial-worm-ci-iam
+          docker cp /tmp/peritial-worm-ci-iam/writer.json peritial-worm:/tmp/peritial-writer.json
+          docker cp /tmp/peritial-worm-ci-iam/reader.json peritial-worm:/tmp/peritial-reader.json
+          docker exec peritial-worm mcli alias set worm \
+            http://127.0.0.1:9000 peritialworm local-only-test-worm-password
+          docker exec peritial-worm mcli admin policy create worm \
+            peritial-worm-writer /tmp/peritial-writer.json
+          docker exec peritial-worm mcli admin policy create worm \
+            peritial-worm-reader /tmp/peritial-reader.json
+          docker exec peritial-worm mcli admin user add worm \
+            peritial-writer-ci local-only-scoped-writer-secret
+          docker exec peritial-worm mcli admin user add worm \
+            peritial-reader-ci local-only-scoped-reader-secret
+          docker exec peritial-worm mcli admin policy attach worm \
+            peritial-worm-writer --user peritial-writer-ci
+          docker exec peritial-worm mcli admin policy attach worm \
+            peritial-worm-reader --user peritial-reader-ci
       - name: Verify no host swap for private tmpfs plaintext
         run: |
           sudo swapoff --all
@@ -229,6 +251,8 @@ jobs:
             --logger "console;verbosity=normal"
         env:
           PERITIAL_TEST_WORM_S3_ENDPOINT: http://127.0.0.1:9000
+          PERITIAL_TEST_WORM_WRITER_SECRET: local-only-scoped-writer-secret
+          PERITIAL_TEST_WORM_READER_SECRET: local-only-scoped-reader-secret
       - name: Local WORM server diagnostics
         if: failure()
         run: docker logs --tail=100 peritial-worm
