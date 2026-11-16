@@ -127,3 +127,34 @@ backup e procedure del runbook. Non usare il trucco
 della fixture CI in produzione.
 
 Riferimento: [ADR 0032](../adr/0032-sinistri-rest-mcp-oauth-cas.md).
+
+## Prova di isolamento OAuth reale con due tenant (#7/#4/#12)
+
+In aggiunta ai test xUnit PostgreSQL FORCE RLS, la suite
+`tests/frontend/security.spec.ts` esegue REST e MCP con **due JWT
+firmati da Keycloak** su identità separate: test tenant A
+`11111111-1111-1111-1111-111111111111` e tenant B
+`22222222-2222-2222-2222-222222222222`. La fixture
+`docker/keycloak/peritial-realm.json` contiene esclusivamente
+utenti/client di laboratorio che non vanno adottati in produzione.
+
+La prova crea un sinistro A via REST e uno B via MCP. In entrambe
+le direzioni: il catalogo REST/MCP non contiene risorse altrui,
+`GET` su UUID esterno restituisce lo **stesso 404** di un UUID
+inesistente, `PUT` verso il tenant altrui restituisce **404**
+senza cambiare dati, e le tool call `get_sinistro` /
+`update_sinistro` restituiscono `isError:true` senza
+esporre il riferimento. Un `X-Tenant-Id` e un `tenantId`
+falsificati sulla creazione REST vengono ignorati: la
+firma del token determina il tenant. La versione CAS resta
+invariata dopo le richieste respinte. Il token di sola lettura
+può leggere il proprio sinistro, ma non aggiornarlo via REST/MCP.
+
+**Limiti:** il test non garantisce che una configurazione OIDC
+produttiva impedisca al chiamante di ottenere token per altri
+tenant: su Keycloak demo i client password-grant pubblici
+hanno claim hardcoded per semplificare il laboratorio.
+Entra ID reale, ruoli e provisioning di utenti organizzativi,
+test con MCP esterni e l'autorizzazione di nuove relazioni
+Sinistri–Perizie restano da implementare e verificare.
+
