@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics.Metrics;
 using System.Net;
 using System.Net.Sockets;
+using Microsoft.Extensions.Configuration;
 using Npgsql;
 using Peritial.Infrastructures;
 using Xunit;
