@@ -20,7 +20,7 @@ public sealed class StorageReadinessProbeTests
         var config = S3Configuration("http://localhost:8333");
         Assert.Throws<InvalidOperationException>(() => StorageReadinessProbe.Create(config));
         Assert.Throws<InvalidOperationException>(() => StorageReadinessProbe.Create(
-            S3Configuration("http://localhost:8333", readerKey: "write", readerSecret: "secret")));
+            S3Configuration("http://localhost:8333", readerKey: "localminio", readerSecret: "local-only-minio-secret")));
     }
 
     [Fact]
@@ -99,8 +99,8 @@ public sealed class StorageReadinessProbeTests
             ["Storage:Provider"] = "Minio",
             ["Storage:Minio:Endpoint"] = endpoint,
             ["Storage:Minio:Bucket"] = bucket ?? "peritial",
-            ["Storage:Minio:AccessKey"] = "write",
-            ["Storage:Minio:SecretKey"] = "secret",
+            ["Storage:Minio:AccessKey"] = "localminio",
+            ["Storage:Minio:SecretKey"] = "local-only-minio-secret",
             ["Storage:Readiness:S3:AccessKey"] = readerKey,
             ["Storage:Readiness:S3:SecretKey"] = readerSecret
         });
