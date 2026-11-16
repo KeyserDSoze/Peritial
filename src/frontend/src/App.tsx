@@ -191,7 +191,7 @@ export default function App() {
               <Button type="submit" disabled={busy}>{t("create")}</Button>
             </form>
             {items.length===0 ? <p className="text-slate-500">{t("empty")}</p> :
-              <ul className="divide-y divide-slate-200 dark:divide-slate-800">{items.map(item =>
+              <ul aria-label={t("perizie")} className="divide-y divide-slate-200 dark:divide-slate-800">{items.map(item =>
                 <li key={item.id} className="py-4">
                   <PeriziaWorkflow item={item} token={token!} onUnavailable={lockProtectedUi} onUpdated={updated => {
                     mutations.current.set(updated.id, (mutations.current.get(updated.id) ?? 0) + 1);
