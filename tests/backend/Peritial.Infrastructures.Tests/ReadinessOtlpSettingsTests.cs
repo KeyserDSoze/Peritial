@@ -37,7 +37,7 @@ public sealed class ReadinessOtlpSettingsTests
     public void Unsafe_production_endpoint_rejects_startup(string endpoint) =>
         Assert.Throws<InvalidOperationException>(() => ReadinessOtlpSettings.FromConfiguration(Config(
             ("Observability:Otlp:Enabled", "true"),
-            ["Observability:Otlp:Endpoint"] = endpoint), isDevelopment: false));
+            ("Observability:Otlp:Endpoint", endpoint)), isDevelopment: false));
 
     [Fact]
     public void Development_allows_explicit_local_http_collector()
