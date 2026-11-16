@@ -25,6 +25,7 @@ export default function App() {
   const [reference, setReference] = useState("");
   const [upload, setUpload] = useState<File|null>(null);
   const [uploadPeriziaId, setUploadPeriziaId] = useState("");
+  const [documentsPeriziaId, setDocumentsPeriziaId] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [dataStatus, setDataStatus] = useState<"loading" | "ready" | "unavailable">("loading");
@@ -39,6 +40,7 @@ export default function App() {
     setItems([]);
     setDocuments([]);
     setUploadPeriziaId("");
+    setDocumentsPeriziaId("");
     setDataStatus("unavailable");
     setError("");
   }
@@ -46,6 +48,14 @@ export default function App() {
     if (!online || !token) return;
     setDataStatus("loading");
     setRefreshIndex(value => value + 1);
+  }
+  function changeDocumentFilter(periziaId: string) {
+    // Do not render an old tenant-scoped projection for the new filter, even
+    // if the previous GET resolves just before React runs effect cleanup.
+    requestEpoch.current += 1;
+    setDocuments([]);
+    setDataStatus("loading");
+    setDocumentsPeriziaId(periziaId);
   }
   useEffect(() => { document.documentElement.classList.toggle("dark", dark); }, [dark]);
   useEffect(() => {
@@ -71,6 +81,7 @@ export default function App() {
       setItems([]);
       setDocuments([]);
       setUploadPeriziaId("");
+      setDocumentsPeriziaId("");
       setVerifiedToken(null);
     }
     // Never display locally retained tenant data while disconnected.
@@ -84,6 +95,7 @@ export default function App() {
       setReference("");
       setUpload(null);
       setUploadPeriziaId("");
+      setDocumentsPeriziaId("");
       setDataStatus("loading");
     }
   }, [token, online]);
@@ -95,7 +107,7 @@ export default function App() {
     const revisionsAtStart = new Map(mutations.current);
     // Fetch both scoped projections before making any write controls
     // available. A failure of either one fails closed.
-    Promise.all([listPerizie(token), listDocuments(token)]).then(([data, latestDocuments]) => {
+    Promise.all([listPerizie(token), listDocuments(token, documentsPeriziaId || undefined)]).then(([data, latestDocuments]) => {
       if (!active || requestEpoch.current !== epochAtStart) return;
       setItems(current => {
         const changedAfterFetch = new Set([...mutations.current].filter(
@@ -110,6 +122,7 @@ export default function App() {
       setDocuments(latestDocuments);
       // A case removed from the authenticated projection must not remain selectable.
       setUploadPeriziaId(value => value && !data.some(item => item.id === value) ? "" : value);
+      setDocumentsPeriziaId(value => value && !data.some(item => item.id === value) ? "" : value);
       setVerifiedToken(token);
       setDataStatus("ready");
       setError("");
@@ -117,7 +130,7 @@ export default function App() {
       if (active) lockProtectedUi();
     });
     return () => { active = false; };
-  }, [token, t, online, refreshIndex]);
+  }, [token, t, online, refreshIndex, documentsPeriziaId]);
   async function create(event:FormEvent) {
     event.preventDefault(); if(!token || !online || dataStatus !== "ready" || !reference.trim()) return;
     setBusy(true); setError("");
@@ -213,6 +226,13 @@ export default function App() {
             <Button disabled={!upload||busy} onClick={() => void sendFile()}><FileUp size={16}/>{t("upload")}</Button>
             <div className="mt-8 border-t border-slate-200 pt-5 dark:border-slate-700">
               <h3 className="mb-3 font-semibold">{t("savedDocuments")}</h3>
+              <label htmlFor="documents-perizia" className="mb-2 block text-sm">{t("documentsFilter")}</label>
+              <select id="documents-perizia" value={documentsPeriziaId}
+                onChange={event => changeDocumentFilter(event.target.value)}
+                className="mb-3 block w-full rounded-md border border-slate-300 bg-transparent px-3 py-2 dark:border-slate-700">
+                <option value="">{t("allDocuments")}</option>
+                {items.map(item => <option key={item.id} value={item.id}>{item.reference}</option>)}
+              </select>
               <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">{t("metadataOnly")}</p>
               {documents.length === 0 ? <p className="text-sm text-slate-500">{t("noDocuments")}</p> :
                 <ul aria-label={t("savedDocuments")} className="divide-y divide-slate-200 dark:divide-slate-700">
