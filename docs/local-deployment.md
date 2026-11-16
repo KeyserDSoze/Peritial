@@ -36,6 +36,20 @@ Dopo upgrade di un volume PostgreSQL preesistente, gli script in `docker-entrypo
 
 Compose avvia un demone ClamAV `clamd` con immagini/firme pre-caricate, connessione TCP solo interna (`clamav:3310`) e health check obbligatorio prima dell'avvio dell'API. Non è pubblicata alcuna porta scanner. I file PDF/JPG/PNG/XML/DOCX validati sono analizzati in memoria con ClamAV **prima** di raggiungere SeaweedFS/PostgreSQL; se ClamAV non è disponibile il caricamento è bloccato (503), un EICAR viene rifiutato (422). La demo disattiva `freshclam` per evitare aggiornamenti esterni non deterministici in CI: non replicare questa configurazione in produzione. L'immagine ufficiale può richiedere una quantità significativa di RAM. Quarantena persistente, worker di recovery e aggiornamento firme sono ancora aperti (#5/#21).
 
+## FreshClam opzionale per il laboratorio (#5)
+
+Il Compose base usa intenzionalmente firme pre-caricate e disabilita l'updater;
+questo **non** è un modello produttivo. Per esercitare il daemon FreshClam
+reale e conservare le firme tra ricreazioni dei container, aggiungere
+`-f docker/compose.clamav-updates.yml` al Compose base. L'overlay abilita
+`FRESHCLAM_CHECKS=12`, `TZ=UTC`, un volume persistente privato e
+`Malware__Clamd__MaxSignatureAgeHours=48`; **la porta 3310 resta interna**.
+Durante l'aggiornamento iniziale la readiness può rimanere 503, poiché
+la policy rifiuta database datati anche se il processo risponde a PING.
+Procedura di prova, controllo della versione caricata e ritorno alla demo:
+[clamav-signature-updates.md](clamav-signature-updates.md).
+I segreti e gli endpoint di questo Compose restano dimostrativi: **mai usarlo in produzione**.
+
 ## Recupero durevole degli upload locali (#21)
 
 Lo schema crea `upload_intents` e due login **distinti** solo in sviluppo: `peritial_app` per le richieste e `peritial_recovery` per il worker. `UploadRecovery__ConnectionString` deve usare il secondo ruolo con privilegi ristretti, mai le credenziali amministrative. Il worker controlla gli intenti più vecchi di un'ora una volta al minuto (max 20 per ciclo), usa lock PostgreSQL per evitare doppi cleanup e verifica che non esista già un documento referenziante. In dev si può controllare *solo il conteggio* dei pendenti con `docker compose -f docker/compose.yml exec -T postgres psql -U peritial -d peritial -Atc 'SELECT count(*) FROM upload_intents;'`. Un volume preesistente richiede migrazione e aggiornamento del ruolo prima di avviare l'API: non eliminare volumi contenenti dati reali.
