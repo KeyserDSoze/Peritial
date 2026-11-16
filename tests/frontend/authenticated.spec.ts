@@ -57,6 +57,32 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     await expect(row.getByRole("button", {name: "Annulla"})).toHaveCount(0);
   });
 
+  test("offline dopo login non espone pratiche né mutazioni e ricarica online da REST", async ({page, context}) => {
+    await page.goto("/");
+    await page.getByRole("button", {name: "Accedi"}).click();
+    await expect(page.locator("#username")).toBeVisible({timeout: 30_000});
+    await page.locator("#username").fill("localuser");
+    await page.locator("#password").fill("local-only-user");
+    await page.locator("#kc-login").click();
+    await expect(page.getByRole("button", {name: "Esci"})).toBeVisible({timeout: 30_000});
+
+    const reference = "OFFLINE-REFETCH-" + Date.now() + "-" + Math.round(Math.random() * 100000);
+    await page.locator("#reference").fill(reference);
+    await page.getByRole("button", {name: "Crea"}).click();
+    await expect(page.getByText(reference)).toBeVisible();
+
+    await context.setOffline(true);
+    await expect(page.getByRole("status")).toContainText("offline");
+    await expect(page.getByText(reference)).toHaveCount(0);
+    await expect(page.getByRole("button", {name: "Crea"})).toHaveCount(0);
+    await expect(page.getByRole("button", {name: "Carica documento"})).toHaveCount(0);
+
+    await context.setOffline(false);
+    await expect(page.getByRole("status")).toHaveCount(0);
+    await expect(page.getByText(reference)).toBeVisible({timeout: 30_000});
+    await expect(page.getByRole("button", {name: "Crea"})).toBeEnabled();
+  });
+
   test("un token JWT del tenant permette REST e discovery MCP, ma MCP anonimo è negato", async ({page, request}) => {
     await page.goto("/");
     await page.getByRole("button", {name: "Accedi"}).click();
