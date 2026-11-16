@@ -16,11 +16,30 @@ Esporre le funzionalità tramite Model Context Protocol (SDK ufficiale .NET, HTT
 ## Catalogo atteso
 | Capability | Tool | Fase |
 |---|---|---|
-| Perizie | list_perizie, create_perizia | vertical slice 1 |
+| Perizie | list_perizie, create_perizia, cancel_perizia | creazione/lettura + annullamento auditato (#9) |
 | Documenti | ingest_file (base64 limitato); REST multipart per grandi file | vertical slice 1 |
 | Sinistri, anagrafiche, stati, import XML, documenti, report, messaggi, contabilità, KPI | tool dedicati per ciascun use case | iterazioni successive |
 
 Per file grandi: non trasportare payload di gigabyte via JSON MCP; fornire un tool per ottenere URL di upload firmati/scoped e una procedura di completamento (da implementare). Una tool call MCP non equivale ad accesso indiscriminato al filesystem.
+
+## Annullamento perizie REST/MCP (#9)
+
+`POST /api/perizie/{id}/cancel` e `cancel_perizia(id: UUID)` invocano
+lo **stesso** `PeriziaService.CancelAsync` e richiedono `peritial.write`
+con tenant e subject validati dal JWT. Non accettano un tenant dal body.
+Le perizie in stato `Billed`, `Duplicated` o `Cancelled` non possono
+essere annullate; il replay su `Cancelled` viene rifiutato, non emette
+un secondo evento di successo. Un ID assente o di altro tenant non è visibile
+attraverso il repository protetto da PostgreSQL FORCE RLS.
+
+Lo stato `Cancelled` e l'evento `perizia.cancel/succeeded` sono scritti
+nella stessa transazione PostgreSQL. Il database rifiuta anche cancellazioni
+stale sopra stati terminali; la concorrenza generale con altre transizioni,
+le operazioni idempotenti e l'UI dello storico **non** sono coperte da questa
+tranche. Il comportamento segue la regola già esistente nel dominio clean-room,
+non è una prova di parità completa con il branch storico `death`.
+Test xUnit e Playwright con Keycloak reale sono descritti in
+`docs/development.md` (#9/#21).
 
 ## E2E e compatibilità
 
