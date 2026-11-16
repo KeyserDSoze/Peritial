@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useAuth } from "react-oidc-context";
 import { useTranslation } from "react-i18next";
 import { FileUp, Moon, Sun, ShieldCheck } from "lucide-react";
@@ -10,6 +10,8 @@ export default function App() {
   const { t, i18n } = useTranslation();
   const [dark, setDark] = useState(false);
   const [items, setItems] = useState<Perizia[]>([]);
+  // Preserve a locally confirmed POST result against any slower list response.
+  const locallyUpdatedIds = useRef<Set<string>>(new Set());
   const [reference, setReference] = useState("");
   const [upload, setUpload] = useState<File|null>(null);
   const [error, setError] = useState("");
@@ -17,19 +19,27 @@ export default function App() {
   const token = auth.user?.access_token;
   useEffect(() => { document.documentElement.classList.toggle("dark", dark); }, [dark]);
   useEffect(() => {
+    // Do not leave another authenticated tenant's list visible after logout.
+    if (!token) { setItems([]); locallyUpdatedIds.current.clear(); }
+  }, [token]);
+  useEffect(() => {
     if (!token) return;
     let active = true;
     listPerizie(token).then(data => { if (active) setItems(current => {
-        // A slow initial GET must not overwrite a perizia just created by POST.
+        // A slow list response must not undo a mutation already confirmed by
+        // the server. React-local snapshots are cleared on logout.
         const incoming = new Set(data.map(item => item.id));
-        return [...current.filter(item => !incoming.has(item.id)), ...data];
+        return [
+          ...current.filter(item => locallyUpdatedIds.current.has(item.id) || !incoming.has(item.id)),
+          ...data.filter(item => !locallyUpdatedIds.current.has(item.id))
+        ];
       }); }).catch(() => { if(active) setError(t("error")); });
     return () => { active = false; };
   }, [token, t]);
   async function create(event:FormEvent) {
     event.preventDefault(); if(!token || !reference.trim()) return;
     setBusy(true); setError("");
-    try { const item = await createPerizia(token,reference.trim()); setItems(current => [item,...current]); setReference(""); }
+    try { const item = await createPerizia(token,reference.trim()); locallyUpdatedIds.current.add(item.id); setItems(current => [item,...current]); setReference(""); }
     catch { setError(t("error")); } finally { setBusy(false); }
   }
   async function sendFile() {
@@ -66,8 +76,10 @@ export default function App() {
             {items.length===0 ? <p className="text-slate-500">{t("empty")}</p> :
               <ul className="divide-y divide-slate-200 dark:divide-slate-800">{items.map(item =>
                 <li key={item.id} className="py-4">
-                  <PeriziaWorkflow item={item} token={token!} onUpdated={updated =>
-                    setItems(current => current.map(value => value.id === updated.id ? updated : value))} />
+                  <PeriziaWorkflow item={item} token={token!} onUpdated={updated => {
+                    locallyUpdatedIds.current.add(updated.id);
+                    setItems(current => current.map(value => value.id === updated.id ? updated : value));
+                  }} />
                 </li>)}</ul>}
           </section>
           <section className="h-fit rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
