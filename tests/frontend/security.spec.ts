@@ -49,6 +49,26 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
     );
   });
 
+  test("signed REST and MCP responses are never browser-cacheable", async ({request}) => {
+    const readOnly = await tokenFor(request, "peritial-test-readonly");
+    const rest = await request.get(api + "/api/perizie", {
+      headers: {Authorization: "Bearer " + readOnly}
+    });
+    expect(rest.status(), await rest.text()).toBe(200);
+    expect(rest.headers()["cache-control"]).toContain("no-store");
+
+    const mcp = await request.post(api + "/mcp", {
+      headers: mcpHeaders(readOnly),
+      data: {jsonrpc: "2.0", id: 307, method: "tools/list"}
+    });
+    expect(mcp.ok(), await mcp.text()).toBeTruthy();
+    expect(mcp.headers()["cache-control"]).toContain("no-store");
+
+    const anonymous = await request.get(api + "/api/perizie");
+    expect(anonymous.status()).toBe(401);
+    expect(anonymous.headers()["cache-control"]).toContain("no-store");
+  });
+
   test("wrong audience, malformed token and missing tenant deny with 401", async ({request}) => {
     const wrong = await tokenFor(request, "peritial-test-wrong-audience");
     const noTenant = await tokenFor(request, "peritial-test-no-tenant");
