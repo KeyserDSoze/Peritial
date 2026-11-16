@@ -126,6 +126,49 @@ altri tool, l'idempotenza estesa, ETag, compatibilità con client
 MCP esterni, upload firmato o UI/storico completi. Vedere
 `docs/mcp.md` e issue #9/#12/#21.
 
+## Workflow perizie nella PWA — assegnazione, avanzamento, annullamento (#13/#9)
+
+La UI autenticata in `src/frontend/src/App.tsx` ora usa il componente
+`PeriziaWorkflow` per ogni pratica visibile nel tenant firmato:
+
+- `Registered`: campo assegnatario con label accessibile e bottone
+  `Assegna` (REST `POST /api/perizie/{id}/assign`).
+- `Assigned`, `ToBeRevised`, `Revised`, `ToSend`, `Sent`:
+  un singolo passo `Avanza` verso lo stato successivo ammesso dal Domain
+  (`POST /api/perizie/{id}/advance`). Il client non offre salti di stato.
+- Stati non terminali: `Annulla` richiede **una seconda azione esplicita**
+  `Conferma annullamento` oppure `Indietro`, prima di inviare
+  `POST /api/perizie/{id}/cancel`. Gli stati terminali
+  `Billed`/`Cancelled`/`Duplicated` non offrono mutazioni.
+- Stato e assegnatario sono aggiornati solo dalla **risposta REST confermata**,
+  senza avanzamento ottimistico. Errori HTTP 409 CAS non
+  alterano lo stato visualizzato: la UI mostra un messaggio
+  e un bottone `Ricarica stato` che interroga
+  `GET /api/perizie/{id}` per ottenere il valore corrente.
+  La fusione fra lista GET e mutazioni confermate è difesa da revisioni
+  locali temporanee: un GET avviato prima del POST non può
+  ripristinare una versione obsoleta, mentre un GET avviato dopo
+  può aggiornare la UI normalmente. Logout svuota elenco e revisioni.
+- Label, azioni, errori e nomi degli stati sono tradotti tramite
+  `src/frontend/src/i18n.ts` in italiano e inglese.
+  La difesa reale resta nel backend OAuth/Domain/PostgreSQL,
+  **non** nella visibilità dei controlli del browser.
+
+`tests/frontend/authenticated.spec.ts` include un E2E Keycloak reale
+eseguito su Chromium desktop e mobile: creazione, stato tradotto,
+assegnazione, avanzamento, cambio lingua in corso d'opera,
+annullamento a due click e assenza di azioni dopo lo stato terminale.
+Una risposta 409 simulata per il client verifica che non
+venga mostrato un successo inesistente e che il comando di
+ricarica ripristini lo stato REST prima di una nuova assegnazione.
+L'errore simulato **non** sostituisce i test PostgreSQL reali
+di concorrenza in `PeriziaAtomicAuditTests` (ADR 0029).
+
+**Restano aperti**: UI dei duplicati e storico perizia/documenti,
+permessi di azione progressivi nel browser, design system
+shadcn/ui completo, test automatici WCAG sistematici, le altre
+sezioni PWA e le regole esatte del legacy `death` (issue #9/#13).
+
 ## Fault injection documentale (#5/#21)
 
 FileIngestionCompensationTests esercita lo storage fake con upload parziale, errore metadata dopo PUT, cleanup fallito, cancellazione HTTP a metà commit, retry dopo errore e successo senza cancellazione. L'adapter S3 e quello Azure implementano DeleteAsync, con cancellazione idempotente. Le prove reali contro entrambi i provider e il recupero persistente dopo crash non sono ancora completati: ADR 0009.
