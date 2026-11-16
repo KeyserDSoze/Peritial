@@ -80,6 +80,18 @@ autorizzata. Il microcopy esplicita che sono **solo
 metadati** e che il download non è ancora supportato.
 Le etichette sono disponibili in italiano e inglese.
 
+Il form di upload permette inoltre di scegliere **facoltativamente** una perizia
+tra quelle restituite dalla GET autenticata per il tenant corrente; senza scelta,
+il documento resta generico (comportamento precedente). La selezione passa il
+solo `periziaId` a `uploadDocument`/`POST /api/files`, dove il Business layer
+esegue i controlli di autorizzazione/tenant prima di salvare i metadati.
+La lista espone il riferimento della perizia se incluso nella proiezione
+corrente, altrimenti una dicitura generica e mai una chiave storage.
+La selezione viene azzerata al cambio JWT, offline, in caso di API
+indisponibile o dopo upload confermato, ed è scartata se il riferimento
+non è più presente nella successiva lista autenticata. Non esistono
+upload in coda né nuovi permessi client-side.
+
 `App.tsx` recupera `listPerizie` e `listDocuments`
 insieme tramite `Promise.all` usando il JWT corrente
 **prima** di rendere nuovamente interattivi i form. Se
