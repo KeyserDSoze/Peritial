@@ -149,11 +149,23 @@ identificativi tenant né dati delle perizie. Sono locali al
 browser/origin, non sincronizzate tra dispositivi.
 
 `tests/frontend/smoke.spec.ts` verifica, su Chromium desktop e
-mobile, lingua HTML `it→en`, toggle tema via tastiera,
-persistenza di entrambi dopo reload, valori arbitrari ignorati,
-ripristino tramite toggle e leggibilità della pagina. Il gate
-frontend della CI usa `npm run build` e `npm run test:e2e`
-(Playwright Chromium desktop e mobile).
+mobile, lingua HTML `it→en`, toggle tema via tastiera e
+`aria-pressed`, persistenza di entrambi dopo reload, valori
+arbitrari ignorati, ripristino tramite toggle e leggibilità
+della pagina. Un test inietta eccezioni sulle **sole** chiavi
+`peritial.ui.*`: il browser continua a usare le scelte nella
+sessione corrente ma ritorna ai default dopo reload quando
+non può scriverle. Non simula la disabilitazione globale di
+`localStorage`, che potrebbe interessare librerie OIDC esterne.
+
+Il gate frontend della CI usa `npm run build` e
+`npm run test:e2e` (Playwright Chromium desktop e mobile).
+**TDD RED**: [CI #43891355737](https://github.com/KeyserDSoze/Peritial/actions/runs/43891355737)
+aveva 4 regressioni fallite prima del fix. **GREEN**:
+[CI #43892664860](https://github.com/KeyserDSoze/Peritial/actions/runs/43892664860)
+con 10/10 test frontend superati, inclusa l'iniezione
+mirata di errori storage.
+
 Questi test **non** costituiscono un audit completo WCAG né una
 validazione di offline cache PWA; #13 resta aperta.
 
