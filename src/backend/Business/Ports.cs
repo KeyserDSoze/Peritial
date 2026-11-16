@@ -21,6 +21,15 @@ public interface IPeriziaRepository
     Task UpdateAuditedAsync(Perizia perizia, SecurityAuditEvent audit, CancellationToken cancellationToken = default);
 }
 
+/// <summary>Tenant-filtered sinistri store. All mutations include successful audit in one database transaction.</summary>
+public interface ISinistroRepository
+{
+    Task<IReadOnlyList<Sinistro>> ListAsync(TenantId tenant, int limit = 50, CancellationToken ct = default);
+    Task<Sinistro?> FindAsync(TenantId tenant, Guid id, CancellationToken ct = default);
+    Task AddAuditedAsync(Sinistro sinistro, SecurityAuditEvent audit, CancellationToken ct = default);
+    Task UpdateAuditedAsync(Sinistro sinistro, SecurityAuditEvent audit, CancellationToken ct = default);
+}
+
 public interface IObjectStore
 {
     Task PutAsync(string key, Stream content, string contentType, CancellationToken cancellationToken = default);
