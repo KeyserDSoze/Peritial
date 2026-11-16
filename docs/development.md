@@ -126,6 +126,41 @@ altri tool, l'idempotenza estesa, ETag, compatibilità con client
 MCP esterni, upload firmato o UI/storico completi. Vedere
 `docs/mcp.md` e issue #9/#12/#21.
 
+## Aggiornamento controllato del service worker PWA (#13)
+
+La UI gestisce moduli e allegati con modifiche ancora **non inviate**.
+Per evitare interruzioni improvvise, `src/frontend/vite.config.ts`
+utilizza `registerType: "prompt"` e `injectRegister: false`
+al posto di `autoUpdate`: Workbox non usa
+`skipWaiting` e `clientsClaim` automatici. La registrazione
+è gestita dal componente React
+`src/frontend/src/components/PwaUpdatePrompt.tsx`
+con il modulo `virtual:pwa-register` e `onNeedRefresh`.
+
+Quando arriva una nuova versione già scaricata, la UI mostra
+un **avviso accessibile** in italiano/inglese: chiede di
+salvare prima il lavoro non inviato, poi offre
+`Aggiorna ora` oppure `Più tardi`. Soltanto il
+click esplicito su `Aggiorna ora` invoca
+`updateServiceWorker()` e può attivare il worker in attesa
+ricaricando la pagina. `Più tardi` riduce l'avviso a
+un pulsante `Aggiornamento pronto` che lo riapre;
+il pulsante di aggiornamento non è disponibile offline.
+Non vengono salvati draft, JWT o identificativi tenant per
+implementare il prompt.
+
+La CI impone anche un gate indipendente dopo il build:
+`src/frontend/scripts/pwa-update-policy.test.mjs` usa
+Node `--test` per verificare il contratto `prompt`,
+l'assenza di registrazione automatica nel file HTML generato,
+la presenza del service worker buildato, e i comandi UI di
+aggiornamento, rinvio e riapertura. È eseguito da
+`npm run build`, quindi anche nella build Docker e nel
+job frontend. L'automazione **non** sostituisce una prova
+multi-tab reale di aggiornamento in produzione, né
+copre rollback SW dopo un rilascio incompatibile:
+questi restano follow-up di #13.
+
 ## Modalità offline dichiarata, senza cache di dati autenticati (#13)
 
 La PWA utilizza già il plugin `vite-plugin-pwa` per il manifest e
