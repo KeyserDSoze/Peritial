@@ -41,6 +41,12 @@ public sealed class McpTools(
     public Task<IReadOnlyList<SinistroDto>> ListSinistri(int limit = 50, CancellationToken ct = default) =>
         sinistri.ListAsync(limit, ct);
 
+    [McpServerTool(Name = "search_sinistri"), Description("Case-insensitive literal prefix autocomplete for external references in the signed tenant. Optional occurredFrom/occurredTo ISO dates and limit 1..50; requires peritial.read or peritial.write. SQL filters before limiting.")]
+    public Task<IReadOnlyList<SinistroDto>> SearchSinistri(
+        string prefix, DateOnly? occurredFrom = null, DateOnly? occurredTo = null,
+        int limit = 10, CancellationToken ct = default) =>
+        sinistri.SearchAsync(prefix, occurredFrom, occurredTo, limit, ct);
+
     [McpServerTool(Name = "get_sinistro"), Description("Gets a sinistro belonging to the signed tenant; missing/foreign IDs are indistinguishable (peritial.read).")]
     public Task<SinistroDto> GetSinistro(Guid id, CancellationToken ct = default) =>
         sinistri.GetAsync(id, ct);
