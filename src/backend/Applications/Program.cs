@@ -251,6 +251,8 @@ api.MapPost("/perizie/{id:guid}/assign", (Guid id, AssignPeriziaRequest request,
     service.AssignAsync(id, request.Assignee, ct)).RequireAuthorization("peritial.write");
 api.MapPost("/perizie/{id:guid}/advance", (Guid id, AdvancePeriziaRequest request, PeriziaService service, CancellationToken ct) =>
     service.AdvanceAsync(id, request.Target, ct)).RequireAuthorization("peritial.write");
+api.MapPost("/perizie/{id:guid}/cancel", (Guid id, PeriziaService service, CancellationToken ct) =>
+    service.CancelAsync(id, ct)).RequireAuthorization("peritial.write");
 
 api.MapPost("/files", async (HttpRequest request, FileIngestionService service, CancellationToken ct) =>
 {
