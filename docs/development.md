@@ -126,6 +126,37 @@ altri tool, l'idempotenza estesa, ETag, compatibilità con client
 MCP esterni, upload firmato o UI/storico completi. Vedere
 `docs/mcp.md` e issue #9/#12/#21.
 
+## Preferenze PWA persistenti e accessibilità lingua/tema (#13)
+
+Il client memorizza **soltanto** due preferenze di interfaccia in
+`localStorage` dello stesso origin browser:
+`peritial.ui.language = it|en` e `peritial.ui.theme = light|dark`.
+Il modulo `src/frontend/src/uiPreferences.ts` ammette solo questi
+valori e intercetta errori di lettura/scrittura (`SecurityError`,
+storage bloccato, quota o navigazione privata). Valori sconosciuti
+o manipolati non vengono eseguiti: il fallback è lingua italiana
+e tema chiaro. La funzionalità continua a operare nella sessione
+corrente anche se il salvataggio delle preferenze viene bloccato.
+
+`src/frontend/src/i18n.ts` inizializza i18next dalla preferenza
+validata; `App.tsx` inizializza il tema prima del primo render React,
+aggiorna `document.documentElement.lang` quando cambia lingua,
+applica/rimuove la classe `dark` e rende `aria-pressed` del
+pulsante tema coerente con lo stato. Il toggle lingua salva la
+selezione `it/en` e il toggle tema salva `light/dark`.
+Le preferenze non contengono token OAuth, credenziali, documenti,
+identificativi tenant né dati delle perizie. Sono locali al
+browser/origin, non sincronizzate tra dispositivi.
+
+`tests/frontend/smoke.spec.ts` verifica, su Chromium desktop e
+mobile, lingua HTML `it→en`, toggle tema via tastiera,
+persistenza di entrambi dopo reload, valori arbitrari ignorati,
+ripristino tramite toggle e leggibilità della pagina. Il gate
+frontend della CI usa `npm run build` e `npm run test:e2e`
+(Playwright Chromium desktop e mobile).
+Questi test **non** costituiscono un audit completo WCAG né una
+validazione di offline cache PWA; #13 resta aperta.
+
 ## Workflow perizie nella PWA — assegnazione, avanzamento, annullamento (#13/#9)
 
 La UI autenticata in `src/frontend/src/App.tsx` ora usa il componente
