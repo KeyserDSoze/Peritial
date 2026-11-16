@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:17-alpine
+        image: postgres:17-alpine@sha256:a77aa70e641402a21411b92b721c58d10f23b50ae5fdd2333efd22d166e1e5f7
         env:
           POSTGRES_USER: peritial
           POSTGRES_PASSWORD: local-only-postgres
@@ -362,7 +362,7 @@ jobs:
           docker run --rm --read-only --network none \
             --user "$(id -u):$(id -g)" \
             -v "$PWD/docker:/work/docker:ro" \
-            --entrypoint /bin/promtool prom/prometheus:v3.5.0 \
+            --entrypoint /bin/promtool prom/prometheus:v3.5.0@sha256:63805ebb8d2b3920190daf1cb14a60871b16fd38bed42b857a3182bc621f4996 \
             check rules /work/docker/prometheus-readiness-alerts.yml
       - name: Verify alert firing, recovery and missing-signal scenarios
         run: |
@@ -373,7 +373,7 @@ jobs:
             --user "$(id -u):$(id -g)" \
             -v "$PWD/docker:/work/docker:ro" \
             -v "$PWD/tests/observability:/work/tests/observability:ro" \
-            --entrypoint /bin/promtool prom/prometheus:v3.5.0 \
+            --entrypoint /bin/promtool prom/prometheus:v3.5.0@sha256:63805ebb8d2b3920190daf1cb14a60871b16fd38bed42b857a3182bc621f4996 \
             test rules /work/tests/observability/prometheus-alerts.test.yml
   clamav-signatures:
     runs-on: ubuntu-latest
