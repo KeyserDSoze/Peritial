@@ -196,6 +196,7 @@ app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
         UnauthorizedAccessException => StatusCodes.Status403Forbidden,
         FileThreatDetectedException => StatusCodes.Status422UnprocessableEntity,
         UploadIdempotencyConflictException => StatusCodes.Status409Conflict,
+        PeriziaConcurrencyConflictException => StatusCodes.Status409Conflict,
         UploadLeaseExpiredException => StatusCodes.Status503ServiceUnavailable,
         MalwareScannerUnavailableException => StatusCodes.Status503ServiceUnavailable,
         InvalidDataException => StatusCodes.Status413PayloadTooLarge,
