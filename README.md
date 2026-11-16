@@ -15,6 +15,8 @@ Backend .NET 10 DDD (Domains / Business / Infrastructures / Applications), API R
 
 **Stato:** primo vertical slice perizie/ingestion, con E2E OAuth Keycloak, API REST e catalogo MCP verificati; NON è una riscrittura funzionalmente completa di death. Configurazione e credenziali Compose solo dimostrative, non per produzione.
 
+**Catalogo documentale (#11/#12):** oltre all'upload controllato, REST `GET /api/files` (opzionale `periziaId`, `limit` da 1 a 100) e `GET /api/files/{id}`, più tool MCP `list_documents`/`get_document`. Le risposte espongono solo metadati del tenant firmato, mai chiavi di storage o byte; accesso `peritial.read` o `peritial.write`. **Download autenticato, paginazione oltre 100, versioni, report e UI documenti restano da implementare.** [Contratto e limiti](docs/mcp.md).
+
 **Offline PWA (#13):** la shell installabile può riaprirsi con asset statici già in cache, ma non offre accesso offline alle pratiche: nasconde i dati tenant, non mette in coda mutazioni e richiede un nuovo fetch autorizzato alla riconnessione. Workbox non salva API/MCP; il backend marca le risposte protette `Cache-Control: no-store`. Tema e lingua sono le sole preferenze locali salvate. [Dettagli, limiti e test](docs/development.md).
 
 Documenti: docs/requirements.md, docs/legacy-inventory.md, docs/architecture.md, docs/mcp.md, docs/development.md, docs/local-deployment.md, docs/database-migrations.md, docs/database-backup-restore.md (adozione legacy V001 o pre-lease solo offline), adr/.
