@@ -1,0 +1,29 @@
+# CI/Development only. Actual API -> otel-collector -> OTLP HTTP -> Prometheus.
+# Traces continue to the disposable debug exporter; Prometheus stores metrics.
+# Never deploy this unauthenticated HTTP topology to production.
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    timeout: 1s
+
+exporters:
+  otlp_http/prometheus:
+    endpoint: http://prometheus:9090/api/v1/otlp
+  debug:
+    verbosity: basic
+
+service:
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp_http/prometheus]
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [debug]
