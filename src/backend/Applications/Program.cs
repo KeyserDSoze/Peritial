@@ -28,6 +28,12 @@ var audience = builder.Configuration["Auth:Audience"] ?? throw new InvalidOperat
 var publicResource = builder.Configuration["Auth:Resource"] ?? "http://localhost:8080/mcp";
 if (string.IsNullOrWhiteSpace(builder.Configuration["Malware:Clamd:Host"]))
     throw new InvalidOperationException("A private ClamAV malware scanner must be configured.");
+// Production cannot silently accept a scanner whose loaded signature database
+// age is unknown. Development Compose deliberately uses preloaded, non-updating
+// signatures; only that environment may omit the explicit freshness budget.
+var clamdSignatures = ClamdSignaturePolicy.FromConfiguration(
+    builder.Configuration, builder.Environment.IsDevelopment());
+builder.Services.AddSingleton(clamdSignatures);
 var metadata = new OAuthProtectedResource(publicResource, builder.Environment.IsDevelopment());
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -153,7 +159,8 @@ builder.Services.AddSingleton(sp =>
         config["Malware:Clamd:Host"] ?? throw new InvalidOperationException("Clamd host is required."),
         config.GetValue("Malware:Clamd:Port", 3310),
         sp.GetRequiredService<IOidcReadinessProbe>(),
-        sp.GetRequiredService<IStorageReadinessProbe>());
+        sp.GetRequiredService<IStorageReadinessProbe>(),
+        sp.GetRequiredService<ClamdSignaturePolicy>());
 });
 var recoveryConnectionString = builder.Configuration["UploadRecovery:ConnectionString"];
 if (string.IsNullOrWhiteSpace(recoveryConnectionString))
