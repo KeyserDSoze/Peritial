@@ -58,6 +58,21 @@ Il test CI `tests/observability/run_collector_e2e.sh` verifica il Compose effett
 
 **Non è ancora configurato alcun collector persistente, dashboard o alert di produzione.** Occorrono provisioning di rete privata/TLS, rotazione delle credenziali del collector, regole di retention/ACL, metriche da tutte le repliche e test di consegna su collector gestito prima di dichiarare osservabilità end-to-end attiva.
 
+### Regole Prometheus versionate e testate (non ancora attive)
+
+Il file [`docker/prometheus-readiness-alerts.yml`](../docker/prometheus-readiness-alerts.yml) contiene quattro regole **compatibili con un futuro Prometheus privato**, i cui nomi aspettano la conversione OpenTelemetry → Prometheus dei contatori/istogrammi, da convalidare sul backend effettivo:
+
+| Alert | Condizione | Intensità | Nota operativa |
+| --- | --- | --- | --- |
+| `PeritialReadinessFailures` | Almeno tre verifiche aggregate `not_ready` negli ultimi 2 minuti | warning | Non include nessuna dimensione variabile per utente o tenant |
+| `PeritialReadinessDependencyFailed` | Almeno due errori in 2 minuti per una tra `postgres`, `clamav`, `oidc`, `storage` | warning | Non tutti i probe vengono eseguiti dopo il primo errore |
+| `PeritialReadinessSlow` | p95 del tempo aggregato >2 s per 2 minuti, finestra di 5 minuti | warning | Budget di riferimento dell'applicazione 3 s |
+| `PeritialReadinessTelemetryMissing` | Nessun segnale di readiness per 3 minuti, persistente per altri 2 | critical | È necessario un **polling continuo e protetto**; distingue telemetria muta da `ready` |
+
+L'unit test [`tests/observability/prometheus-alerts.test.yml`](../tests/observability/prometheus-alerts.test.yml) verifica con `promtool test rules` i casi sani, alert scattati, ritorno alla normalità, assenza totale delle metriche e p95 elevato. Il job CI `observability-rules` usa `prom/prometheus:v3.5.0` con rete disabilitata, root filesystem read-only e un tmpfs per il database temporaneo dei test. La policy non contiene tenant ID, utente, URL, bucket, file o raw exception nelle label.
+
+**Questa è policy validata staticamente e su dati sintetici**, non un alert operativo: la demo collector attuale usa soltanto l'exporter `debug`; **non** è connessa a un Prometheus persistente e non esiste un Alertmanager o un canale di notifica. Prima del rollout occorre provare i nomi effettivi delle metriche sul percorso completo exporter → scrape / OTLP → Prometheus, dimensionare frequenza dei probe e finestre/soglie, testare anche la risoluzione delle notifiche, mTLS/ACL e retention. In mancanza di polling, il segnale `TelemetryMissing` deve attivarsi e va interpretato come perdita di osservabilità, non necessariamente API offline. Per ambienti multi-replica verificare la necessità di `instance`/relabeling interno senza introdurre dimensioni personali.
+
 Una volta collegato un backend metriche, usare almeno i seguenti segnali per dashboard e alert:
 - rapporto tra incremento di `peritial.readiness.requests` con `outcome=not_ready` e richieste totali, con soglie da tarare su una finestra di minuti e su tutte le repliche;
 - durata p95/p99 di `peritial.readiness.duration`, confrontata con il budget di 3 s;
