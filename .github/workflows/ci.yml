@@ -346,7 +346,10 @@ jobs:
             check rules /work/docker/prometheus-readiness-alerts.yml
       - name: Verify alert firing, recovery and missing-signal scenarios
         run: |
+          # promtool uses a disposable TSDB in /tmp; never write to the
+          # runner filesystem or weaken the container read-only root.
           docker run --rm --read-only --network none \
+            --tmpfs /tmp:rw,noexec,nosuid,size=128m,mode=1777 \
             --user "$(id -u):$(id -g)" \
             -v "$PWD/docker:/work/docker:ro" \
             -v "$PWD/tests/observability:/work/tests/observability:ro" \
