@@ -80,6 +80,22 @@ jobs:
           done
           echo "Keycloak discovery unavailable"
           exit 1
+      - name: Provision isolated Keycloak short-lived JWT client for expiry E2E
+        run: |
+          # Create a signed five-second JWT client solely inside the disposable
+          # development realm. Never change the PWA or existing test clients.
+          keycloak_container=$(docker compose -f docker/compose.yml ps -q keycloak)
+          test -n "$keycloak_container"
+          docker cp docker/keycloak/peritial-expiry-client.json \
+            "$keycloak_container:/tmp/peritial-expiry-client.json"
+          docker compose -f docker/compose.yml exec -T keycloak sh -ec '
+            /opt/keycloak/bin/kcadm.sh config credentials \
+              --server http://localhost:8080 --realm master \
+              --user "$KC_BOOTSTRAP_ADMIN_USERNAME" \
+              --password "$KC_BOOTSTRAP_ADMIN_PASSWORD" >/dev/null
+            /opt/keycloak/bin/kcadm.sh create clients -r peritial \
+              -f /tmp/peritial-expiry-client.json >/dev/null
+          '
       - name: API dependency readiness succeeds against PostgreSQL, ClamAV, OIDC and S3
         run: |
           ready=0
