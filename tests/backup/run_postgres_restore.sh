@@ -38,6 +38,10 @@ docker exec -i "$src" psql -X -U peritial -d peritial -v ON_ERROR_STOP=1 >/dev/n
 INSERT INTO perizie(tenant_id,id,reference,status,created_at_utc) VALUES
  ('11111111-1111-1111-1111-111111111111','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','BACKUP-ONE',-1,now()),
  ('22222222-2222-2222-2222-222222222222','bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb','BACKUP-TWO',-1,now());
+-- A V003 case must survive PG dump/restore with its tenant and CAS version.
+INSERT INTO sinistri(tenant_id,id,external_reference,occurred_on,reported_on,created_at_utc,version)
+ VALUES('11111111-1111-1111-1111-111111111111','12121212-1212-1212-1212-121212121212',
+ 'RESTORE-SINISTRO','2026-11-01','2026-11-03',now(),4);
 INSERT INTO documents(tenant_id,id,perizia_id,file_name,content_type,length_bytes,storage_key,created_at_utc)
  VALUES('11111111-1111-1111-1111-111111111111','cccccccc-cccc-cccc-cccc-cccccccccccc',
  'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','fixture.pdf','application/pdf',8,
@@ -102,6 +106,12 @@ SELECT
  (SELECT count(*) FROM perizie)=2
  AND (SELECT count(DISTINCT tenant_id) FROM perizie)=2
  AND (SELECT count(*) FROM documents)=1
+ AND (SELECT count(*) FROM sinistri
+      WHERE tenant_id='11111111-1111-1111-1111-111111111111'
+        AND id='12121212-1212-1212-1212-121212121212'
+        AND external_reference='RESTORE-SINISTRO'
+        AND occurred_on='2026-11-01'
+        AND reported_on='2026-11-03' AND version=4)=1
  AND (SELECT count(*) FROM security_audit)=2
  AND (SELECT count(*) FROM upload_intents)=1
  AND (SELECT count(*) FROM upload_request_keys WHERE status='completed')=1
