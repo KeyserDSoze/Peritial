@@ -104,6 +104,59 @@ public sealed class SinistroServiceTests
         Assert.Equal(new[] {"sinistro.create"}, audit.Events.Select(x => x.Action));
     }
 
+    [Fact]
+    public async Task Search_rejects_invalid_filters_before_repository_and_does_not_audit_a_read()
+    {
+        var actor = new ActingTenant(read: true);
+        var audit = new SpyAudit();
+        var repo = new InMemorySinistri(audit);
+        var service = new SinistroService(actor, repo, audit);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => service.SearchAsync(" "));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.SearchAsync("X"));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.SearchAsync(new string('R', 101)));
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => service.SearchAsync("AB", limit: 0));
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => service.SearchAsync("AB", limit: 51));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.SearchAsync(
+            "AB", new DateOnly(2026, 11, 16), new DateOnly(2026, 11, 15)));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.SearchAsync(
+            "AB", default(DateOnly), null));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.SearchAsync(
+            "AB", null, default(DateOnly)));
+        Assert.Empty(audit.Events);
+    }
+
+    [Fact]
+    public async Task Search_is_scoped_normalized_and_evaluated_before_limit()
+    {
+        var actor = new ActingTenant(read: true);
+        var audit = new SpyAudit();
+        var repo = new InMemorySinistri(audit);
+        var service = new SinistroService(actor, repo, audit);
+
+        repo.Saved.Add(Guid.NewGuid(), Sinistro.Create(actor.TenantId,
+            "NO-MATCH-NEW", new DateOnly(2026, 11, 16)));
+        var match = Sinistro.Create(actor.TenantId, "   AB_%Older   ", new DateOnly(2026, 10, 10));
+        repo.Saved.Add(match.Id, match);
+        var future = Sinistro.Create(actor.TenantId, "AB_%Future", new DateOnly(2026, 11, 17));
+        repo.Saved.Add(future.Id, future);
+        var foreign = Sinistro.Create(TenantId.From(Guid.NewGuid()),
+            "AB_%SECRET", new DateOnly(2026, 10, 11));
+        repo.Saved.Add(foreign.Id, foreign);
+
+        var results = await service.SearchAsync(" aB_% ", new DateOnly(2026, 10, 1),
+            new DateOnly(2026, 11, 16), limit: 1);
+        Assert.Single(results);
+        Assert.Equal(match.Id, results[0].Id);
+        Assert.Equal("AB_%Older", results[0].ExternalReference.Trim());
+        Assert.DoesNotContain("TenantId", System.Text.Json.JsonSerializer.Serialize(results));
+        Assert.Empty(audit.Events);
+
+        var noScope = new SinistroService(new ActingTenant(), repo, audit);
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => noScope.SearchAsync("AB"));
+        Assert.Empty(audit.Events);
+    }
+
     private sealed class ActingTenant(bool write = false, bool read = false) : ITenantContext
     {
         public TenantId TenantId { get; } = TenantId.From(Guid.NewGuid());
