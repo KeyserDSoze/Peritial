@@ -92,6 +92,24 @@ indisponibile o dopo upload confermato, ed è scartata se il riferimento
 non è più presente nella successiva lista autenticata. Non esistono
 upload in coda né nuovi permessi client-side.
 
+La consultazione metadata ora ha anche un filtro opzionale per perizia:
+`GET /api/files?limit=50&periziaId=<uuid>` eseguito **sul server**
+con il JWT corrente, non un filtro locale sui soli 50 elementi
+già ottenuti. L'opzione "tutte" usa `GET /api/files?limit=50`;
+i documenti non associati a una perizia sono visibili nell'elenco
+globale. Il filtro cambia i dati soltanto dopo una nuova GET autenticata:
+all'interazione azzera immediatamente i metadati visualizzati,
+invalida le risposte in volo con l'epoch e disabilita i form fino
+al completamento delle due letture tenant-scoped. Se una GET fallisce,
+la PWA nasconde entrambi gli elenchi e richiede un retry; non conserva
+un elenco precedente o una cache offline. Il filtro viene cancellato
+al cambio identità/offline/failure o quando la perizia non compare più
+nell'elenco autorizzato. Nessuna scelta UI equivale ad autorizzazione:
+restano obbligatori scope, tenant e FORCE RLS lato API/DB.
+Il cap 50 resta **per query**; paginazione dell'intero storico non è
+ancora implementata. Test Playwright Keycloak/ClamAV/SeaweedFS esercita
+due perizie e due upload reali, commutando filtro e lingua it/en.
+
 `App.tsx` recupera `listPerizie` e `listDocuments`
 insieme tramite `Promise.all` usando il JWT corrente
 **prima** di rendere nuovamente interattivi i form. Se
