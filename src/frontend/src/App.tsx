@@ -3,7 +3,7 @@ import { useAuth } from "react-oidc-context";
 import { useTranslation } from "react-i18next";
 import { FileUp, Moon, Sun, ShieldCheck } from "lucide-react";
 import { Button } from "./components/ui/button";
-import { createPerizia, listPerizie, uploadDocument, type Perizia } from "./api";
+import { createPerizia, isApiUnavailable, listPerizie, uploadDocument, type Perizia } from "./api";
 import { PeriziaWorkflow } from "./components/PeriziaWorkflow";
 import {preferredTheme, saveLanguage, saveTheme} from "./uiPreferences";
 import {useOnlineStatus} from "./useOnlineStatus";
@@ -21,7 +21,22 @@ export default function App() {
   const [upload, setUpload] = useState<File|null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [dataStatus, setDataStatus] = useState<"loading" | "ready" | "unavailable">("loading");
+  const [refreshIndex, setRefreshIndex] = useState(0);
   const token = auth.user?.access_token;
+  function lockProtectedUi() {
+    // Never retain a potentially stale tenant record after REST, auth or
+    // network failure. All writes must wait for a fresh authorized GET.
+    mutations.current.clear();
+    setItems([]);
+    setDataStatus("unavailable");
+    setError("");
+  }
+  function refreshPerizie() {
+    if (!online || !token) return;
+    setDataStatus("loading");
+    setRefreshIndex(value => value + 1);
+  }
   useEffect(() => { document.documentElement.classList.toggle("dark", dark); }, [dark]);
   useEffect(() => {
     document.documentElement.lang = i18n.language === "en" ? "en" : "it";
@@ -45,11 +60,13 @@ export default function App() {
       setError("");
       setReference("");
       setUpload(null);
+      setDataStatus("loading");
     }
   }, [token, online]);
   useEffect(() => {
     if (!token || !online) return;
     let active = true;
+    setDataStatus("loading");
     const revisionsAtStart = new Map(mutations.current);
     listPerizie(token).then(data => { if (active) setItems(current => {
         const changedAfterFetch = new Set([...mutations.current].filter(
@@ -60,11 +77,16 @@ export default function App() {
           ...current.filter(item => changedAfterFetch.has(item.id) || !incoming.has(item.id)),
           ...data.filter(item => !changedAfterFetch.has(item.id))
         ];
-      }); }).catch(() => { if(active) setError(t("error")); });
+      });
+      setDataStatus("ready");
+      setError("");
+    }).catch(() => {
+      if (active) lockProtectedUi();
+    });
     return () => { active = false; };
-  }, [token, t, online]);
+  }, [token, t, online, refreshIndex]);
   async function create(event:FormEvent) {
-    event.preventDefault(); if(!token || !online || !reference.trim()) return;
+    event.preventDefault(); if(!token || !online || dataStatus !== "ready" || !reference.trim()) return;
     setBusy(true); setError("");
     try {
       const item = await createPerizia(token,reference.trim());
@@ -72,13 +94,19 @@ export default function App() {
       setItems(current => [item,...current]);
       setReference("");
     }
-    catch { setError(t("error")); } finally { setBusy(false); }
+    catch (cause) {
+      if (isApiUnavailable(cause)) lockProtectedUi();
+      else setError(t("error"));
+    } finally { setBusy(false); }
   }
   async function sendFile() {
-    if(!token || !online || !upload) return;
+    if(!token || !online || dataStatus !== "ready" || !upload) return;
     setBusy(true); setError("");
     try { await uploadDocument(token,upload); setUpload(null); }
-    catch { setError(t("error")); } finally { setBusy(false); }
+    catch (cause) {
+      if (isApiUnavailable(cause)) lockProtectedUi();
+      else setError(t("error"));
+    } finally { setBusy(false); }
   }
   return <div className="min-h-screen">
     <header className="border-b border-slate-200 dark:border-slate-800"><div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-4">
@@ -100,9 +128,18 @@ export default function App() {
           <p className="mb-6 text-slate-600 dark:text-slate-300">{t("signInHelp")}</p>
           <Button onClick={() => void auth.signinRedirect()}>{t("signIn")}</Button>
         </section> :
+        dataStatus === "unavailable" ?
+        <section role="alert" className="max-w-xl rounded-xl border border-amber-300 bg-white p-7 shadow-sm dark:border-amber-700 dark:bg-slate-900">
+          <h2 className="mb-3 text-xl font-semibold">{t("apiUnavailableTitle")}</h2>
+          <p className="mb-4 text-slate-700 dark:text-slate-300">{t("apiUnavailableMessage")}</p>
+          <Button type="button" onClick={refreshPerizie}>{t("retryConnection")}</Button>
+        </section> : dataStatus === "loading" ? <p role="status">{t("loading")}</p> :
         <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
           <section className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
-            <h2 className="mb-5 text-xl font-semibold">{t("perizie")}</h2>
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-xl font-semibold">{t("perizie")}</h2>
+              <Button type="button" variant="outline" disabled={busy} onClick={refreshPerizie}>{t("refreshList")}</Button>
+            </div>
             <form onSubmit={event => void create(event)} className="mb-6 flex flex-wrap gap-2">
               <label className="sr-only" htmlFor="reference">{t("reference")}</label>
               <input id="reference" className="min-w-0 flex-1 rounded-md border border-slate-300 bg-transparent px-3 py-2 dark:border-slate-700" value={reference} onChange={e=>setReference(e.target.value)} maxLength={160} placeholder={t("newPerizia")} required />
@@ -111,7 +148,7 @@ export default function App() {
             {items.length===0 ? <p className="text-slate-500">{t("empty")}</p> :
               <ul className="divide-y divide-slate-200 dark:divide-slate-800">{items.map(item =>
                 <li key={item.id} className="py-4">
-                  <PeriziaWorkflow item={item} token={token!} onUpdated={updated => {
+                  <PeriziaWorkflow item={item} token={token!} onUnavailable={lockProtectedUi} onUpdated={updated => {
                     mutations.current.set(updated.id, (mutations.current.get(updated.id) ?? 0) + 1);
                     setItems(current => current.map(value => value.id === updated.id ? updated : value));
                   }} />
