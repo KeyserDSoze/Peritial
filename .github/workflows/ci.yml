@@ -392,6 +392,8 @@ jobs:
         run: python3 -m unittest discover -s tests/security -p 'test_dockerfile_base_pins.py' -v
       - name: Verify reviewed PostgreSQL and Prometheus OCI refs in CI and Compose
         run: python3 -m unittest discover -s tests/security -p 'test_infra_oci_pins.py' -v
+      - name: Reject unreviewed floating runner, Node and .NET CI toolchains
+        run: python3 -m unittest discover -s tests/security -p 'test_ci_toolchain_pins.py' -v
 
   terraform:
     runs-on: ubuntu-latest
