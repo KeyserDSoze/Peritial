@@ -5,11 +5,12 @@ namespace Peritial.Infrastructures;
 
 /// <summary>
 /// Fast, read-only dependency probe for the API admission path.
-/// This checks OIDC discovery/signing-key reachability, not full authentication, storage or malware signatures.
+/// This checks OIDC discovery/signing-key reachability, not full authentication, data-object integrity or malware signatures.
 /// No database data, storage object, raw exception or secret is exposed.
 /// </summary>
 public sealed class ServiceReadinessProbe(
-    NpgsqlDataSource database, string scannerHost, int scannerPort, IOidcReadinessProbe identity)
+    NpgsqlDataSource database, string scannerHost, int scannerPort,
+    IOidcReadinessProbe identity, IStorageReadinessProbe storage)
 {
     private static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(3);
 
@@ -41,7 +42,8 @@ public sealed class ServiceReadinessProbe(
             var response = new byte[5];
             await stream.ReadExactlyAsync(response, timeout.Token);
             return response.AsSpan().SequenceEqual("PONG\0"u8) &&
-                await identity.CheckAsync(timeout.Token);
+                await identity.CheckAsync(timeout.Token) &&
+                await storage.CheckAsync(timeout.Token);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
