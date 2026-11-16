@@ -26,18 +26,27 @@ public sealed class DocumentCatalogRepositoryTests
 
         var tenantA = TenantId.From(Guid.NewGuid());
         var tenantB = TenantId.From(Guid.NewGuid());
-        var periziaA = Guid.NewGuid();
-        var periziaB = Guid.NewGuid();
-        var aDoc = Record(tenantA, periziaA, DateTime.UtcNow.AddSeconds(-2));
-        var latest = Record(tenantA, periziaA, DateTime.UtcNow);
-        var other = Record(tenantA, periziaB, DateTime.UtcNow.AddSeconds(-1));
-        var foreign = Record(tenantB, periziaA, DateTime.UtcNow.AddSeconds(1));
+        // A document FK includes (tenant_id, perizia_id). Seed real parent
+        // rows including the same perizia UUID in two tenants to exercise RLS.
+        var parentA = Perizia.Create(tenantA, "CAT-A-" + Guid.NewGuid().ToString("N"));
+        var parentC = Perizia.Create(tenantA, "CAT-C-" + Guid.NewGuid().ToString("N"));
+        var parentB = Perizia.Restore(parentA.Id, tenantB,
+            "CAT-B-" + Guid.NewGuid().ToString("N"),
+            PeriziaStatus.Registered, null, DateTime.UtcNow);
+        var perizie = new PgPeriziaRepository(admin);
+        await perizie.AddAsync(parentA);
+        await perizie.AddAsync(parentC);
+        await perizie.AddAsync(parentB);
+        var aDoc = Record(tenantA, parentA.Id, DateTime.UtcNow.AddSeconds(-2));
+        var latest = Record(tenantA, parentA.Id, DateTime.UtcNow);
+        var other = Record(tenantA, parentC.Id, DateTime.UtcNow.AddSeconds(-1));
+        var foreign = Record(tenantB, parentA.Id, DateTime.UtcNow.AddSeconds(1));
         // The catalog is the read-only projection, not the ingestion seam.
         // Seeding with admin bypasses the upload-intent workflow in test only.
         foreach (var item in new[] {aDoc, latest, other, foreign})
             await writer.AddAsync(item);
 
-        var scoped = await repo.ListAsync(tenantA, periziaA, 100);
+        var scoped = await repo.ListAsync(tenantA, parentA.Id, 100);
         Assert.Equal(new[] {latest.Id, aDoc.Id}, scoped.Select(x => x.Id));
         Assert.Equal(latest.Id, (await repo.ListAsync(tenantA, null, 1)).Single().Id);
         Assert.Equal(foreign.Id, (await repo.ListAsync(tenantB, null, 100)).Single().Id);
