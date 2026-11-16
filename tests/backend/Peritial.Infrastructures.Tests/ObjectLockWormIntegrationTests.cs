@@ -139,7 +139,7 @@ public sealed class ObjectLockWormIntegrationTests
             {
                 BucketName = bucket, Key = completeKey
             });
-            await using (var original = await client.GetObjectAsync(new GetObjectRequest
+            using (var original = await client.GetObjectAsync(new GetObjectRequest
             {
                 BucketName = bucket, Key = completeKey,
                 VersionId = firstVersion
