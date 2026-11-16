@@ -496,7 +496,7 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
     // Create B via MCP to prove both protocols are scoped to its JWT identity.
     const bCreatedMcp = await tool(writerB, "create_sinistro", {
       externalReference: bReference, occurredOn: "2040-01-05",
-      reportedOn: null, tenantId: claimsA.tenant_id
+      reportedOn: null
     }, 901);
     expect(bCreatedMcp).toContain(bReference);
     expect(bCreatedMcp).not.toContain('"isError":true');
@@ -546,7 +546,7 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
     expect(foreignGet).not.toContain(aReference);
     const foreignUpdate = await tool(writerB, "update_sinistro", {
       id: a.id, externalReference: "FORBIDDEN-MCP-" + unique,
-      occurredOn: "2040-01-08", expectedVersion: 1, tenantId: claimsA.tenant_id
+      occurredOn: "2040-01-08", expectedVersion: 1
     }, 903);
     expect(foreignUpdate).toContain('"isError":true');
     expect(foreignUpdate).not.toContain(aReference);
