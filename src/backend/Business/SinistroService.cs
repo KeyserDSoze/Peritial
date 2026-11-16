@@ -27,6 +27,18 @@ public sealed class SinistroService(
         return items.Select(SinistroDto.From).ToArray();
     }
 
+    /// <summary>Server-side, case-insensitive autocomplete prefix plus optional date bounds.</summary>
+    public async Task<IReadOnlyList<SinistroDto>> SearchAsync(
+        string prefix, DateOnly? occurredFrom = null, DateOnly? occurredTo = null,
+        int limit = 10, CancellationToken ct = default)
+    {
+        RequireRead();
+        var filter = SinistroSearchFilter.Create(prefix, occurredFrom, occurredTo, limit);
+        var results = await repository.SearchAsync(context.TenantId, filter.Prefix,
+            filter.OccurredFrom, filter.OccurredTo, filter.Limit, ct);
+        return results.Select(SinistroDto.From).ToArray();
+    }
+
     public async Task<SinistroDto> GetAsync(Guid id, CancellationToken ct = default)
     {
         RequireRead();
@@ -90,4 +102,31 @@ public sealed class SinistroService(
 public sealed class SinistroConcurrencyConflictException()
     : Exception("Sinistro has changed since it was read.")
 {
+}
+
+/// <summary>
+/// One canonical filter contract used both by Business and the PG adapter.
+/// The prefix is literal; SQL wildcards are not a supported search language.
+/// </summary>
+public sealed record SinistroSearchFilter(
+    string Prefix, DateOnly? OccurredFrom, DateOnly? OccurredTo, int Limit)
+{
+    public static SinistroSearchFilter Create(
+        string prefix, DateOnly? occurredFrom = null, DateOnly? occurredTo = null, int limit = 10)
+    {
+        if (string.IsNullOrWhiteSpace(prefix))
+            throw new ArgumentException("Search prefix required.", nameof(prefix));
+        var normalized = prefix.Trim();
+        if (normalized.Length is < 2 or > 100)
+            throw new ArgumentException("Search prefix must be 2–100 characters.", nameof(prefix));
+        if (limit is < 1 or > 50)
+            throw new ArgumentOutOfRangeException(nameof(limit), "Search limit must be 1–50.");
+        if (occurredFrom is { } from && from == default)
+            throw new ArgumentException("Invalid lower occurrence date.", nameof(occurredFrom));
+        if (occurredTo is { } to && to == default)
+            throw new ArgumentException("Invalid upper occurrence date.", nameof(occurredTo));
+        if (occurredFrom > occurredTo)
+            throw new ArgumentException("Occurrence date range is reversed.", nameof(occurredTo));
+        return new SinistroSearchFilter(normalized, occurredFrom, occurredTo, limit);
+    }
 }
