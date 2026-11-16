@@ -34,6 +34,46 @@ public sealed class SecurityAuditUseCaseTests
     }
 
     [Fact]
+    public async Task Get_perizia_allows_read_only_or_write_scope_without_mutation_audit()
+    {
+        foreach (var actor in new[] { new ActingTenant(false, true), new ActingTenant(true) })
+        {
+            var audit = new SpyAudit();
+            var perizie = new MemoryPerizie(audit);
+            var owned = Perizia.Create(actor.TenantId, "PRIVATE-READ");
+            perizie.Items.Add(owned.Id, owned);
+            var service = new PeriziaService(actor, perizie, audit);
+
+            var found = await service.GetAsync(owned.Id);
+            Assert.Equal(owned.Id, found.Id);
+            Assert.Equal("PRIVATE-READ", found.Reference);
+            Assert.Equal(PeriziaStatus.Registered.ToString(), found.Status);
+            Assert.Empty(audit.Events);
+            Assert.Equal(PeriziaStatus.Registered, perizie.Items[owned.Id].Status);
+        }
+    }
+
+    [Fact]
+    public async Task Get_perizia_denies_missing_scope_and_hides_missing_or_foreign_tenant_ids()
+    {
+        var readonlyActor = new ActingTenant(false, true);
+        var audit = new SpyAudit();
+        var perizie = new MemoryPerizie(audit);
+        var foreign = Perizia.Create(TenantId.From(Guid.NewGuid()), "FOREIGN");
+        perizie.Items.Add(foreign.Id, foreign);
+        var service = new PeriziaService(readonlyActor, perizie, audit);
+
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => service.GetAsync(foreign.Id));
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => service.GetAsync(Guid.NewGuid()));
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => service.GetAsync(Guid.Empty));
+        Assert.Empty(audit.Events);
+
+        var unscoped = new PeriziaService(new ActingTenant(false), perizie, audit);
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => unscoped.GetAsync(foreign.Id));
+        Assert.Empty(audit.Events);
+    }
+
+    [Fact]
     public async Task Denied_mcp_mutation_is_recorded_and_does_not_change_data()
     {
         var actor = new ActingTenant(false);
@@ -50,11 +90,12 @@ public sealed class SecurityAuditUseCaseTests
         Assert.DoesNotContain("PRIVATE", entry.ToString());
     }
 
-    private sealed class ActingTenant(bool allowWrite) : ITenantContext
+    private sealed class ActingTenant(bool allowWrite, bool allowRead = false) : ITenantContext
     {
         public TenantId TenantId { get; } = TenantId.From(Guid.NewGuid());
         public string Subject => "test-subject";
-        public bool HasScope(string scope) => allowWrite && scope == "peritial.write";
+        public bool HasScope(string scope) => (allowWrite && scope == "peritial.write") ||
+            (allowRead && scope == "peritial.read");
     }
 
     private sealed class MemoryPerizie(SpyAudit audit) : IPeriziaRepository
