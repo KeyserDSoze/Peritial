@@ -29,3 +29,5 @@ Il bundle AES-256-GCM può ora essere replicato **solo cifrato** su uno storage 
 La replica cifrata verso un vero S3 richiede ora **Object Lock COMPLIANCE con versioning e almeno 30 giorni** (gate fail-closed, ADR 0025). Il server locale SeaweedFS della CI usa solo un bypass dimostrativo esplicito: **non** è un deposito WORM/backup di produzione. Runbook in `docs/sealed-multiservice-recovery.md`.
 
 Il **sesto job CI `worm-recovery`** verifica ora S3 Object Lock COMPLIANCE con un provider compatibile che lo implementa (PGSTY SILO, immagine per digest): la cancellazione di una versione protetta viene respinta, mentre un controllo non protetto è cancellabile. Restano aperti AWS S3/IAM, restore delle versioni storiche come insieme, KMS e retention offsite produttiva (ADR 0026).
+
+È disponibile anche `pull-historic` per il **recupero esplicito dell'intero bundle cifrato da VersionId S3 COMPLIANCE selezionati** in caso di delete marker, senza rimuoverli o pubblicare dati parziali (ADR 0027). Richiede conferma separata e inventario di versioni completo; non seleziona versioni automaticamente né sostituisce KMS/offsite di produzione.

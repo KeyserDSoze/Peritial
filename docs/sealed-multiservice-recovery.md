@@ -146,3 +146,46 @@ La prova valida la configurazione mediante le API S3, crea un vero set cifrato P
 Infine un `DeleteObject` *senza VersionId* crea un **delete marker** che nasconde `complete` alla lettura per nome corrente; la versione protetta resta consultabile con `GetObject(VersionId=...)`, ma il comando standard `pull-sealed` **rifiuta correttamente** il prefisso non più completo secondo lo stato corrente. **Il ripristino operativo di un intero set da VersionId storici non è ancora implementato**: serve un comando offline esplicito e autenticato che selezioni e verifichi tutte le versioni coerenti, non un fallback arbitrario al backup precedente. Anche le prove contro AWS S3 effettivo, Object Lock su bucket amministrati con IAM minimo, georeplica, retention legale, KMS e rotation restano aperte.
 
 La vecchia immagine upstream `quay.io/minio/minio` ha restituito 401 al pull; la suite usa quindi il fork mantenuto **SILO 2026-11-12**, **pin per digest**, unicamente in CI. Non considerare il test un certificato di compliance, continuità operativa o produzione: un container usa-e-getta non è un deposito offsite. Un `COMPLIANCE` di 32 giorni nel laboratorio vale **solo per i dati del container temporaneo**, che vengono distrutti insieme al server alla fine del job, non per backup veri.
+
+## Recupero storico esplicito del set cifrato da versioni S3 nascoste (ADR 0027)
+
+**Quando usarlo:** un `DELETE` di una key su bucket versionato ha creato un *delete marker*, o la versione corrente è stata sostituita. Il normale `pull-sealed` deve **rifiutare** lo stato corrente incompleto/alterato; non elimina automaticamente il marker e non deve cercare versioni precedenti alla cieca. **Solo un operatore in ambiente isolato** può scegliere un set preciso di versioni S3 COMPLIANCE ancora protette e richiederne il recupero.
+
+Il nuovo `Peritial.RecoveryBundle -- pull-historic` richiede un file JSON esterno e locale `PERITIAL_OFFSITE_VERSION_SELECTION_FILE`. Contiene il `VersionId` **di ciascuna key**, relativo al prefisso immutabile `sealed-v1/<backup-id>/`: `complete`, `transfer.json`, `transfer.hmac`, `index.json`, `index.hmac` e tutti i `payload/00000000.enc` ecc. Il formato è versione 1, senza chiavi duplicate né campi imprevisti. Una selezione mancante, extra, con path non canonico o VersionId non valido fallisce chiusa. **Non** è una firma: l'autenticità deriva dall'HMAC legato al backup ID, dai SHA-256 dell'inventario, dai tag AES-256-GCM e dalla retention verificata per ogni `VersionId`.
+
+Il software legge con `GetObject(VersionId=...)` solo gli oggetti selezionati, rifiuta ogni incongruenza fra nomi e inventario autenticato, richiede Object Lock COMPLIANCE configurato e retention `COMPLIANCE` **ancora non scaduta** per ogni versione, e copia soltanto ciphertext in una nuova directory privata con rename dopo la verifica completa. Non esegue alcuna PUT, DELETE, rimozione di marker o mutazione del deposito. L'output diventa plaintext **solo** dopo il normale `unseal` in `tmpfs` swap-free.
+
+### Preparazione operatore
+
+1. In una finestra di ripristino isolata, identificare il backup ID esatto e inventariare le versioni con un client S3 amministrativo in **sola lettura**, per esempio `aws s3api list-object-versions --bucket <bucket> --prefix sealed-v1/<backup-id>/`. Annotare `Key`, `VersionId`, `IsLatest` e i delete marker. Esaminare il punto di ripristino approvato: **non** selezionare automaticamente la versione più recente di ogni key o combinare snapshot diversi.
+2. Creare un file privato con tutte le key relative. Esempio minimo per un bundle senza documenti (quattro file di payload tecnici; in caso di documenti aggiungere tutti i `payload/*.enc`):
+```json
+{
+  "Version": 1,
+  "Versions": {
+    "complete": "version-id-complete",
+    "transfer.json": "version-id-transfer-json",
+    "transfer.hmac": "version-id-transfer-hmac",
+    "index.json": "version-id-index-json",
+    "index.hmac": "version-id-index-hmac",
+    "payload/00000000.enc": "version-id-payload-0",
+    "payload/00000001.enc": "version-id-payload-1",
+    "payload/00000002.enc": "version-id-payload-2",
+    "payload/00000003.enc": "version-id-payload-3"
+  }
+}
+```
+3. Proteggere il file fuori dal repository (`umask 077`; idealmente `chmod 600`) e usare lo stesso backup ID e la chiave AES del bundle originale. Non stampare il file né le credenziali nei log:
+```bash
+export PERITIAL_BUNDLE_CONFIRM=ISOLATED_HISTORICAL_DOWNLOAD
+export PERITIAL_OFFSITE_VERSION_SELECTION_FILE=/secure/recovery/selected-versions.json
+export PERITIAL_OFFSITE_BACKUP_ID=0123456789abcdef0123456789abcdef
+export PERITIAL_BUNDLE_DOWNLOAD_DIR=/secure/recovery/restored-ciphertext
+# Richiede inoltre PERITIAL_OFFSITE_S3_ENDPOINT HTTPS, bucket, credenziali,
+# PERITIAL_BUNDLE_AES_KEY_FILE e PERITIAL_ARCHIVE_HMAC_KEY_FILE.
+# PERITIAL_BUNDLE_DIR rimane richiesto dal CLI per compatibilità con gli altri comandi.
+dotnet run --project scripts/recovery/Peritial.RecoveryBundle -- pull-historic
+```
+4. Eseguire `unseal` verso `tmpfs` privata con swap disabilitato e gli ordinari restore su **nuovo** PostgreSQL e **nuovo** bucket S3 vuoti. Verificare identità tenant, hash, RLS e audit prima di qualsiasi switch di traffico.
+
+Il percorso storico è **sempre sottoposto a Object Lock**: il bypass `DISPOSABLE_TEST_ONLY` di SeaweedFS non può attivare `pull-historic`. Il job WORM del laboratorio esercita il recupero dopo delete marker su `complete` **e** su un file ciphertext, con selezione completa, chiavi errate, file mancanti, versione scorretta, JSON duplicato e divieto di overwrite, senza pubblicare partial. Lo storage WORM è una singola istanza usa-e-getta: restano da testare AWS S3 gestito, IAM con permessi di recupero minimi, KMS e restore *multi-tenant* interamente WORM su un provider offsite, oltre al disaster recovery in produzione.
