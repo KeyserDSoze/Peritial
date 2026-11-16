@@ -1,6 +1,6 @@
 import {useState, type FormEvent} from "react";
 import {useTranslation} from "react-i18next";
-import {advancePerizia, assignPerizia, cancelPerizia, getPerizia, type Perizia} from "../api";
+import {advancePerizia, assignPerizia, cancelPerizia, getPerizia, isApiUnavailable, type Perizia} from "../api";
 import {Button} from "./ui/button";
 
 const nextStatus: Record<string, string> = {
@@ -12,9 +12,14 @@ const nextStatus: Record<string, string> = {
 };
 const cancellable = new Set(["Registered", "Assigned", "ToBeRevised", "Revised", "ToSend", "Sent"]);
 
-type Props = {item: Perizia; token: string; onUpdated: (updated: Perizia) => void};
+type Props = {
+  item: Perizia;
+  token: string;
+  onUpdated: (updated: Perizia) => void;
+  onUnavailable: () => void;
+};
 
-export function PeriziaWorkflow({item, token, onUpdated}: Props) {
+export function PeriziaWorkflow({item, token, onUpdated, onUnavailable}: Props) {
   const {t} = useTranslation();
   const [assignee, setAssignee] = useState("");
   const [busy, setBusy] = useState(false);
@@ -31,7 +36,8 @@ export function PeriziaWorkflow({item, token, onUpdated}: Props) {
       onUpdated(updated);
       setConfirmCancel(false);
     } catch (cause) {
-      setError(cause instanceof Error && cause.message === "HTTP 409" ? "conflict" : "error");
+      if (isApiUnavailable(cause)) onUnavailable();
+      else setError(cause instanceof Error && cause.message === "HTTP 409" ? "conflict" : "error");
     } finally {
       setBusy(false);
     }
@@ -53,8 +59,9 @@ export function PeriziaWorkflow({item, token, onUpdated}: Props) {
       onUpdated(await getPerizia(token, item.id));
       setError(null);
       setConfirmCancel(false);
-    } catch {
-      setError("error");
+    } catch (cause) {
+      if (isApiUnavailable(cause)) onUnavailable();
+      else setError("error");
     } finally {
       setBusy(false);
     }
