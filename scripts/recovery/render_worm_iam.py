@@ -37,14 +37,17 @@ def policy(bucket: str, *, writer: bool) -> dict:
             {
                 "Sid": "ListOnlyEncryptedRecoveryPrefix",
                 "Effect": "Allow",
-                "Action": BUCKET_LIST,
+                "Action": ["s3:ListBucket"] + ([] if writer else ["s3:ListBucketVersions"]),
                 "Resource": bucket_arn,
                 "Condition": {"StringLike": {"s3:prefix": ["sealed-v1/*"]}},
             },
             {
                 "Sid": "ReadOrUploadOnlyEncryptedBundleObjects",
                 "Effect": "Allow",
-                "Action": sorted(OBJECT_READ + (OBJECT_WRITE if writer else [])),
+                "Action": sorted(
+                    (["s3:GetObject", "s3:GetObjectRetention", "s3:PutObject"]
+                     if writer else OBJECT_READ)
+                ),
                 "Resource": bucket_arn + "/sealed-v1/*",
             },
         ],

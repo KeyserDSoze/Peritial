@@ -30,9 +30,9 @@ class WormIamPolicyTests(unittest.TestCase):
                 self.assertTrue(all(x["Effect"] == "Allow" for x in statements))
                 actions = set(sum((x["Action"] for x in statements), []))
                 self.assertIn("s3:GetObjectRetention", actions)
-                self.assertIn("s3:GetObjectVersion", actions)
+                self.assertEqual(not writer, "s3:GetObjectVersion" in actions)
                 self.assertIn("s3:GetBucketObjectLockConfiguration", actions)
-                self.assertIn("s3:ListBucketVersions", actions)
+                self.assertEqual(not writer, "s3:ListBucketVersions" in actions)
                 self.assertEqual(writer, "s3:PutObject" in actions)
                 self.assertFalse(any(
                     a == "s3:*" or "Delete" in a or "PutBucket" in a or
