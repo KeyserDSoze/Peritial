@@ -37,12 +37,12 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     await expect(row.getByRole("alert")).toHaveCount(0);
 
     await row.getByRole("button", {name: "Assegna"}).click();
-    await expect(row.getByText("Assegnata")).toBeVisible();
+    await expect(row.getByText("Assegnata", {exact: true})).toBeVisible();
     await expect(row.getByText("ui-inspector")).toBeVisible();
 
     await page.getByRole("button", {name: "Lingua"}).click();
     await expect(row.getByText("Assigned")).toBeVisible();
-    await page.getByRole("button", {name: "Lingua"}).click();
+    await page.getByRole("button", {name: "Language"}).click();
 
     await row.getByRole("button", {name: "Avanza"}).click();
     await expect(row.getByText("Da revisionare")).toBeVisible();
