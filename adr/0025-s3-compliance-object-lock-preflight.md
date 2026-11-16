@@ -17,3 +17,7 @@ ADR 0024 dimostra replica cifrata dei byte dei backup PostgreSQL+S3 su una terza
 ## Sicurezza residua e prossimi passi
 
 La retention COMPLIANCE protegge versioni S3 ma non garantisce accessibilità del nome corrente (delete markers), recupero da versioni precedenti, integrità della configurazione IAM, sopravvivenza del provider, replica geografica né backup delle chiavi crittografiche. La verifica API è una garanzia condizionata all'implementazione corretta del server. Non è stata eseguita la prova di end-to-end su AWS S3/MinIO con Object Lock effettivamente abilitato e tentativo reale di cancellazione: questo rimane requisito aperto. Sono inoltre mancanti policy di retention offsite, KMS/rotazione delle chiavi, restore Keycloak/Azure, multipart upload per archivi grandi e snapshot DB↔S3 coerenti sotto traffico. Non chiudere #6/#18/#21.
+
+## Stato successivo (ADR 0026, 2026-11-16)
+
+La nota iniziale sull'assenza della prova **positiva** WORM era corretta quando fu scritta. In seguito è stato aggiunto il job indipendente `worm-recovery` con backend SILO compatibile S3 e bucket COMPLIANCE/versioning reali: verifica sia il rifiuto della cancellazione protetta sia il successo di cancellazione nel controllo non protetto, e il mantenimento della versione storica dopo un delete marker. Rimangono da verificare un provider AWS gestito, policy IAM minime, recupero dell'intero backup dalle versioni precedenti e offsite geografico/KMS. Consultare l'ADR 0026.
