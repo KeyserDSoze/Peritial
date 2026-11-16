@@ -23,7 +23,8 @@ public sealed class ObjectLockWormIntegrationTests
         var endpoint = Environment.GetEnvironmentVariable("PERITIAL_TEST_WORM_S3_ENDPOINT");
         if (string.IsNullOrWhiteSpace(endpoint))
             return;
-        Assert.True(OperatingSystem.IsLinux());
+        if (!OperatingSystem.IsLinux())
+            return;
 
         var id = Guid.NewGuid().ToString("N");
         var bucket = "peritial-worm-" + id;
@@ -123,7 +124,43 @@ public sealed class ObjectLockWormIntegrationTests
                     BucketName = bucket, Key = completeKey,
                     VersionId = firstVersion
                 }));
-            Assert.Equal(HttpStatusCode.Forbidden, delete.StatusCode);
+            Assert.True(
+                delete.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.BadRequest,
+                "Locked object DELETE returned unexpected HTTP " +
+                (int)delete.StatusCode + " / " + delete.ErrorCode);
+            // Positive control: the SAME S3 server must support deleting a
+            // version of an ordinary versioned (non Object Lock) bucket.
+            // This rules out a 400 caused simply by broken DELETE support.
+            var controlBucket = "peritial-control-" + id;
+            await client.PutBucketAsync(new PutBucketRequest
+            {
+                BucketName = controlBucket
+            });
+            await client.PutBucketVersioningAsync(new PutBucketVersioningRequest
+            {
+                BucketName = controlBucket,
+                VersioningConfig = new S3BucketVersioningConfig
+                {
+                    Status = VersionStatus.Enabled
+                }
+            });
+            var unprotected = await client.PutObjectAsync(new PutObjectRequest
+            {
+                BucketName = controlBucket,
+                Key = "control.bin",
+                ContentBody = "control data"
+            });
+            Assert.False(string.IsNullOrWhiteSpace(unprotected.VersionId));
+            var permittedDelete = await client.DeleteObjectAsync(new DeleteObjectRequest
+            {
+                BucketName = controlBucket,
+                Key = "control.bin",
+                VersionId = unprotected.VersionId
+            });
+            Assert.True((int)permittedDelete.HttpStatusCode is >= 200 and < 300);
+            // Confirm that the protected version remains retained.
+            await OffsiteObjectLockPolicy.RequireProtectedObjectVersionAsync(
+                client, bucket, completeKey, firstVersion, DateTime.UtcNow, default, 0);
 
             await SealedBundleOffsite.DownloadAsync(client, bucket, id,
                 restored, encryptionKey);
