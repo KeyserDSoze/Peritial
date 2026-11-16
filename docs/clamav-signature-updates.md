@@ -5,7 +5,7 @@ Il file [`docker/compose.clamav-updates.yml`](../docker/compose.clamav-updates.y
 produzione. Il Compose base conserva `CLAMAV_NO_FRESHCLAMD=true` per non
 dipendere dai mirror pubblici durante la CI; l'overlay abilita il servizio
 FreshClam dell'immagine ufficiale `clamav/clamav:1.5`, imposta
-`FRESHCLAM_CHECKS=12` (due verifiche/ora), `TZ=UTC` e un volume Docker
+`FRESHCLAM_CHECKS=12` (12 controlli al giorno, uno ogni due ore), `TZ=UTC` e un volume Docker
 nominato `clamav-signatures` montato scrivibile in `/var/lib/clamav`.
 La porta 3310 di clamd **non viene pubblicata**. Si applica inoltre
 `Malware__Clamd__MaxSignatureAgeHours=48` all'API, anche in Development,
