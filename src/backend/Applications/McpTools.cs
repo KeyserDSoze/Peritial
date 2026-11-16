@@ -15,6 +15,10 @@ public sealed class McpTools(PeriziaService perizie, FileIngestionService ingest
     public Task<PeriziaDto> CreatePerizia(string reference, CancellationToken ct = default) =>
         perizie.CreateAsync(reference, ct);
 
+    [McpServerTool(Name = "cancel_perizia"), Description("Cancels a non-terminal perizia belonging to the authenticated tenant (peritial.write).")]
+    public Task<PeriziaDto> CancelPerizia(Guid id, CancellationToken ct = default) =>
+        perizie.CancelAsync(id, ct);
+
     [McpServerTool(Name = "ingest_file"), Description("Uploads a PDF, XML, JPEG, PNG or DOCX document (base64, max 4 MiB, peritial.write).")]
     public Task<DocumentDto> IngestFile(
         string fileName, string contentType, string base64, Guid? periziaId = null,
