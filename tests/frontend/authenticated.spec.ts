@@ -94,14 +94,17 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
 
     let failMutation: () => void = () => undefined;
     let completeOldRead: () => void = () => undefined;
+    let markReadStarted: () => void = () => undefined;
     const mutationGate = new Promise<void>(resolve => {failMutation = resolve;});
     const readGate = new Promise<void>(resolve => {completeOldRead = resolve;});
+    const readStarted = new Promise<void>(resolve => {markReadStarted = resolve;});
     await page.route("**/api/perizie/*/assign", async route => {
       await mutationGate;
       await route.fulfill({status: 503, body: "API unavailable"});
     });
     await page.route("**/api/perizie", async route => {
       if (route.request().method() === "GET") {
+        markReadStarted();
         await readGate;
       }
       await route.continue();
@@ -109,6 +112,7 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
 
     await row.getByRole("button", {name: "Assegna"}).click();
     await page.getByRole("button", {name: "Aggiorna elenco"}).click();
+    await readStarted; // Guarantee the GET captured the pre-failure epoch.
     failMutation();
     await expect(page.getByRole("alert")).toContainText("Servizio perizie non disponibile");
 
@@ -117,7 +121,8 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     const oldRead = page.waitForResponse(response =>
       response.url().endsWith("/api/perizie") && response.request().method() === "GET");
     completeOldRead();
-    await oldRead;
+    const oldResponse = await oldRead;
+    await oldResponse.finished();
     await expect(page.getByRole("button", {name: "Riprova"})).toBeVisible();
     await expect(page.getByText(ref, {exact: true})).toHaveCount(0);
     await expect(page.getByRole("button", {name: "Crea"})).toHaveCount(0);
