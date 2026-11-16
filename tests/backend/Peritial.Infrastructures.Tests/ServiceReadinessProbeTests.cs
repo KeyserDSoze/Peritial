@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Diagnostics.Metrics;
 using System.Net;
 using System.Net.Sockets;
 using Npgsql;
@@ -26,9 +28,31 @@ public sealed class ServiceReadinessProbeTests
             await stream.WriteAsync("PONG\0"u8.ToArray(), deadline.Token);
         }, deadline.Token);
 
+        // Confirm that the actual four dependency checks (not only the
+        // isolated helper) emit the bounded metric dimensions.
+        var captured = new ConcurrentBag<(string Dependency, string Outcome)>();
+        using var metrics = new MeterListener();
+        metrics.InstrumentPublished = (instrument, listener) =>
+        {
+            if (instrument.Meter.Name == "Peritial.Readiness")
+                listener.EnableMeasurementEvents(instrument);
+        };
+        metrics.SetMeasurementEventCallback<long>((instrument, value, measurementTags, _) =>
+        {
+            if (instrument.Name != "peritial.readiness.dependency.checks" || value != 1)
+                return;
+            var tags = measurementTags.ToArray();
+            var dependency = tags.FirstOrDefault(t => t.Key == "dependency").Value?.ToString();
+            var outcome = tags.FirstOrDefault(t => t.Key == "outcome").Value?.ToString();
+            if (dependency is not null && outcome is not null)
+                captured.Add((dependency, outcome));
+        });
+        metrics.Start();
         var probe = new ServiceReadinessProbe(database, "127.0.0.1", port, new FixedIdentity(true), new FixedStorage(true));
         Assert.True(await probe.CheckAsync(deadline.Token));
         await scanner;
+        foreach (var dependency in new[] { "postgres", "clamav", "oidc", "storage" })
+            Assert.Contains(captured, item => item.Dependency == dependency && item.Outcome == "ok");
     }
 
     [Fact]
