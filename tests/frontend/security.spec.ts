@@ -155,6 +155,112 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
     expect(replay.status(), await replay.text()).toBe(400);
   });
 
+  test("document metadata catalog is scoped, bounded and identical in REST and MCP", async ({request}) => {
+    const writer = await tokenFor(request, "peritial-test-write");
+    const reader = await tokenFor(request, "peritial-test-readonly");
+    const noScope = await tokenFor(request, "peritial-test-no-scope");
+    const headers = {Authorization: "Bearer " + writer};
+    const create = await request.post(api + "/api/perizie", {
+      headers, data: {reference: "DOC-CATALOG-" + Date.now() + "-" + Math.random()}
+    });
+    expect(create.status(), await create.text()).toBe(201);
+    const periziaId = (await create.json() as {id: string}).id;
+
+    const pdf = Buffer.from("%PDF-1.7\n1 0 obj\n<<>>\nendobj\n%%EOF\n");
+    const fileName = "catalog-" + Date.now() + ".pdf";
+    const uploaded = await request.post(api + "/api/files", {
+      headers,
+      multipart: {file: {name: fileName, mimeType: "application/pdf", buffer: pdf},
+        periziaId}
+    });
+    expect(uploaded.status(), await uploaded.text()).toBe(201);
+    const documentId = (await uploaded.json() as {id: string}).id;
+
+    const list = await request.get(api + "/api/files?limit=50&periziaId=" + periziaId, {
+      headers: {Authorization: "Bearer " + reader}
+    });
+    expect(list.status(), await list.text()).toBe(200);
+    const rows = await list.json() as {
+      id: string; periziaId: string; fileName: string; length: number;
+      createdAtUtc: string; storageKey?: string;
+    }[];
+    const row = rows.find(x => x.id === documentId);
+    expect(row).toBeTruthy();
+    expect(row?.fileName).toBe(fileName);
+    expect(row?.periziaId).toBe(periziaId);
+    expect(row?.length).toBe(pdf.length);
+    expect(row?.createdAtUtc).toBeTruthy();
+    expect(row?.storageKey).toBeUndefined();
+    expect(await list.text()).not.toContain("storageKey");
+
+    const detail = await request.get(api + "/api/files/" + documentId, {
+      headers: {Authorization: "Bearer " + reader}
+    });
+    expect(detail.status(), await detail.text()).toBe(200);
+    expect((await detail.json() as {id: string}).id).toBe(documentId);
+    expect(await detail.text()).not.toContain("storageKey");
+
+    const filtered = await request.get(
+      api + "/api/files?periziaId=00000000-0000-4000-8000-000000000002",
+      {headers: {Authorization: "Bearer " + reader}});
+    expect(filtered.status(), await filtered.text()).toBe(200);
+    expect((await filtered.json() as {id: string}[]).some(x => x.id === documentId)).toBe(false);
+    for (const badLimit of ["0", "101"]) {
+      const bad = await request.get(api + "/api/files?limit=" + badLimit, {
+        headers: {Authorization: "Bearer " + reader}
+      });
+      expect(bad.status(), await bad.text()).toBe(400);
+    }
+    const missing = await request.get(
+      api + "/api/files/00000000-0000-4000-8000-000000000002",
+      {headers: {Authorization: "Bearer " + reader}});
+    expect(missing.status(), await missing.text()).toBe(404);
+    const forbidden = await request.get(api + "/api/files", {
+      headers: {Authorization: "Bearer " + noScope}
+    });
+    expect(forbidden.status(), await forbidden.text()).toBe(403);
+    const anonymous = await request.get(api + "/api/files");
+    expect(anonymous.status(), await anonymous.text()).toBe(401);
+
+    const listTools = await request.post(api + "/mcp", {
+      headers: mcpHeaders(reader),
+      data: {jsonrpc: "2.0", id: 701, method: "tools/list"}
+    });
+    expect(listTools.ok(), await listTools.text()).toBeTruthy();
+    expect(await listTools.text()).toContain("list_documents");
+    expect(await listTools.text()).toContain("get_document");
+
+    const listTool = await request.post(api + "/mcp", {
+      headers: mcpHeaders(reader),
+      data: {jsonrpc: "2.0", id: 702, method: "tools/call", params: {
+        name: "list_documents", arguments: {periziaId, limit: 50}
+      }}
+    });
+    expect(listTool.ok(), await listTool.text()).toBeTruthy();
+    expect(await listTool.text()).toContain(documentId);
+    expect(await listTool.text()).not.toContain("storageKey");
+    expect(await listTool.text()).not.toContain('"isError":true');
+
+    const getTool = await request.post(api + "/mcp", {
+      headers: mcpHeaders(reader),
+      data: {jsonrpc: "2.0", id: 703, method: "tools/call", params: {
+        name: "get_document", arguments: {id: documentId}
+      }}
+    });
+    expect(getTool.ok(), await getTool.text()).toBeTruthy();
+    expect(await getTool.text()).toContain(fileName);
+    expect(await getTool.text()).not.toContain("storageKey");
+
+    const missingTool = await request.post(api + "/mcp", {
+      headers: mcpHeaders(reader),
+      data: {jsonrpc: "2.0", id: 704, method: "tools/call", params: {
+        name: "get_document", arguments: {id: "00000000-0000-4000-8000-000000000002"}
+      }}
+    });
+    expect(missingTool.ok(), await missingTool.text()).toBeTruthy();
+    expect(await missingTool.text()).toContain('"isError":true');
+  });
+
   test("perizia cancellation is scoped, audited and exposed in REST and MCP", async ({request}) => {
     const readOnly = await tokenFor(request, "peritial-test-readonly");
     const writer = await tokenFor(request, "peritial-test-write");
