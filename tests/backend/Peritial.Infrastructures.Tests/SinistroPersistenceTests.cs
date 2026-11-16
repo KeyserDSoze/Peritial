@@ -144,6 +144,39 @@ public sealed class SinistroPersistenceTests
         Assert.Equal("SIN-AUDIT-UPDATED", (await repo.FindAsync(a, created.Id))!.ExternalReference);
     }
 
+    [Fact]
+    public async Task Search_filters_inside_postgres_before_limit_and_escapes_ilike_wildcards_with_RLS()
+    {
+        await using var db = await IsolatedDatabases.CreateAsync();
+        var repo = new PgSinistroRepository(db.App);
+        var a = TenantId.From(Guid.NewGuid());
+        var b = TenantId.From(Guid.NewGuid());
+        var entities = new[]
+        {
+            Sinistro.Create(a, "FRESH-NONMATCH", new DateOnly(2026, 12, 1)),
+            Sinistro.Create(a, "CL_%Case-1", new DateOnly(2026, 10, 5)),
+            Sinistro.Create(a, "cl_%case-2", new DateOnly(2026, 10, 7)),
+            Sinistro.Create(a, "CL123-FALSE-POSITIVE", new DateOnly(2026, 11, 20)),
+            Sinistro.Create(b, "CL_%PRIVATE", new DateOnly(2026, 10, 6)),
+            Sinistro.Create(a, "CL_%OUTSIDE-DATES", new DateOnly(2026, 8, 1)),
+        };
+        foreach (var entity in entities)
+            await repo.AddAuditedAsync(entity, Event(entity.TenantId, entity.Id, "sinistro.create"));
+
+        // Literal '_' and '%' MUST NOT match arbitrary chars or records.
+        var aResults = await repo.SearchAsync(a, "CL_%", new DateOnly(2026, 10, 1),
+            new DateOnly(2026, 11, 30), limit: 2);
+        Assert.Equal(new[] {entities[2].Id, entities[1].Id}, aResults.Select(x => x.Id));
+        Assert.All(aResults, x => Assert.Equal(a, x.TenantId));
+        Assert.Empty(await repo.SearchAsync(b, "FRESH"));
+        Assert.Equal(entities[4].Id, (await repo.SearchAsync(b, "cL_%")).Single().Id);
+
+        // Also escape a literal escape character (!) in the prefix.
+        var escape = Sinistro.Create(a, "ESC!_%EXACT", new DateOnly(2026, 10, 8));
+        await repo.AddAuditedAsync(escape, Event(a, escape.Id, "sinistro.create"));
+        Assert.Equal(escape.Id, (await repo.SearchAsync(a, "esc!_%")).Single().Id);
+    }
+
     private static SecurityAuditEvent Event(TenantId tenant, Guid id, string action) =>
         new(Guid.NewGuid(), tenant, "signed-subject", action, "succeeded", id, DateTime.UtcNow);
 
