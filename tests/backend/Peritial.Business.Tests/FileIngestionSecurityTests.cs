@@ -29,13 +29,15 @@ public sealed class FileIngestionSecurityTests
     [Fact]
     public async Task Docx_con_zip_bomb_altamente_comprimibile_e_bloccato_prima_della_scansione()
     {
-        var (service, store, docs) = NewService();
+        var scanner = new CountingScanner();
+        var (service, store, docs) = NewService(scanner: scanner);
         // Eight MiB compresses to a handful of KiB; decompression
         // must not be accepted just because the ZIP itself is small.
         var bytes = CreateDocx(("word/media/huge.bin", new byte[8 * 1024 * 1024]));
         await Assert.ThrowsAsync<ArgumentException>(() =>
             service.IngestAsync("rapporto.docx", DocxMime,
                 new MemoryStream(bytes), bytes.Length));
+        Assert.Equal(0, scanner.Scans);
         Assert.Equal(0, store.Uploads);
         Assert.Empty(docs.Records);
     }
@@ -230,7 +232,7 @@ public sealed class FileIngestionSecurityTests
         var foreign = Perizia.Create(TenantId.From(Guid.NewGuid()), "FOREIGN");
         var store = new SpyStore();
         var docs = new SpyDocuments();
-        var service = new FileIngestionService(new FakeTenant(true), new FakePerizie(foreign), docs, store, new FakeAudit(), new CleanScanner(), new FakeIntents(), new FakeIdempotency());
+        var service = new FileIngestionService(new FakeTenant(true), new FakePerizie(foreign), docs, store, new FakeAudit(), scanner ?? new CleanScanner(), new FakeIntents(), new FakeIdempotency());
 
         await Assert.ThrowsAsync<KeyNotFoundException>(() =>
             service.IngestAsync("fattura.pdf", "application/pdf",
@@ -239,11 +241,24 @@ public sealed class FileIngestionSecurityTests
         Assert.Empty(docs.Records);
     }
 
-    private static (FileIngestionService Service, SpyStore Store, SpyDocuments Docs) NewService(bool canWrite = true)
+    private static (FileIngestionService Service, SpyStore Store, SpyDocuments Docs) NewService(
+        bool canWrite = true, IFileMalwareScanner? scanner = null)
     {
         var store = new SpyStore();
         var docs = new SpyDocuments();
         return (new FileIngestionService(new FakeTenant(canWrite), new FakePerizie(), docs, store, new FakeAudit(), new CleanScanner(), new FakeIntents(), new FakeIdempotency()), store, docs);
+    }
+
+    private sealed class CountingScanner : IFileMalwareScanner
+    {
+        public int Scans { get; private set; }
+
+        public Task<MalwareScanResult> ScanAsync(
+            ReadOnlyMemory<byte> data, CancellationToken ct = default)
+        {
+            Scans++;
+            return Task.FromResult(MalwareScanResult.Clean);
+        }
     }
 
     private sealed class CleanScanner : IFileMalwareScanner
