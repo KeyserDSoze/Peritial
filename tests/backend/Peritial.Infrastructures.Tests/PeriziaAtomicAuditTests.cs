@@ -45,7 +45,7 @@ public sealed class PeriziaAtomicAuditTests
         await repo.UpdateAuditedAsync(first, Entry(tenant, original.Id, "perizia.cancel"));
 
         stale.Assign(tenant, "unwanted-assignee");
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAsync<PeriziaConcurrencyConflictException>(() =>
             repo.UpdateAuditedAsync(stale, Entry(tenant, original.Id, "perizia.assign")));
         Assert.Equal(PeriziaStatus.Cancelled, (await repo.FindAsync(tenant, original.Id))!.Status);
         Assert.Equal(0L, await CountSuccessfulAuditAsync(db.Admin, tenant, original.Id, "perizia.assign"));
@@ -69,7 +69,7 @@ public sealed class PeriziaAtomicAuditTests
         await repo.UpdateAuditedAsync(first, Entry(tenant, original.Id, "perizia.cancel"));
 
         stale.Advance(tenant, PeriziaStatus.ToBeRevised);
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAsync<PeriziaConcurrencyConflictException>(() =>
             repo.UpdateAuditedAsync(stale, Entry(tenant, original.Id, "perizia.advance")));
         Assert.Equal(PeriziaStatus.Cancelled, (await repo.FindAsync(tenant, original.Id))!.Status);
         Assert.Equal(0L, await CountSuccessfulAuditAsync(db.Admin, tenant, original.Id, "perizia.advance"));
@@ -90,7 +90,7 @@ public sealed class PeriziaAtomicAuditTests
         await repo.UpdateAuditedAsync(first, Entry(tenant, original.Id, "perizia.assign"));
 
         stale.Cancel(tenant);
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAsync<PeriziaConcurrencyConflictException>(() =>
             repo.UpdateAuditedAsync(stale, Entry(tenant, original.Id, "perizia.cancel")));
         var current = (await repo.FindAsync(tenant, original.Id))!;
         Assert.Equal(PeriziaStatus.Assigned, current.Status);
@@ -112,7 +112,7 @@ public sealed class PeriziaAtomicAuditTests
         first.Assign(tenant, "first");
         stale.Assign(tenant, "second");
         await repo.UpdateAuditedAsync(first, Entry(tenant, original.Id, "perizia.assign"));
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAsync<PeriziaConcurrencyConflictException>(() =>
             repo.UpdateAuditedAsync(stale, Entry(tenant, original.Id, "perizia.assign")));
 
         var current = (await repo.FindAsync(tenant, original.Id))!;
