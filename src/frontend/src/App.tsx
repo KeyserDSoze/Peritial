@@ -10,8 +10,9 @@ export default function App() {
   const { t, i18n } = useTranslation();
   const [dark, setDark] = useState(false);
   const [items, setItems] = useState<Perizia[]>([]);
-  // Preserve a locally confirmed POST result against any slower list response.
-  const locallyUpdatedIds = useRef<Set<string>>(new Set());
+  // Each confirmed mutation increments a local revision. A GET started before
+  // it must not overwrite that result; a later GET may refresh it normally.
+  const mutations = useRef<Map<string, number>>(new Map());
   const [reference, setReference] = useState("");
   const [upload, setUpload] = useState<File|null>(null);
   const [error, setError] = useState("");
@@ -20,18 +21,20 @@ export default function App() {
   useEffect(() => { document.documentElement.classList.toggle("dark", dark); }, [dark]);
   useEffect(() => {
     // Do not leave another authenticated tenant's list visible after logout.
-    if (!token) { setItems([]); locallyUpdatedIds.current.clear(); }
+    if (!token) { setItems([]); mutations.current.clear(); }
   }, [token]);
   useEffect(() => {
     if (!token) return;
     let active = true;
+    const revisionsAtStart = new Map(mutations.current);
     listPerizie(token).then(data => { if (active) setItems(current => {
-        // A slow list response must not undo a mutation already confirmed by
-        // the server. React-local snapshots are cleared on logout.
+        const changedAfterFetch = new Set([...mutations.current].filter(
+          ([id, version]) => version !== (revisionsAtStart.get(id) ?? 0)
+        ).map(([id]) => id));
         const incoming = new Set(data.map(item => item.id));
         return [
-          ...current.filter(item => locallyUpdatedIds.current.has(item.id) || !incoming.has(item.id)),
-          ...data.filter(item => !locallyUpdatedIds.current.has(item.id))
+          ...current.filter(item => changedAfterFetch.has(item.id) || !incoming.has(item.id)),
+          ...data.filter(item => !changedAfterFetch.has(item.id))
         ];
       }); }).catch(() => { if(active) setError(t("error")); });
     return () => { active = false; };
@@ -39,7 +42,12 @@ export default function App() {
   async function create(event:FormEvent) {
     event.preventDefault(); if(!token || !reference.trim()) return;
     setBusy(true); setError("");
-    try { const item = await createPerizia(token,reference.trim()); locallyUpdatedIds.current.add(item.id); setItems(current => [item,...current]); setReference(""); }
+    try {
+      const item = await createPerizia(token,reference.trim());
+      mutations.current.set(item.id, (mutations.current.get(item.id) ?? 0) + 1);
+      setItems(current => [item,...current]);
+      setReference("");
+    }
     catch { setError(t("error")); } finally { setBusy(false); }
   }
   async function sendFile() {
@@ -77,7 +85,7 @@ export default function App() {
               <ul className="divide-y divide-slate-200 dark:divide-slate-800">{items.map(item =>
                 <li key={item.id} className="py-4">
                   <PeriziaWorkflow item={item} token={token!} onUpdated={updated => {
-                    locallyUpdatedIds.current.add(updated.id);
+                    mutations.current.set(updated.id, (mutations.current.get(updated.id) ?? 0) + 1);
                     setItems(current => current.map(value => value.id === updated.id ? updated : value));
                   }} />
                 </li>)}</ul>}
