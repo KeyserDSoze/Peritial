@@ -16,11 +16,38 @@ Esporre le funzionalità tramite Model Context Protocol (SDK ufficiale .NET, HTT
 ## Catalogo atteso
 | Capability | Tool | Fase |
 |---|---|---|
-| Perizie | list_perizie, create_perizia, assign_perizia, advance_perizia, cancel_perizia | vertical slice perizie: REST/MCP con audit atomico e CAS (#9/#12) |
+| Perizie | list_perizie, get_perizia, create_perizia, assign_perizia, advance_perizia, cancel_perizia | lettura scoped e mutazioni REST/MCP con audit atomico e CAS (#9/#12) |
 | Documenti | ingest_file (base64 limitato); REST multipart per grandi file | vertical slice 1 |
 | Sinistri, anagrafiche, stati, import XML, documenti, report, messaggi, contabilità, KPI | tool dedicati per ciascun use case | iterazioni successive |
 
 Per file grandi: non trasportare payload di gigabyte via JSON MCP; fornire un tool per ottenere URL di upload firmati/scoped e una procedura di completamento (da implementare). Una tool call MCP non equivale ad accesso indiscriminato al filesystem.
+
+## Lettura puntuale perizia senza escalation OAuth (#12/#9)
+
+La route `GET /api/perizie/{id}` e il tool MCP
+`get_perizia(id: UUID)` chiamano `PeriziaService.GetAsync`:
+l'identità e il `tenant_id` provengono esclusivamente dal
+JWT già validato, e `IPeriziaRepository.FindAsync` opera
+nella stessa transazione tenant-scoped PostgreSQL FORCE RLS
+delle altre letture. Non si accettano parametri tenant
+provenienti dal client.
+
+Sono ammessi token con `peritial.read` **oppure**
+`peritial.write`; una richiesta anonima è 401, un
+token senza scope autorizzato è 403. ID sconosciuti,
+non validi come GUID oppure di tenant non visibile
+non consentono di enumerare le pratiche: i GUID validi
+non presenti producono **REST 404** e nel tool MCP
+un risultato di errore, mai dati di altri tenant.
+
+Le letture non modificano lo stato e non emettono un
+audit mutativo `succeeded`. I test Business verificano
+accesso read-only e write-only, riservatezza cross-tenant,
+ID mancante e assenza di audit di successo;
+`tests/frontend/security.spec.ts` esercita REST/MCP,
+discovery del tool, Keycloak reale e permessi negativi.
+La suite Infrastructure preesistente dimostra inoltre
+l'isolamento di `FindAsync` tramite RLS su PostgreSQL reale.
 
 ## Assegnazione e avanzamento perizie via MCP (#12/#9)
 
