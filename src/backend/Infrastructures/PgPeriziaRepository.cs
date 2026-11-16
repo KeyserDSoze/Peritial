@@ -62,11 +62,11 @@ public sealed class PgPeriziaRepository(NpgsqlDataSource dataSource) : IPeriziaR
 
     public async Task UpdateAuditedAsync(Perizia item, SecurityAuditEvent audit, CancellationToken ct = default)
     {
-        if (audit.Action is not ("perizia.assign" or "perizia.advance"))
+        if (audit.Action is not ("perizia.assign" or "perizia.advance" or "perizia.cancel"))
             throw new ArgumentException("Invalid update audit action.", nameof(audit));
         CheckAudit(item, audit, audit.Action);
         await using var scope = await TenantDbScope.OpenAsync(dataSource, item.TenantId, ct);
-        await UpdateRowAsync(scope, item, ct);
+        await UpdateRowAsync(scope, item, ct, cancellation: audit.Action == "perizia.cancel");
         await PgSecurityAuditTrail.AppendWithinScopeAsync(scope, audit, ct);
         await scope.CommitAsync(ct);
     }
@@ -88,13 +88,30 @@ public sealed class PgPeriziaRepository(NpgsqlDataSource dataSource) : IPeriziaR
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
-    private static async Task UpdateRowAsync(TenantDbScope scope, Perizia item, CancellationToken ct)
+    private static async Task UpdateRowAsync(
+        TenantDbScope scope, Perizia item, CancellationToken ct, bool cancellation = false)
     {
+        // A stale cancellation must not overwrite another completed cancel
+        // or a terminal Billed/Duplicated transition. The row lock and
+        // predicate are rechecked by PostgreSQL if two cancels race.
+        var condition = cancellation
+            ? " AND status NOT IN (@billed,@duplicated,@cancelled)"
+            : "";
         await using var cmd = scope.Command(
-            "UPDATE perizie SET status=@status, assigned_to=@assignee WHERE tenant_id=@tenant AND id=@id");
+            "UPDATE perizie SET status=@status, assigned_to=@assignee WHERE tenant_id=@tenant AND id=@id" + condition);
         Fill(cmd, item);
+        if (cancellation)
+        {
+            cmd.Parameters.AddWithValue("billed", (int)PeriziaStatus.Billed);
+            cmd.Parameters.AddWithValue("duplicated", (int)PeriziaStatus.Duplicated);
+            cmd.Parameters.AddWithValue("cancelled", (int)PeriziaStatus.Cancelled);
+        }
         if (await cmd.ExecuteNonQueryAsync(ct) != 1)
+        {
+            if (cancellation)
+                throw new InvalidOperationException("Perizia cannot be cancelled in its current state.");
             throw new KeyNotFoundException("Perizia not found.");
+        }
     }
 
     private static Perizia Read(NpgsqlDataReader reader) => Perizia.Restore(
