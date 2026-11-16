@@ -388,6 +388,8 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Reject unpinned, mutable or unreviewed GitHub Actions
         run: python3 -m unittest discover -s tests/security -p 'test_workflow_action_pins.py' -v
+      - name: Reject unpinned or unreviewed Dockerfile base images
+        run: python3 -m unittest discover -s tests/security -p 'test_dockerfile_base_pins.py' -v
 
   terraform:
     runs-on: ubuntu-latest
