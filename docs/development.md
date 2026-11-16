@@ -68,6 +68,42 @@ ancora ETag/If-Match pubblico, idempotenza completa degli altri tool,
 prova di race multi-replica o di commit-ACK incerto, UI di storico,
 notifiche o parità con le regole del legacy. #9 e #21 restano aperte.
 
+## Lista documenti in PWA — solo metadati, niente download (#11/#13)
+
+La PWA in `App.tsx` ora mostra nel riquadro upload
+gli **ultimi 50 documenti del tenant** (`GET /api/files?limit=50`)
+con nome del file, tipo MIME, dimensione in byte e data.
+I contenuti sono renderizzati come testo React: non vengono
+inseriti link a storage, presigned URL, pulsanti download o
+anteprime; le azioni rimangono limitate all'ingestion già
+autorizzata. Il microcopy esplicita che sono **solo
+metadati** e che il download non è ancora supportato.
+Le etichette sono disponibili in italiano e inglese.
+
+`App.tsx` recupera `listPerizie` e `listDocuments`
+insieme tramite `Promise.all` usando il JWT corrente
+**prima** di rendere nuovamente interattivi i form. Se
+una delle due GET fallisce, `loading/ready/unavailable`
+blocca entrambe le sezioni: non si riutilizzano
+record di un vecchio tenant, e offline non resta
+una copia dei nomi dei file in memoria UI.
+Dopo un `POST /api/files` confermato, la PWA
+svuota la selezione e ricarica soltanto con
+nuove GET autenticate: **non** ripete il POST
+se la conferma è incerta. Le risposte precedenti
+a un cambio token/epoch non possono riattivare
+le azioni.
+
+`tests/frontend/authenticated.spec.ts` usa
+Keycloak, ClamAV e SeaweedFS reali: carica un PDF
+ammesso tramite il form, richiede la visualizzazione
+del solo nome/dimensione e l'assenza di link o
+pulsanti di download, quindi prova il refresh
+della lista. Mancano ancora la paginazione di
+tutto lo storico, la ricerca, il download autorizzato,
+cartelle e versioning documentale (issue #11)
+e le altre sezioni PWA (issue #13).
+
 ## Catalogo documenti: metadata tenant-scoped senza download (#11/#12)
 
 La nuova read model `DocumentSummaryDto` contiene solo
