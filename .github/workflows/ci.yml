@@ -359,6 +359,13 @@ jobs:
             -v "$PWD/tests/observability:/work/tests/observability:ro" \
             --entrypoint /bin/promtool prom/prometheus:v3.5.0 \
             test rules /work/tests/observability/prometheus-alerts.test.yml
+  clamav-signatures:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate opt-in FreshClam Compose merge and fail-closed invariants
+        run: python3 -m unittest discover -s tests/security -p 'test_clamav_update_overlay.py' -v
+
   terraform:
     runs-on: ubuntu-latest
     steps:
