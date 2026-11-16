@@ -5,10 +5,11 @@ import { FileUp, Moon, Sun, ShieldCheck } from "lucide-react";
 import { Button } from "./components/ui/button";
 import { createPerizia, listPerizie, uploadDocument, type Perizia } from "./api";
 import { PeriziaWorkflow } from "./components/PeriziaWorkflow";
+import {preferredTheme, saveLanguage, saveTheme} from "./uiPreferences";
 export default function App() {
   const auth = useAuth();
   const { t, i18n } = useTranslation();
-  const [dark, setDark] = useState(false);
+  const [dark, setDark] = useState(() => preferredTheme() === "dark");
   const [items, setItems] = useState<Perizia[]>([]);
   // Each confirmed mutation increments a local revision. A GET started before
   // it must not overwrite that result; a later GET may refresh it normally.
@@ -19,6 +20,19 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const token = auth.user?.access_token;
   useEffect(() => { document.documentElement.classList.toggle("dark", dark); }, [dark]);
+  useEffect(() => {
+    document.documentElement.lang = i18n.language === "en" ? "en" : "it";
+  }, [i18n.language]);
+  function toggleLanguage() {
+    const next = i18n.language === "it" ? "en" : "it";
+    void i18n.changeLanguage(next);
+    saveLanguage(next);
+  }
+  function toggleTheme() {
+    const next = !dark;
+    setDark(next);
+    saveTheme(next ? "dark" : "light");
+  }
   useEffect(() => {
     // Do not leave another authenticated tenant's list visible after logout.
     if (!token) { setItems([]); mutations.current.clear(); }
@@ -60,8 +74,8 @@ export default function App() {
     <header className="border-b border-slate-200 dark:border-slate-800"><div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-4">
       <div className="flex items-center gap-3"><div className="rounded-lg bg-sky-600 p-2 text-white"><FileUp size={24}/></div><strong className="text-lg">{t("title")}</strong></div>
       <div className="flex items-center gap-2">
-        <Button variant="outline" aria-label={t("language")} onClick={() => void i18n.changeLanguage(i18n.language === "it" ? "en" : "it")}>{i18n.language.toUpperCase()}</Button>
-        <Button variant="outline" aria-label={t("theme")} onClick={() => setDark(value=>!value)}>{dark ? <Sun size={17}/> : <Moon size={17}/>}</Button>
+        <Button variant="outline" aria-label={t("language")} onClick={toggleLanguage}>{i18n.language.toUpperCase()}</Button>
+        <Button variant="outline" aria-label={t("theme")} aria-pressed={dark} onClick={toggleTheme}>{dark ? <Sun size={17}/> : <Moon size={17}/>}</Button>
         {auth.isAuthenticated && <Button variant="outline" onClick={() => void auth.signoutRedirect()}>{t("signOut")}</Button>}
       </div>
     </div></header>
