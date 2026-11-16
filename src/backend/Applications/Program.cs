@@ -131,6 +131,15 @@ builder.Services.AddSingleton<IOidcReadinessProbe>(sp =>
         new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(3) },
         authIssuer, metadataAddress, allowHttpForDevelopment: builder.Environment.IsDevelopment());
 });
+// Enforce independent read-only storage credentials before accepting traffic.
+// Only the explicit local Development Compose demo may share its test account.
+var allowSharedReadinessCredentials = builder.Configuration.GetValue<bool>(
+    "Storage:Readiness:AllowSharedDevelopmentCredentials");
+if (allowSharedReadinessCredentials && !builder.Environment.IsDevelopment())
+    throw new InvalidOperationException("Shared storage readiness credentials are forbidden outside Development.");
+builder.Services.AddSingleton<IStorageReadinessProbe>(
+    StorageReadinessProbe.Create(builder.Configuration, allowSharedReadinessCredentials));
+
 builder.Services.AddSingleton(sp =>
 {
     var config = sp.GetRequiredService<IConfiguration>();
@@ -138,7 +147,8 @@ builder.Services.AddSingleton(sp =>
         sp.GetRequiredService<NpgsqlDataSource>(),
         config["Malware:Clamd:Host"] ?? throw new InvalidOperationException("Clamd host is required."),
         config.GetValue("Malware:Clamd:Port", 3310),
-        sp.GetRequiredService<IOidcReadinessProbe>());
+        sp.GetRequiredService<IOidcReadinessProbe>(),
+        sp.GetRequiredService<IStorageReadinessProbe>());
 });
 var recoveryConnectionString = builder.Configuration["UploadRecovery:ConnectionString"];
 if (string.IsNullOrWhiteSpace(recoveryConnectionString))
