@@ -1,0 +1,18 @@
+# Disposable developer/CI routing test only: unauthenticated internal HTTP.
+# No real contacts, secrets, chat/email destinations, or persistence.
+global:
+  resolve_timeout: 10s
+
+route:
+  receiver: local-sanitized-webhook
+  group_by: ['alertname', 'dependency']
+  group_wait: 1s
+  group_interval: 5s
+  repeat_interval: 1m
+
+receivers:
+  - name: local-sanitized-webhook
+    webhook_configs:
+      - url: http://alert-sink:8088/alerts
+        send_resolved: true
+        max_alerts: 4
