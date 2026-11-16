@@ -168,8 +168,9 @@ idempotenza lato server.
 
 `tests/frontend/authenticated.spec.ts` usa Keycloak e
 PostgreSQL reali, mantiene `navigator.onLine=true`, inietta
-HTTP 503 sulla GET dell'elenco e su una POST di creazione,
-verifica assenza di pratiche e comandi e riabilitazione
+HTTP 503 sulla GET dell'elenco e su una POST di creazione
+**e forza un errore di rete `fetch` sulla GET**, verifica
+assenza di pratiche e comandi e riabilitazione
 solo dopo una nuova GET autenticata riuscita. Questo test
 non simula un vero outage di rete in produzione, né sostituisce
 fault injection multi-replica o controlli di scadenza JWT.
