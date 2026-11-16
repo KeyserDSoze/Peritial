@@ -10,7 +10,8 @@ namespace Peritial.Infrastructures;
 /// </summary>
 public sealed class ServiceReadinessProbe(
     NpgsqlDataSource database, string scannerHost, int scannerPort,
-    IOidcReadinessProbe identity, IStorageReadinessProbe storage)
+    IOidcReadinessProbe identity, IStorageReadinessProbe storage,
+    ClamdSignaturePolicy? signaturePolicy = null)
 {
     private static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(3);
 
@@ -56,6 +57,12 @@ public sealed class ServiceReadinessProbe(
         await stream.WriteAsync("zPING\0"u8.ToArray(), cancellationToken);
         var response = new byte[5];
         await stream.ReadExactlyAsync(response, cancellationToken);
-        return response.AsSpan().SequenceEqual("PONG\0"u8);
+        if (!response.AsSpan().SequenceEqual("PONG\0"u8))
+            return false;
+
+        // The PONG only proves a running process, not a recently updated
+        // signature database. Production must verify zVERSION too.
+        return signaturePolicy is null || !signaturePolicy.Enabled ||
+               await signaturePolicy.CheckAsync(scannerHost, scannerPort, cancellationToken);
     }
 }
