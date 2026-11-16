@@ -27,13 +27,9 @@ public sealed class McpTools(PeriziaService perizie, FileIngestionService ingest
     [McpServerTool(Name = "advance_perizia"), Description("Advances a perizia one step; target must be exactly ToBeRevised, Revised, ToSend, Sent, or Billed (peritial.write).")]
     public Task<PeriziaDto> AdvancePerizia(Guid id, string target, CancellationToken ct = default)
     {
-        // MCP transport accepts only documented symbolic state names; no
-        // JSON numeric enum values, arbitrary state injection or tenant input.
-        // The Business/domain layer still validates the actual transition
-        // and enforces signed-tenant scope + atomic audited PostgreSQL CAS.
-        if (target is not ("ToBeRevised" or "Revised" or "ToSend" or "Sent" or "Billed"))
-            throw new ArgumentException("Invalid target perizia status.", nameof(target));
-        return perizie.AdvanceAsync(id, Enum.Parse<PeriziaStatus>(target), ct);
+        // REST and MCP share an exact symbolic-state contract; Business
+        // validates the actual transition, scope, tenant and audited CAS.
+        return perizie.AdvanceAsync(id, PeriziaAdvanceTarget.Parse(target), ct);
     }
 
     [McpServerTool(Name = "cancel_perizia"), Description("Cancels a non-terminal perizia belonging to the authenticated tenant (peritial.write).")]
