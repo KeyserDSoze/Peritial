@@ -108,7 +108,9 @@ try
             await SealedBundleOffsite.UploadAsync(bundle, remote, bucket, backupId,
                 master, disposableUnprotectedDemo: disposableDemo,
                 verificationSource: verifier);
-            Console.WriteLine("Encrypted backup copied, integrity verified by a separate S3 reader, and remote completion marker published.");
+            Console.WriteLine(disposableDemo
+                ? "Disposable demo encrypted backup copied and verified without Object Lock or distinct S3 reader."
+                : "Encrypted backup copied, integrity verified by an independent S3 reader, and remote completion marker published.");
         }
         else if (args[0] == "pull-sealed")
         {
