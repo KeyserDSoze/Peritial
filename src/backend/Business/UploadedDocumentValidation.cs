@@ -68,15 +68,79 @@ internal static class UploadedDocumentValidation
         }
     }
 
+    // OOXML is a ZIP container. Cap both expansion and entry count BEFORE
+    // malware scanning and storage, including entries with forged ZIP lengths.
+    // These are application admission budgets, not the ClamAV scan limits.
+    private const int MaxDocxEntries = 1024;
+    private const long MaxDocxPartBytes = 25L * 1024 * 1024;
+    private const long MaxDocxExpandedBytes = 64L * 1024 * 1024;
+    private const long MaxDocxCompressionRatio = 200;
+
     private static void ValidateDocx(ReadOnlySpan<byte> data)
     {
         try
         {
             using var stream = new MemoryStream(data.ToArray(), writable: false);
             using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
-            if (archive.GetEntry("[Content_Types].xml") is null ||
-                archive.GetEntry("word/document.xml") is null)
+            if (archive.Entries.Count is 0 or > MaxDocxEntries)
+                throw new ArgumentException("DOCX contains too many ZIP entries.");
+
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            long declaredTotal = 0;
+            var hasContentTypes = false;
+            var hasDocument = false;
+            foreach (var entry in archive.Entries)
+            {
+                // Neither a downstream OOXML consumer nor an archive extractor
+                // must be offered traversal, absolute, ambiguous or duplicate
+                // (on Windows) paths from an uploaded document.
+                var name = entry.FullName;
+                var segments = name.Split('/');
+                if (string.IsNullOrWhiteSpace(name) || name.StartsWith('/') ||
+                    name.Contains('\\') || name.Contains(':') ||
+                    segments.Any(s => s is "." or "..") ||
+                    segments.SkipLast(1).Any(string.IsNullOrEmpty) ||
+                    (!name.EndsWith('/') && segments.Any(string.IsNullOrEmpty)) ||
+                    !names.Add(name.TrimEnd('/')))
+                    throw new ArgumentException("Unsafe DOCX ZIP entry name.");
+
+                if (entry.Length < 0 || entry.CompressedLength < 0 ||
+                    entry.Length > MaxDocxPartBytes ||
+                    entry.Length > MaxDocxExpandedBytes - declaredTotal ||
+                    (entry.Length >= 1024 * 1024 &&
+                     (entry.CompressedLength == 0 ||
+                      entry.Length / entry.CompressedLength > MaxDocxCompressionRatio)))
+                    throw new ArgumentException("DOCX ZIP expansion limit exceeded.");
+
+                declaredTotal += entry.Length;
+                hasContentTypes |= name == "[Content_Types].xml";
+                hasDocument |= name == "word/document.xml";
+            }
+
+            if (!hasContentTypes || !hasDocument)
                 throw new ArgumentException("Invalid DOCX structure.");
+
+            // Never trust central-directory size fields alone. Actually
+            // decompress each part with an independent bounded byte budget.
+            // This prevents a forged size from bypassing the metadata limit
+            // and also rejects corrupt entries before ClamAV sees the ZIP.
+            long expanded = 0;
+            var scratch = new byte[64 * 1024];
+            foreach (var entry in archive.Entries)
+            {
+                using var part = entry.Open();
+                long readPart = 0;
+                int count;
+                while ((count = part.Read(scratch)) != 0)
+                {
+                    readPart += count;
+                    expanded += count;
+                    if (readPart > MaxDocxPartBytes || expanded > MaxDocxExpandedBytes)
+                        throw new ArgumentException("DOCX ZIP expansion limit exceeded.");
+                }
+                if (readPart != entry.Length)
+                    throw new ArgumentException("Invalid DOCX ZIP entry length.");
+            }
         }
         catch (InvalidDataException ex)
         {
