@@ -3,7 +3,7 @@ import { useAuth } from "react-oidc-context";
 import { useTranslation } from "react-i18next";
 import { FileUp, Moon, Sun, ShieldCheck } from "lucide-react";
 import { Button } from "./components/ui/button";
-import { createPerizia, isApiUnavailable, listPerizie, uploadDocument, type Perizia } from "./api";
+import { createPerizia, isApiUnavailable, listDocuments, listPerizie, uploadDocument, type DocumentSummary, type Perizia } from "./api";
 import { PeriziaWorkflow } from "./components/PeriziaWorkflow";
 import {preferredTheme, saveLanguage, saveTheme} from "./uiPreferences";
 import {useOnlineStatus} from "./useOnlineStatus";
@@ -14,6 +14,7 @@ export default function App() {
   const online = useOnlineStatus();
   const [dark, setDark] = useState(() => preferredTheme() === "dark");
   const [items, setItems] = useState<Perizia[]>([]);
+  const [documents, setDocuments] = useState<DocumentSummary[]>([]);
   // Each confirmed mutation increments a local revision. A GET started before
   // it must not overwrite that result; a later GET may refresh it normally.
   const mutations = useRef<Map<string, number>>(new Map());
@@ -35,6 +36,7 @@ export default function App() {
     setVerifiedToken(null);
     mutations.current.clear();
     setItems([]);
+    setDocuments([]);
     setDataStatus("unavailable");
     setError("");
   }
@@ -65,6 +67,7 @@ export default function App() {
       requestEpoch.current += 1;
       mutations.current.clear();
       setItems([]);
+      setDocuments([]);
       setVerifiedToken(null);
     }
     // Never display locally retained tenant data while disconnected.
@@ -72,6 +75,7 @@ export default function App() {
     if (!token || !online) {
       requestEpoch.current += 1;
       setItems([]);
+      setDocuments([]);
       mutations.current.clear();
       setError("");
       setReference("");
@@ -85,7 +89,9 @@ export default function App() {
     setDataStatus("loading");
     const epochAtStart = requestEpoch.current;
     const revisionsAtStart = new Map(mutations.current);
-    listPerizie(token).then(data => {
+    // Fetch both scoped projections before making any write controls
+    // available. A failure of either one fails closed.
+    Promise.all([listPerizie(token), listDocuments(token)]).then(([data, latestDocuments]) => {
       if (!active || requestEpoch.current !== epochAtStart) return;
       setItems(current => {
         const changedAfterFetch = new Set([...mutations.current].filter(
@@ -97,6 +103,7 @@ export default function App() {
           ...data.filter(item => !changedAfterFetch.has(item.id))
         ];
       });
+      setDocuments(latestDocuments);
       setVerifiedToken(token);
       setDataStatus("ready");
       setError("");
@@ -109,7 +116,9 @@ export default function App() {
     event.preventDefault(); if(!token || !online || dataStatus !== "ready" || !reference.trim()) return;
     setBusy(true); setError("");
     try {
+      const epochAtStart = requestEpoch.current;
       const item = await createPerizia(token,reference.trim());
+      if (requestEpoch.current !== epochAtStart || activeToken.current !== token) return;
       mutations.current.set(item.id, (mutations.current.get(item.id) ?? 0) + 1);
       setItems(current => [item,...current]);
       setReference("");
@@ -122,7 +131,15 @@ export default function App() {
   async function sendFile() {
     if(!token || !online || dataStatus !== "ready" || !upload) return;
     setBusy(true); setError("");
-    try { await uploadDocument(token,upload); setUpload(null); }
+    try {
+      const epochAtStart = requestEpoch.current;
+      await uploadDocument(token, upload);
+      // Never replay an uncertain POST. Instead refresh both read-only
+      // projections with the signed current tenant after a confirmed upload.
+      if (requestEpoch.current !== epochAtStart || activeToken.current !== token) return;
+      setUpload(null);
+      refreshPerizie();
+    }
     catch (cause) {
       if (isApiUnavailable(cause)) lockProtectedUi();
       else setError(t("error"));
@@ -179,6 +196,20 @@ export default function App() {
             <label htmlFor="file" className="mb-2 block text-sm">{t("file")}</label>
             <input id="file" type="file" accept=".pdf,.xml,.jpg,.jpeg,.png,.docx" className="mb-4 block w-full text-sm" onChange={e=>setUpload(e.target.files?.[0]||null)}/>
             <Button disabled={!upload||busy} onClick={() => void sendFile()}><FileUp size={16}/>{t("upload")}</Button>
+            <div className="mt-8 border-t border-slate-200 pt-5 dark:border-slate-700">
+              <h3 className="mb-3 font-semibold">{t("savedDocuments")}</h3>
+              <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">{t("metadataOnly")}</p>
+              {documents.length === 0 ? <p className="text-sm text-slate-500">{t("noDocuments")}</p> :
+                <ul aria-label={t("savedDocuments")} className="divide-y divide-slate-200 dark:divide-slate-700">
+                  {documents.map(doc => <li key={doc.id} className="py-3">
+                    <p className="break-all text-sm font-medium">{doc.fileName}</p>
+                    <p className="mt-1 break-words text-xs text-slate-500 dark:text-slate-400">
+                      {doc.contentType} · {doc.length} {t("bytes")} ·
+                      {" "}{new Date(doc.createdAtUtc).toLocaleDateString(i18n.language === "en" ? "en-GB" : "it-IT")}
+                    </p>
+                  </li>)}
+                </ul>}
+            </div>
           </section>
         </div>}
       {error && <p role="alert" className="mt-6 text-red-600">{error}</p>}
