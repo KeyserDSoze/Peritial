@@ -114,13 +114,31 @@ builder.Services.AddScoped<IUploadIdempotencyStore, PgUploadIdempotencyStore>();
 builder.Services.AddScoped<ISecurityAuditTrail, PgSecurityAuditTrail>();
 builder.Services.AddScoped<PeriziaService>();
 builder.Services.AddSingleton<IFileMalwareScanner, ClamdFileMalwareScanner>();
+// Probe the same OIDC issuer as JWT validation, with the existing Keycloak
+// development backchannel mapping only when explicitly running Development.
+builder.Services.AddSingleton<IOidcReadinessProbe>(sp =>
+{
+    var config = sp.GetRequiredService<IConfiguration>();
+    var metadataAddress = config["Auth:MetadataAddress"] ??
+        authIssuer.TrimEnd('/') + "/.well-known/openid-configuration";
+    var internalOrigin = config["Auth:DevelopmentBackchannelOrigin"];
+    if (!builder.Environment.IsDevelopment() && !string.IsNullOrEmpty(internalOrigin))
+        throw new InvalidOperationException("OIDC development backchannel is forbidden in production.");
+    HttpMessageHandler handler = !string.IsNullOrEmpty(internalOrigin)
+        ? new OidcDevelopmentBackchannelHandler(authIssuer, internalOrigin, allowRedirects: false)
+        : new HttpClientHandler { AllowAutoRedirect = false };
+    return new OidcReadinessProbe(
+        new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(3) },
+        authIssuer, metadataAddress, allowHttpForDevelopment: builder.Environment.IsDevelopment());
+});
 builder.Services.AddSingleton(sp =>
 {
     var config = sp.GetRequiredService<IConfiguration>();
     return new ServiceReadinessProbe(
         sp.GetRequiredService<NpgsqlDataSource>(),
         config["Malware:Clamd:Host"] ?? throw new InvalidOperationException("Clamd host is required."),
-        config.GetValue("Malware:Clamd:Port", 3310));
+        config.GetValue("Malware:Clamd:Port", 3310),
+        sp.GetRequiredService<IOidcReadinessProbe>());
 });
 var recoveryConnectionString = builder.Configuration["UploadRecovery:ConnectionString"];
 if (string.IsNullOrWhiteSpace(recoveryConnectionString))
