@@ -17,6 +17,8 @@ export default function App() {
   // Each confirmed mutation increments a local revision. A GET started before
   // it must not overwrite that result; a later GET may refresh it normally.
   const mutations = useRef<Map<string, number>>(new Map());
+  // A failed mutation must invalidate GETs that began before that failure.
+  const requestEpoch = useRef(0);
   const [reference, setReference] = useState("");
   const [upload, setUpload] = useState<File|null>(null);
   const [error, setError] = useState("");
@@ -26,7 +28,8 @@ export default function App() {
   const token = auth.user?.access_token;
   function lockProtectedUi() {
     // Never retain a potentially stale tenant record after REST, auth or
-    // network failure. All writes must wait for a fresh authorized GET.
+    // network failure. Invalidate any pre-existing GET that may finish late.
+    requestEpoch.current += 1;
     mutations.current.clear();
     setItems([]);
     setDataStatus("unavailable");
@@ -55,6 +58,7 @@ export default function App() {
     // Never display locally retained tenant data while disconnected.
     // After reconnect the app must fetch new data using the current JWT.
     if (!token || !online) {
+      requestEpoch.current += 1;
       setItems([]);
       mutations.current.clear();
       setError("");
@@ -67,9 +71,10 @@ export default function App() {
     if (!token || !online) return;
     let active = true;
     setDataStatus("loading");
+    const epochAtStart = requestEpoch.current;
     const revisionsAtStart = new Map(mutations.current);
     listPerizie(token).then(data => {
-      if (!active) return;
+      if (!active || requestEpoch.current !== epochAtStart) return;
       setItems(current => {
         const changedAfterFetch = new Set([...mutations.current].filter(
           ([id, version]) => version !== (revisionsAtStart.get(id) ?? 0)
