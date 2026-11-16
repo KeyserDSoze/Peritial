@@ -11,7 +11,7 @@ namespace Peritial.Infrastructures;
 /// store, never the plaintext PostgreSQL or document archives. No Object Lock
 /// or geographic/offsite guarantee: infrastructure must supply those.
 /// </summary>
-public static class SealedBundleOffsite
+public static partial class SealedBundleOffsite
 {
     private sealed record FileEntry(string Name, long Length, string Sha256);
     private sealed record Inventory(int Version, IReadOnlyList<FileEntry> Files);
@@ -113,10 +113,32 @@ public static class SealedBundleOffsite
                 completionStarted, ct);
     }
 
-    public static async Task DownloadAsync(
+    public static Task DownloadAsync(
         IAmazonS3 source, string bucket, string backupId,
         string destinationDirectory, byte[] encryptionKey, CancellationToken ct = default,
-        bool disposableUnprotectedDemo = false)
+        bool disposableUnprotectedDemo = false) =>
+        DownloadCoreAsync(source, bucket, backupId, destinationDirectory,
+            encryptionKey, ct, disposableUnprotectedDemo, null);
+
+    /// <summary>
+    /// Explicit forensic restore of a complete, authenticated set of
+    /// COMPLIANCE-protected historical versions. Does not remove delete
+    /// markers, mutate the remote bucket, or silently select latest versions.
+    /// The caller must supply the VersionId for EVERY object in the bundle.
+    /// </summary>
+    public static Task DownloadHistoricalAsync(
+        IAmazonS3 source, string bucket, string backupId,
+        string destinationDirectory, byte[] encryptionKey,
+        IReadOnlyDictionary<string, string> pinnedVersions, CancellationToken ct = default) =>
+        DownloadCoreAsync(source, bucket, backupId, destinationDirectory,
+            encryptionKey, ct, false, pinnedVersions ??
+            throw new InvalidOperationException("Historical restore requires explicitly pinned versions."));
+
+    private static async Task DownloadCoreAsync(
+        IAmazonS3 source, string bucket, string backupId,
+        string destinationDirectory, byte[] encryptionKey, CancellationToken ct,
+        bool disposableUnprotectedDemo,
+        IReadOnlyDictionary<string, string>? historicalVersions)
     {
         Validate(encryptionKey, bucket, backupId);
         if (!Path.IsPathFullyQualified(destinationDirectory) ||
@@ -132,13 +154,24 @@ public static class SealedBundleOffsite
             await OffsiteObjectLockPolicy.RequireCompliantBucketAsync(
                 source, bucket, ct);
         var prefix = Prefix(backupId);
-        // No completion marker means a partial/crashed transfer, not a backup.
+        // Read the completion marker and authenticated inventory from the
+        // EXPLICIT versions, never from current versions if restoring history.
+        // Fail before any network access if a mandatory selector is missing.
+        if (historicalVersions is not null)
+        {
+            RequirePinnedVersion(historicalVersions, CompletedName);
+            RequirePinnedVersion(historicalVersions, InventoryName);
+            RequirePinnedVersion(historicalVersions, SignatureName);
+        }
         var completed = await GetBytesAsync(source, bucket,
-            prefix + CompletedName, 32, ct);
+            prefix + CompletedName, 32, ct,
+            historicalVersions is null ? null : historicalVersions[CompletedName]);
         var raw = await GetBytesAsync(source, bucket,
-            prefix + InventoryName, MaxManifestBytes, ct);
+            prefix + InventoryName, MaxManifestBytes, ct,
+            historicalVersions is null ? null : historicalVersions[InventoryName]);
         var signed = await GetBytesAsync(source, bucket,
-            prefix + SignatureName, 32, ct);
+            prefix + SignatureName, 32, ct,
+            historicalVersions is null ? null : historicalVersions[SignatureName]);
         if (completed.Length != 32 || signed.Length != 32 ||
             !CryptographicOperations.FixedTimeEquals(
                 completed, CompletionDigest(raw, signed)) ||
@@ -157,22 +190,40 @@ public static class SealedBundleOffsite
         foreach (var item in inventory!.Files)
             expected.Add(prefix + item.Name);
         var authenticatedKeys = expected.ToArray();
-        // Detect unexpected objects, duplicate or stale keys in the snapshot.
-        string? continuation = null;
-        do
+        if (historicalVersions is not null)
         {
-            var page = await source.ListObjectsV2Async(new ListObjectsV2Request
-            {
-                BucketName = bucket, Prefix = prefix, ContinuationToken = continuation
-            }, ct);
-            foreach (var item in page.S3Objects ?? [])
-                if (!expected.Remove(item.Key))
+            // The explicit selection must cover EXACTLY the canonical set
+            // named by the authenticated inventory. No implicit fallback,
+            // wildcard, path traversal, extra object or mixed anonymous GET.
+            if (historicalVersions.Count != expected.Count)
+                throw new InvalidOperationException(
+                    "Historical version selection is missing or has extra entries.");
+            foreach (var key in authenticatedKeys)
+                RequirePinnedVersion(historicalVersions, key[prefix.Length..]);
+            foreach (var relative in historicalVersions.Keys)
+                if (!expected.Contains(prefix + relative))
                     throw new InvalidOperationException(
-                        "Remote backup prefix contains unexpected or repeated objects.");
-            continuation = page.IsTruncated == true ? page.NextContinuationToken : null;
-        } while (continuation is not null);
-        if (expected.Count != 0)
-            throw new InvalidOperationException("Remote encrypted backup is missing objects.");
+                        "Historical version selection contains an unexpected object.");
+        }
+        else
+        {
+            // Detect unexpected objects, duplicates and missing current keys.
+            string? continuation = null;
+            do
+            {
+                var page = await source.ListObjectsV2Async(new ListObjectsV2Request
+                {
+                    BucketName = bucket, Prefix = prefix, ContinuationToken = continuation
+                }, ct);
+                foreach (var item in page.S3Objects ?? [])
+                    if (!expected.Remove(item.Key))
+                        throw new InvalidOperationException(
+                            "Remote backup prefix contains unexpected or repeated objects.");
+                continuation = page.IsTruncated == true ? page.NextContinuationToken : null;
+            } while (continuation is not null);
+            if (expected.Count != 0)
+                throw new InvalidOperationException("Remote encrypted backup is missing objects.");
+        }
 
         // Object Lock protects individual VERSIONS, not key names. Inspect
         // the current version of each encrypted file and all three markers:
@@ -180,8 +231,16 @@ public static class SealedBundleOffsite
         if (!disposableUnprotectedDemo)
         {
             foreach (var key in authenticatedKeys)
-                await OffsiteObjectLockPolicy.RequireCurrentProtectedVersionAsync(
-                    source, bucket, key, ct);
+            {
+                if (historicalVersions is null)
+                    await OffsiteObjectLockPolicy.RequireCurrentProtectedVersionAsync(
+                        source, bucket, key, ct);
+                else
+                    await OffsiteObjectLockPolicy.RequireProtectedObjectVersionAsync(
+                        source, bucket, key,
+                        historicalVersions[key[prefix.Length..]],
+                        DateTime.UtcNow, ct, 0);
+            }
         }
 
         var stage = destinationDirectory + ".partial-" + Guid.NewGuid().ToString("N");
@@ -194,7 +253,8 @@ public static class SealedBundleOffsite
                 var local = Path.Combine(stage,
                     entry.Name.Replace('/', Path.DirectorySeparatorChar));
                 var result = await CopyRemoteToFileAsync(source, bucket,
-                    prefix + entry.Name, local, ct);
+                    prefix + entry.Name, local, ct,
+                    historicalVersions is null ? null : historicalVersions[entry.Name]);
                 if (result.Length != entry.Length || result.Sha256 != entry.Sha256)
                     throw new InvalidOperationException(
                         "Downloaded encrypted bundle file failed authenticated SHA-256 verification.");
@@ -287,9 +347,9 @@ public static class SealedBundleOffsite
     }
 
     private static async Task<byte[]> GetBytesAsync(IAmazonS3 s3, string bucket,
-        string key, int limit, CancellationToken ct)
+        string key, int limit, CancellationToken ct, string? versionId = null)
     {
-        using var response = await ReadRemoteAsync(s3, bucket, key, ct);
+        using var response = await ReadRemoteAsync(s3, bucket, key, ct, versionId);
         await using var memory = new MemoryStream();
         var buffer = new byte[65536];
         int n;
@@ -310,9 +370,10 @@ public static class SealedBundleOffsite
     }
 
     private static async Task<(long Length, string Sha256)> CopyRemoteToFileAsync(
-        IAmazonS3 s3, string bucket, string key, string file, CancellationToken ct)
+        IAmazonS3 s3, string bucket, string key, string file, CancellationToken ct,
+        string? versionId = null)
     {
-        using var remote = await ReadRemoteAsync(s3, bucket, key, ct);
+        using var remote = await ReadRemoteAsync(s3, bucket, key, ct, versionId);
         var options = new FileStreamOptions
         {
             Mode = FileMode.CreateNew, Access = FileAccess.Write, Share = FileShare.None
@@ -340,18 +401,31 @@ public static class SealedBundleOffsite
     }
 
     private static async Task<GetObjectResponse> ReadRemoteAsync(
-        IAmazonS3 s3, string bucket, string key, CancellationToken ct)
+        IAmazonS3 s3, string bucket, string key, CancellationToken ct,
+        string? versionId = null)
     {
         try
         {
             return await s3.GetObjectAsync(new GetObjectRequest
-            { BucketName = bucket, Key = key }, ct);
+            { BucketName = bucket, Key = key, VersionId = versionId }, ct);
         }
         catch (AmazonS3Exception ex) when (ex.StatusCode == HttpStatusCode.NotFound)
         {
             throw new InvalidOperationException(
                 "Remote encrypted backup missing an expected object or completion marker.");
         }
+    }
+
+    private static void RequirePinnedVersion(
+        IReadOnlyDictionary<string, string> versions, string relativeName)
+    {
+        if (!versions.TryGetValue(relativeName, out var versionId) ||
+            string.IsNullOrWhiteSpace(versionId) ||
+            versionId.Equals("null", StringComparison.OrdinalIgnoreCase) ||
+            versionId.Length > 1024 ||
+            versionId.Any(char.IsControl))
+            throw new InvalidOperationException(
+                "Historical recovery requires a valid explicit VersionId for each object.");
     }
 
     private static void CreatePrivateDirectory(string path)
