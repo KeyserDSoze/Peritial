@@ -18,6 +18,11 @@ prom = services["prometheus"]
 otel = services["otel-collector"]
 api = services["api"]
 assert not otel.get("ports"), "OTLP Collector receiver must remain internal"
+for name in ("alertmanager", "alert-sink"):
+    service = services[name]
+    assert not service.get("ports"), name + " must remain internal"
+    assert service.get("read_only") is True, name + " root filesystem must be read-only"
+    assert service.get("tmpfs"), name + " data must remain disposable"
 assert prom.get("read_only") is True, "Prometheus root filesystem must be read-only"
 assert prom.get("tmpfs"), "Prometheus CI data must use disposable tmpfs"
 ports = prom.get("ports", [])
@@ -42,6 +47,27 @@ PY
 }
 positive() { awk -v value="$1" 'BEGIN { exit !(value > 0) }'; }
 zero() { awk -v value="$1" 'BEGIN { exit !(value == 0) }'; }
+# Read ONLY already-sanitized, ephemeral events via docker exec; the sink
+# has no host ports, and no original Alertmanager payload is persisted.
+webhook_count() {
+  local records
+  records=$("${stack[@]}" exec -T alert-sink cat /events/events.jsonl 2>/dev/null || true)
+  printf '%s\\n' "$records" | python3 -c '
+import json, sys
+status, name, dependency = sys.argv[1:]
+count = 0
+for line in sys.stdin:
+    if not line.strip():
+        continue
+    event = json.loads(line)
+    for alert in event["alerts"]:
+        if (alert["status"] == status and alert["alertname"] == name
+                and alert.get("dependency", "") == dependency):
+            count += 1
+print(count)
+' "$1" "$2" "$3"
+}
+
 
 # Previous collector E2E restored the API base and stopped its receiver.
 "${stack[@]}" up -d prometheus otel-collector
@@ -96,6 +122,25 @@ if [ "$triggered" != 1 ]; then
   exit 1
 fi
 echo "Verified both alerts firing during a real ClamAV outage"
+# Prometheus firing is insufficient: also prove Alertmanager delivered both
+# notifications to the internal redacting receiver, not an external service.
+notified=0
+for i in $(seq 1 55); do
+  if firing_total=$(webhook_count firing PeritialReadinessFailures "") &&
+     firing_clamav=$(webhook_count firing PeritialReadinessDependencyFailed clamav) &&
+     positive "$firing_total" && positive "$firing_clamav"; then
+    notified=1
+    break
+  fi
+  sleep 2
+done
+if [ "$notified" != 1 ]; then
+  echo "Alertmanager did not deliver both FIRING webhooks to the private receiver" >&2
+  "${stack[@]}" logs --tail=40 alertmanager alert-sink >&2
+  exit 1
+fi
+echo "Verified two private Alertmanager FIRING webhook notifications"
+
 
 docker compose -f "$base" start clamav
 recovered=0
@@ -128,10 +173,29 @@ if [ "$resolved" != 1 ]; then
   exit 1
 fi
 echo "Verified Prometheus firing alerts genuinely resolve after lookback"
+# Alertmanager must send resolved notifications too, NOT just clear the
+# Prometheus ALERTS vector. A live local receiver proves actual delivery.
+resolved_notifications=0
+for i in $(seq 1 55); do
+  if resolved_total=$(webhook_count resolved PeritialReadinessFailures "") &&
+     resolved_clamav=$(webhook_count resolved PeritialReadinessDependencyFailed clamav) &&
+     positive "$resolved_total" && positive "$resolved_clamav"; then
+    resolved_notifications=1
+    break
+  fi
+  sleep 2
+done
+if [ "$resolved_notifications" != 1 ]; then
+  echo "Alertmanager did not deliver both RESOLVED webhooks" >&2
+  "${stack[@]}" logs --tail=40 alertmanager alert-sink >&2
+  exit 1
+fi
+echo "Verified two private Alertmanager RESOLVED webhook notifications"
+
 
 # Leave the ordinary Development API with telemetry disabled. None of these
 # CI-only services or unauthenticated HTTP endpoints is in the base Compose.
-"${stack[@]}" stop otel-collector prometheus
+"${stack[@]}" stop otel-collector prometheus alertmanager alert-sink
 docker compose -f "$base" up -d --no-deps --force-recreate api
 restored=0
 for i in $(seq 1 35); do
