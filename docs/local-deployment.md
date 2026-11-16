@@ -5,7 +5,7 @@ Prerequisiti: Docker Engine, Docker Compose v2.
 - Avvio: docker compose -f docker/compose.yml up --build -d
 - PWA http://localhost:5173 ; REST http://localhost:8080/api/perizie ; MCP http://localhost:8080/mcp
 - Liveness (processo attivo): http://localhost:8080/health/live
-- Readiness **parziale** (PostgreSQL applicativo + PING ClamAV): http://localhost:8080/health/ready
+- Readiness **parziale** (PostgreSQL applicativo + PING ClamAV + discovery/JWKS OIDC): http://localhost:8080/health/ready
 - Keycloak: http://localhost:8081 ; SeaweedFS S3: http://localhost:8333
 - Utente solo locale: localuser / local-only-user; admin Keycloak locale: localadmin / local-only-admin.
 - Test backend PostgreSQL reale: docker compose -f docker/compose.yml --profile test run --rm tests
@@ -50,6 +50,11 @@ La pipeline CI usa un overlay Compose separato, `docker/compose.chaos.yml`, che 
 
 ## Liveness e readiness applicativa (#19)
 
-`GET /health/live` restituisce HTTP 200 quando il processo HTTP risponde, **anche** se PostgreSQL o ClamAV sono temporaneamente indisponibili. `GET /health/ready` (senza token) esegue una query read-only `SELECT 1` con la **stessa connessione PostgreSQL non privilegiata** usata dall'applicazione e un `zPING` sul socket interno configurato di `clamd`: è pronto soltanto con esito PostgreSQL corretto e risposta esatta `PONG`. Il probe ha un budget complessivo di 3 secondi e restituisce HTTP 200 `{"status":"ready"}` oppure HTTP 503 `{"status":"not_ready"}`, senza hostname, credenziali o dettagli di errore. Non esegue scansioni di contenuti, non altera dati e non bypassa tenant RLS.
+`GET /health/live` restituisce HTTP 200 quando il processo HTTP risponde, **anche** se PostgreSQL, ClamAV o il provider OIDC non sono disponibili. `GET /health/ready` (senza token) verifica in un **budget comune di 3 secondi**:
+1. `SELECT 1` con il ruolo PostgreSQL applicativo e senza bypass RLS;
+2. `zPING` sul clamd configurato, risposta esatta `PONG`;
+3. GET del documento di discovery OIDC su `Auth:MetadataAddress` (oppure `Auth:Authority/.well-known/openid-configuration`), `issuer` identico ad `Auth:Authority`, `jwks_uri` sullo stesso origin dell'issuer pubblico e GET JWKS con almeno una chiave di firma RSA/EC/OKP strutturalmente valida. Il backchannel interno `Auth:DevelopmentBackchannelOrigin` per Keycloak/Compose è ammesso esclusivamente in Development e il probe non segue redirect HTTP.
 
-Questo è un **primo gate**, non una prova di readiness produttiva completa: non verifica ancora S3/Azure Blob, disponibilità/validità delle chiavi e del metadata OIDC, freschezza delle firme ClamAV, worker recovery, queue backlog, multi-replica o limiti delle dipendenze. Non usare `/health/live` come controllo di ammissione del traffico; dove configurato, usare `/health/ready` soltanto con la consapevolezza di questi limiti. In CI Compose sono verificate sia la risposta positiva sia HTTP 503 quando `clamav` viene fermato, mantenendo `/health/live` a 200.
+La risposta è HTTP 200 `{"status":"ready"}` o HTTP 503 `{"status":"not_ready"}`, senza hostname, credenziali, metadata o dettagli di errore. Non effettua scritture a DB o storage né verifica JWT con token. In CI Compose vengono provate la disponibilità completa, l'indisponibilità e il ripristino di Keycloak e la successiva indisponibilità ClamAV, mantenendo `/health/live` attivo.
+
+**Limiti:** readiness **parziale**, non un controllo di production readiness certificato: ancora da verificare object storage S3/Azure Blob con privilegi minimi, aggiornamento/freschezza/rotazione delle chiavi OIDC e delle firme ClamAV, autorizzazione di client specifici, worker recovery, metriche e backlog, multi-replica, rate limiting e alerting. Un keyset JWKS non vuoto non dimostra che un particolare JWT sia verificabile. Non usare `/health/live` come gate di traffico; calibrare frequenza e rate-limit dei probe di readiness per non caricare il provider OIDC.
