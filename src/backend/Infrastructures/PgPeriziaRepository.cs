@@ -42,6 +42,7 @@ public sealed class PgPeriziaRepository(NpgsqlDataSource dataSource) : IPeriziaR
         await using var scope = await TenantDbScope.OpenAsync(dataSource, item.TenantId, ct);
         await InsertAsync(scope, item, ct);
         await scope.CommitAsync(ct);
+        item.ConfirmPersisted();
     }
 
     public async Task UpdateAsync(Perizia item, CancellationToken ct = default)
@@ -49,6 +50,7 @@ public sealed class PgPeriziaRepository(NpgsqlDataSource dataSource) : IPeriziaR
         await using var scope = await TenantDbScope.OpenAsync(dataSource, item.TenantId, ct);
         await UpdateRowAsync(scope, item, ct);
         await scope.CommitAsync(ct);
+        item.ConfirmPersisted();
     }
 
     public async Task AddAuditedAsync(Perizia item, SecurityAuditEvent audit, CancellationToken ct = default)
@@ -58,6 +60,7 @@ public sealed class PgPeriziaRepository(NpgsqlDataSource dataSource) : IPeriziaR
         await InsertAsync(scope, item, ct);
         await PgSecurityAuditTrail.AppendWithinScopeAsync(scope, audit, ct);
         await scope.CommitAsync(ct);
+        item.ConfirmPersisted();
     }
 
     public async Task UpdateAuditedAsync(Perizia item, SecurityAuditEvent audit, CancellationToken ct = default)
@@ -65,10 +68,12 @@ public sealed class PgPeriziaRepository(NpgsqlDataSource dataSource) : IPeriziaR
         if (audit.Action is not ("perizia.assign" or "perizia.advance" or "perizia.cancel"))
             throw new ArgumentException("Invalid update audit action.", nameof(audit));
         CheckAudit(item, audit, audit.Action);
+        CheckTransition(item, audit.Action);
         await using var scope = await TenantDbScope.OpenAsync(dataSource, item.TenantId, ct);
-        await UpdateRowAsync(scope, item, ct, cancellation: audit.Action == "perizia.cancel");
+        await UpdateRowAsync(scope, item, ct);
         await PgSecurityAuditTrail.AppendWithinScopeAsync(scope, audit, ct);
         await scope.CommitAsync(ct);
+        item.ConfirmPersisted();
     }
 
     private static void CheckAudit(Perizia item, SecurityAuditEvent audit, string action)
@@ -77,6 +82,33 @@ public sealed class PgPeriziaRepository(NpgsqlDataSource dataSource) : IPeriziaR
             throw new UnauthorizedAccessException("Cross-tenant audit operation denied.");
         if (audit.ResourceId != item.Id || audit.Action != action || audit.Outcome != "succeeded")
             throw new ArgumentException("Audit must describe this successful perizia mutation.", nameof(audit));
+    }
+
+    private static void CheckTransition(Perizia item, string action)
+    {
+        var previous = item.PersistedStatus;
+        var current = item.Status;
+        var valid = action switch
+        {
+            "perizia.assign" => previous == PeriziaStatus.Registered &&
+                               current == PeriziaStatus.Assigned &&
+                               !string.IsNullOrWhiteSpace(item.AssignedTo),
+            "perizia.advance" => (previous, current) switch
+            {
+                (PeriziaStatus.Assigned, PeriziaStatus.ToBeRevised) => true,
+                (PeriziaStatus.ToBeRevised, PeriziaStatus.Revised) => true,
+                (PeriziaStatus.Revised, PeriziaStatus.ToSend) => true,
+                (PeriziaStatus.ToSend, PeriziaStatus.Sent) => true,
+                (PeriziaStatus.Sent, PeriziaStatus.Billed) => true,
+                _ => false
+            },
+            "perizia.cancel" => current == PeriziaStatus.Cancelled &&
+                                previous is not (PeriziaStatus.Cancelled or
+                                    PeriziaStatus.Billed or PeriziaStatus.Duplicated),
+            _ => false
+        };
+        if (!valid)
+            throw new InvalidOperationException("Invalid perizia state transition.");
     }
 
     private static async Task InsertAsync(TenantDbScope scope, Perizia item, CancellationToken ct)
@@ -89,29 +121,31 @@ public sealed class PgPeriziaRepository(NpgsqlDataSource dataSource) : IPeriziaR
     }
 
     private static async Task UpdateRowAsync(
-        TenantDbScope scope, Perizia item, CancellationToken ct, bool cancellation = false)
+        TenantDbScope scope, Perizia item, CancellationToken ct)
     {
-        // A stale cancellation must not overwrite another completed cancel
-        // or a terminal Billed/Duplicated transition. The row lock and
-        // predicate are rechecked by PostgreSQL if two cancels race.
-        var condition = cancellation
-            ? " AND status NOT IN (@billed,@duplicated,@cancelled)"
-            : "";
+        // Optimistic compare-and-swap under PostgreSQL's row lock. Both
+        // status and assignee must still equal the originally read values;
+        // PostgreSQL rechecks this predicate after concurrent transactions.
+        // A zero-row update MUST NOT append a success audit.
         await using var cmd = scope.Command(
-            "UPDATE perizie SET status=@status, assigned_to=@assignee WHERE tenant_id=@tenant AND id=@id" + condition);
+            "UPDATE perizie SET status=@status, assigned_to=@assignee " +
+            "WHERE tenant_id=@tenant AND id=@id " +
+            "AND status=@expected_status " +
+            "AND assigned_to IS NOT DISTINCT FROM @expected_assignee");
         Fill(cmd, item);
-        if (cancellation)
-        {
-            cmd.Parameters.AddWithValue("billed", (int)PeriziaStatus.Billed);
-            cmd.Parameters.AddWithValue("duplicated", (int)PeriziaStatus.Duplicated);
-            cmd.Parameters.AddWithValue("cancelled", (int)PeriziaStatus.Cancelled);
-        }
-        if (await cmd.ExecuteNonQueryAsync(ct) != 1)
-        {
-            if (cancellation)
-                throw new InvalidOperationException("Perizia cannot be cancelled in its current state.");
+        cmd.Parameters.AddWithValue("expected_status", (int)item.PersistedStatus);
+        cmd.Parameters.AddWithValue("expected_assignee", (object?)item.PersistedAssignedTo ?? DBNull.Value);
+        if (await cmd.ExecuteNonQueryAsync(ct) == 1) return;
+
+        // RLS must still hide foreign tenant records as 404. Distinguish
+        // missing/foreign IDs from a stale row within the authenticated tenant.
+        await using var existing = scope.Command(
+            "SELECT 1 FROM perizie WHERE tenant_id=@tenant AND id=@id");
+        existing.Parameters.AddWithValue("tenant", item.TenantId.Value);
+        existing.Parameters.AddWithValue("id", item.Id);
+        if (await existing.ExecuteScalarAsync(ct) is null)
             throw new KeyNotFoundException("Perizia not found.");
-        }
+        throw new PeriziaConcurrencyConflictException();
     }
 
     private static Perizia Read(NpgsqlDataReader reader) => Perizia.Restore(
