@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { FileUp, Moon, Sun, ShieldCheck } from "lucide-react";
 import { Button } from "./components/ui/button";
 import { createPerizia, listPerizie, uploadDocument, type Perizia } from "./api";
+import { PeriziaWorkflow } from "./components/PeriziaWorkflow";
 export default function App() {
   const auth = useAuth();
   const { t, i18n } = useTranslation();
@@ -63,8 +64,11 @@ export default function App() {
               <Button type="submit" disabled={busy}>{t("create")}</Button>
             </form>
             {items.length===0 ? <p className="text-slate-500">{t("empty")}</p> :
-              <ul className="divide-y divide-slate-200 dark:divide-slate-800">{items.map(item=>
-                <li key={item.id} className="flex items-center justify-between gap-4 py-3"><span className="font-medium">{item.reference}</span><span className="text-sm text-slate-500">{item.status}</span></li>)}</ul>}
+              <ul className="divide-y divide-slate-200 dark:divide-slate-800">{items.map(item =>
+                <li key={item.id} className="py-4">
+                  <PeriziaWorkflow item={item} token={token!} onUpdated={updated =>
+                    setItems(current => current.map(value => value.id === updated.id ? updated : value))} />
+                </li>)}</ul>}
           </section>
           <section className="h-fit rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
             <h2 className="mb-5 text-xl font-semibold">{t("upload")}</h2>
