@@ -125,7 +125,7 @@ public static partial class SchemaMigrator
     /// <summary>
     /// Explicitly recognize a single older shape: upload_intents has no lease
     /// column/index. It must otherwise match V001 including RLS, ACL and
-    /// columns, and is repaired before writing V001 + V002 journal atomically.
+    /// columns, and is repaired before writing V001 + V002/V003 journal atomically.
     /// Never called automatically by ordinary apply/adopt.
     /// </summary>
     public static Task<int> AdoptPreLeaseLegacyAsync(
