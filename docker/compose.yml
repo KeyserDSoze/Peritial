@@ -85,6 +85,9 @@ services:
       Storage__Minio__AccessKey: localminio
       Storage__Minio__SecretKey: local-only-minio-secret
       Storage__Minio__Bucket: peritial
+      # Local disposable demo only: production MUST supply a separate read-only
+      # storage readiness identity (never reuse the upload/delete credentials).
+      Storage__Readiness__AllowSharedDevelopmentCredentials: "true"
       Cors__Origin: http://localhost:5173
     ports: ["8080:8080"]
     depends_on:
