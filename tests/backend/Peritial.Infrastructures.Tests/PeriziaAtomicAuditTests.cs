@@ -31,6 +31,65 @@ public sealed class PeriziaAtomicAuditTests
     }
 
     [Fact]
+    public async Task Cancel_is_atomic_and_records_only_one_success_event()
+    {
+        await using var databases = await TestDatabases.OpenAsync();
+        var tenant = TenantId.From(Guid.NewGuid());
+        var perizia = Perizia.Create(tenant, "CANCEL-ATOMIC-" + Guid.NewGuid().ToString("N"));
+        var repo = new PgPeriziaRepository(databases.App);
+        await repo.AddAuditedAsync(perizia, Entry(tenant, perizia.Id, "perizia.create"));
+
+        perizia.Cancel(tenant);
+        await repo.UpdateAuditedAsync(perizia, Entry(tenant, perizia.Id, "perizia.cancel"));
+
+        Assert.Equal(PeriziaStatus.Cancelled, (await repo.FindAsync(tenant, perizia.Id))!.Status);
+        await using var audit = databases.Admin.CreateCommand(
+            "SELECT count(*) FROM security_audit WHERE tenant_id=@tenant AND resource_id=@id AND action='perizia.cancel' AND outcome='succeeded'");
+        audit.Parameters.AddWithValue("tenant", tenant.Value);
+        audit.Parameters.AddWithValue("id", perizia.Id);
+        Assert.Equal(1L, (long)(await audit.ExecuteScalarAsync())!);
+
+        // Replayed cancellation cannot add another audit success event.
+        await Assert.ThrowsAnyAsync<Exception>(() =>
+            repo.UpdateAuditedAsync(perizia, Entry(tenant, perizia.Id, "perizia.cancel")));
+        Assert.Equal(1L, (long)(await audit.ExecuteScalarAsync())!);
+    }
+
+    [Fact]
+    public async Task Cancel_audit_failure_rolls_back_the_status()
+    {
+        await using var databases = await TestDatabases.OpenAsync();
+        var tenant = TenantId.From(Guid.NewGuid());
+        var perizia = Perizia.Create(tenant, "CANCEL-ROLLBACK-" + Guid.NewGuid().ToString("N"));
+        var repo = new PgPeriziaRepository(databases.App);
+        var create = Entry(tenant, perizia.Id, "perizia.create");
+        await repo.AddAuditedAsync(perizia, create);
+
+        perizia.Cancel(tenant);
+        var duplicated = create with { Action = "perizia.cancel" };
+        var ex = await Assert.ThrowsAsync<PostgresException>(() =>
+            repo.UpdateAuditedAsync(perizia, duplicated));
+        Assert.Equal(PostgresErrorCodes.UniqueViolation, ex.SqlState);
+        Assert.Equal(PeriziaStatus.Registered, (await repo.FindAsync(tenant, perizia.Id))!.Status);
+    }
+
+    [Fact]
+    public async Task Cancel_cannot_modify_other_tenant_even_by_direct_repository_call()
+    {
+        await using var databases = await TestDatabases.OpenAsync();
+        var owner = TenantId.From(Guid.NewGuid());
+        var other = TenantId.From(Guid.NewGuid());
+        var perizia = Perizia.Create(owner, "CANCEL-TENANT-" + Guid.NewGuid().ToString("N"));
+        var repo = new PgPeriziaRepository(databases.App);
+        await repo.AddAuditedAsync(perizia, Entry(owner, perizia.Id, "perizia.create"));
+
+        Assert.Null(await repo.FindAsync(other, perizia.Id));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+            repo.UpdateAuditedAsync(perizia, Entry(other, perizia.Id, "perizia.cancel")));
+        Assert.Equal(PeriziaStatus.Registered, (await repo.FindAsync(owner, perizia.Id))!.Status);
+    }
+
+    [Fact]
     public async Task Duplicate_audit_id_undoes_perizia_creation_then_new_request_can_succeed()
     {
         await using var databases = await TestDatabases.OpenAsync();
