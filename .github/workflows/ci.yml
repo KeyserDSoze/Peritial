@@ -80,7 +80,7 @@ jobs:
           done
           echo "Keycloak discovery unavailable"
           exit 1
-      - name: API dependency readiness succeeds against real PostgreSQL and ClamAV
+      - name: API dependency readiness succeeds against PostgreSQL, ClamAV, OIDC and S3
         run: |
           ready=0
           for i in $(seq 1 30); do
@@ -115,7 +115,7 @@ jobs:
             -e PERITIAL_TEST_AZURITE_ENDPOINT=http://azurite:10000/devstoreaccount1 \
             -e PERITIAL_TEST_CLAMD_HOST=clamav \
             tests dotnet test tests/backend/Peritial.Infrastructures.Tests/Peritial.Infrastructures.Tests.csproj \
-            --filter "FullyQualifiedName~ObjectStoreContractTests|FullyQualifiedName~ClamdScannerContractTests|FullyQualifiedName~ObjectRecoveryCheckpointContractTests" \
+            --filter "FullyQualifiedName~ObjectStoreContractTests|FullyQualifiedName~ClamdScannerContractTests|FullyQualifiedName~ObjectRecoveryCheckpointContractTests|FullyQualifiedName~StorageReadinessProbeTests" \
             --logger "console;verbosity=normal"
       - name: Verify archive export/restore on independent PostgreSQL and SeaweedFS servers
         run: |
@@ -195,7 +195,7 @@ jobs:
         run: bash tests/chaos/run_mid_put.sh
       - name: Offline PostgreSQL and S3 byte restore to independent new servers
         run: bash tests/backup/run_complete_pg_s3_restore.sh
-      - name: Readiness fails closed when ClamAV stops, while liveness stays up
+      - name: Readiness rejects Keycloak, S3 and ClamAV outages while liveness stays up
         run: |
           # The preceding offline cross-service backup drill intentionally
           # stops all API writers. Start the API again before fault injection.
@@ -224,6 +224,21 @@ jobs:
             sleep 2
           done
           test "$recovered" = "1"
+          # A stopped S3 endpoint must not be mistaken for usable storage.
+          docker compose -f docker/compose.yml stop seaweedfs
+          storage_status=$(curl --silent --max-time 6 --output /tmp/peritial-storage-readiness.json --write-out '%{http_code}' http://localhost:8080/health/ready)
+          test "$storage_status" = "503"
+          grep -q '"status":"not_ready"' /tmp/peritial-storage-readiness.json
+          curl --fail --silent --max-time 6 http://localhost:8080/health/live > /dev/null
+          docker compose -f docker/compose.yml start seaweedfs
+          storage_recovered=0
+          for i in $(seq 1 45); do
+            if curl --fail --silent --max-time 5 http://localhost:8080/health/ready > /dev/null; then
+              storage_recovered=1; break
+            fi
+            sleep 2
+          done
+          test "$storage_recovered" = "1"
           docker compose -f docker/compose.yml stop clamav
           status=$(curl --silent --max-time 6 --output /tmp/peritial-readiness.json --write-out '%{http_code}' http://localhost:8080/health/ready)
           test "$status" = "503"
