@@ -24,8 +24,8 @@ async function request<T>(url:string, token:string, init?:RequestInit):Promise<T
   return response.json() as Promise<T>;
 }
 export const listPerizie = (token:string) => request<Perizia[]>("/perizie",token);
-export const listDocuments = (token:string) =>
-  request<DocumentSummary[]>("/files?limit=50", token);
+export const listDocuments = (token:string, periziaId?:string) =>
+  request<DocumentSummary[]>("/files?limit=50" + (periziaId ? "&periziaId=" + encodeURIComponent(periziaId) : ""), token);
 export const createPerizia = (token:string, reference:string) => request<Perizia>("/perizie",token,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({reference})});
 // Mutations reuse the Business layer's scoped REST endpoints. Responses are
 // authoritative: the UI does not optimistically advance a workflow state.
