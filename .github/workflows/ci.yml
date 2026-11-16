@@ -252,7 +252,7 @@ jobs:
         if: failure()
         run: docker compose -f docker/compose.yml logs --tail=160 api
       - if: always()
-        run: docker compose -f docker/compose.yml -f docker/compose.chaos.yml -f docker/compose.observability.yml --profile azure-test --profile chaos --profile recovery-test down -v
+        run: docker compose -f docker/compose.yml -f docker/compose.chaos.yml -f docker/compose.observability.yml -f docker/compose.prometheus.yml --profile azure-test --profile chaos --profile recovery-test down -v
   worm-recovery:
     runs-on: ubuntu-latest
     steps:
