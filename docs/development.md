@@ -24,6 +24,30 @@ SecurityAuditUseCaseTests verifica tenant, subject, azione ed esito senza riferi
 
 PeriziaAtomicAuditTests prova su PostgreSQL reale che INSERT/UPDATE perizie e audit si committano insieme, che un audit duplicato annulla CREATE o UPDATE, e che gli eventi cross-tenant non modificano dati. DocumentAtomicAuditTests applica gli stessi controlli ai metadata dei file. Tutte le mutazioni REST/MCP usano i metodi AddAuditedAsync/UpdateAuditedAsync delle porte Business; il ruolo DB resta soggetto a FORCE RLS. La lettura degli oggetti esterni e la loro compensazione in caso di errore restano fuori dalla transazione PostgreSQL: ADR 0008 e issue #5/#21.
 
+## Cancellazione perizie REST/MCP (#9)
+
+La transizione terminale `Cancelled` già presente in Domain è esposta da
+`PeriziaService.CancelAsync`, dall'endpoint
+`POST /api/perizie/{id}/cancel` e da `cancel_perizia(id)` nel catalogo MCP.
+Autorizzazione `peritial.write` e tenant dal JWT firmato, senza parametro
+tenant client. I test `PeriziaTests` verificano il divieto cross-tenant e
+gli stati terminali `Billed`, `Duplicated`, `Cancelled`.
+`SecurityAuditUseCaseTests` controlla un unico evento di successo, con
+tenant e subject senza riferimento privato; il retry sullo stesso aggregato
+viene rifiutato.
+
+`PeriziaAtomicAuditTests` usa PostgreSQL reale con ruolo app FORCE RLS:
+cancellazione, audit nello stesso commit, rollback del cambio stato se
+l'audit fallisce e rifiuto di un secondo evento per una pratica già
+annullata. `tests/frontend/security.spec.ts` esercita REST e MCP con
+token Keycloak `peritial-test-write` e prova il `403` con token read-only;
+il job Compose verifica gli eventi persistiti dopo Playwright.
+
+**Limiti**: non esiste ancora una versione/ETag dell'aggregato con compare-and-swap
+per *tutte* le transizioni e una prova di race multi-replica contro
+`assign`/`advance`; niente UI di storico, notifiche e comportamento
+legacy completo. #9 e #21 restano aperte.
+
 ## Fault injection documentale (#5/#21)
 
 FileIngestionCompensationTests esercita lo storage fake con upload parziale, errore metadata dopo PUT, cleanup fallito, cancellazione HTTP a metà commit, retry dopo errore e successo senza cancellazione. L'adapter S3 e quello Azure implementano DeleteAsync, con cancellazione idempotente. Le prove reali contro entrambi i provider e il recupero persistente dopo crash non sono ancora completati: ADR 0009.
