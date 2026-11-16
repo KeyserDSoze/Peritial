@@ -30,6 +30,12 @@ public static class ReadinessOtlpRegistration
                     options.Endpoint = settings.MetricsEndpoint!;
                 }))
             .WithTracing(traces => traces
+                // The incoming ASP.NET HTTP Activity can be not-recorded.
+                // The default ParentBased sampler would silently discard
+                // these readiness child spans. This provider subscribes ONLY
+                // to the fixed Peritial.Readiness source; always record that
+                // source so the diagnostic trace remains observable.
+                .SetSampler(new AlwaysOnSampler())
                 .AddSource(ReadinessTelemetry.SourceName)
                 .AddOtlpExporter(options =>
                 {
