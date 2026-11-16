@@ -159,6 +159,12 @@ jobs:
                 AND (SELECT count(*) FROM security_audit WHERE action='document.scan' AND outcome='denied') >= 1
                 AND (SELECT count(*) FROM security_audit WHERE action='authorization.forbidden' AND outcome='denied') >= 1
                 AND (SELECT count(*) FROM security_audit WHERE action='perizia.create' AND outcome='denied') >= 1
+                AND (SELECT count(*) FROM security_audit WHERE action='perizia.cancel' AND outcome='succeeded') >= 2
+                AND NOT EXISTS (
+                  SELECT 1 FROM security_audit
+                  WHERE action='perizia.cancel' AND outcome='succeeded'
+                  GROUP BY tenant_id,resource_id HAVING count(*) <> 1
+                )
                 AND (SELECT count(*) FROM security_audit WHERE subject = '') = 0
                 AND (SELECT count(*) FROM upload_intents) = 0
                 AND (SELECT count(*) FROM documents WHERE file_name='retry-proof.pdf') = 2
