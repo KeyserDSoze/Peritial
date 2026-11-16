@@ -42,6 +42,16 @@ public sealed class PeriziaService(ITenantContext context, IPeriziaRepository re
         return PeriziaDto.From(perizia);
     }
 
+    /// <summary>Cancel a non-terminal perizia with tenant-scoped success audit.</summary>
+    public async Task<PeriziaDto> CancelAsync(Guid id, CancellationToken ct = default)
+    {
+        await RequireWriteAsync("perizia.cancel", ct);
+        var perizia = await GetRequiredAsync(id, ct);
+        perizia.Cancel(context.TenantId);
+        await repository.UpdateAuditedAsync(perizia, Event("perizia.cancel", "succeeded", perizia.Id), ct);
+        return PeriziaDto.From(perizia);
+    }
+
     private async Task<Perizia> GetRequiredAsync(Guid id, CancellationToken ct) =>
         await repository.FindAsync(context.TenantId, id, ct) ?? throw new KeyNotFoundException("Perizia not found.");
 
