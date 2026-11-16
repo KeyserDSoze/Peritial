@@ -18,7 +18,7 @@ EXPECTED: dict[str, dict[str, tuple[str, int]]] = {
 }
 
 IMAGE_LINE = re.compile(r"^\s*image\s*:\s*(\S+)\s*$")
-PROMTOOL_LINE = re.compile(r"--entrypoint\s+/bin/promtool\s+(\S+)\s*\\?\s*$")
+PROMTOOL_LINE = re.compile(r"--entrypoint\s+/bin/promtool\s+([^\s\\]+)\s*\\?\s*$")
 
 
 def detect_images(content: str, path: str) -> dict[str, list[str]]:
