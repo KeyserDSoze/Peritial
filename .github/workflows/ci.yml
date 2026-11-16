@@ -160,6 +160,7 @@ jobs:
                 AND (SELECT count(*) FROM security_audit WHERE action='authorization.forbidden' AND outcome='denied') >= 1
                 AND (SELECT count(*) FROM security_audit WHERE action='perizia.create' AND outcome='denied') >= 1
                 AND (SELECT count(*) FROM security_audit WHERE action='perizia.cancel' AND outcome='succeeded') >= 2
+                AND (SELECT count(*) FROM security_audit WHERE action='perizia.cancel' AND outcome='denied') >= 2
                 AND NOT EXISTS (
                   SELECT 1 FROM security_audit
                   WHERE action='perizia.cancel' AND outcome='succeeded'
