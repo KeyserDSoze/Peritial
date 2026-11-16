@@ -18,16 +18,16 @@ Esporre le funzionalità tramite Model Context Protocol (SDK ufficiale .NET, HTT
 |---|---|---|
 | Perizie | list_perizie, get_perizia, create_perizia, assign_perizia, advance_perizia, cancel_perizia | lettura scoped e mutazioni REST/MCP con audit atomico e CAS (#9/#12) |
 | Documenti | list_documents, get_document (lettura metadata), ingest_file (base64 limitato); REST multipart | catalogo read-only tenant-scoped + ingestion; download/report ancora aperti (#11/#12) |
-| Sinistri | list_sinistri, get_sinistro, create_sinistro, update_sinistro | primo catalogo/read/create/update tenant-scoped, CAS, audit atomico (#7/#12) |
+| Sinistri | list_sinistri, search_sinistri, get_sinistro, create_sinistro, update_sinistro | list/search/read/create/update tenant-scoped, CAS e audit atomico; delete/UI ancora da fare (#7/#12) |
 | Anagrafiche, import XML, report, messaggi, contabilità, KPI | tool dedicati per ciascun use case | iterazioni successive |
 
 Per file grandi: non trasportare payload di gigabyte via JSON MCP; fornire un tool per ottenere URL di upload firmati/scoped e una procedura di completamento (da implementare). Una tool call MCP non equivale ad accesso indiscriminato al filesystem.
 
 ## Sinistri: primi contratti REST e MCP (#7/#12)
 
-Le route `GET /api/sinistri?limit=50`, `GET /api/sinistri/{id}`,
+Le route `GET /api/sinistri?limit=50`, `GET /api/sinistri/search`, `GET /api/sinistri/{id}`,
 `POST /api/sinistri`, `PUT /api/sinistri/{id}` e i tool
-`list_sinistri(limit=50)`, `get_sinistro(id)`,
+`list_sinistri(limit=50)`, `search_sinistri(prefix,occurredFrom?,occurredTo?,limit=10)`, `get_sinistro(id)`,
 `create_sinistro(externalReference, occurredOn, reportedOn?)`,
 `update_sinistro(id, externalReference, occurredOn, expectedVersion, reportedOn?)`
 delegano allo **stesso `SinistroService`**. Le richieste devono
@@ -38,6 +38,7 @@ con `TenantDbScope` e non enumerano i sinistri di altri tenant.
 | Operazione | Richiesta | Risultato |
 |---|---|---|
 | Lista | `GET /api/sinistri?limit=50` / `list_sinistri` | Array di ultimi sinistri per `occurredOn DESC,id`; `limit` da 1 a 100 |
+| Ricerca/autocomplete | `GET /api/sinistri/search?prefix=...&occurredFrom=...&occurredTo=...&limit=10` / `search_sinistri` | Prefisso letterale case-insensitive (2–100), date evento incluse, cap 1–50; filtro SQL prima di LIMIT |
 | Dettaglio | `GET /api/sinistri/{id}` / `get_sinistro` | Proiezione tenant-scoped; GUID estranei e mancanti non distinguibili (404 REST) |
 | Creazione | `POST /api/sinistri` / `create_sinistro` | JSON `{"externalReference":"RIF","occurredOn":"2026-11-01","reportedOn":null}`, REST 201 |
 | Modifica | `PUT /api/sinistri/{id}` / `update_sinistro` | Stesso JSON con `expectedVersion:1` obbligatoria; versione successiva restituita solo dopo COMMIT; stale REST 409 |
@@ -58,6 +59,23 @@ transazione PostgreSQL**. Per evitare lost update, il
 l'UPDATE SQL CAS. Le risposte non sono cacheabili
 (`Cache-Control: no-store`).
 
+**Autocomplete ricerca:** `prefix` è obbligatorio (trim, da
+2 a 100 caratteri); i caratteri `%`, `_` e `!`
+sono **letterali** e non wildcard del chiamante.
+`occurredFrom` e `occurredTo` filtrano facoltativamente
+la data evento con estremi **inclusivi** (`YYYY-MM-DD`);
+la data denuncia non influisce. `limit` default 10,
+minimo 1, massimo 50. Prefisso invalido, intervallo
+inverso e cap superato generano **400 REST**
+(errore del tool MCP). Il risultato segue
+`occurredOn DESC,id`; il repository esegue
+WHERE tenant, prefisso e date **prima** di LIMIT,
+sempre in transazione FORCE RLS. Non è ricerca
+full-text né una lista paginabile oltre il cap;
+per cataloghi grandi è da validare un indice ILIKE
+dedicato in una migrazione nuova, oltre ai benchmark.
+[ADR 0033](../adr/0033-sinistri-prefix-autocomplete.md).
+
 **Installazione:** V003 è una migrazione **esplicita**. Il
 Compose demo con V001 non journaled non la applica
 automaticamente. Solo la CI temporanea inietta V003 come
@@ -66,7 +84,7 @@ non adottare questa procedura come upgrade di produzione.
 Per database versionati usare il migrator con identità DDL
 e backup verificato come da [runbook](database-migrations.md).
 
-**Limitazioni:** nessun DELETE, filtri full-text/autocomplete,
+**Limitazioni:** nessun DELETE, filtri full-text/fuzzy, indice specifico per ILIKE a scala produttiva,
 cursor, relazioni polizze/anagrafiche/perizie, UI PWA o import
 Classic/Accertatore. Non è un CRUD completo. [ADR 0032](../adr/0032-sinistri-rest-mcp-oauth-cas.md).
 
