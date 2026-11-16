@@ -1,7 +1,7 @@
 name: peritial
 services:
   postgres:
-    image: postgres:17-alpine
+    image: postgres:17-alpine@sha256:a77aa70e641402a21411b92b721c58d10f23b50ae5fdd2333efd22d166e1e5f7
     environment: {POSTGRES_DB: peritial, POSTGRES_USER: peritial, POSTGRES_PASSWORD: local-only-postgres}
     ports: ["5432:5432"]
     volumes: ["pgdata:/var/lib/postgresql/data", "../scripts/db/001_init.sql:/docker-entrypoint-initdb.d/001_init.sql:ro", "../scripts/db/002_dev_app_role.sql:/docker-entrypoint-initdb.d/002_dev_app_role.sql:ro"]
@@ -18,7 +18,7 @@ services:
   # Two independent, ephemeral recovery destinations, never used by the API.
   postgres-restore:
     profiles: ["recovery-test"]
-    image: postgres:17-alpine
+    image: postgres:17-alpine@sha256:a77aa70e641402a21411b92b721c58d10f23b50ae5fdd2333efd22d166e1e5f7
     environment: {POSTGRES_DB: peritial, POSTGRES_USER: peritial, POSTGRES_PASSWORD: local-only-postgres}
     volumes: ["pgrestoredata:/var/lib/postgresql/data"]
     healthcheck: {test: ["CMD-SHELL", "pg_isready -U peritial -d peritial"], interval: 5s, timeout: 3s, retries: 20}
