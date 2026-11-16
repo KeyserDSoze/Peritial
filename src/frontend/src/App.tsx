@@ -24,6 +24,7 @@ export default function App() {
   const [verifiedToken, setVerifiedToken] = useState<string | null>(null);
   const [reference, setReference] = useState("");
   const [upload, setUpload] = useState<File|null>(null);
+  const [uploadPeriziaId, setUploadPeriziaId] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [dataStatus, setDataStatus] = useState<"loading" | "ready" | "unavailable">("loading");
@@ -37,6 +38,7 @@ export default function App() {
     mutations.current.clear();
     setItems([]);
     setDocuments([]);
+    setUploadPeriziaId("");
     setDataStatus("unavailable");
     setError("");
   }
@@ -68,6 +70,7 @@ export default function App() {
       mutations.current.clear();
       setItems([]);
       setDocuments([]);
+      setUploadPeriziaId("");
       setVerifiedToken(null);
     }
     // Never display locally retained tenant data while disconnected.
@@ -80,6 +83,7 @@ export default function App() {
       setError("");
       setReference("");
       setUpload(null);
+      setUploadPeriziaId("");
       setDataStatus("loading");
     }
   }, [token, online]);
@@ -104,6 +108,8 @@ export default function App() {
         ];
       });
       setDocuments(latestDocuments);
+      // A case removed from the authenticated projection must not remain selectable.
+      setUploadPeriziaId(value => value && !data.some(item => item.id === value) ? "" : value);
       setVerifiedToken(token);
       setDataStatus("ready");
       setError("");
@@ -129,15 +135,17 @@ export default function App() {
     } finally { setBusy(false); }
   }
   async function sendFile() {
-    if(!token || !online || dataStatus !== "ready" || !upload) return;
+    if(!token || !online || dataStatus !== "ready" || !upload ||
+      (uploadPeriziaId !== "" && !items.some(item => item.id === uploadPeriziaId))) return;
     setBusy(true); setError("");
     try {
       const epochAtStart = requestEpoch.current;
-      await uploadDocument(token, upload);
+      await uploadDocument(token, upload, uploadPeriziaId || undefined);
       // Never replay an uncertain POST. Instead refresh both read-only
       // projections with the signed current tenant after a confirmed upload.
       if (requestEpoch.current !== epochAtStart || activeToken.current !== token) return;
       setUpload(null);
+      setUploadPeriziaId("");
       refreshPerizie();
     }
     catch (cause) {
@@ -193,6 +201,13 @@ export default function App() {
           </section>
           <section className="h-fit rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
             <h2 className="mb-5 text-xl font-semibold">{t("upload")}</h2>
+            <label htmlFor="upload-perizia" className="mb-2 block text-sm">{t("linkedPerizia")}</label>
+            <select id="upload-perizia" value={uploadPeriziaId} disabled={busy}
+              onChange={event => setUploadPeriziaId(event.target.value)}
+              className="mb-4 block w-full rounded-md border border-slate-300 bg-transparent px-3 py-2 dark:border-slate-700">
+              <option value="">{t("noLinkedPerizia")}</option>
+              {items.map(item => <option key={item.id} value={item.id}>{item.reference}</option>)}
+            </select>
             <label htmlFor="file" className="mb-2 block text-sm">{t("file")}</label>
             <input id="file" type="file" accept=".pdf,.xml,.jpg,.jpeg,.png,.docx" className="mb-4 block w-full text-sm" onChange={e=>setUpload(e.target.files?.[0]||null)}/>
             <Button disabled={!upload||busy} onClick={() => void sendFile()}><FileUp size={16}/>{t("upload")}</Button>
@@ -203,6 +218,9 @@ export default function App() {
                 <ul aria-label={t("savedDocuments")} className="divide-y divide-slate-200 dark:divide-slate-700">
                   {documents.map(doc => <li key={doc.id} className="py-3">
                     <p className="break-all text-sm font-medium">{doc.fileName}</p>
+                    {doc.periziaId && <p className="mt-1 break-words text-xs text-slate-500 dark:text-slate-400">
+                      {t("linkedPerizia")}: {items.find(item => item.id === doc.periziaId)?.reference ?? t("linkedPeriziaUnknown")}
+                    </p>}
                     <p className="mt-1 break-words text-xs text-slate-500 dark:text-slate-400">
                       {doc.contentType} · {doc.length} {t("bytes")} ·
                       {" "}{new Date(doc.createdAtUtc).toLocaleDateString(i18n.language === "en" ? "en-GB" : "it-IT")}
