@@ -195,6 +195,8 @@ jobs:
         run: bash tests/chaos/run_mid_put.sh
       - name: Offline PostgreSQL and S3 byte restore to independent new servers
         run: bash tests/backup/run_complete_pg_s3_restore.sh
+      - name: Verify OTLP collector via Compose end-to-end
+        run: bash tests/observability/run_collector_e2e.sh
       - name: Readiness rejects Keycloak, S3 and ClamAV outages while liveness stays up
         run: |
           # The preceding offline cross-service backup drill intentionally
