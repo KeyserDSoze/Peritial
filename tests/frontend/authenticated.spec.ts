@@ -17,7 +17,7 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     const ref = "API-DOWN-" + Date.now() + "-" + Math.round(Math.random() * 100000);
     await page.locator("#reference").fill(ref);
     await page.getByRole("button", {name: "Crea"}).click();
-    await expect(page.getByRole("list", {name: "Perizie"}).getByText(ref, {exact: true})).toBeVisible();
+    await expect(page.getByRole("list", {name: /^(Perizie|Appraisals)$/}).getByText(ref, {exact: true})).toBeVisible();
 
     await page.route("**/api/perizie", async route => {
       if (route.request().method() === "GET") {
@@ -28,14 +28,14 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     });
     await page.getByRole("button", {name: "Aggiorna elenco"}).click();
     await expect(page.getByRole("alert")).toContainText("Servizio perizie non disponibile");
-    await expect(page.getByRole("list", {name: "Perizie"}).getByText(ref, {exact: true})).toHaveCount(0);
+    await expect(page.getByRole("list", {name: /^(Perizie|Appraisals)$/}).getByText(ref, {exact: true})).toHaveCount(0);
     await expect(page.getByRole("button", {name: "Crea"})).toHaveCount(0);
     await expect(page.getByRole("button", {name: "Carica documento"})).toHaveCount(0);
     expect(await page.evaluate(() => navigator.onLine)).toBe(true);
 
     await page.unroute("**/api/perizie");
     await page.getByRole("button", {name: "Riprova"}).click();
-    await expect(page.getByRole("list", {name: "Perizie"}).getByText(ref, {exact: true})).toBeVisible();
+    await expect(page.getByRole("list", {name: /^(Perizie|Appraisals)$/}).getByText(ref, {exact: true})).toBeVisible();
     await expect(page.getByRole("button", {name: "Crea"})).toBeEnabled();
 
     // A browser may report online while DNS, proxy or origin connections fail.
@@ -49,11 +49,11 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     });
     await page.getByRole("button", {name: "Aggiorna elenco"}).click();
     await expect(page.getByRole("alert")).toContainText("Servizio perizie non disponibile");
-    await expect(page.getByRole("list", {name: "Perizie"}).getByText(ref, {exact: true})).toHaveCount(0);
+    await expect(page.getByRole("list", {name: /^(Perizie|Appraisals)$/}).getByText(ref, {exact: true})).toHaveCount(0);
     expect(await page.evaluate(() => navigator.onLine)).toBe(true);
     await page.unroute("**/api/perizie");
     await page.getByRole("button", {name: "Riprova"}).click();
-    await expect(page.getByRole("list", {name: "Perizie"}).getByText(ref, {exact: true})).toBeVisible();
+    await expect(page.getByRole("list", {name: /^(Perizie|Appraisals)$/}).getByText(ref, {exact: true})).toBeVisible();
 
     const otherRef = "API-DOWN-WRITE-" + Date.now();
     await page.route("**/api/perizie", async route => {
@@ -66,14 +66,14 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     await page.locator("#reference").fill(otherRef);
     await page.getByRole("button", {name: "Crea"}).click();
     await expect(page.getByRole("alert")).toContainText("Servizio perizie non disponibile");
-    await expect(page.getByRole("list", {name: "Perizie"}).getByText(ref, {exact: true})).toHaveCount(0);
+    await expect(page.getByRole("list", {name: /^(Perizie|Appraisals)$/}).getByText(ref, {exact: true})).toHaveCount(0);
     await expect(page.getByRole("button", {name: "Crea"})).toHaveCount(0);
     expect(await page.evaluate(() => navigator.onLine)).toBe(true);
 
     await page.unroute("**/api/perizie");
     await page.getByRole("button", {name: "Riprova"}).click();
-    await expect(page.getByRole("list", {name: "Perizie"}).getByText(ref, {exact: true})).toBeVisible();
-    await expect(page.getByRole("list", {name: "Perizie"}).getByText(otherRef, {exact: true})).toHaveCount(0);
+    await expect(page.getByRole("list", {name: /^(Perizie|Appraisals)$/}).getByText(ref, {exact: true})).toBeVisible();
+    await expect(page.getByRole("list", {name: /^(Perizie|Appraisals)$/}).getByText(otherRef, {exact: true})).toHaveCount(0);
   });
 
   test("a stale GET never restores protected rows after a concurrent failed mutation", async ({page}) => {
@@ -88,7 +88,7 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     const ref = "API-RACE-" + Date.now() + "-" + Math.round(Math.random() * 100000);
     await page.locator("#reference").fill(ref);
     await page.getByRole("button", {name: "Crea"}).click();
-    const row = page.getByRole("list", {name: "Perizie"}).locator("li").filter({hasText: ref});
+    const row = page.getByRole("list", {name: /^(Perizie|Appraisals)$/}).locator("li").filter({hasText: ref});
     await expect(row).toBeVisible();
     await row.getByRole("textbox", {name: "Assegnatario " + ref}).fill("race-assignee");
 
@@ -124,13 +124,13 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     const oldResponse = await oldRead;
     await oldResponse.finished();
     await expect(page.getByRole("button", {name: "Riprova"})).toBeVisible();
-    await expect(page.getByRole("list", {name: "Perizie"}).getByText(ref, {exact: true})).toHaveCount(0);
+    await expect(page.getByRole("list", {name: /^(Perizie|Appraisals)$/}).getByText(ref, {exact: true})).toHaveCount(0);
     await expect(page.getByRole("button", {name: "Crea"})).toHaveCount(0);
 
     await page.unroute("**/api/perizie");
     await page.unroute("**/api/perizie/*/assign");
     await page.getByRole("button", {name: "Riprova"}).click();
-    await expect(page.getByRole("list", {name: "Perizie"}).getByText(ref, {exact: true})).toBeVisible();
+    await expect(page.getByRole("list", {name: /^(Perizie|Appraisals)$/}).getByText(ref, {exact: true})).toBeVisible();
     await expect(row.getByText("Registrata")).toBeVisible();
   });
 
@@ -220,7 +220,7 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     const reference = "UI-WORKFLOW-" + Date.now() + "-" + Math.round(Math.random() * 100000);
     await page.locator("#reference").fill(reference);
     await page.getByRole("button", {name: "Crea"}).click();
-    const row = page.getByRole("list", {name: "Perizie"}).locator("li").filter({hasText: reference});
+    const row = page.getByRole("list", {name: /^(Perizie|Appraisals)$/}).locator("li").filter({hasText: reference});
     await expect(row).toBeVisible();
     await expect(row.getByText("Registrata")).toBeVisible();
 
@@ -272,7 +272,7 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     const reference = "OFFLINE-REFETCH-" + Date.now() + "-" + Math.round(Math.random() * 100000);
     await page.locator("#reference").fill(reference);
     await page.getByRole("button", {name: "Crea"}).click();
-    await expect(page.getByRole("list", {name: "Perizie"}).getByText(reference)).toBeVisible();
+    await expect(page.getByRole("list", {name: /^(Perizie|Appraisals)$/}).getByText(reference)).toBeVisible();
 
     // This test uses the built nginx-hosted PWA, not the Vite dev server.
     // Workbox may precache the public shell only, never API/MCP or tenant
@@ -298,13 +298,13 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     });
     expect(offlineApiResult, "offline API must not be answered with cached data").toBe(0);
     await expect(page.getByRole("status")).toContainText("offline");
-    await expect(page.getByRole("list", {name: "Perizie"}).getByText(reference)).toHaveCount(0);
+    await expect(page.getByRole("list", {name: /^(Perizie|Appraisals)$/}).getByText(reference)).toHaveCount(0);
     await expect(page.getByRole("button", {name: "Crea"})).toHaveCount(0);
     await expect(page.getByRole("button", {name: "Carica documento"})).toHaveCount(0);
 
     await context.setOffline(false);
     await expect(page.getByRole("status")).toHaveCount(0);
-    await expect(page.getByRole("list", {name: "Perizie"}).getByText(reference)).toBeVisible({timeout: 30_000});
+    await expect(page.getByRole("list", {name: /^(Perizie|Appraisals)$/}).getByText(reference)).toBeVisible({timeout: 30_000});
     await expect(page.getByRole("button", {name: "Crea"})).toBeEnabled();
   });
 
@@ -324,7 +324,7 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     await page.getByRole("button", {name: "Crea"}).click();
     const created = await creation;
     expect(created.status(), await created.text()).toBe(201);
-    await expect(page.getByRole("list", {name: "Perizie"}).getByText(reference)).toBeVisible({timeout: 30_000});
+    await expect(page.getByRole("list", {name: /^(Perizie|Appraisals)$/}).getByText(reference)).toBeVisible({timeout: 30_000});
 
     const accessToken = await page.evaluate(() => {
       const key = Object.keys(sessionStorage).find(k => k.startsWith("oidc.user:"));
