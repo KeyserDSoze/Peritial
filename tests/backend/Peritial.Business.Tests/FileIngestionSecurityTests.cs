@@ -11,6 +11,80 @@ public sealed class FileIngestionSecurityTests
     private static readonly byte[] Xml = Encoding.UTF8.GetBytes("<?xml version=\"1.0\"?><document><item>ok</item></document>");
     private static readonly byte[] Png = [137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0];
 
+    private const string DocxMime =
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+    [Fact]
+    public async Task Docx_valido_rimane_ammesso_dopo_i_controlli_anti_zip_bomb()
+    {
+        var (service, store, docs) = NewService();
+        var bytes = CreateDocx();
+        var saved = await service.IngestAsync("rapporto.docx", DocxMime,
+            new MemoryStream(bytes), bytes.Length);
+        Assert.Equal(bytes.Length, saved.Length);
+        Assert.Equal(1, store.Uploads);
+        Assert.Single(docs.Records);
+    }
+
+    [Fact]
+    public async Task Docx_con_zip_bomb_altamente_comprimibile_e_bloccato_prima_della_scansione()
+    {
+        var (service, store, docs) = NewService();
+        // Eight MiB compresses to a handful of KiB; decompression
+        // must not be accepted just because the ZIP itself is small.
+        var bytes = CreateDocx(("word/media/huge.bin", new byte[8 * 1024 * 1024]));
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.IngestAsync("rapporto.docx", DocxMime,
+                new MemoryStream(bytes), bytes.Length));
+        Assert.Equal(0, store.Uploads);
+        Assert.Empty(docs.Records);
+    }
+
+    [Fact]
+    public async Task Docx_con_zip_slip_path_e_bloccato_prima_dello_storage()
+    {
+        var (service, store, docs) = NewService();
+        var bytes = CreateDocx(("../escape.xml", "<root/>"u8.ToArray()));
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.IngestAsync("rapporto.docx", DocxMime,
+                new MemoryStream(bytes), bytes.Length));
+        Assert.Equal(0, store.Uploads);
+        Assert.Empty(docs.Records);
+    }
+
+    [Fact]
+    public async Task Docx_con_entry_duplicate_case_insensitive_e_bloccato()
+    {
+        var (service, store, docs) = NewService();
+        var bytes = CreateDocx(("[content_types].XML", "<Types/>"u8.ToArray()));
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.IngestAsync("rapporto.docx", DocxMime,
+                new MemoryStream(bytes), bytes.Length));
+        Assert.Equal(0, store.Uploads);
+        Assert.Empty(docs.Records);
+    }
+
+    private static byte[] CreateDocx(params (string Name, byte[] Bytes)[] additional)
+    {
+        using var output = new MemoryStream();
+        using (var zip = new System.IO.Compression.ZipArchive(
+            output, System.IO.Compression.ZipArchiveMode.Create, leaveOpen: true))
+        {
+            AddPart("[Content_Types].xml", "<Types/>"u8.ToArray());
+            AddPart("word/document.xml", "<document/>"u8.ToArray());
+            foreach (var part in additional)
+                AddPart(part.Name, part.Bytes);
+
+            void AddPart(string name, byte[] bytes)
+            {
+                var entry = zip.CreateEntry(name, System.IO.Compression.CompressionLevel.Optimal);
+                using var contents = entry.Open();
+                contents.Write(bytes);
+            }
+        }
+        return output.ToArray();
+    }
+
     [Fact]
     public async Task Falso_pdf_non_raggiunge_storage_o_database()
     {
