@@ -1,5 +1,8 @@
 export type Perizia = { id:string; reference:string; status:string; assignedTo:string|null; createdAtUtc:string };
 export type DocumentRecord = { id:string; periziaId:string|null; fileName:string; contentType:string; length:number };
+// Safe read-only metadata projection: no tenant ID, internal storage key,
+// object URL, file bytes or scanner details.
+export type DocumentSummary = DocumentRecord & {createdAtUtc:string};
 // When the browser is still "online", REST can still be unreachable or the
 // current JWT can be rejected. Stop showing previously loaded tenant records
 // until a new authenticated GET succeeds; never queue or replay a mutation.
@@ -21,6 +24,8 @@ async function request<T>(url:string, token:string, init?:RequestInit):Promise<T
   return response.json() as Promise<T>;
 }
 export const listPerizie = (token:string) => request<Perizia[]>("/perizie",token);
+export const listDocuments = (token:string) =>
+  request<DocumentSummary[]>("/files?limit=50", token);
 export const createPerizia = (token:string, reference:string) => request<Perizia>("/perizie",token,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({reference})});
 // Mutations reuse the Business layer's scoped REST endpoints. Responses are
 // authoritative: the UI does not optimistically advance a workflow state.
