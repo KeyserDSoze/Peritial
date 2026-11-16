@@ -156,6 +156,76 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
     expect(perizie.find(p => p.id === secondId)?.status).toBe("Cancelled");
   });
 
+  test("MCP assignment and advancement share REST authorization, state and audit", async ({request}) => {
+    const writer = await tokenFor(request, "peritial-test-write");
+    const readOnly = await tokenFor(request, "peritial-test-readonly");
+    const listTools = await request.post(api + "/mcp", {
+      headers: mcpHeaders(writer),
+      data: {jsonrpc: "2.0", id: 201, method: "tools/list"}
+    });
+    expect(listTools.ok(), await listTools.text()).toBeTruthy();
+    expect(await listTools.text()).toContain("assign_perizia");
+    expect(await listTools.text()).toContain("advance_perizia");
+
+    const created = await request.post(api + "/api/perizie", {
+      headers: {Authorization: "Bearer " + writer},
+      data: {reference: "MCP-WORKFLOW-" + Date.now() + "-" + Math.random()}
+    });
+    expect(created.status(), await created.text()).toBe(201);
+    const id = (await created.json() as {id: string}).id;
+    const call = (token: string, requestId: number, name: string, args: object) =>
+      request.post(api + "/mcp", {
+        headers: mcpHeaders(token),
+        data: {jsonrpc: "2.0", id: requestId, method: "tools/call",
+          params: {name, arguments: args}}
+      });
+
+    const deniedAssign = await call(readOnly, 202, "assign_perizia", {
+      id, assignee: "forbidden-assignee"
+    });
+    expect(deniedAssign.ok(), await deniedAssign.text()).toBeTruthy();
+    expect(await deniedAssign.text()).toContain('"isError":true');
+    const deniedAdvance = await call(readOnly, 203, "advance_perizia", {
+      id, target: "ToBeRevised"
+    });
+    expect(deniedAdvance.ok(), await deniedAdvance.text()).toBeTruthy();
+    expect(await deniedAdvance.text()).toContain('"isError":true');
+
+    const assigned = await call(writer, 204, "assign_perizia", {
+      id, assignee: "assigned-through-mcp"
+    });
+    expect(assigned.ok(), await assigned.text()).toBeTruthy();
+    expect(await assigned.text()).toContain("Assigned");
+    expect(await assigned.text()).not.toContain('"isError":true');
+
+    const invalid = await call(writer, 205, "advance_perizia", {
+      id, target: "Cancelled"
+    });
+    expect(invalid.ok(), await invalid.text()).toBeTruthy();
+    expect(await invalid.text()).toContain('"isError":true');
+
+    const advanced = await call(writer, 206, "advance_perizia", {
+      id, target: "ToBeRevised"
+    });
+    expect(advanced.ok(), await advanced.text()).toBeTruthy();
+    expect(await advanced.text()).toContain("ToBeRevised");
+    expect(await advanced.text()).not.toContain('"isError":true');
+    const replay = await call(writer, 207, "advance_perizia", {
+      id, target: "ToBeRevised"
+    });
+    expect(replay.ok(), await replay.text()).toBeTruthy();
+    expect(await replay.text()).toContain('"isError":true');
+
+    const rest = await request.get(api + "/api/perizie", {
+      headers: {Authorization: "Bearer " + writer}
+    });
+    expect(rest.status(), await rest.text()).toBe(200);
+    const items = await rest.json() as {id: string; status: string; assignedTo: string | null}[];
+    const item = items.find(p => p.id === id);
+    expect(item?.status).toBe("ToBeRevised");
+    expect(item?.assignedTo).toBe("assigned-through-mcp");
+  });
+
   test("Keycloak-signed expired access tokens deny REST and MCP after configured clock skew", async ({request}) => {
     // The API intentionally allows 60 s clock skew. Test the real issuer's
     // short-lived, correctly signed token rather than forging a JWT payload.
