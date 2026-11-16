@@ -257,6 +257,42 @@
           }
         }
       ]
+    },
+    {
+      "clientId": "peritial-test-write-tenant-b",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "protocol": "openid-connect",
+      "defaultClientScopes": [
+        "basic",
+        "profile",
+        "peritial.read",
+        "peritial.write"
+      ],
+      "protocolMappers": [
+        {
+          "name": "tenant-id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "22222222-2222-2222-2222-222222222222",
+            "jsonType.label": "String",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "peritial-api",
+            "access.token.claim": "true"
+          }
+        }
+      ]
     }
   ],
   "users": [
@@ -273,6 +309,22 @@
       "email": "localuser@example.invalid",
       "firstName": "Local",
       "lastName": "Tester",
+      "emailVerified": true,
+      "requiredActions": []
+    },
+    {
+      "username": "otheruser",
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "local-only-other-user",
+          "temporary": false
+        }
+      ],
+      "email": "otheruser@example.invalid",
+      "firstName": "Other",
+      "lastName": "Tenant",
       "emailVerified": true,
       "requiredActions": []
     }
