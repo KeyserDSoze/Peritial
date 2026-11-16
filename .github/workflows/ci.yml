@@ -20,7 +20,7 @@ jobs:
           --health-cmd "pg_isready -U peritial -d peritial"
           --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Fail-closed recovery tests require swap disabled on ephemeral runner
         run: |
           sudo swapoff --all
@@ -45,7 +45,7 @@ jobs:
       run:
         working-directory: src/frontend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -56,7 +56,7 @@ jobs:
   compose:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Disable host swap before private tmpfs recovery drill
         run: |
           sudo swapoff --all
@@ -272,7 +272,7 @@ jobs:
   worm-recovery:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Start isolated S3 implementation with REAL COMPLIANCE Object Lock
         run: |
           # Dedicated disposable PGSTY SILO WORM reference (MinIO-compatible):
@@ -341,7 +341,7 @@ jobs:
   database-recovery:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "10.0.x"
@@ -354,7 +354,7 @@ jobs:
   observability-rules:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Verify webhook data minimization and rejection rules
         run: python3 -m unittest discover -s tests/observability -p 'test_alert_webhook_sink.py' -v
       - name: Validate isolated Prometheus readiness alert rules
@@ -378,21 +378,21 @@ jobs:
   clamav-signatures:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Validate opt-in FreshClam Compose merge and fail-closed invariants
         run: python3 -m unittest discover -s tests/security -p 'test_clamav_update_overlay.py' -v
 
   supply-chain-actions:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Reject unpinned, mutable or unreviewed GitHub Actions
         run: python3 -m unittest discover -s tests/security -p 'test_workflow_action_pins.py' -v
 
   terraform:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: hashicorp/setup-terraform@v3
       - name: Format check / validate
         run: |
