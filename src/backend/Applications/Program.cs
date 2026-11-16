@@ -243,6 +243,8 @@ app.MapGet("/.well-known/oauth-protected-resource", () =>
 var api = app.MapGroup("/api").RequireAuthorization();
 api.MapGet("/perizie", (PeriziaService service, CancellationToken ct) => service.ListAsync(ct))
     .RequireAuthorization("peritial.read");
+api.MapGet("/perizie/{id:guid}", (Guid id, PeriziaService service, CancellationToken ct) =>
+    service.GetAsync(id, ct)).RequireAuthorization("peritial.read");
 api.MapPost("/perizie", async (CreatePeriziaRequest input, PeriziaService service, CancellationToken ct) =>
 {
     var created = await service.CreateAsync(input.Reference, ct);
