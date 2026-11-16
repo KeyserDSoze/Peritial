@@ -58,6 +58,32 @@ Il test CI `tests/observability/run_collector_e2e.sh` verifica il Compose effett
 
 **Non è ancora configurato alcun collector persistente, dashboard o alert di produzione.** Occorrono provisioning di rete privata/TLS, rotazione delle credenziali del collector, regole di retention/ACL, metriche da tutte le repliche e test di consegna su collector gestito prima di dichiarare osservabilità end-to-end attiva.
 
+### Prometheus effimero reale, solo Compose / CI
+
+Per verificare anche il **percorso di trasporto, la normalizzazione OTLP→Prometheus e le regole valutate su misure reali**, aggiungere il terzo overlay `docker/compose.prometheus.yml` a quelli esistenti:
+
+```sh
+docker compose -f docker/compose.yml up -d --build
+docker compose -f docker/compose.yml \
+  -f docker/compose.observability.yml \
+  -f docker/compose.prometheus.yml up -d prometheus otel-collector api
+# Solo dal computer dove si esegue Docker; non esporre fuori da localhost:
+curl -fsS -G 'http://127.0.0.1:19090/api/v1/query' \
+  --data-urlencode 'query=peritial_readiness_requests_total'
+# La porta OTLP 4318 del collector NON ha un bind host.
+# Ripristinare l'API standard senza exporter:
+docker compose -f docker/compose.yml up -d --no-deps --force-recreate api
+docker compose -f docker/compose.yml \
+  -f docker/compose.observability.yml \
+  -f docker/compose.prometheus.yml stop otel-collector prometheus
+```
+
+La versione di test di Prometheus è fissata a `prom/prometheus:v3.5.0`. La sua API 9090 è raggiungibile **solo dall'interfaccia loopback dell'host** su 19090 per le query CI: non è autenticata. Il collector continua a ricevere OTLP/HTTP senza pubblicare 4318 e usa l'exporter `otlp_http/prometheus` verso `http://prometheus:9090/api/v1/otlp`, che inoltra le misure al percorso `/v1/metrics`. Le trace non vengono memorizzate in Prometheus: rimangono nel diagnostico effimero del collector. La root del container Prometheus è in sola lettura; la TSDB è confinata a un **tmpfs temporaneo da 128 MB**, con retention di una sola ora (non persistente al riavvio). Non ci sono servizi di Alertmanager, backend cifrati o notifiche.
+
+Il gate `tests/observability/run_prometheus_e2e.sh` verifica sul `main` il **vero** arrivo di `peritial_readiness_requests_total` e `peritial_readiness_duration_seconds_bucket` tramite API→Collector→Prometheus, poi arresta ClamAV, richiede vere risposte HTTP 503 e interroga `ALERTS` per entrambi i warning `PeritialReadinessFailures` e `PeritialReadinessDependencyFailed`. Riavvia ClamAV, conferma HTTP 200 e attende la completa risoluzione **reale** degli alert dopo la finestra `increase(...[2m])`; infine ripristina l'API base non esportante. Gli alert di silenzio/p95 rimangono coperti dai test `promtool` a dati sintetici, non da una simulazione artificiale dell'orologio produttivo.
+
+**Perimetro di sicurezza:** HTTP su rete Compose e porta loopback senza auth sono ammissibili **soltanto in CI/Development**. Questo overlay non è un esempio di rilascio reale. In produzione servono porte senza bind host, autenticazione e TLS/mTLS lato ingestione/query, collector egress/ACL privati, provisioning e retention su storage durevole, monitoraggio volumi, federazione multi-replica, Alertmanager e test di notifica reali. L'uso di OTLP push→Prometheus è un'integrazione dimostrativa di volume limitato: il deployment richiede la scelta di una topologia di ingestione adatta al carico effettivo.
+
 ### Regole Prometheus versionate e testate (non ancora attive)
 
 Il file [`docker/prometheus-readiness-alerts.yml`](../docker/prometheus-readiness-alerts.yml) contiene quattro regole **compatibili con un futuro Prometheus privato**, i cui nomi aspettano la conversione OpenTelemetry → Prometheus dei contatori/istogrammi, da convalidare sul backend effettivo:
