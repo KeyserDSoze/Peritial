@@ -7,7 +7,7 @@ export function isApiUnavailable(error: unknown): boolean {
   if (error instanceof TypeError) return true; // fetch network failure
   if (!(error instanceof Error)) return false;
   if (error.name === "AbortError") return true;
-  const code = /^HTTP (\\d{3})$/.exec(error.message);
+  const code = /^HTTP (\d{3})$/.exec(error.message);
   if (!code) return false;
   const status = Number(code[1]);
   return status === 401 || status === 403 || status === 408 ||
