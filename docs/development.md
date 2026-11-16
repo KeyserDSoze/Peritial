@@ -132,11 +132,18 @@ La PWA utilizza già il plugin `vite-plugin-pwa` per il manifest e
 per il precaricamento degli asset **statici** della shell. In
 `src/frontend/vite.config.ts` la configurazione Workbox ora
 limita esplicitamente il fallback di navigazione al solo path
-`/` (`navigateFallbackAllowlist: [/^\\/$/]`) e disabilita
+`/` (`navigateFallbackAllowlist: [/^\/$/]`) e disabilita
 qualsiasi `runtimeCaching`: richieste `/api`, `/mcp`,
 `/.well-known`, OAuth e altri endpoint server **non** vengono
 serviti dal fallback né archiviate in runtime cache dal service
-worker. Questa impostazione non sostituisce la revisione degli
+worker. Il middleware ASP.NET Core risponde inoltre con
+`Cache-Control: no-store` e `Pragma: no-cache` per
+**ogni** richiesta `/api` e `/mcp`, inclusi 401/403 e
+stream MCP: così anche la cache HTTP ordinaria del browser
+o del proxy non dovrebbe conservare dati del tenant.
+`tests/frontend/security.spec.ts` verifica gli header su
+REST autenticata, MCP autenticato e REST anonima.
+Questa impostazione non sostituisce la revisione degli
 asset precache a ogni nuova release.
 
 `src/frontend/src/useOnlineStatus.ts` ascolta gli eventi browser
