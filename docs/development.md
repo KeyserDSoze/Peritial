@@ -16,6 +16,44 @@ La CI Docker Compose esegue ora un test Playwright autenticato reale (Keycloak, 
 
 `tests/frontend/security.spec.ts` effettua test negativi reali contro il realm Keycloak demo in Docker Compose: discovery RFC 9728, assenza `tenant_id`, audience errata, scope insufficiente, `401` vs `403`, tool MCP non autorizzati. I client Keycloak `peritial-test-*` con password grant servono **esclusivamente** per i test isolati locali, non per i client reali. La PWA continua con Authorization Code + PKCE. Vedere ADR 0007.
 
+## Regressione Sinistri: due tenant OAuth realmente firmati (#7/#4/#12)
+
+La suite `tests/frontend/security.spec.ts` usa ora **due identità
+soggetto distinte** sul Keycloak demo: `localuser` con client
+`peritial-test-write` (claim tenant firmato
+`11111111-1111-1111-1111-111111111111`) e `otheruser` con
+`peritial-test-write-tenant-b` (`22222222-2222-2222-2222-222222222222`).
+Entrambi i client usano il solo **password grant per CI locale**;
+nessun client PWA/PKCE o codice API accetta il tenant da una
+header/body/parametro fornito dal chiamante.
+
+Il test E2E su PostgreSQL reale e V003 verifica:
+- Creazione sinistro A via REST con un `tenantId` ostile nel JSON e
+  `X-Tenant-Id` falsificato; il record resta nel tenant firmato A.
+- Creazione sinistro B via MCP, verifica che entrambi i soggetti JWT
+  e i `tenant_id` firmati siano **diversi**, anche nelle risposte
+  lettura/lista REST/MCP.
+- `GET` cross-tenant A→B e B→A in REST produce **404 identico**
+  al GUID inesistente, e PUT cross-tenant produce 404 senza modifiche.
+- `get_sinistro`/`update_sinistro` su ID estraneo in MCP
+  restituiscono `isError:true`, senza riferimento privato;
+  `list_sinistri` per ciascun tenant non enumera quello altrui.
+- Il token read-only dello stesso tenant legge ma non aggiorna
+  (REST 403; MCP `isError:true`). Le versioni dei due record
+  restano 1 e gli errori non producono aggiornamenti riusciti.
+
+La CI Compose applica **solo in un database effimero** la fixture
+SQL V003 prima dei Playwright, senza alterare il bootstrap V001
+non journaled o l'upgrade esplicito della CLI migrator.
+Queste due identità sono **fittizie e non sicure per produzione**:
+i client pubblici password grant hanno tenant hardcoded per test;
+chiunque disponga delle credenziali demo potrebbe scegliere il
+client. In produzione il tenant deve essere assegnato e firmato
+dal provider OIDC conforme al modello di trust e provisioning
+dell'organizzazione, non dal client, da JSON o da header.
+La prova non certifica Entra ID, IAM effettivo di produzione,
+client MCP esterni, rotazione credenziali, né la parità del legacy.
+
 ## Test audit
 
 SecurityAuditUseCaseTests verifica tenant, subject, azione ed esito senza riferimenti o payload. SecurityAuditRepositoryTests usa PostgreSQL reale e il ruolo INSERT-only per verificare RLS. La CI Docker Compose verifica audit realmente persistito dopo REST e MCP. Le fixture DDL/ruoli PostgreSQL usano un advisory lock per impedire corse del catalogo tra test paralleli. Vedere docs/audit.md.
