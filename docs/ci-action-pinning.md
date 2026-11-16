@@ -50,11 +50,11 @@ automaticamente dal controllo ricorsivo.
 
 ## Confini espliciti
 
-Questo gate rende deterministica la **revisione delle action** chiamate
-tramite `uses:`, non la supply chain completa: immagini Docker con tag
-mobili, base image, `runs-on: ubuntu-latest`, versioni SDK `10.0.x`,
-Terraform installato tramite setup action, dipendenze transitive e mirror
-esterni devono essere affrontati separatamente. Uno SHA fisso **non
+Il job copre ora anche il controllo dei digest dei **due Dockerfile applicativi**,
+tramite `test_dockerfile_base_pins.py` (runbook: [pin OCI](oci-base-image-pinning.md)).
+Non copre ancora la supply chain completa: immagini Compose/CI con tag mobili,
+`runs-on: ubuntu-latest`, SDK `10.0.x`, Terraform installato tramite setup action,
+dipendenze transitive e mirror esterni devono essere affrontati separatamente. Uno SHA fisso **non
 dimostra** da solo firma, provenance/SLSA, assenza vulnerabilità o
 approvazione del publisher. Non sostituisce branch protection, secrets
 security, permessi minimi o attestazioni del deploy. La issue #6 resta aperta.
