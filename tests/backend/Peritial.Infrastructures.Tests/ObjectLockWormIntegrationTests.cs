@@ -86,11 +86,18 @@ public sealed class ObjectLockWormIntegrationTests
                 UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
             var signingKey = RandomNumberGenerator.GetBytes(32);
             var encryptionKey = RandomNumberGenerator.GetBytes(32);
+            // Include a real multi-chunk encrypted document, not only PGDMP.
+            byte[] blob = RandomNumberGenerator.GetBytes(1_200_000);
+            await File.WriteAllBytesAsync(
+                Path.Combine(archive, "objects", "00000000.blob"), blob);
             var manifest = JsonSerializer.SerializeToUtf8Bytes(
                 new ObjectRecoveryArchive.ArchiveManifest(1,
                     new ObjectRecoveryCheckpoint.Manifest(1,
-                        Array.Empty<ObjectRecoveryCheckpoint.Document>()),
-                    Array.Empty<string>()));
+                        new[] { new ObjectRecoveryCheckpoint.Document(
+                            Guid.NewGuid(), Guid.NewGuid(), "tenant/locked.pdf",
+                            blob.LongLength,
+                            Convert.ToHexString(SHA256.HashData(blob)).ToLowerInvariant()) }),
+                    new[] { "application/pdf" }));
             await File.WriteAllBytesAsync(Path.Combine(archive, "manifest.json"), manifest);
             using (var hmac = IncrementalHash.CreateHMAC(
                 HashAlgorithmName.SHA256, signingKey))
@@ -168,6 +175,8 @@ public sealed class ObjectLockWormIntegrationTests
                 encryptionKey, signingKey);
             Assert.Equal(source, await File.ReadAllBytesAsync(
                 Path.Combine(decrypted, "postgres", "peritial.dump")));
+            Assert.Equal(blob, await File.ReadAllBytesAsync(
+                Path.Combine(decrypted, "s3", "objects", "00000000.blob")));
 
             // A key-only DELETE is allowed to create a delete marker. It must
             // never invalidate the protected prior version, and the ordinary
@@ -191,6 +200,68 @@ public sealed class ObjectLockWormIntegrationTests
                 SealedBundleOffsite.DownloadAsync(client, bucket, id,
                     newer, encryptionKey));
             Assert.False(Directory.Exists(newer));
+
+            // Also mask one ciphertext file, not just 'complete'. A coherent
+            // historical restore MUST pin EVERY encrypted object version.
+            var payloadKey = "sealed-v1/" + id + "/payload/00000004.enc";
+            await client.DeleteObjectAsync(new DeleteObjectRequest
+            {
+                BucketName = bucket, Key = payloadKey
+            });
+            var versions = await client.ListVersionsAsync(new ListVersionsRequest
+            {
+                BucketName = bucket, Prefix = "sealed-v1/" + id + "/",
+                MaxKeys = 100
+            });
+            Assert.False(versions.IsTruncated);
+            var selected = versions.Versions
+                .Where(v => !v.IsDeleteMarker)
+                .ToDictionary(v => v.Key[("sealed-v1/" + id + "/").Length..],
+                    v => v.VersionId, StringComparer.Ordinal);
+            Assert.Contains("complete", selected.Keys);
+            Assert.Contains("payload/00000004.enc", selected.Keys);
+            Assert.True(versions.Versions.Any(v =>
+                v.Key == completeKey && v.IsDeleteMarker));
+            Assert.True(versions.Versions.Any(v =>
+                v.Key == payloadKey && v.IsDeleteMarker));
+
+            var missing = new Dictionary<string, string>(selected,
+                StringComparer.Ordinal);
+            missing.Remove("complete");
+            var incompleteDir = Path.Combine(root, "historical-missing");
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                SealedBundleOffsite.DownloadHistoricalAsync(client, bucket, id,
+                    incompleteDir, encryptionKey, missing));
+            Assert.False(Directory.Exists(incompleteDir));
+
+            var tampered = new Dictionary<string, string>(selected,
+                StringComparer.Ordinal);
+            tampered["complete"] = selected["index.json"];
+            var tamperedDir = Path.Combine(root, "historical-forged");
+            await Assert.ThrowsAnyAsync<Exception>(() =>
+                SealedBundleOffsite.DownloadHistoricalAsync(client, bucket, id,
+                    tamperedDir, encryptionKey, tampered));
+            Assert.False(Directory.Exists(tamperedDir));
+
+            var wrongKeyDir = Path.Combine(root, "historical-wrong-key");
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                SealedBundleOffsite.DownloadHistoricalAsync(client, bucket, id,
+                    wrongKeyDir, RandomNumberGenerator.GetBytes(32), selected));
+            Assert.False(Directory.Exists(wrongKeyDir));
+
+            var historical = Path.Combine(root, "historical-encrypted");
+            var historicPlain = Path.Combine(root, "historical-plain");
+            await SealedBundleOffsite.DownloadHistoricalAsync(client, bucket, id,
+                historical, encryptionKey, selected);
+            await SealedRecoveryBundle.UnsealAsync(historical, historicPlain,
+                encryptionKey, signingKey);
+            Assert.Equal(source, await File.ReadAllBytesAsync(
+                Path.Combine(historicPlain, "postgres", "peritial.dump")));
+            Assert.Equal(blob, await File.ReadAllBytesAsync(
+                Path.Combine(historicPlain, "s3", "objects", "00000000.blob")));
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                SealedBundleOffsite.DownloadHistoricalAsync(client, bucket, id,
+                    historical, encryptionKey, selected));
         }
         finally
         {
