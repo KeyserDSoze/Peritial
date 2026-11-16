@@ -196,13 +196,14 @@ jobs:
       - uses: actions/checkout@v4
       - name: Start isolated S3 implementation with REAL COMPLIANCE Object Lock
         run: |
-          # MinIO community reference image is historical and unmaintained:
-          # CI-only disposable instance, not a production dependency.
+          # Dedicated disposable PGSTY SILO WORM reference (MinIO-compatible):
+          # maintained downstream fork, image fixed by published digest.
+          # CI-only; not an application's storage or a production dependency.
           docker run -d --name peritial-worm \
             -p 127.0.0.1:9000:9000 \
             -e MINIO_ROOT_USER=peritialworm \
             -e MINIO_ROOT_PASSWORD=local-only-test-worm-password \
-            quay.io/minio/minio:RELEASE.2025-10-15T17-29-55Z server /data
+            docker.io/pgsty/silo@sha256:c20d112390b9a9ce8c11b8af95ad35bcaa62f4759663c09c936cd8d2b511f329 server /data
           ready=0
           for i in $(seq 1 40); do
             if curl --fail --silent --max-time 2 http://127.0.0.1:9000/minio/health/ready > /dev/null; then
