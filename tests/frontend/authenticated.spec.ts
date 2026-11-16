@@ -208,6 +208,79 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     await expect(row.locator("a,button")).toHaveCount(0);
   });
 
+  test("PWA filtra i documenti per perizia tramite GET tenant-scoped e non riusa la lista precedente", async ({page}) => {
+    await page.goto("/");
+    await page.getByRole("button", {name: "Accedi"}).click();
+    await expect(page.locator("#username")).toBeVisible({timeout: 30_000});
+    await page.locator("#username").fill("localuser");
+    await page.locator("#password").fill("local-only-user");
+    await page.locator("#kc-login").click();
+    await expect(page.getByRole("button", {name: "Esci"})).toBeVisible({timeout: 30_000});
+
+    const stamp = Date.now() + "-" + Math.round(Math.random() * 100000);
+    async function createCase(reference: string): Promise<string> {
+      const responsePromise = page.waitForResponse(response =>
+        response.url().endsWith("/api/perizie") && response.request().method() === "POST");
+      await page.locator("#reference").fill(reference);
+      await page.getByRole("button", {name: "Crea"}).click();
+      const response = await responsePromise;
+      expect(response.status(), await response.text()).toBe(201);
+      return ((await response.json()) as {id: string}).id;
+    }
+
+    const firstId = await createCase("FILTER-A-" + stamp);
+    const secondId = await createCase("FILTER-B-" + stamp);
+    const pdf = Buffer.from("%PDF-1.7\n1 0 obj\n<<>>\nendobj\n%%EOF\n");
+    async function uploadFor(id: string, name: string) {
+      await page.getByRole("combobox", {name: "Perizia collegata"}).selectOption(id);
+      await page.locator("#file").setInputFiles({name, mimeType: "application/pdf", buffer: pdf});
+      const responsePromise = page.waitForResponse(response =>
+        response.url().endsWith("/api/files") && response.request().method() === "POST");
+      await page.getByRole("button", {name: "Carica documento"}).click();
+      const response = await responsePromise;
+      expect(response.status(), await response.text()).toBe(201);
+      const list = page.getByRole("list", {name: "Documenti caricati"});
+      await expect(list.getByText(name, {exact: true})).toBeVisible();
+    }
+
+    const firstName = "first-filter-" + stamp + ".pdf";
+    const secondName = "second-filter-" + stamp + ".pdf";
+    await uploadFor(firstId, firstName);
+    await uploadFor(secondId, secondName);
+
+    const list = page.getByRole("list", {name: "Documenti caricati"});
+    await expect(list.getByText(firstName, {exact: true})).toBeVisible();
+    await expect(list.getByText(secondName, {exact: true})).toBeVisible();
+
+    const filter = page.getByRole("combobox", {name: "Filtra documenti per perizia"});
+    const firstGet = page.waitForResponse(response =>
+      response.request().method() === "GET" &&
+      new URL(response.url()).pathname === "/api/files" &&
+      new URL(response.url()).searchParams.get("periziaId") === firstId);
+    await filter.selectOption(firstId);
+    expect((await firstGet).status()).toBe(200);
+    await expect(list.getByText(firstName, {exact: true})).toBeVisible();
+    await expect(list.getByText(secondName, {exact: true})).toHaveCount(0);
+
+    const secondGet = page.waitForResponse(response =>
+      response.request().method() === "GET" &&
+      new URL(response.url()).pathname === "/api/files" &&
+      new URL(response.url()).searchParams.get("periziaId") === secondId);
+    await filter.selectOption(secondId);
+    expect((await secondGet).status()).toBe(200);
+    await expect(list.getByText(firstName, {exact: true})).toHaveCount(0);
+    await expect(list.getByText(secondName, {exact: true})).toBeVisible();
+    await expect(list.locator("a,button")).toHaveCount(0);
+
+    await page.getByRole("button", {name: "Lingua"}).click();
+    await expect(page.getByRole("combobox", {name: "Filter documents by appraisal"})).toHaveValue(secondId);
+    await page.getByRole("button", {name: "Language"}).click();
+
+    await filter.selectOption("");
+    await expect(list.getByText(firstName, {exact: true})).toBeVisible();
+    await expect(list.getByText(secondName, {exact: true})).toBeVisible();
+  });
+
   test("workflow perizia UI: assign, advance, cancel con conferma e i18n", async ({page}) => {
     await page.goto("/");
     await page.getByRole("button", {name: "Accedi"}).click();
