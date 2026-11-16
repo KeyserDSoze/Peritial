@@ -333,6 +333,25 @@ jobs:
         run: bash tests/backup/run_legacy_adoption.sh
       - name: Pre-lease legacy upgrade with verified backup and pending intents
         run: bash tests/backup/run_prelease_adoption.sh
+  observability-rules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate isolated Prometheus readiness alert rules
+        run: |
+          docker run --rm --read-only --network none \
+            --user "$(id -u):$(id -g)" \
+            -v "$PWD/docker:/work/docker:ro" \
+            --entrypoint /bin/promtool prom/prometheus:v3.5.0 \
+            check rules /work/docker/prometheus-readiness-alerts.yml
+      - name: Verify alert firing, recovery and missing-signal scenarios
+        run: |
+          docker run --rm --read-only --network none \
+            --user "$(id -u):$(id -g)" \
+            -v "$PWD/docker:/work/docker:ro" \
+            -v "$PWD/tests/observability:/work/tests/observability:ro" \
+            --entrypoint /bin/promtool prom/prometheus:v3.5.0 \
+            test rules /work/tests/observability/prometheus-alerts.test.yml
   terraform:
     runs-on: ubuntu-latest
     steps:
