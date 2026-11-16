@@ -114,6 +114,14 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
     });
     expect(forbidden.status(), await forbidden.text()).toBe(403);
 
+    const readOnlyTool = await request.post(api + "/mcp", {
+      headers: mcpHeaders(readOnly),
+      data: {jsonrpc: "2.0", id: 94, method: "tools/call",
+        params: {name: "cancel_perizia", arguments: {id: firstId}}}
+    });
+    expect(readOnlyTool.ok(), await readOnlyTool.text()).toBeTruthy();
+    expect(await readOnlyTool.text()).toContain('"isError":true');
+
     const cancelled = await request.post(api + "/api/perizie/" + firstId + "/cancel", {
       headers: writeHeaders
     });
