@@ -8,6 +8,21 @@ async function request<T>(url:string, token:string, init?:RequestInit):Promise<T
 }
 export const listPerizie = (token:string) => request<Perizia[]>("/perizie",token);
 export const createPerizia = (token:string, reference:string) => request<Perizia>("/perizie",token,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({reference})});
+// Mutations reuse the Business layer's scoped REST endpoints. Responses are
+// authoritative: the UI does not optimistically advance a workflow state.
+export const assignPerizia = (token: string, id: string, assignee: string) =>
+  request<Perizia>("/perizie/" + encodeURIComponent(id) + "/assign", token, {
+    method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({assignee})
+  });
+export const advancePerizia = (token: string, id: string, target: string) =>
+  request<Perizia>("/perizie/" + encodeURIComponent(id) + "/advance", token, {
+    method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({target})
+  });
+export const cancelPerizia = (token: string, id: string) =>
+  request<Perizia>("/perizie/" + encodeURIComponent(id) + "/cancel", token, {method: "POST"});
+export const getPerizia = (token: string, id: string) =>
+  request<Perizia>("/perizie/" + encodeURIComponent(id), token);
+
 export async function uploadDocument(token:string, file:File, periziaId?:string):Promise<DocumentRecord> {
   const body = new FormData(); body.append("file",file); if(periziaId) body.append("periziaId",periziaId);
   return request<DocumentRecord>("/files",token,{method:"POST",body});
