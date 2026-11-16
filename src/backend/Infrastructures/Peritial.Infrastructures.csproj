@@ -13,5 +13,6 @@
   <ItemGroup>
     <EmbeddedResource Include="../../../scripts/db/001_init.sql" />
     <EmbeddedResource Include="../../../scripts/db/migrations/V002__security_audit_action_index.sql" />
+    <EmbeddedResource Include="../../../scripts/db/migrations/V003__sinistri_rls.sql" />
   </ItemGroup>
 </Project>
