@@ -38,3 +38,11 @@ L'upgrade deve aggiungere `upload_intents.lease_expires_at_utc` e il grant colon
 ## Prova S3 mid-PUT non equivalente a test Azure
 
 La CI verifica SIGKILL durante un upload S3 effettivamente in corso (byte HTTP PUT inoltrati a SeaweedFS) e cleanup automatico dopo restart usando il worker e i ruoli PostgreSQL reali. Questo non prova i comportamenti specifici di Azure Blob, il failover multi-replica, le reti aziendali e il backup/restore: tali prove rimangono prerequisiti di rilascio (#17/#21). ADR 0014.
+
+## Readiness storage Azure Blob (#19)
+
+La nuova `GET /health/ready` include la verifica **read-only** dei metadati dello stesso container documentale dell'app. `Storage__Provider=Azure` e `Storage__Azure__Container` selezionano lo storage; il probe chiama `GetContainerProperties`, non scrive né elenca file. La risposta è `not_ready` (HTTP 503) se il servizio è irraggiungibile o il container non è accessibile.
+
+**Separazione delle credenziali obbligatoria** per l'ambiente non-Development: impostare `Storage__Readiness__Azure__ManagedIdentityClientId` (identità managed dedicata con accesso limitato ai metadati e `Storage__Azure__ServiceUri` HTTPS), in alternativa `Storage__Readiness__Azure__ConnectionString` con credenziale/SAS di sola lettura diversa da quella del writer. Fornire le credenziali da Azure Key Vault/secret manager; mai in file versionati. Senza identità di readiness l'API rifiuta l'avvio. `Storage__Readiness__AllowSharedDevelopmentCredentials` non è ammessa in produzione. L'attuale Terraform non provisiona l'identità/ruolo di readiness: aggiornare IaC e testare RBAC e Managed Identity reali in Azure prima del rilascio (#17).
+
+La suite Compose usa Azurite e testa la HEAD del container esistente e inesistente; **non** dimostra l'assenza di privilegi di scrittura su Azure, la raggiungibilità Azure da Container Apps, l'efficacia di una SAS reale o la salute dell'ingestion. Vedere `docs/local-deployment.md` per S3 e per i limiti complessivi di readiness.
