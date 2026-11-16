@@ -72,8 +72,8 @@ export function PeriziaWorkflow({item, token, onUpdated}: Props) {
     </p>}
     <div className="flex flex-wrap items-center gap-2">
       {item.status === "Registered" && <form className="flex min-w-0 flex-wrap items-center gap-2" onSubmit={assign}>
-        <label className="sr-only" htmlFor={"assignee-" + item.id}>{t("assignee")} {item.reference}</label>
-        <input id={"assignee-" + item.id} value={assignee} required maxLength={160}
+        <input id={"assignee-" + item.id} aria-label={t("assignee") + " " + item.reference}
+          value={assignee} required maxLength={160}
           placeholder={t("assignee")} disabled={busy}
           onChange={event => setAssignee(event.target.value)}
           className="min-w-0 flex-1 rounded-md border border-slate-300 bg-transparent px-3 py-2 dark:border-slate-700" />
