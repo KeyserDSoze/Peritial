@@ -6,9 +6,11 @@ import { Button } from "./components/ui/button";
 import { createPerizia, listPerizie, uploadDocument, type Perizia } from "./api";
 import { PeriziaWorkflow } from "./components/PeriziaWorkflow";
 import {preferredTheme, saveLanguage, saveTheme} from "./uiPreferences";
+import {useOnlineStatus} from "./useOnlineStatus";
 export default function App() {
   const auth = useAuth();
   const { t, i18n } = useTranslation();
+  const online = useOnlineStatus();
   const [dark, setDark] = useState(() => preferredTheme() === "dark");
   const [items, setItems] = useState<Perizia[]>([]);
   // Each confirmed mutation increments a local revision. A GET started before
@@ -34,11 +36,18 @@ export default function App() {
     saveTheme(next ? "dark" : "light");
   }
   useEffect(() => {
-    // Do not leave another authenticated tenant's list visible after logout.
-    if (!token) { setItems([]); mutations.current.clear(); }
-  }, [token]);
+    // Never display locally retained tenant data while disconnected.
+    // After reconnect the app must fetch new data using the current JWT.
+    if (!token || !online) {
+      setItems([]);
+      mutations.current.clear();
+      setError("");
+      setReference("");
+      setUpload(null);
+    }
+  }, [token, online]);
   useEffect(() => {
-    if (!token) return;
+    if (!token || !online) return;
     let active = true;
     const revisionsAtStart = new Map(mutations.current);
     listPerizie(token).then(data => { if (active) setItems(current => {
@@ -52,9 +61,9 @@ export default function App() {
         ];
       }); }).catch(() => { if(active) setError(t("error")); });
     return () => { active = false; };
-  }, [token, t]);
+  }, [token, t, online]);
   async function create(event:FormEvent) {
-    event.preventDefault(); if(!token || !reference.trim()) return;
+    event.preventDefault(); if(!token || !online || !reference.trim()) return;
     setBusy(true); setError("");
     try {
       const item = await createPerizia(token,reference.trim());
@@ -65,7 +74,7 @@ export default function App() {
     catch { setError(t("error")); } finally { setBusy(false); }
   }
   async function sendFile() {
-    if(!token || !upload) return;
+    if(!token || !online || !upload) return;
     setBusy(true); setError("");
     try { await uploadDocument(token,upload); setUpload(null); }
     catch { setError(t("error")); } finally { setBusy(false); }
@@ -76,13 +85,16 @@ export default function App() {
       <div className="flex items-center gap-2">
         <Button variant="outline" aria-label={t("language")} onClick={toggleLanguage}>{i18n.language.toUpperCase()}</Button>
         <Button variant="outline" aria-label={t("theme")} aria-pressed={dark} onClick={toggleTheme}>{dark ? <Sun size={17}/> : <Moon size={17}/>}</Button>
-        {auth.isAuthenticated && <Button variant="outline" onClick={() => void auth.signoutRedirect()}>{t("signOut")}</Button>}
+        {auth.isAuthenticated && online && <Button variant="outline" onClick={() => void auth.signoutRedirect()}>{t("signOut")}</Button>}
       </div>
     </div></header>
     <main className="mx-auto max-w-5xl px-4 py-10 sm:py-14">
       <div className="mb-8"><p className="mb-2 flex items-center gap-2 text-xs uppercase tracking-widest text-sky-700 dark:text-sky-300"><ShieldCheck size={15}/>{t("tenant")}</p>
         <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">{t("welcome")}</h1><p className="mt-2 text-slate-500 dark:text-slate-400">{t("subtitle")}</p></div>
-      {auth.isLoading ? <p>{t("loading")}</p> : !auth.isAuthenticated ?
+      {!online ? <section role="status" aria-live="polite" className="max-w-xl rounded-xl border border-amber-300 bg-white p-7 shadow-sm dark:border-amber-700 dark:bg-slate-900">
+          <h2 className="mb-3 text-xl font-semibold">{t("offlineTitle")}</h2>
+          <p className="text-slate-700 dark:text-slate-300">{t("offlineMessage")}</p>
+        </section> : auth.isLoading ? <p>{t("loading")}</p> : !auth.isAuthenticated ?
         <section className="max-w-lg rounded-xl border border-slate-200 bg-white p-7 shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <p className="mb-6 text-slate-600 dark:text-slate-300">{t("signInHelp")}</p>
           <Button onClick={() => void auth.signinRedirect()}>{t("signIn")}</Button>
