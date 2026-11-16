@@ -97,6 +97,57 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
     });
     expect(tools.status(), await tools.text()).toBe(403);
   });
+  test("perizia cancellation is scoped, audited and exposed in REST and MCP", async ({request}) => {
+    const readOnly = await tokenFor(request, "peritial-test-readonly");
+    const writer = await tokenFor(request, "peritial-test-write");
+    const writeHeaders = {Authorization: "Bearer " + writer};
+
+    const create = await request.post(api + "/api/perizie", {
+      headers: writeHeaders,
+      data: {reference: "CANCEL-E2E-" + Date.now() + "-" + Math.random()}
+    });
+    expect(create.status(), await create.text()).toBe(201);
+    const firstId = (await create.json() as {id: string}).id;
+
+    const forbidden = await request.post(api + "/api/perizie/" + firstId + "/cancel", {
+      headers: {Authorization: "Bearer " + readOnly}
+    });
+    expect(forbidden.status(), await forbidden.text()).toBe(403);
+
+    const cancelled = await request.post(api + "/api/perizie/" + firstId + "/cancel", {
+      headers: writeHeaders
+    });
+    expect(cancelled.status(), await cancelled.text()).toBe(200);
+    expect((await cancelled.json() as {status: string}).status).toBe("Cancelled");
+
+    const replay = await request.post(api + "/api/perizie/" + firstId + "/cancel", {
+      headers: writeHeaders
+    });
+    expect(replay.status(), await replay.text()).toBe(400);
+
+    // Same use case through MCP on a separate perizia, with the same signed tenant.
+    const secondCreate = await request.post(api + "/api/perizie", {
+      headers: writeHeaders,
+      data: {reference: "CANCEL-MCP-" + Date.now() + "-" + Math.random()}
+    });
+    expect(secondCreate.status(), await secondCreate.text()).toBe(201);
+    const secondId = (await secondCreate.json() as {id: string}).id;
+    const mcp = await request.post(api + "/mcp", {
+      headers: mcpHeaders(writer),
+      data: {jsonrpc: "2.0", id: 95, method: "tools/call",
+        params: {name: "cancel_perizia", arguments: {id: secondId}}}
+    });
+    expect(mcp.ok(), await mcp.text()).toBeTruthy();
+    expect(await mcp.text()).toContain("Cancelled");
+    expect(await mcp.text()).not.toContain('"isError":true');
+
+    const list = await request.get(api + "/api/perizie", {headers: writeHeaders});
+    expect(list.status()).toBe(200);
+    const perizie = await list.json() as {id: string; status: string}[];
+    expect(perizie.find(p => p.id === firstId)?.status).toBe("Cancelled");
+    expect(perizie.find(p => p.id === secondId)?.status).toBe("Cancelled");
+  });
+
   test("Keycloak-signed expired access tokens deny REST and MCP after configured clock skew", async ({request}) => {
     // The API intentionally allows 60 s clock skew. Test the real issuer's
     // short-lived, correctly signed token rather than forging a JWT payload.
