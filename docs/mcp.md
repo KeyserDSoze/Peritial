@@ -33,13 +33,20 @@ un secondo evento di successo. Un ID assente o di altro tenant non è visibile
 attraverso il repository protetto da PostgreSQL FORCE RLS.
 
 Lo stato `Cancelled` e l'evento `perizia.cancel/succeeded` sono scritti
-nella stessa transazione PostgreSQL. Il database rifiuta anche cancellazioni
-stale sopra stati terminali; la concorrenza generale con altre transizioni,
-le operazioni idempotenti e l'UI dello storico **non** sono coperte da questa
-tranche. Il comportamento segue la regola già esistente nel dominio clean-room,
-non è una prova di parità completa con il branch storico `death`.
-Test xUnit e Playwright con Keycloak reale sono descritti in
-`docs/development.md` (#9/#21).
+nella stessa transazione PostgreSQL. Per **tutte** le mutazioni di perizie
+implementate (`assign`, `advance`, `cancel`) il repository confronta
+in modo atomico lo stato e l'assegnatario persistiti al momento della lettura.
+Se un'altra richiesta li ha cambiati, rifiuta la modifica prima dell'audit:
+**REST 409 Conflict** oppure errore MCP, mai `succeeded` per il loser.
+Un ID sconosciuto o di altro tenant resta 404 REST grazie a FORCE RLS.
+Vedere [ADR 0029](../adr/0029-optimistic-perizia-state-cas.md) e
+`docs/development.md` per i quattro test PostgreSQL RED/GREEN.
+
+La coppia status+assignee non è un contatore monotono né un token
+`If-Match` pubblico: transizioni inverse future potrebbero creare
+rischi ABA e richiederanno un revision counter. Mancano ancora
+idempotenza generale, UI di storico, prove multi-replica e equivalenza
+con il branch storico `death`. #9/#21 restano aperte.
 
 ## E2E e compatibilità
 
