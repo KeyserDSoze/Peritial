@@ -5,7 +5,7 @@ Prerequisiti: Docker Engine, Docker Compose v2.
 - Avvio: docker compose -f docker/compose.yml up --build -d
 - PWA http://localhost:5173 ; REST http://localhost:8080/api/perizie ; MCP http://localhost:8080/mcp
 - Liveness (processo attivo): http://localhost:8080/health/live
-- Readiness **parziale** (PostgreSQL applicativo + PING ClamAV + discovery/JWKS OIDC): http://localhost:8080/health/ready
+- Readiness **parziale** (PostgreSQL + ClamAV + OIDC + metadati S3): http://localhost:8080/health/ready
 - Keycloak: http://localhost:8081 ; SeaweedFS S3: http://localhost:8333
 - Utente solo locale: localuser / local-only-user; admin Keycloak locale: localadmin / local-only-admin.
 - Test backend PostgreSQL reale: docker compose -f docker/compose.yml --profile test run --rm tests
@@ -50,11 +50,22 @@ La pipeline CI usa un overlay Compose separato, `docker/compose.chaos.yml`, che 
 
 ## Liveness e readiness applicativa (#19)
 
-`GET /health/live` restituisce HTTP 200 quando il processo HTTP risponde, **anche** se PostgreSQL, ClamAV o il provider OIDC non sono disponibili. `GET /health/ready` (senza token) verifica in un **budget comune di 3 secondi**:
-1. `SELECT 1` con il ruolo PostgreSQL applicativo e senza bypass RLS;
-2. `zPING` sul clamd configurato, risposta esatta `PONG`;
-3. GET del documento di discovery OIDC su `Auth:MetadataAddress` (oppure `Auth:Authority/.well-known/openid-configuration`), `issuer` identico ad `Auth:Authority`, `jwks_uri` sullo stesso origin dell'issuer pubblico e GET JWKS con almeno una chiave di firma RSA/EC/OKP strutturalmente valida. Il backchannel interno `Auth:DevelopmentBackchannelOrigin` per Keycloak/Compose è ammesso esclusivamente in Development e il probe non segue redirect HTTP.
+`GET /health/live` risponde HTTP 200 quando il processo HTTP funziona, **anche** se una dipendenza è indisponibile. `GET /health/ready` (senza token) controlla entro un **budget comune di 3 secondi**:
+1. `SELECT 1` usando il ruolo PostgreSQL applicativo, senza bypass RLS;
+2. `zPING` su ClamAV e risposta esatta `PONG`;
+3. Discovery OIDC e JWKS (issuer pubblico corrispondente, chiave di firma strutturalmente valida, HTTP bounded, senza redirect);
+4. **Metadati dello storage documentale** scelto da `Storage:Provider`: `HeadBucket` per S3/SeaweedFS oppure `GetContainerProperties` per Azure Blob. Il probe non effettua PUT, DELETE, LIST degli oggetti o GET dei byte dei documenti. Bucket/container inesistenti, rete indisponibile e risposta non 200 implicano `not_ready`.
 
-La risposta è HTTP 200 `{"status":"ready"}` o HTTP 503 `{"status":"not_ready"}`, senza hostname, credenziali, metadata o dettagli di errore. Non effettua scritture a DB o storage né verifica JWT con token. In CI Compose vengono provate la disponibilità completa, l'indisponibilità e il ripristino di Keycloak e la successiva indisponibilità ClamAV, mantenendo `/health/live` attivo.
+La risposta è HTTP 200 `{"status":"ready"}` o HTTP 503 `{"status":"not_ready"}`, senza hostname, chiavi, filename, metadata delle dipendenze o errori interni.
 
-**Limiti:** readiness **parziale**, non un controllo di production readiness certificato: ancora da verificare object storage S3/Azure Blob con privilegi minimi, aggiornamento/freschezza/rotazione delle chiavi OIDC e delle firme ClamAV, autorizzazione di client specifici, worker recovery, metriche e backlog, multi-replica, rate limiting e alerting. Un keyset JWKS non vuoto non dimostra che un particolare JWT sia verificabile. Non usare `/health/live` come gate di traffico; calibrare frequenza e rate-limit dei probe di readiness per non caricare il provider OIDC.
+### Identità storage di sola lettura
+
+Fuori da `Development` le credenziali di readiness **devono essere diverse** da quelle per upload e cleanup. Se mancano, l'API non deve avviarsi; non attivare `Storage__Readiness__AllowSharedDevelopmentCredentials` in produzione.
+
+- **S3**: `Storage__Readiness__S3__AccessKey` e `Storage__Readiness__S3__SecretKey` sono obbligatorie e non devono corrispondere entrambe alla coppia `Storage__Minio__AccessKey/SecretKey`. La policy del principal deve consentire soltanto `s3:ListBucket` sul bucket specifico (per HeadBucket), senza `s3:GetObject`, `PutObject`, `DeleteObject` o enumerazione di oggetti; sul provider effettivo verificare l'applicazione IAM e i limiti operativi. La configurazione condivisa di Compose usa l'account locale di test solo con opt-in e non dimostra isolamento IAM.
+- **Azure Blob**: usare `Storage__Readiness__Azure__ManagedIdentityClientId` con `Storage__Azure__ServiceUri` HTTPS e RBAC limitato alla lettura dei metadati del container, **oppure** `Storage__Readiness__Azure__ConnectionString` riferita a una credenziale/SAS di sola lettura diversa dalla connection string del writer. Il contenitore è `Storage__Azure__Container` (default `documents`). Le prove Azurite verificano l'operazione, **non** l'assegnazione RBAC della managed identity o l'effettiva granularità SAS in Azure.
+- **Demo locale**: `Storage__Readiness__AllowSharedDevelopmentCredentials=true` è ammessa *solo* con `ASPNETCORE_ENVIRONMENT=Development`. Condivide credenziali note in Docker Compose e non va copiata in on-prem o Azure.
+
+La CI verifica la configurazione fail-closed, i metadati S3 e Azure su SeaweedFS/Azurite reali, e in Compose l'arresto/ripristino di Keycloak e SeaweedFS nonché l'arresto di ClamAV: readiness diventa 503 mentre liveness resta 200.
+
+**Limiti:** la riuscita di `HeadBucket`/`GetContainerProperties` non dimostra possibilità di upload, permessi di scrittura/lettura dei byte, correttezza dei documenti, integrità cross-servizio o latenza sostenuta. Sono ancora aperti prove AWS IAM e Azure managed identity reali, freschezza/rotazione JWKS e firme ClamAV, worker recovery, metriche e backlog, multi-replica, rate limiting e alerting. Non considerare `/health/ready` una certificazione di produzione né usare `/health/live` come gate di traffico.
