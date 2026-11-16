@@ -36,6 +36,26 @@ L'endpoint è una **base URL**: il client aggiunge esattamente `/v1/metrics` e `
 
 **Prova CI**: test xUnit `ReadinessOtlpExportContractTests` con receiver OTLP/HTTP-Protobuf su loopback effettivamente acquisisce un batch di metriche e uno di trace, oltre ai test che verificano la disattivazione e i vincoli URL. Il test loopback non prova TLS, autenticazione, collector vero, retention, esportazione distribuita o dashboard.
 
+### Collector effimero Compose per CI e sviluppo
+
+L'overlay facoltativo `docker/compose.observability.yml` abilita l'export soltanto sulla API della demo e aggiunge `otel/opentelemetry-collector:0.165.0` con il file `docker/otel-collector-demo.yml`. Il collector riceve **solo OTLP/HTTP port 4318 sulla rete interna Compose**, non pubblica porte sull'host, usa filesystem di root in sola lettura e capabilities Linux ridotte. Non ha pipeline di log, né storage, né una connessione a un backend esterno: l'exporter `debug` stampa esclusivamente le metriche e le trace ricevute nei log Docker. Questa configurazione non offre autenticazione o TLS: il trasporto HTTP è consentito **solo** perché l'API gira in Development e la rete è di test.
+
+```sh
+# Partire dalla stack di sviluppo; richiede Docker Compose v2.
+docker compose -f docker/compose.yml up -d --build
+docker compose -f docker/compose.yml -f docker/compose.observability.yml up -d otel-collector api
+# Genera probe di readiness; i batch sono periodici.
+curl --fail http://localhost:8080/health/ready
+docker compose -f docker/compose.yml -f docker/compose.observability.yml logs --tail=200 otel-collector
+# Tornare alla configurazione senza exporter:
+docker compose -f docker/compose.yml up -d --no-deps --force-recreate api
+docker compose -f docker/compose.yml -f docker/compose.observability.yml stop otel-collector
+```
+
+Il test CI `tests/observability/run_collector_e2e.sh` verifica il Compose effettivo, l'assenza di port binding, l'arrivo di una misura `peritial.readiness.requests` **e** uno span `peritial.readiness` ai log del collector, e prova che fermarlo **non cambia** la disponibilità di `/health/live` o `/health/ready` se le quattro dipendenze applicative funzionano. Ripristina l'API standard prima degli ulteriori drill di fault injection. Le misure si perdono se il collector si arresta: la prova non misura retention né consegna garantita.
+
+**Non copiare in produzione:** nel collector operativo servono TLS autenticato (o mTLS), destinazioni/backend privati, credenziali/headers da secret manager, controllo egress e accessi, retention, audit, regole di sampling/limiti e dashboard/alert. L'exporter debug è un diagnostico e non va usato con dati sensibili o telemetria generale dell'API.
+
 **Non è ancora configurato alcun collector persistente, dashboard o alert di produzione.** Occorrono provisioning di rete privata/TLS, rotazione delle credenziali del collector, regole di retention/ACL, metriche da tutte le repliche e test di consegna su collector gestito prima di dichiarare osservabilità end-to-end attiva.
 
 Una volta collegato un backend metriche, usare almeno i seguenti segnali per dashboard e alert:
