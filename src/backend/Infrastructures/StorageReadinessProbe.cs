@@ -44,7 +44,7 @@ public sealed class StorageReadinessProbe : IStorageReadinessProbe, IDisposable
             provider.Equals("S3", StringComparison.OrdinalIgnoreCase))
         {
             var endpoint = Required(config["Storage:Minio:Endpoint"]);
-            var bucket = Required(config["Storage:Minio:Bucket"]);
+            var bucket = config["Storage:Minio:Bucket"] ?? "peritial";
             var readerKey = config["Storage:Readiness:S3:AccessKey"];
             var readerSecret = config["Storage:Readiness:S3:SecretKey"];
             if (string.IsNullOrWhiteSpace(readerKey) != string.IsNullOrWhiteSpace(readerSecret))
@@ -72,7 +72,7 @@ public sealed class StorageReadinessProbe : IStorageReadinessProbe, IDisposable
 
         if (provider.Equals("Azure", StringComparison.OrdinalIgnoreCase))
         {
-            var name = Required(config["Storage:Azure:Container"]);
+            var name = config["Storage:Azure:Container"] ?? "documents";
             var readConnection = config["Storage:Readiness:Azure:ConnectionString"];
             var clientId = config["Storage:Readiness:Azure:ManagedIdentityClientId"];
             if (!string.IsNullOrWhiteSpace(readConnection) && !string.IsNullOrWhiteSpace(clientId))
@@ -108,7 +108,7 @@ public sealed class StorageReadinessProbe : IStorageReadinessProbe, IDisposable
         {
             if (_s3 is not null)
             {
-                using var response = await _s3.HeadBucketAsync(
+                var response = await _s3.HeadBucketAsync(
                     new HeadBucketRequest { BucketName = _bucket! }, cancellationToken);
                 return response.HttpStatusCode == HttpStatusCode.OK;
             }
