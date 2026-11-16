@@ -5,9 +5,9 @@ using Amazon.Runtime;
 
 // Manual security boundary: two independent 32-byte keys in secret-managed
 // files outside the backup; no plaintext secrets in argv, logs or Git.
-if (args.Length != 1 || args[0] is not ("seal" or "unseal" or "push-sealed" or "pull-sealed"))
+if (args.Length != 1 || args[0] is not ("seal" or "unseal" or "push-sealed" or "pull-sealed" or "pull-historic"))
 {
-    Console.Error.WriteLine("Usage: dotnet run --project scripts/recovery/Peritial.RecoveryBundle -- seal|unseal|push-sealed|pull-sealed");
+    Console.Error.WriteLine("Usage: dotnet run --project scripts/recovery/Peritial.RecoveryBundle -- seal|unseal|push-sealed|pull-sealed|pull-historic");
     return 2;
 }
 static string Required(string key) =>
@@ -43,6 +43,7 @@ try
         "seal" => "WRITERS_STOPPED",
         "unseal" => "ISOLATED_RESTORE",
         "push-sealed" => "REMOTE_ENCRYPTED_UPLOAD",
+        "pull-historic" => "ISOLATED_HISTORICAL_DOWNLOAD",
         _ => "ISOLATED_ENCRYPTED_DOWNLOAD"
     };
     if (Environment.GetEnvironmentVariable("PERITIAL_BUNDLE_CONFIRM") != expectedConfirmation)
@@ -100,12 +101,25 @@ try
                 master, disposableUnprotectedDemo: disposableDemo);
             Console.WriteLine("Encrypted backup copied, integrity verified, and remote completion marker published.");
         }
-        else
+        else if (args[0] == "pull-sealed")
         {
             await SealedBundleOffsite.DownloadAsync(remote, bucket, backupId,
                 Required("PERITIAL_BUNDLE_DOWNLOAD_DIR"), master,
                 disposableUnprotectedDemo: disposableDemo);
             Console.WriteLine("Remote encrypted backup authenticated and recovered to a private directory.");
+        }
+        else
+        {
+            // Never choose historical versions implicitly, and NEVER allow
+            // a WORM-history restore via the unprotected CI demo bypass.
+            if (disposableDemo)
+                throw new InvalidOperationException(
+                    "Historical Object Lock recovery is unavailable on the unprotected demo.");
+            var selected = SealedBundleOffsite.LoadHistoricalVersionSelection(
+                Required("PERITIAL_OFFSITE_VERSION_SELECTION_FILE"));
+            await SealedBundleOffsite.DownloadHistoricalAsync(remote, bucket, backupId,
+                Required("PERITIAL_BUNDLE_DOWNLOAD_DIR"), master, selected);
+            Console.WriteLine("Explicitly pinned historical encrypted S3 versions authenticated and recovered.");
         }
     }
     return 0;
