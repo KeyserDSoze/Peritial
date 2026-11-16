@@ -226,6 +226,60 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
     expect(item?.assignedTo).toBe("assigned-through-mcp");
   });
 
+  test("get_perizia returns only a tenant-scoped record to read-only REST and MCP tokens", async ({request}) => {
+    const writer = await tokenFor(request, "peritial-test-write");
+    const reader = await tokenFor(request, "peritial-test-readonly");
+    const noScope = await tokenFor(request, "peritial-test-no-scope");
+    const reference = "GET-MCP-" + Date.now() + "-" + Math.random();
+    const created = await request.post(api + "/api/perizie", {
+      headers: {Authorization: "Bearer " + writer},
+      data: {reference}
+    });
+    expect(created.status(), await created.text()).toBe(201);
+    const id = (await created.json() as {id: string}).id;
+    const nonexistent = "00000000-0000-4000-8000-000000000001";
+
+    const read = await request.get(api + "/api/perizie/" + id, {
+      headers: {Authorization: "Bearer " + reader}
+    });
+    expect(read.status(), await read.text()).toBe(200);
+    expect((await read.json() as {id: string; reference: string}).reference).toBe(reference);
+    const missing = await request.get(api + "/api/perizie/" + nonexistent, {
+      headers: {Authorization: "Bearer " + reader}
+    });
+    expect(missing.status(), await missing.text()).toBe(404);
+    const blocked = await request.get(api + "/api/perizie/" + id, {
+      headers: {Authorization: "Bearer " + noScope}
+    });
+    expect(blocked.status(), await blocked.text()).toBe(403);
+    const anonymous = await request.get(api + "/api/perizie/" + id);
+    expect(anonymous.status(), await anonymous.text()).toBe(401);
+
+    const catalog = await request.post(api + "/mcp", {
+      headers: mcpHeaders(reader),
+      data: {jsonrpc: "2.0", id: 301, method: "tools/list"}
+    });
+    expect(catalog.ok(), await catalog.text()).toBeTruthy();
+    expect(await catalog.text()).toContain("get_perizia");
+
+    const tool = (token: string, rpcId: number, itemId: string) =>
+      request.post(api + "/mcp", {
+        headers: mcpHeaders(token),
+        data: {jsonrpc: "2.0", id: rpcId, method: "tools/call",
+          params: {name: "get_perizia", arguments: {id: itemId}}}
+      });
+    const readMcp = await tool(reader, 302, id);
+    expect(readMcp.ok(), await readMcp.text()).toBeTruthy();
+    expect(await readMcp.text()).toContain(reference);
+    expect(await readMcp.text()).not.toContain('"isError":true');
+    const missingMcp = await tool(reader, 303, nonexistent);
+    expect(missingMcp.ok(), await missingMcp.text()).toBeTruthy();
+    expect(await missingMcp.text()).toContain('"isError":true');
+
+    const noScopeMcp = await tool(noScope, 304, id);
+    expect(noScopeMcp.status(), await noScopeMcp.text()).toBe(403);
+  });
+
   test("Keycloak-signed expired access tokens deny REST and MCP after configured clock skew", async ({request}) => {
     // The API intentionally allows 60 s clock skew. Test the real issuer's
     // short-lived, correctly signed token rather than forging a JWT payload.
