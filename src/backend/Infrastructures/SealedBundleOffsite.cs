@@ -24,9 +24,17 @@ public static partial class SealedBundleOffsite
     public static async Task UploadAsync(
         string sealedDirectory, IAmazonS3 destination, string bucket,
         string backupId, byte[] encryptionKey, CancellationToken ct = default,
-        bool disposableUnprotectedDemo = false)
+        bool disposableUnprotectedDemo = false, IAmazonS3? verificationSource = null)
     {
         Validate(encryptionKey, bucket, backupId);
+        // Production upload uses two distinct clients: a write-only publisher
+        // and a read-only verifier. Even S3-compatible servers that conflate
+        // GetObject and GetObjectVersion cannot expose document bytes to
+        // the uploader's credential. The demo-only path may share a client.
+        if (!disposableUnprotectedDemo && verificationSource is null)
+            throw new InvalidOperationException(
+                "Remote Object Lock upload requires a separate read-only verifier.");
+        var verifier = verificationSource ?? destination;
         // Authenticate every GCM tag in memory, with no temporary plaintext.
         var files = await SealedRecoveryBundle.ValidateEncryptedAsync(
             sealedDirectory, encryptionKey, ct);
@@ -76,7 +84,7 @@ public static partial class SealedBundleOffsite
             if (!disposableUnprotectedDemo)
                 await OffsiteObjectLockPolicy.RequireProtectedObjectVersionAsync(
                     destination, bucket, prefix + entry.Name, write.VersionId, started, ct);
-            var received = await HashRemoteAsync(destination, bucket,
+            var received = await HashRemoteAsync(verifier, bucket,
                 prefix + entry.Name, ct);
             if (received.Length != entry.Length || received.Sha256 != entry.Sha256)
                 throw new InvalidOperationException(
@@ -97,9 +105,9 @@ public static partial class SealedBundleOffsite
                 destination, bucket, prefix + SignatureName, signatureVersion,
                 signatureStarted, ct);
         var expectedComplete = CompletionDigest(inventory, signature);
-        var remoteInventory = await GetBytesAsync(destination, bucket,
+        var remoteInventory = await GetBytesAsync(verifier, bucket,
             prefix + InventoryName, MaxManifestBytes, ct);
-        var remoteSignature = await GetBytesAsync(destination, bucket,
+        var remoteSignature = await GetBytesAsync(verifier, bucket,
             prefix + SignatureName, 32, ct);
         if (!CryptographicOperations.FixedTimeEquals(inventory, remoteInventory) ||
             !CryptographicOperations.FixedTimeEquals(signature, remoteSignature))
