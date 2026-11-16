@@ -7,6 +7,7 @@ import { createPerizia, listPerizie, uploadDocument, type Perizia } from "./api"
 import { PeriziaWorkflow } from "./components/PeriziaWorkflow";
 import {preferredTheme, saveLanguage, saveTheme} from "./uiPreferences";
 import {useOnlineStatus} from "./useOnlineStatus";
+import {PwaUpdatePrompt} from "./components/PwaUpdatePrompt";
 export default function App() {
   const auth = useAuth();
   const { t, i18n } = useTranslation();
@@ -125,5 +126,6 @@ export default function App() {
         </div>}
       {error && <p role="alert" className="mt-6 text-red-600">{error}</p>}
     </main>
+    <PwaUpdatePrompt />
   </div>;
 }
