@@ -31,6 +31,96 @@ public sealed class PeriziaAtomicAuditTests
     }
 
     [Fact]
+    public async Task Stale_assignment_cannot_resurrect_cancelled_perizia_or_audit_success()
+    {
+        await using var db = await TestDatabases.OpenAsync();
+        var tenant = TenantId.From(Guid.NewGuid());
+        var repo = new PgPeriziaRepository(db.App);
+        var original = Perizia.Create(tenant, "STALE-ASSIGN-" + Guid.NewGuid().ToString("N"));
+        await repo.AddAuditedAsync(original, Entry(tenant, original.Id, "perizia.create"));
+
+        var first = (await repo.FindAsync(tenant, original.Id))!;
+        var stale = (await repo.FindAsync(tenant, original.Id))!;
+        first.Cancel(tenant);
+        await repo.UpdateAuditedAsync(first, Entry(tenant, original.Id, "perizia.cancel"));
+
+        stale.Assign(tenant, "unwanted-assignee");
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            repo.UpdateAuditedAsync(stale, Entry(tenant, original.Id, "perizia.assign")));
+        Assert.Equal(PeriziaStatus.Cancelled, (await repo.FindAsync(tenant, original.Id))!.Status);
+        Assert.Equal(0L, await CountSuccessfulAuditAsync(db.Admin, tenant, original.Id, "perizia.assign"));
+        Assert.Equal(1L, await CountSuccessfulAuditAsync(db.Admin, tenant, original.Id, "perizia.cancel"));
+    }
+
+    [Fact]
+    public async Task Stale_advance_cannot_resurrect_cancelled_perizia()
+    {
+        await using var db = await TestDatabases.OpenAsync();
+        var tenant = TenantId.From(Guid.NewGuid());
+        var repo = new PgPeriziaRepository(db.App);
+        var original = Perizia.Create(tenant, "STALE-ADVANCE-" + Guid.NewGuid().ToString("N"));
+        await repo.AddAuditedAsync(original, Entry(tenant, original.Id, "perizia.create"));
+        original.Assign(tenant, "assignee");
+        await repo.UpdateAuditedAsync(original, Entry(tenant, original.Id, "perizia.assign"));
+
+        var first = (await repo.FindAsync(tenant, original.Id))!;
+        var stale = (await repo.FindAsync(tenant, original.Id))!;
+        first.Cancel(tenant);
+        await repo.UpdateAuditedAsync(first, Entry(tenant, original.Id, "perizia.cancel"));
+
+        stale.Advance(tenant, PeriziaStatus.ToBeRevised);
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            repo.UpdateAuditedAsync(stale, Entry(tenant, original.Id, "perizia.advance")));
+        Assert.Equal(PeriziaStatus.Cancelled, (await repo.FindAsync(tenant, original.Id))!.Status);
+        Assert.Equal(0L, await CountSuccessfulAuditAsync(db.Admin, tenant, original.Id, "perizia.advance"));
+    }
+
+    [Fact]
+    public async Task Stale_cancel_cannot_discard_committed_assignment()
+    {
+        await using var db = await TestDatabases.OpenAsync();
+        var tenant = TenantId.From(Guid.NewGuid());
+        var repo = new PgPeriziaRepository(db.App);
+        var original = Perizia.Create(tenant, "STALE-CANCEL-" + Guid.NewGuid().ToString("N"));
+        await repo.AddAuditedAsync(original, Entry(tenant, original.Id, "perizia.create"));
+
+        var first = (await repo.FindAsync(tenant, original.Id))!;
+        var stale = (await repo.FindAsync(tenant, original.Id))!;
+        first.Assign(tenant, "assigned-first");
+        await repo.UpdateAuditedAsync(first, Entry(tenant, original.Id, "perizia.assign"));
+
+        stale.Cancel(tenant);
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            repo.UpdateAuditedAsync(stale, Entry(tenant, original.Id, "perizia.cancel")));
+        var current = (await repo.FindAsync(tenant, original.Id))!;
+        Assert.Equal(PeriziaStatus.Assigned, current.Status);
+        Assert.Equal("assigned-first", current.AssignedTo);
+        Assert.Equal(0L, await CountSuccessfulAuditAsync(db.Admin, tenant, original.Id, "perizia.cancel"));
+    }
+
+    [Fact]
+    public async Task Competing_assignments_can_commit_only_one_assignee_and_audit()
+    {
+        await using var db = await TestDatabases.OpenAsync();
+        var tenant = TenantId.From(Guid.NewGuid());
+        var repo = new PgPeriziaRepository(db.App);
+        var original = Perizia.Create(tenant, "DOUBLE-ASSIGN-" + Guid.NewGuid().ToString("N"));
+        await repo.AddAuditedAsync(original, Entry(tenant, original.Id, "perizia.create"));
+
+        var first = (await repo.FindAsync(tenant, original.Id))!;
+        var stale = (await repo.FindAsync(tenant, original.Id))!;
+        first.Assign(tenant, "first");
+        stale.Assign(tenant, "second");
+        await repo.UpdateAuditedAsync(first, Entry(tenant, original.Id, "perizia.assign"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            repo.UpdateAuditedAsync(stale, Entry(tenant, original.Id, "perizia.assign")));
+
+        var current = (await repo.FindAsync(tenant, original.Id))!;
+        Assert.Equal("first", current.AssignedTo);
+        Assert.Equal(1L, await CountSuccessfulAuditAsync(db.Admin, tenant, original.Id, "perizia.assign"));
+    }
+
+    [Fact]
     public async Task Cancel_is_atomic_and_records_only_one_success_event()
     {
         await using var databases = await TestDatabases.OpenAsync();
@@ -141,6 +231,18 @@ public sealed class PeriziaAtomicAuditTests
         await Assert.ThrowsAsync<UnauthorizedAccessException>(
             () => repo.AddAuditedAsync(item, Entry(foreign, item.Id, "perizia.create")));
         Assert.Null(await repo.FindAsync(tenant, item.Id));
+    }
+
+    private static async Task<long> CountSuccessfulAuditAsync(
+        NpgsqlDataSource admin, TenantId tenant, Guid id, string action)
+    {
+        await using var cmd = admin.CreateCommand(
+            "SELECT count(*) FROM security_audit WHERE tenant_id=@tenant AND resource_id=@id " +
+            "AND action=@action AND outcome='succeeded'");
+        cmd.Parameters.AddWithValue("tenant", tenant.Value);
+        cmd.Parameters.AddWithValue("id", id);
+        cmd.Parameters.AddWithValue("action", action);
+        return (long)(await cmd.ExecuteScalarAsync())!;
     }
 
     private static SecurityAuditEvent Entry(TenantId tenant, Guid id, string action) =>
