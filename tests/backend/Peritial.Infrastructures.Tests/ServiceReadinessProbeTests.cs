@@ -56,6 +56,47 @@ public sealed class ServiceReadinessProbeTests
     }
 
     [Fact]
+    public async Task Stale_Clamd_signature_database_makes_readiness_unavailable()
+    {
+        await using var database = TestDatabase();
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var responder = Task.Run(async () =>
+        {
+            using (var pingPeer = await listener.AcceptTcpClientAsync(deadline.Token))
+            {
+                await using var pingStream = pingPeer.GetStream();
+                var ping = new byte[6];
+                await pingStream.ReadExactlyAsync(ping, deadline.Token);
+                Assert.Equal("zPING\0"u8.ToArray(), ping);
+                await pingStream.WriteAsync("PONG\0"u8.ToArray(), deadline.Token);
+            }
+
+            using var versionPeer = await listener.AcceptTcpClientAsync(deadline.Token);
+            await using var versionStream = versionPeer.GetStream();
+            var version = new byte[9];
+            await versionStream.ReadExactlyAsync(version, deadline.Token);
+            Assert.Equal("zVERSION\0"u8.ToArray(), version);
+            await versionStream.WriteAsync(
+                "ClamAV 1.5.0/28000/Sun Nov 15 00:00:00 2026\0"u8.ToArray(),
+                deadline.Token);
+        }, deadline.Token);
+        var config = new Microsoft.Extensions.Configuration.ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Malware:Clamd:MaxSignatureAgeHours"] = "1"
+            }).Build();
+        var policy = ClamdSignaturePolicy.FromConfiguration(config, isDevelopment: false);
+
+        var probe = new ServiceReadinessProbe(database, "127.0.0.1", port,
+            new FixedIdentity(true), new FixedStorage(true), policy);
+        Assert.False(await probe.CheckAsync(deadline.Token));
+        await responder;
+    }
+
+    [Fact]
     public async Task Wrong_Clamd_response_fails_closed()
     {
         await using var database = TestDatabase();
