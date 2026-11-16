@@ -26,6 +26,10 @@ public interface ISinistroRepository
 {
     Task<IReadOnlyList<Sinistro>> ListAsync(TenantId tenant, int limit = 50, CancellationToken ct = default);
     Task<Sinistro?> FindAsync(TenantId tenant, Guid id, CancellationToken ct = default);
+    Task<IReadOnlyList<Sinistro>> SearchAsync(TenantId tenant, string prefix,
+        DateOnly? occurredFrom = null, DateOnly? occurredTo = null, int limit = 10,
+        CancellationToken ct = default);
+
     Task AddAuditedAsync(Sinistro sinistro, SecurityAuditEvent audit, CancellationToken ct = default);
     Task UpdateAuditedAsync(Sinistro sinistro, SecurityAuditEvent audit, CancellationToken ct = default);
 }
