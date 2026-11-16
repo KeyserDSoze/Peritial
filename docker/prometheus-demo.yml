@@ -1,0 +1,18 @@
+# Ephemeral Prometheus for Docker Compose integration tests only.
+# Its HTTP OTLP receiver is unauthenticated and must never be exposed publicly.
+global:
+  scrape_interval: 30s
+  evaluation_interval: 5s
+
+otlp:
+  translation_strategy: UnderscoreEscapingWithSuffixes
+
+rule_files:
+  - /etc/prometheus/readiness-alerts.yml
+
+scrape_configs:
+  # This is for process self-health only. Application readiness metrics
+  # are received via OTLP from the separate private Collector.
+  - job_name: prometheus
+    static_configs:
+      - targets: ['localhost:9090']
