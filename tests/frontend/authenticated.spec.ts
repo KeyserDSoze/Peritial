@@ -134,6 +134,38 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     await expect(row.getByText("Registrata")).toBeVisible();
   });
 
+  test("PWA lists safe document metadata after an authenticated upload", async ({page}) => {
+    await page.goto("/");
+    await page.getByRole("button", {name: "Accedi"}).click();
+    await expect(page.locator("#username")).toBeVisible({timeout: 30_000});
+    await page.locator("#username").fill("localuser");
+    await page.locator("#password").fill("local-only-user");
+    await page.locator("#kc-login").click();
+    await expect(page.getByRole("button", {name: "Esci"})).toBeVisible({timeout: 30_000});
+
+    const name = "pwa-catalog-" + Date.now() + ".pdf";
+    const pdf = Buffer.from("%PDF-1.7\n1 0 obj\n<<>>\nendobj\n%%EOF\n");
+    await page.locator("#file").setInputFiles({
+      name, mimeType: "application/pdf", buffer: pdf
+    });
+    const upload = page.waitForResponse(response =>
+      response.url().endsWith("/api/files") && response.request().method() === "POST");
+    await page.getByRole("button", {name: "Carica documento"}).click();
+    const response = await upload;
+    expect(response.status(), await response.text()).toBe(201);
+
+    const documentList = page.getByRole("list", {name: "Documenti caricati"});
+    await expect(documentList.getByText(name, {exact: true})).toBeVisible();
+    const row = documentList.locator("li").filter({hasText: name});
+    await expect(row).toContainText(String(pdf.length));
+    // The PWA exposes metadata only: no download, object-storage link or bytes.
+    await expect(row.locator("a,button")).toHaveCount(0);
+
+    await page.getByRole("button", {name: "Aggiorna elenco"}).click();
+    await expect(documentList.getByText(name, {exact: true})).toBeVisible();
+    await expect(row.locator("a,button")).toHaveCount(0);
+  });
+
   test("workflow perizia UI: assign, advance, cancel con conferma e i18n", async ({page}) => {
     await page.goto("/");
     await page.getByRole("button", {name: "Accedi"}).click();
