@@ -1,0 +1,151 @@
+using Peritial.Business;
+using Peritial.Domains;
+using Xunit;
+
+namespace Peritial.Business.Tests;
+
+public sealed class SinistroServiceTests
+{
+    [Fact]
+    public async Task Create_and_update_use_signed_tenant_and_atomic_audit_without_leaking_tenant_in_DTO()
+    {
+        var actor = new ActingTenant(write: true);
+        var audit = new SpyAudit();
+        var repo = new InMemorySinistri(audit);
+        var service = new SinistroService(actor, repo, audit);
+        var date = new DateOnly(2026, 11, 9);
+        var reported = new DateOnly(2026, 11, 10);
+
+        var created = await service.CreateAsync("  PRIVATE-CASE  ", date, reported);
+        Assert.Equal("PRIVATE-CASE", created.ExternalReference);
+        Assert.Equal(1L, created.Version);
+        Assert.Equal(actor.TenantId, repo.Saved[created.Id].TenantId);
+        Assert.Equal(created.Id, (await service.ListAsync(20)).Single().Id);
+        Assert.Equal(created.Id, (await service.GetAsync(created.Id)).Id);
+        Assert.DoesNotContain("TenantId", System.Text.Json.JsonSerializer.Serialize(created));
+
+        var updated = await service.UpdateAsync(created.Id, "CHANGED", date, null, created.Version);
+        Assert.Equal("CHANGED", updated.ExternalReference);
+        Assert.Equal(2L, updated.Version);
+        Assert.Null(updated.ReportedOn);
+        Assert.Equal(new[] {"sinistro.create", "sinistro.update"}, audit.Events.Select(x => x.Action));
+        Assert.All(audit.Events, entry =>
+        {
+            Assert.Equal(actor.TenantId, entry.TenantId);
+            Assert.Equal(actor.Subject, entry.Subject);
+            Assert.Equal("succeeded", entry.Outcome);
+            Assert.Equal(created.Id, entry.ResourceId);
+            Assert.DoesNotContain("PRIVATE", entry.ToString());
+        });
+    }
+
+    [Fact]
+    public async Task Read_only_scope_can_read_but_denied_mutations_are_audited_and_do_not_write()
+    {
+        var actor = new ActingTenant(read: true);
+        var audit = new SpyAudit();
+        var repo = new InMemorySinistri(audit);
+        var item = Sinistro.Create(actor.TenantId, "READ-ONLY", new DateOnly(2026, 1, 2));
+        repo.Saved.Add(item.Id, item);
+        var service = new SinistroService(actor, repo, audit);
+
+        Assert.Single(await service.ListAsync());
+        Assert.Equal(item.Id, (await service.GetAsync(item.Id)).Id);
+        Assert.Empty(audit.Events);
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+            service.CreateAsync("DENIED", new DateOnly(2026, 1, 2)));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+            service.UpdateAsync(item.Id, "DENIED", new DateOnly(2026, 1, 2), null, 1));
+        Assert.Equal("READ-ONLY", repo.Saved[item.Id].ExternalReference);
+        Assert.Equal(new[] {"sinistro.create", "sinistro.update"}, audit.Events.Select(x => x.Action));
+        Assert.All(audit.Events, entry =>
+        {
+            Assert.Equal("denied", entry.Outcome);
+            Assert.Null(entry.ResourceId);
+        });
+    }
+
+    [Fact]
+    public async Task Foreign_and_missing_sinistri_are_indistinguishable_and_wrong_scope_is_denied_before_lookup()
+    {
+        var actor = new ActingTenant(read: true);
+        var audit = new SpyAudit();
+        var repo = new InMemorySinistri(audit);
+        var foreign = Sinistro.Create(TenantId.From(Guid.NewGuid()), "FOREIGN", new DateOnly(2026, 2, 2));
+        repo.Saved.Add(foreign.Id, foreign);
+        var service = new SinistroService(actor, repo, audit);
+        Assert.Empty(await service.ListAsync());
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => service.GetAsync(foreign.Id));
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => service.GetAsync(Guid.NewGuid()));
+        Assert.Empty(audit.Events);
+
+        var noScope = new SinistroService(new ActingTenant(), repo, audit);
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => noScope.ListAsync());
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => noScope.GetAsync(foreign.Id));
+        Assert.Empty(audit.Events);
+    }
+
+    [Fact]
+    public async Task Stale_expected_version_and_invalid_limit_fail_before_mutating_or_auditing_success()
+    {
+        var actor = new ActingTenant(write: true);
+        var audit = new SpyAudit();
+        var repo = new InMemorySinistri(audit);
+        var service = new SinistroService(actor, repo, audit);
+        var created = await service.CreateAsync("ORIGINAL", new DateOnly(2026, 10, 1));
+
+        await Assert.ThrowsAsync<SinistroConcurrencyConflictException>(() =>
+            service.UpdateAsync(created.Id, "STALE", new DateOnly(2026, 10, 2), null, created.Version + 1));
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => service.ListAsync(0));
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => service.ListAsync(101));
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            service.UpdateAsync(created.Id, "INVALID", new DateOnly(2026, 10, 2), null, 0));
+        Assert.Equal("ORIGINAL", repo.Saved[created.Id].ExternalReference);
+        Assert.Equal(new[] {"sinistro.create"}, audit.Events.Select(x => x.Action));
+    }
+
+    private sealed class ActingTenant(bool write = false, bool read = false) : ITenantContext
+    {
+        public TenantId TenantId { get; } = TenantId.From(Guid.NewGuid());
+        public string Subject => "signed-subject";
+        public bool HasScope(string scope) =>
+            (write && scope == "peritial.write") || (read && scope == "peritial.read");
+    }
+
+    private sealed class SpyAudit : ISecurityAuditTrail
+    {
+        public List<SecurityAuditEvent> Events { get; } = [];
+        public Task AppendAsync(SecurityAuditEvent entry, CancellationToken ct = default)
+        {
+            Events.Add(entry);
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class InMemorySinistri(SpyAudit audit) : ISinistroRepository
+    {
+        public Dictionary<Guid, Sinistro> Saved { get; } = [];
+        private static Sinistro Snapshot(Sinistro s) => Sinistro.Restore(
+            s.Id, s.TenantId, s.ExternalReference, s.OccurredOn, s.ReportedOn, s.CreatedAtUtc, s.PersistedVersion);
+        public Task<IReadOnlyList<Sinistro>> ListAsync(TenantId tenant, int limit = 50, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<Sinistro>>(Saved.Values.Where(x => x.TenantId == tenant)
+                .Take(limit).Select(Snapshot).ToArray());
+        public Task<Sinistro?> FindAsync(TenantId tenant, Guid id, CancellationToken ct = default) =>
+            Task.FromResult(Saved.TryGetValue(id, out var s) && s.TenantId == tenant ? Snapshot(s) : null);
+        public async Task AddAuditedAsync(Sinistro item, SecurityAuditEvent entry, CancellationToken ct = default)
+        {
+            await audit.AppendAsync(entry, ct);
+            Saved.Add(item.Id, Snapshot(item));
+        }
+        public async Task UpdateAuditedAsync(Sinistro item, SecurityAuditEvent entry, CancellationToken ct = default)
+        {
+            if (!Saved.TryGetValue(item.Id, out var current) || current.TenantId != item.TenantId)
+                throw new KeyNotFoundException();
+            if (current.PersistedVersion != item.PersistedVersion)
+                throw new SinistroConcurrencyConflictException();
+            await audit.AppendAsync(entry, ct);
+            item.ConfirmPersistedUpdate();
+            Saved[item.Id] = Snapshot(item);
+        }
+    }
+}
