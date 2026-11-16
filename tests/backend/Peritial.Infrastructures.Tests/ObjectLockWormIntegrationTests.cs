@@ -215,15 +215,15 @@ public sealed class ObjectLockWormIntegrationTests
             });
             Assert.False(versions.IsTruncated);
             var selected = versions.Versions
-                .Where(v => !v.IsDeleteMarker)
+                .Where(v => v.IsDeleteMarker != true)
                 .ToDictionary(v => v.Key[("sealed-v1/" + id + "/").Length..],
                     v => v.VersionId, StringComparer.Ordinal);
             Assert.Contains("complete", selected.Keys);
             Assert.Contains("payload/00000004.enc", selected.Keys);
             Assert.True(versions.Versions.Any(v =>
-                v.Key == completeKey && v.IsDeleteMarker));
+                v.Key == completeKey && v.IsDeleteMarker == true));
             Assert.True(versions.Versions.Any(v =>
-                v.Key == payloadKey && v.IsDeleteMarker));
+                v.Key == payloadKey && v.IsDeleteMarker == true));
 
             // Operators must supply a strict, complete mapping for the CLI.
             // It is a selector, NOT the integrity proof: the transfer HMAC
