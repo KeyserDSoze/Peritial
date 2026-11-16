@@ -26,7 +26,7 @@ public sealed class ServiceReadinessProbeTests
             await stream.WriteAsync("PONG\0"u8.ToArray(), deadline.Token);
         }, deadline.Token);
 
-        var probe = new ServiceReadinessProbe(database, "127.0.0.1", port, new FixedIdentity(true));
+        var probe = new ServiceReadinessProbe(database, "127.0.0.1", port, new FixedIdentity(true), new FixedStorage(true));
         Assert.True(await probe.CheckAsync(deadline.Token));
         await scanner;
     }
@@ -48,7 +48,7 @@ public sealed class ServiceReadinessProbeTests
             await stream.WriteAsync("NOPE\0"u8.ToArray(), deadline.Token);
         }, deadline.Token);
 
-        var probe = new ServiceReadinessProbe(database, "127.0.0.1", port, new FixedIdentity(true));
+        var probe = new ServiceReadinessProbe(database, "127.0.0.1", port, new FixedIdentity(true), new FixedStorage(true));
         Assert.False(await probe.CheckAsync(deadline.Token));
         await scanner;
     }
@@ -62,7 +62,7 @@ public sealed class ServiceReadinessProbeTests
         var unusedPort = ((IPEndPoint)listener.LocalEndpoint).Port;
         listener.Stop();
 
-        var probe = new ServiceReadinessProbe(database, "127.0.0.1", unusedPort, new FixedIdentity(true));
+        var probe = new ServiceReadinessProbe(database, "127.0.0.1", unusedPort, new FixedIdentity(true), new FixedStorage(true));
         Assert.False(await probe.CheckAsync());
     }
 
@@ -75,7 +75,7 @@ public sealed class ServiceReadinessProbeTests
         listener.Stop();
         await using var database = NpgsqlDataSource.Create(
             $"Host=127.0.0.1;Port={unusedPort};Database=peritial;Username=unavailable;Password=unavailable;Timeout=1;Pooling=false");
-        var probe = new ServiceReadinessProbe(database, "127.0.0.1", 3310, new FixedIdentity(true));
+        var probe = new ServiceReadinessProbe(database, "127.0.0.1", 3310, new FixedIdentity(true), new FixedStorage(true));
         Assert.False(await probe.CheckAsync());
     }
 
@@ -96,9 +96,38 @@ public sealed class ServiceReadinessProbeTests
             await stream.WriteAsync("PONG\0"u8.ToArray(), deadline.Token);
         }, deadline.Token);
 
-        var probe = new ServiceReadinessProbe(database, "127.0.0.1", port, new FixedIdentity(false));
+        var probe = new ServiceReadinessProbe(database, "127.0.0.1", port, new FixedIdentity(false), new FixedStorage(true));
         Assert.False(await probe.CheckAsync(deadline.Token));
         await scanner;
+    }
+
+    [Fact]
+    public async Task Unavailable_storage_prevents_readiness_even_when_others_respond()
+    {
+        await using var database = TestDatabase();
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var scanner = Task.Run(async () =>
+        {
+            using var client = await listener.AcceptTcpClientAsync(deadline.Token);
+            await using var stream = client.GetStream();
+            var ping = new byte[6];
+            await stream.ReadExactlyAsync(ping, deadline.Token);
+            await stream.WriteAsync("PONG\0"u8.ToArray(), deadline.Token);
+        }, deadline.Token);
+
+        var probe = new ServiceReadinessProbe(database, "127.0.0.1", port,
+            new FixedIdentity(true), new FixedStorage(false));
+        Assert.False(await probe.CheckAsync(deadline.Token));
+        await scanner;
+    }
+
+    private sealed class FixedStorage(bool ready) : IStorageReadinessProbe
+    {
+        public Task<bool> CheckAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(ready);
     }
 
     private sealed class FixedIdentity(bool ready) : IOidcReadinessProbe
