@@ -114,6 +114,14 @@ builder.Services.AddScoped<IUploadIdempotencyStore, PgUploadIdempotencyStore>();
 builder.Services.AddScoped<ISecurityAuditTrail, PgSecurityAuditTrail>();
 builder.Services.AddScoped<PeriziaService>();
 builder.Services.AddSingleton<IFileMalwareScanner, ClamdFileMalwareScanner>();
+builder.Services.AddSingleton(sp =>
+{
+    var config = sp.GetRequiredService<IConfiguration>();
+    return new ServiceReadinessProbe(
+        sp.GetRequiredService<NpgsqlDataSource>(),
+        config["Malware:Clamd:Host"] ?? throw new InvalidOperationException("Clamd host is required."),
+        config.GetValue("Malware:Clamd:Port", 3310));
+});
 var recoveryConnectionString = builder.Configuration["UploadRecovery:ConnectionString"];
 if (string.IsNullOrWhiteSpace(recoveryConnectionString))
     throw new InvalidOperationException("Independent least-privilege upload recovery connection is required.");
@@ -177,6 +185,13 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapGet("/health/live", () => Results.Ok(new { status = "healthy" }));
+// Read-only, unauthenticated readiness: no details of internal hosts or credentials.
+// Liveness remains healthy even while dependencies are temporarily unavailable.
+app.MapGet("/health/ready", async (ServiceReadinessProbe probe, CancellationToken ct) =>
+    await probe.CheckAsync(ct)
+        ? Results.Ok(new { status = "ready" })
+        : Results.Json(new { status = "not_ready" },
+            statusCode: StatusCodes.Status503ServiceUnavailable));
 // RFC 9728: resource metadata must match the canonical protected resource URI.
 // Clients visiting /mcp get the path-specific /.well-known/.../mcp metadata.
 app.MapGet("/.well-known/oauth-protected-resource/mcp", () =>
