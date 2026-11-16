@@ -14,11 +14,15 @@ public sealed class Sinistro
     public DateOnly OccurredOn { get; private set; }
     public DateOnly? ReportedOn { get; private set; }
     public DateTime CreatedAtUtc { get; }
+    // Expected database version from the last committed snapshot, never advanced
+    // by an in-memory Update. The repository advances it only after COMMIT.
+    public long PersistedVersion { get; private set; }
 
     private Sinistro(Guid id, TenantId tenant, string externalReference,
-        DateOnly occurredOn, DateOnly? reportedOn, DateTime createdAtUtc)
+        DateOnly occurredOn, DateOnly? reportedOn, DateTime createdAtUtc, long version)
     {
         if (id == Guid.Empty) throw new ArgumentException("Invalid accident id.", nameof(id));
+        if (version < 1) throw new ArgumentOutOfRangeException(nameof(version));
         if (tenant.Value == Guid.Empty) throw new ArgumentException("Invalid tenant.", nameof(tenant));
         var normalizedReference = ValidateReference(externalReference);
         ValidateDates(occurredOn, reportedOn);
@@ -29,16 +33,17 @@ public sealed class Sinistro
         OccurredOn = occurredOn;
         ReportedOn = reportedOn;
         CreatedAtUtc = createdAtUtc;
+        PersistedVersion = version;
     }
 
     public static Sinistro Create(TenantId tenant, string externalReference,
         DateOnly occurredOn, DateOnly? reportedOn = null) =>
-        new(Guid.NewGuid(), tenant, externalReference, occurredOn, reportedOn, DateTime.UtcNow);
+        new(Guid.NewGuid(), tenant, externalReference, occurredOn, reportedOn, DateTime.UtcNow, 1);
 
     /// <summary>Rehydrate from a trusted, tenant-filtered persistence adapter only.</summary>
     public static Sinistro Restore(Guid id, TenantId tenant, string externalReference,
-        DateOnly occurredOn, DateOnly? reportedOn, DateTime createdAtUtc) =>
-        new(id, tenant, externalReference, occurredOn, reportedOn, createdAtUtc);
+        DateOnly occurredOn, DateOnly? reportedOn, DateTime createdAtUtc, long version = 1) =>
+        new(id, tenant, externalReference, occurredOn, reportedOn, createdAtUtc, version);
 
     /// <summary>
     /// Update simple identifying facts, atomically at aggregate level.
@@ -57,6 +62,9 @@ public sealed class Sinistro
         OccurredOn = occurredOn;
         ReportedOn = reportedOn;
     }
+
+    /// <summary>Called by the persistence adapter only after the update and its audit commit.</summary>
+    public void ConfirmPersistedUpdate() => PersistedVersion = checked(PersistedVersion + 1);
 
     private static string ValidateReference(string externalReference)
     {
