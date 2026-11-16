@@ -122,7 +122,7 @@ public sealed class ObjectLockWormIntegrationTests
 
             // NO demo bypass: both upload and download must check Object Lock.
             await SealedBundleOffsite.UploadAsync(sealedDirectory, writer, bucket,
-                id, encryptionKey);
+                id, encryptionKey, verificationSource: reader);
             var completeKey = "sealed-v1/" + id + "/complete";
             var head = await client.GetObjectMetadataAsync(new GetObjectMetadataRequest
             {
@@ -189,11 +189,11 @@ public sealed class ObjectLockWormIntegrationTests
                     VersioningConfig = new S3BucketVersioningConfig
                     { Status = VersionStatus.Suspended }
                 }));
-            // This SILO reference server treats ListObjectVersions as a
-            // general bucket-list operation, so NOT granting the AWS action
-            // s3:ListBucketVersions does not reliably block enumeration here.
-            // The crucial isolation is that a writer cannot READ a historical
-            // object by VersionId (s3:GetObjectVersion is not granted).
+            // SILO conflates GetObject and GetObjectVersion. The uploader
+            // therefore receives NO GET permission whatsoever; a separate
+            // reader is used to verify the uploaded bytes. Both reads fail.
+            await Assert.ThrowsAsync<AmazonS3Exception>(() =>
+                writer.GetObjectAsync(bucket, completeKey));
             await Assert.ThrowsAsync<AmazonS3Exception>(() =>
                 writer.GetObjectAsync(new GetObjectRequest
                 {

@@ -45,7 +45,7 @@ def policy(bucket: str, *, writer: bool) -> dict:
                 "Sid": "ReadOrUploadOnlyEncryptedBundleObjects",
                 "Effect": "Allow",
                 "Action": sorted(
-                    (["s3:GetObject", "s3:GetObjectRetention", "s3:PutObject"]
+                    (["s3:GetObjectRetention", "s3:PutObject"]
                      if writer else OBJECT_READ)
                 ),
                 "Resource": bucket_arn + "/sealed-v1/*",
