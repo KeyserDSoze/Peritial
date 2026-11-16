@@ -12,6 +12,10 @@ public sealed class McpTools(PeriziaService perizie, FileIngestionService ingest
     [McpServerTool(Name = "list_perizie"), Description("Lists perizie visible to the authenticated tenant (peritial.read).")]
     public Task<IReadOnlyList<PeriziaDto>> ListPerizie(CancellationToken ct = default) => perizie.ListAsync(ct);
 
+    [McpServerTool(Name = "get_perizia"), Description("Gets a single perizia by ID within the signed tenant (peritial.read or peritial.write); foreign and missing IDs are indistinguishable.")]
+    public Task<PeriziaDto> GetPerizia(Guid id, CancellationToken ct = default) =>
+        perizie.GetAsync(id, ct);
+
     [McpServerTool(Name = "create_perizia"), Description("Creates a perizia in the authenticated tenant (peritial.write).")]
     public Task<PeriziaDto> CreatePerizia(string reference, CancellationToken ct = default) =>
         perizie.CreateAsync(reference, ct);
