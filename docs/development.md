@@ -139,7 +139,12 @@ La UI autenticata in `src/frontend/src/App.tsx` ora usa il componente
   `PeriziaAdvanceTarget.Parse`: il JSON REST usa una **stringa simbolica**
   come `{"target":"ToBeRevised"}`, non un enum numerico. Numeri,
   nomi case-insensitive, `Cancelled` e transizioni illegali sono rifiutati
-  con HTTP 400 (su MCP: errore del tool). Il client non offre salti di stato.
+  con HTTP 400 (su MCP: errore del tool). Il gestore globale ASP.NET
+  preserva anche gli HTTP 400 emessi da `BadHttpRequestException`
+  durante il parsing del JSON (body numerico o sintatticamente malformato),
+  anziché trasformarli erroneamente in 500. `security.spec.ts`
+  verifica nomi validi, numeri, casing, stato terminale,
+  JSON troncato e replay. Il client non offre salti di stato.
 - Stati non terminali: `Annulla` richiede **una seconda azione esplicita**
   `Conferma annullamento` oppure `Indietro`, prima di inviare
   `POST /api/perizie/{id}/cancel`. Gli stati terminali
