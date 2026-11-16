@@ -189,6 +189,21 @@ public sealed class ObjectLockWormIntegrationTests
                     VersioningConfig = new S3BucketVersioningConfig
                     { Status = VersionStatus.Suspended }
                 }));
+            // Bucket-name isolation is not sufficient: neither identity may
+            // read or upload outside sealed-v1/* even inside the same bucket.
+            await client.PutObjectAsync(new PutObjectRequest
+            {
+                BucketName = bucket, Key = "unrelated-private.txt",
+                ContentBody = "outside encrypted backup namespace"
+            });
+            await Assert.ThrowsAsync<AmazonS3Exception>(() =>
+                reader.GetObjectAsync(bucket, "unrelated-private.txt"));
+            await Assert.ThrowsAsync<AmazonS3Exception>(() =>
+                writer.PutObjectAsync(new PutObjectRequest
+                {
+                    BucketName = bucket, Key = "unrelated-upload.txt",
+                    ContentBody = "must be rejected"
+                }));
             var permittedDelete = await client.DeleteObjectAsync(new DeleteObjectRequest
             {
                 BucketName = controlBucket,
