@@ -1,0 +1,25 @@
+# Opt-in developer/CI-only overlay:
+# docker compose -f docker/compose.yml -f docker/compose.observability.yml up -d
+# The collector is confined to the existing private Compose bridge with no
+# published port. HTTP and debug exporter are prohibited for production.
+services:
+  api:
+    environment:
+      Observability__Otlp__Enabled: "true"
+      Observability__Otlp__Endpoint: http://otel-collector:4318/
+      # Fast, bounded exports for deterministic CI; never configure this
+      # short interval for routine production telemetry collection.
+      OTEL_METRIC_EXPORT_INTERVAL: "1000"
+      OTEL_BSP_SCHEDULE_DELAY: "1000"
+    depends_on:
+      otel-collector: {condition: service_started}
+  otel-collector:
+    image: otel/opentelemetry-collector:0.165.0
+    command: ["--config=/etc/otelcol/config.yaml"]
+    read_only: true
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    volumes:
+      - ./otel-collector-demo.yml:/etc/otelcol/config.yaml:ro
+    # No host port, no logs pipeline and no durable storage.
+    # Dev-only debug output is visible through docker compose logs.
