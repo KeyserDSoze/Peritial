@@ -1,0 +1,29 @@
+# OPT-IN local pre-release exercise only. Base Compose embeds demo passwords,
+# HTTP identity endpoints and Development settings: NOT a production manifest.
+# Enables the official ClamAV image's FreshClam daemon and a persistent
+# signature database, while enforcing the API's 48-hour age admission policy.
+#
+# docker compose -f docker/compose.yml -f docker/compose.clamav-updates.yml up -d clamav api
+# Startup may stay not_ready until FreshClam downloads current signatures.
+services:
+  clamav:
+    environment:
+      # Official image starts both clamd and freshclam when not disabled.
+      CLAMAV_NO_FRESHCLAMD: "false"
+      # Twice each hour; 48-hour API max age is an independent fail-closed gate.
+      FRESHCLAM_CHECKS: "12"
+      # clamd's zVERSION timestamp has NO timezone offset.
+      TZ: UTC
+    volumes:
+      # Volume persists across container recreation; not bound to host paths.
+      - clamav-signatures:/var/lib/clamav
+    # Inherits base healthcheck, network-only 3310 and clamav/clamav:1.5.
+
+  api:
+    environment:
+      # Present in Development intentionally: test the same timestamp
+      # admission path used in production, even though the rest is demo-only.
+      Malware__Clamd__MaxSignatureAgeHours: "48"
+
+volumes:
+  clamav-signatures:
