@@ -164,8 +164,13 @@ Test di regressione:
   niente accesso o pulsanti di modifica offline.
 - `tests/frontend/authenticated.spec.ts` (solo Compose/Keycloak):
   pratica realmente creata prima della disconnessione,
-  assenza di riferimenti tenant e azioni offline, ritorno online
-  con refetch REST prima di mostrare di nuovo la pratica.
+  controllo `CacheStorage` del build PWA installato dopo una
+  mutazione autenticata (precache popolata ma nessuna entry con
+  path `/api`, `/mcp`, `/realms` o `/.well-known`),
+  richiesta REST offline che **deve fallire** e non ricevere una
+  risposta dalla cache, assenza di riferimenti tenant e azioni
+  offline, ritorno online con refetch REST prima di mostrare
+  di nuovo la pratica.
 - RED della nuova suite `smoke` su
   [CI #43894072347](https://github.com/KeyserDSoze/Peritial/actions/runs/43894072347);
   GREEN frontend 12/12 su
