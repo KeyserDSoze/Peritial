@@ -97,9 +97,18 @@ try
             new AmazonS3Config { ServiceURL = endpoint, ForcePathStyle = true });
         if (args[0] == "push-sealed")
         {
+            // Separate credentials at the S3 provider boundary: writer may
+            // PUT but cannot GET ciphertext. The verifier can GET/inspect
+            // Object Lock versions but has no PUT or DELETE permission.
+            using var verifier = disposableDemo ? null : new AmazonS3Client(
+                new BasicAWSCredentials(
+                    Required("PERITIAL_OFFSITE_VERIFY_S3_ACCESS_KEY"),
+                    Required("PERITIAL_OFFSITE_VERIFY_S3_SECRET_KEY")),
+                new AmazonS3Config { ServiceURL = endpoint, ForcePathStyle = true });
             await SealedBundleOffsite.UploadAsync(bundle, remote, bucket, backupId,
-                master, disposableUnprotectedDemo: disposableDemo);
-            Console.WriteLine("Encrypted backup copied, integrity verified, and remote completion marker published.");
+                master, disposableUnprotectedDemo: disposableDemo,
+                verificationSource: verifier);
+            Console.WriteLine("Encrypted backup copied, integrity verified by a separate S3 reader, and remote completion marker published.");
         }
         else if (args[0] == "pull-sealed")
         {
