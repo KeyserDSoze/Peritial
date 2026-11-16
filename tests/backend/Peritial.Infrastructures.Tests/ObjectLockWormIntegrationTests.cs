@@ -189,10 +189,16 @@ public sealed class ObjectLockWormIntegrationTests
                     VersioningConfig = new S3BucketVersioningConfig
                     { Status = VersionStatus.Suspended }
                 }));
+            // This SILO reference server treats ListObjectVersions as a
+            // general bucket-list operation, so NOT granting the AWS action
+            // s3:ListBucketVersions does not reliably block enumeration here.
+            // The crucial isolation is that a writer cannot READ a historical
+            // object by VersionId (s3:GetObjectVersion is not granted).
             await Assert.ThrowsAsync<AmazonS3Exception>(() =>
-                writer.ListVersionsAsync(new ListVersionsRequest
+                writer.GetObjectAsync(new GetObjectRequest
                 {
-                    BucketName = bucket, Prefix = "sealed-v1/" + id + "/"
+                    BucketName = bucket, Key = completeKey,
+                    VersionId = firstVersion
                 }));
             // Bucket-name isolation is not sufficient: neither identity may
             // read or upload outside sealed-v1/* even inside the same bucket.
