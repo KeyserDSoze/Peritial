@@ -71,7 +71,29 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     await page.getByRole("button", {name: "Crea"}).click();
     await expect(page.getByText(reference)).toBeVisible();
 
+    // This test uses the built nginx-hosted PWA, not the Vite dev server.
+    // Workbox may precache the public shell only, never API/MCP or tenant
+    // data. Explicitly check caches after a real authenticated API write.
+    const cachedPaths = await page.evaluate(async () => {
+      await navigator.serviceWorker.ready;
+      const names = await caches.keys();
+      const entries = await Promise.all(names.map(async name => (await caches.open(name)).keys()));
+      return entries.flat().map(entry => new URL(entry.url).pathname);
+    });
+    expect(cachedPaths.length, "production PWA must precache its public shell").toBeGreaterThan(0);
+    expect(cachedPaths.filter(path => /^\\/(?:api|mcp|realms|\\.well-known)(?:\\/|$)/.test(path)))
+      .toEqual([]);
+
     await context.setOffline(true);
+    const offlineApiResult = await page.evaluate(async () => {
+      try {
+        const response = await fetch("/api/perizie");
+        return response.status;
+      } catch {
+        return 0; // Expected: no network, no SW runtime API fallback.
+      }
+    });
+    expect(offlineApiResult, "offline API must not be answered with cached data").toBe(0);
     await expect(page.getByRole("status")).toContainText("offline");
     await expect(page.getByText(reference)).toHaveCount(0);
     await expect(page.getByRole("button", {name: "Crea"})).toHaveCount(0);
