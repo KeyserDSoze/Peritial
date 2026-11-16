@@ -3,7 +3,7 @@
 Il porting dei sinistri inizia con `src/backend/Domains/Sinistro.cs`
 e `tests/backend/Peritial.Domains.Tests/SinistroTests.cs`.
 Il dominio e la migrazione V003 sono seguiti dal primo slice REST/MCP
-**read/create/update**. Mancano ancora DELETE, relazioni, import e UI.
+**list/search/read/create/update**. Mancano ancora DELETE, relazioni, import e UI.
 
 ## Caratterizzazione minima
 
@@ -33,9 +33,9 @@ REST/MCP; l'isolamento DB è invece applicato dalla nuova V003.
 
 - Eliminazione e politiche di retention con audit e autorizzazione;
   non è ancora un CRUD completo.
-- Ricerca/autocomplete con filtri, cursor e paginazione oltre i primi 100.
-- Test REST/MCP con identità di due tenant realmente distinti, oltre
-  alle verifiche di isolamento PostgreSQL già presenti.
+- Ricerca avanzata (full-text/fuzzy, filtri per assicurazione/polizza, paginazione cursor),
+  indice di prefisso dimensionato e benchmark su volumi realistici; il primo
+  autocomplete del riferimento esterno con date è ora disponibile via REST/MCP.
 - Collegamento a compagnie, polizze, anagrafiche e perizie (#8);
   import Classic/Accertatore (#10) senza assunzioni sul legacy.
 - UI PWA it/en, test E2E desktop/mobile e documentazione API.
@@ -76,7 +76,8 @@ usare il repository, seguendo `docs/database-migrations.md`.
 REST e MCP riusano ora il servizio Business autorizzato che accede a questo repository.
 
 **Restano fuori scope:** relazioni anagrafiche e perizie, delete, import/merge,
-ricerca/autocomplete, UI e verifica E2E cross-tenant con due identità diverse. I campi temporali di data-only richiedono
+ricerca full-text/fuzzy, cursor e UI; i test E2E cross-tenant con due identità
+sono già presenti. I campi temporali di data-only richiedono
 un confronto con i datetime del legacy prima di importare dati.
 Decisione: [ADR 0031](../adr/0031-sinistri-v003-rls-cas-audit.md).
 
@@ -95,6 +96,7 @@ solo azione e subject firmato, senza contenuto della richiesta.
 | REST | Tool MCP | Permesso |
 |---|---|---|
 | `GET /api/sinistri?limit=50` | `list_sinistri(limit=50)` | read o write |
+| `GET /api/sinistri/search?prefix=...&occurredFrom=...&occurredTo=...&limit=10` | `search_sinistri(prefix,...)` | read o write |
 | `GET /api/sinistri/{id}` | `get_sinistro(id)` | read o write |
 | `POST /api/sinistri` | `create_sinistro(...)` | write |
 | `PUT /api/sinistri/{id}` | `update_sinistro(...,expectedVersion)` | write |
@@ -158,3 +160,45 @@ Entra ID reale, ruoli e provisioning di utenti organizzativi,
 test con MCP esterni e l'autorizzazione di nuove relazioni
 Sinistri–Perizie restano da implementare e verificare.
 
+
+
+## Ricerca e autocomplete per riferimento esterno (#7/#12)
+
+`GET /api/sinistri/search?prefix=AB&occurredFrom=2026-01-01&occurredTo=2026-12-31&limit=10`
+e il tool `search_sinistri(prefix,occurredFrom?,occurredTo?,limit=10)`
+invocano **lo stesso metodo** `SinistroService.SearchAsync`
+protetto da `peritial.read` o `peritial.write`.
+Le due date ISO sono facoltative, inclusive, e si riferiscono a
+`occurredOn` (non alla denuncia). Il prefisso è obbligatorio:
+normalizzato con trim, **2–100 caratteri**, confronto
+**case-insensitive letterale**; `%`, `_` e `!` non
+sono wildcard interpretabili dal client.
+Risultati ordinati per `occurredOn DESC,id`, default
+10, cap 1–50; input invalido genera REST **400**
+o errore del tool MCP.
+
+Il repository applica `tenant_id=@tenant`, `ILIKE` con escape
+e filtri data **in PostgreSQL prima del LIMIT**, in una transazione
+`TenantDbScope` sotto FORCE RLS. Non filtra localmente
+una lista limitata a 50/100 record; il DTO è sempre quello
+senza tenant ID di `SinistroDto`. Nessuna lettura genera
+audit di mutazione riuscita, né viene memorizzata nella
+cache browser (`Cache-Control: no-store`).
+
+**Test:** `SinistroServiceTests` verifica regole di input,
+scope, date, limite e risultato; `SinistroPersistenceTests`
+usa PostgreSQL reale con due tenant, record più recenti
+non corrispondenti e prefissi contenenti `%`, `_`, `!`
+per verificare escape e filtro prima del LIMIT.
+`security.spec.ts` usa due utenti Keycloak reali,
+chiamate REST/MCP, date, cap, 401/403/400 e dati senza
+riferimenti di altro tenant, sia desktop che mobile.
+
+**Debito esplicito:** non sono implementati ricerca
+fuzzy/full-text o per dati collegati, cursor/paginazione
+completa, autocomplete PWA e benchmark con grandi dataset.
+L'indice esistente copre tenant e data; `ILIKE` su
+riferimento può richiedere un nuovo indice funzionale o
+trigramma in una futura migrazione **V004** dopo
+`EXPLAIN ANALYZE` su dati rappresentativi.
+Non modificare V003 storica. [ADR 0033](../adr/0033-sinistri-prefix-autocomplete.md).
