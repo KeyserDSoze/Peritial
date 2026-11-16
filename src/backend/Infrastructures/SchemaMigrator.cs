@@ -21,7 +21,8 @@ public static partial class SchemaMigrator
         var definitions = new (int Version, string File)[]
         {
             (1, "001_init.sql"),
-            (2, "V002__security_audit_action_index.sql")
+            (2, "V002__security_audit_action_index.sql"),
+            (3, "V003__sinistri_rls.sql")
         };
         var scripts = new List<Script>();
         foreach (var (version, file) in definitions)
