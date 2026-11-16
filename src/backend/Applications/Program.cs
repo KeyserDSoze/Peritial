@@ -200,6 +200,9 @@ app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
         UploadLeaseExpiredException => StatusCodes.Status503ServiceUnavailable,
         MalwareScannerUnavailableException => StatusCodes.Status503ServiceUnavailable,
         InvalidDataException => StatusCodes.Status413PayloadTooLarge,
+        // Minimal API JSON binding rejects malformed bodies before a service
+        // is invoked. Preserve its 400 instead of disguising user input as 500.
+        BadHttpRequestException badRequest when badRequest.StatusCode == 400 => StatusCodes.Status400BadRequest,
         BadHttpRequestException badRequest when badRequest.StatusCode == 413 => StatusCodes.Status413PayloadTooLarge,
         KeyNotFoundException => StatusCodes.Status404NotFound,
         ArgumentException or InvalidOperationException => StatusCodes.Status400BadRequest,
