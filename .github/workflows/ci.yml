@@ -339,6 +339,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Verify webhook data minimization and rejection rules
+        run: python3 -m unittest discover -s tests/observability -p 'test_alert_webhook_sink.py' -v
       - name: Validate isolated Prometheus readiness alert rules
         run: |
           docker run --rm --read-only --network none \
