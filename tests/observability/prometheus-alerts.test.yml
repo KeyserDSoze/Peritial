@@ -1,0 +1,90 @@
+# Prometheus recording/alert unit tests: synthetic fixtures, no tenant or PII.
+# Executed with promtool v3.5.0 inside CI, independently of Docker Compose.
+rule_files:
+  - /work/docker/prometheus-readiness-alerts.yml
+evaluation_interval: 30s
+tests:
+  - name: healthy_readiness_has_no_failure_or_dependency_alerts
+    interval: 30s
+    input_series:
+      - series: 'peritial_readiness_requests_total{outcome="ready"}'
+        values: '0+1x20'
+      - series: 'peritial_readiness_requests_total{outcome="not_ready"}'
+        values: '0+0x20'
+      - series: 'peritial_readiness_dependency_checks_total{dependency="storage",outcome="failed"}'
+        values: '0+0x20'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: PeritialReadinessFailures
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: PeritialReadinessDependencyFailed
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: PeritialReadinessTelemetryMissing
+        exp_alerts: []
+
+  - name: sustained_not_ready_and_storage_failures_fire_then_resolve
+    interval: 30s
+    input_series:
+      - series: 'peritial_readiness_requests_total{outcome="ready"}'
+        values: '0+1x20'
+      - series: 'peritial_readiness_requests_total{outcome="not_ready"}'
+        values: '0 0 0 0 2 4 6 8 8 8 8 8 8 8 8 8 8 8 8 8 8'
+      - series: 'peritial_readiness_dependency_checks_total{dependency="storage",outcome="failed"}'
+        values: '0 0 0 0 1 2 3 4 4 4 4 4 4 4 4 4 4 4 4 4 4'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: PeritialReadinessFailures
+        exp_alerts:
+          - exp_labels: {severity: warning, service: peritial-api}
+            exp_annotations:
+              summary: "Readiness reported repeated failures"
+              description: "Three or more not_ready responses in two minutes; check dependency metrics and health."
+      - eval_time: 3m
+        alertname: PeritialReadinessDependencyFailed
+        exp_alerts:
+          - exp_labels: {severity: warning, service: peritial-api, dependency: storage}
+            exp_annotations:
+              summary: "Repeated failure of a readiness dependency"
+              description: "Dependency storage failed at least twice in two minutes."
+      - eval_time: 6m
+        alertname: PeritialReadinessFailures
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: PeritialReadinessDependencyFailed
+        exp_alerts: []
+
+  - name: missing_readiness_signal_fires_without_exposing_identifiers
+    interval: 30s
+    input_series:
+      - series: 'another_service_requests_total'
+        values: '0+1x20'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: PeritialReadinessTelemetryMissing
+        exp_alerts:
+          - exp_labels: {severity: critical, service: peritial-api}
+            exp_annotations:
+              summary: "No readiness telemetry received"
+              description: "No readiness request series for three minutes; verify probes, collector and metrics delivery."
+
+  - name: high_readiness_p95_latency_fires
+    interval: 30s
+    input_series:
+      - series: 'peritial_readiness_duration_seconds_bucket{le="0.5",outcome="ready"}'
+        values: '0+0x22'
+      - series: 'peritial_readiness_duration_seconds_bucket{le="2",outcome="ready"}'
+        values: '0+0x22'
+      - series: 'peritial_readiness_duration_seconds_bucket{le="5",outcome="ready"}'
+        values: '0+1x22'
+      - series: 'peritial_readiness_duration_seconds_bucket{le="+Inf",outcome="ready"}'
+        values: '0+1x22'
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: PeritialReadinessSlow
+        exp_alerts:
+          - exp_labels: {severity: warning, service: peritial-api}
+            exp_annotations:
+              summary: "Readiness p95 is near its time budget"
+              description: "Readiness p95 exceeded two seconds for two minutes."
