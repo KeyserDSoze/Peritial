@@ -22,6 +22,20 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     await expect(row.getByText("Registrata")).toBeVisible();
 
     await row.getByRole("textbox", {name: "Assegnatario " + reference}).fill("ui-inspector");
+
+    // An intercepted CAS conflict must never advance local status or pretend
+    // that an audit-success was committed by the server.
+    const assignPattern = "**/api/perizie/*/assign";
+    await page.route(assignPattern, async route => {
+      await route.fulfill({status: 409, contentType: "application/json", body: '{"error":"stale"}'});
+    });
+    await row.getByRole("button", {name: "Assegna"}).click();
+    await expect(row.getByRole("alert")).toContainText("modificata");
+    await expect(row.getByText("Registrata")).toBeVisible();
+    await page.unroute(assignPattern);
+    await row.getByRole("button", {name: "Ricarica stato"}).click();
+    await expect(row.getByRole("alert")).toHaveCount(0);
+
     await row.getByRole("button", {name: "Assegna"}).click();
     await expect(row.getByText("Assegnata")).toBeVisible();
     await expect(row.getByText("ui-inspector")).toBeVisible();
