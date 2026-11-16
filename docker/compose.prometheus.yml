@@ -10,8 +10,40 @@ services:
       - ./otel-collector-prometheus-demo.yml:/etc/otelcol/prometheus.yaml:ro
     depends_on:
       prometheus: {condition: service_started}
+  alert-sink:
+    image: python:3.13-alpine
+    user: "65534:65534"
+    command: ["python", "-B", "-u", "/app/alert_webhook_sink.py"]
+    read_only: true
+    tmpfs:
+      - /events:rw,noexec,nosuid,size=4m,mode=1777
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    volumes:
+      - ../tests/observability/alert_webhook_sink.py:/app/alert_webhook_sink.py:ro
+    # No port binding: only Alertmanager can reach this synthetic sink.
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+      - --web.listen-address=0.0.0.0:9093
+    read_only: true
+    tmpfs:
+      - /alertmanager:rw,noexec,nosuid,size=32m,mode=1777
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    volumes:
+      - ./alertmanager-demo.yml:/etc/alertmanager/alertmanager.yml:ro
+    depends_on:
+      alert-sink: {condition: service_started}
+    # Never publish Alertmanager's unauthenticated API outside Compose.
+
   prometheus:
     image: prom/prometheus:v3.5.0
+    depends_on:
+      alertmanager: {condition: service_started}
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
