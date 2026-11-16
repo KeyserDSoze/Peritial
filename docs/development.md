@@ -135,7 +135,11 @@ La UI autenticata in `src/frontend/src/App.tsx` ora usa il componente
   `Assegna` (REST `POST /api/perizie/{id}/assign`).
 - `Assigned`, `ToBeRevised`, `Revised`, `ToSend`, `Sent`:
   un singolo passo `Avanza` verso lo stato successivo ammesso dal Domain
-  (`POST /api/perizie/{id}/advance`). Il client non offre salti di stato.
+  (`POST /api/perizie/{id}/advance`). REST e MCP condividono
+  `PeriziaAdvanceTarget.Parse`: il JSON REST usa una **stringa simbolica**
+  come `{"target":"ToBeRevised"}`, non un enum numerico. Numeri,
+  nomi case-insensitive, `Cancelled` e transizioni illegali sono rifiutati
+  con HTTP 400 (su MCP: errore del tool). Il client non offre salti di stato.
 - Stati non terminali: `Annulla` richiede **una seconda azione esplicita**
   `Conferma annullamento` oppure `Indietro`, prima di inviare
   `POST /api/perizie/{id}/cancel`. Gli stati terminali
