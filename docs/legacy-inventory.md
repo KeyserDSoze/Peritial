@@ -4,7 +4,7 @@ Esame statico dei progetti Expertiser.* sul commit death `35b043e6f6392bde3e45fa
 
 | Epic | Funzioni osservate | Stato nuovo |
 |---|---|---|
-| Sinistri | CRUD, ricerca, autocomplete, import | da implementare |
+| Sinistri | CRUD, ricerca, autocomplete, import | primo aggregate `Sinistro` tenant-scoped con test; nessun REST/MCP/DB/UI (#7) |
 | Perizie | CRUD, assegnazione, filtro utente, workflow | primo vertical slice in corso |
 | Stati | Registered(-1), Assigned(0), ToBeRevised(1), Revised(2), ToSend(3), Sent(4), Billed(5), Duplicated(6), Cancelled(7) | regole nuove da validare |
 | Import | XML Classic/Accertatore, auto-detection, anagrafiche e allegati | da implementare |
