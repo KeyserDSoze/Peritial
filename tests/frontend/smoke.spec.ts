@@ -50,12 +50,20 @@ test("preferenze sconosciute vengono ignorate senza eseguire contenuti memorizza
 });
 
 
-test("preferenze in sessione funzionano anche quando il browser blocca localStorage", async ({page}) => {
+test("preferenze in sessione funzionano con accesso alle chiavi UI negato", async ({page}) => {
   await page.addInitScript(() => {
-    Object.defineProperty(window, "localStorage", {
-      configurable: true,
-      get() { throw new DOMException("Storage denied", "SecurityError"); }
-    });
+    // Simulate a storage policy that denies the UI preference keys only.
+    // Do not block the auth library's unrelated session/browser storage.
+    const originalRead = Storage.prototype.getItem;
+    const originalWrite = Storage.prototype.setItem;
+    Storage.prototype.getItem = function (key: string) {
+      if (key.startsWith("peritial.ui.")) throw new DOMException("Storage denied", "SecurityError");
+      return originalRead.call(this, key);
+    };
+    Storage.prototype.setItem = function (key: string, value: string) {
+      if (key.startsWith("peritial.ui.")) throw new DOMException("Storage denied", "SecurityError");
+      return originalWrite.call(this, key, value);
+    };
   });
   await page.goto("/");
   await expect(page.getByRole("heading", {name: "Gestione perizie"})).toBeVisible();
