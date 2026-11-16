@@ -126,6 +126,51 @@ altri tool, l'idempotenza estesa, ETag, compatibilità con client
 MCP esterni, upload firmato o UI/storico completi. Vedere
 `docs/mcp.md` e issue #9/#12/#21.
 
+## API non raggiungibile nonostante browser online (#13)
+
+Il valore `navigator.onLine` indica soltanto la disponibilità
+apparente della connettività. Un gateway può restituire HTTP 503,
+Keycloak può negare il token oppure la `fetch` REST può fallire
+anche quando `navigator.onLine === true`. In questi casi
+`App.tsx` **non** lascia visibile l'ultima lista tenant-scoped
+né permette la creazione, l'upload o le mutazioni perizia.
+
+La UI autenticata distingue tre fasi per l'elenco:
+`loading` (lettura in corso, nessuna mutazione),
+`ready` (GET REST autenticata riuscita, operazioni consentite)
+e `unavailable` (la GET è fallita o una mutazione ha incontrato
+un errore di rete/autenticazione/server). In `unavailable` la
+lista e gli snapshot di mutazione vengono svuotati, il form e
+gli altri controlli non sono renderizzati e compare un avviso
+accessibile `role=alert` in italiano/inglese. Solo un click su
+`Riprova` esegue nuovamente `GET /api/perizie` con l'access
+token attuale e, se riesce, riabilita le operazioni. Quando il
+servizio funziona, `Aggiorna elenco` permette una revalidazione
+manuale e nasconde i controlli durante la richiesta.
+
+Il modulo `api.ts` identifica come guasto critico le
+`TypeError` di rete e risposte `401`/`403`/`408`/`429`
+o `5xx` durante le mutazioni. Gli errori del dominio
+`400`, `409`, `422` vengono invece gestiti normalmente
+dai singoli casi d'uso, senza confonderli con una indisponibilità
+globale. Le richieste avviate prima di un refresh non possono
+rimettere la UI in `ready` dopo che il loro effetto React è
+stato invalidato. Il client **non** memorizza né accoda POST
+per riprovarle senza consenso, evitando duplicazioni dopo
+esiti incerti; rimangono necessari i meccanismi di
+idempotenza lato server.
+
+`tests/frontend/authenticated.spec.ts` usa Keycloak e
+PostgreSQL reali, mantiene `navigator.onLine=true`, inietta
+HTTP 503 sulla GET dell'elenco e su una POST di creazione,
+verifica assenza di pratiche e comandi e riabilitazione
+solo dopo una nuova GET autenticata riuscita. Questo test
+non simula un vero outage di rete in produzione, né sostituisce
+fault injection multi-replica o controlli di scadenza JWT.
+Test RED [CI #43902048937](https://github.com/KeyserDSoze/Peritial/actions/runs/43902048937)
+sulla UI precedente: 2 test browser falliti,
+38 test full-stack precedenti superati.
+
 ## Aggiornamento controllato del service worker PWA (#13)
 
 La UI gestisce moduli e allegati con modifiche ancora **non inviate**.
