@@ -631,3 +631,40 @@ obbligatorio solo nella Compose CI.
 Questa è una prova su Keycloak locale, **non** una validazione Entra ID reale,
 revoca/rotazione chiavi o client MCP esterni. Non importare il client di test
 in realm o ambienti produttivi; mantenere aperta la issue #4 per i gate residui.
+
+
+## TDD ricerca/autocomplete Sinistri tenant-scoped (#7/#12, ADR 0033)
+
+La ricerca REST `GET /api/sinistri/search` e il tool MCP
+`search_sinistri` accettano `prefix` (2–100, trim,
+case-insensitive **letterale**), `occurredFrom` e `occurredTo`
+(DateOnly ISO, filtri inclusivi sulla data evento) e `limit`
+(1–50, default 10). Il servizio controlla `peritial.read` o
+`peritial.write` e deriva il tenant soltanto dal JWT.
+Il repository esegue il predicato tenant + `ILIKE` escaped +
+date **nel database prima di ORDER BY/LIMIT**;
+nessuna ricerca locale sui primi 50/100 elementi.
+I metacaratteri SQL `%`, `_`, `!` nell'input sono
+trattati letteralmente, quindi non estendono il filtro.
+
+Il ciclo RED → GREEN è coperto da:
+- `SinistroServiceTests`: normalizzazione, date inverse/default,
+  limiti, scope, projection senza tenant, ordinamento e filtro
+  prima del cap.
+- `SinistroPersistenceTests`: test PG17 in schemi isolati e
+  ruolo `peritial_app` su FORCE RLS, A/B e caratteri wildcard,
+  con record più recenti da escludere prima del limite.
+- `tests/frontend/security.spec.ts`: JWT firmati reali
+  da due tenant, REST e tool MCP, prefisso `SR_%...`,
+  range, cap=1, default no-cache, 400/401/403, nessuna riga
+  dell'altro tenant. Il test gira su desktop e mobile nella
+  Compose CI effimera con fixture V003.
+
+**Residui:** nessun indice specializzato garantito per `ILIKE`
+case-insensitive su grandi cataloghi: misurare
+`EXPLAIN ANALYZE` con cardinalità realistiche e, se necessario,
+aggiungere l'indice in una migrazione nuova senza mutare V003.
+Mancano cursor, full-text/fuzzy, collegamento Sinistri–Perizie,
+autocomplete PWA e deployment/tenancy Entra reali. Non chiudere
+la #7 né la #12. Dettagli in
+[ADR 0033](../adr/0033-sinistri-prefix-autocomplete.md).
