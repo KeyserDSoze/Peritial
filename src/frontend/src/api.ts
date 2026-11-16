@@ -1,5 +1,19 @@
 export type Perizia = { id:string; reference:string; status:string; assignedTo:string|null; createdAtUtc:string };
 export type DocumentRecord = { id:string; periziaId:string|null; fileName:string; contentType:string; length:number };
+// When the browser is still "online", REST can still be unreachable or the
+// current JWT can be rejected. Stop showing previously loaded tenant records
+// until a new authenticated GET succeeds; never queue or replay a mutation.
+export function isApiUnavailable(error: unknown): boolean {
+  if (error instanceof TypeError) return true; // fetch network failure
+  if (!(error instanceof Error)) return false;
+  if (error.name === "AbortError") return true;
+  const code = /^HTTP (\\d{3})$/.exec(error.message);
+  if (!code) return false;
+  const status = Number(code[1]);
+  return status === 401 || status === 403 || status === 408 ||
+    status === 429 || status >= 500;
+}
+
 const base = import.meta.env.VITE_API_URL || "/api";
 async function request<T>(url:string, token:string, init?:RequestInit):Promise<T> {
   const response = await fetch(base + url, { ...init, headers: { Authorization: "Bearer " + token, ...init?.headers } });
