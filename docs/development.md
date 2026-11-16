@@ -155,7 +155,13 @@ o `5xx` durante le mutazioni. Gli errori del dominio
 dai singoli casi d'uso, senza confonderli con una indisponibilità
 globale. Le richieste avviate prima di un refresh non possono
 rimettere la UI in `ready` dopo che il loro effetto React è
-stato invalidato. Il client **non** memorizza né accoda POST
+stato invalidato: un epoch in memoria invalida anche i GET
+che erano partiti prima di un errore di mutazione. Quando
+cambia il JWT autenticato, la UI svuota l'elenco, elimina le
+revisioni locali e mostra i dati soltanto se la lista è stata
+verificata con **esattamente il token corrente**, evitando
+un transitorio con dati del tenant precedente.
+Il client **non** memorizza né accoda POST
 per riprovarle senza consenso, evitando duplicazioni dopo
 esiti incerti; rimangono necessari i meccanismi di
 idempotenza lato server.
