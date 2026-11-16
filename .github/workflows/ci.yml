@@ -382,6 +382,13 @@ jobs:
       - name: Validate opt-in FreshClam Compose merge and fail-closed invariants
         run: python3 -m unittest discover -s tests/security -p 'test_clamav_update_overlay.py' -v
 
+  supply-chain-actions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reject unpinned, mutable or unreviewed GitHub Actions
+        run: python3 -m unittest discover -s tests/security -p 'test_workflow_action_pins.py' -v
+
   terraform:
     runs-on: ubuntu-latest
     steps:
