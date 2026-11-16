@@ -27,7 +27,8 @@ public sealed class ObjectLockWormIntegrationTests
             return;
 
         var id = Guid.NewGuid().ToString("N");
-        var bucket = "peritial-worm-" + id;
+        // Single fresh disposable S3 instance per CI runner.
+        const string bucket = "peritial-worm-ci";
         var root = Path.Combine("/dev/shm", "peritial-worm-" + id);
         var sealedDirectory = Path.Combine(root, "encrypted");
         var restored = Path.Combine(root, "restored");
@@ -36,9 +37,18 @@ public sealed class ObjectLockWormIntegrationTests
         var pg = Path.Combine(root, "peritial.dump");
         Directory.CreateDirectory(root, UnixFileMode.UserRead |
                                         UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        var config = new AmazonS3Config { ServiceURL = endpoint, ForcePathStyle = true };
         using var client = new AmazonS3Client(
             new BasicAWSCredentials("peritialworm", "local-only-test-worm-password"),
-            new AmazonS3Config { ServiceURL = endpoint, ForcePathStyle = true });
+            config); // admin only for bucket setup and controlled DELETE comparisons
+        var writerSecret = Environment.GetEnvironmentVariable("PERITIAL_TEST_WORM_WRITER_SECRET")
+            ?? throw new InvalidOperationException("Scoped writer credentials required.");
+        var readerSecret = Environment.GetEnvironmentVariable("PERITIAL_TEST_WORM_READER_SECRET")
+            ?? throw new InvalidOperationException("Scoped reader credentials required.");
+        using var writer = new AmazonS3Client(
+            new BasicAWSCredentials("peritial-writer-ci", writerSecret), config);
+        using var reader = new AmazonS3Client(
+            new BasicAWSCredentials("peritial-reader-ci", readerSecret), config);
 
         try
         {
@@ -111,7 +121,7 @@ public sealed class ObjectLockWormIntegrationTests
                 encryptionKey, signingKey);
 
             // NO demo bypass: both upload and download must check Object Lock.
-            await SealedBundleOffsite.UploadAsync(sealedDirectory, client, bucket,
+            await SealedBundleOffsite.UploadAsync(sealedDirectory, writer, bucket,
                 id, encryptionKey);
             var completeKey = "sealed-v1/" + id + "/complete";
             var head = await client.GetObjectMetadataAsync(new GetObjectMetadataRequest
@@ -158,6 +168,27 @@ public sealed class ObjectLockWormIntegrationTests
                 ContentBody = "control data"
             });
             Assert.False(string.IsNullOrWhiteSpace(unprotected.VersionId));
+            // IAM failure checks against an UNPROTECTED version ensure that
+            // a denied delete isn't merely COMPLIANCE's lock rejecting it.
+            await Assert.ThrowsAsync<AmazonS3Exception>(() =>
+                reader.DeleteObjectAsync(new DeleteObjectRequest
+                { BucketName = controlBucket, Key = "control.bin",
+                  VersionId = unprotected.VersionId }));
+            await Assert.ThrowsAsync<AmazonS3Exception>(() =>
+                writer.DeleteObjectAsync(new DeleteObjectRequest
+                { BucketName = controlBucket, Key = "control.bin",
+                  VersionId = unprotected.VersionId }));
+            await Assert.ThrowsAsync<AmazonS3Exception>(() =>
+                reader.PutObjectAsync(new PutObjectRequest
+                { BucketName = bucket, Key = "sealed-v1/" + id + "/forbidden.bin",
+                  ContentBody = "must not appear" }));
+            await Assert.ThrowsAsync<AmazonS3Exception>(() =>
+                writer.PutBucketVersioningAsync(new PutBucketVersioningRequest
+                {
+                    BucketName = bucket,
+                    VersioningConfig = new S3BucketVersioningConfig
+                    { Status = VersionStatus.Suspended }
+                }));
             var permittedDelete = await client.DeleteObjectAsync(new DeleteObjectRequest
             {
                 BucketName = controlBucket,
@@ -169,7 +200,7 @@ public sealed class ObjectLockWormIntegrationTests
             await OffsiteObjectLockPolicy.RequireProtectedObjectVersionAsync(
                 client, bucket, completeKey, firstVersion, DateTime.UtcNow, default, 0);
 
-            await SealedBundleOffsite.DownloadAsync(client, bucket, id,
+            await SealedBundleOffsite.DownloadAsync(reader, bucket, id,
                 restored, encryptionKey);
             await SealedRecoveryBundle.UnsealAsync(restored, decrypted,
                 encryptionKey, signingKey);
@@ -197,7 +228,7 @@ public sealed class ObjectLockWormIntegrationTests
             }
             var newer = Path.Combine(root, "current-key-rejected");
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                SealedBundleOffsite.DownloadAsync(client, bucket, id,
+                SealedBundleOffsite.DownloadAsync(reader, bucket, id,
                     newer, encryptionKey));
             Assert.False(Directory.Exists(newer));
 
@@ -208,7 +239,7 @@ public sealed class ObjectLockWormIntegrationTests
             {
                 BucketName = bucket, Key = payloadKey
             });
-            var versions = await client.ListVersionsAsync(new ListVersionsRequest
+            var versions = await reader.ListVersionsAsync(new ListVersionsRequest
             {
                 BucketName = bucket, Prefix = "sealed-v1/" + id + "/",
                 MaxKeys = 100
@@ -249,7 +280,7 @@ public sealed class ObjectLockWormIntegrationTests
             missing.Remove("complete");
             var incompleteDir = Path.Combine(root, "historical-missing");
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                SealedBundleOffsite.DownloadHistoricalAsync(client, bucket, id,
+                SealedBundleOffsite.DownloadHistoricalAsync(reader, bucket, id,
                     incompleteDir, encryptionKey, missing));
             Assert.False(Directory.Exists(incompleteDir));
 
@@ -258,19 +289,19 @@ public sealed class ObjectLockWormIntegrationTests
             tampered["complete"] = selected["index.json"];
             var tamperedDir = Path.Combine(root, "historical-forged");
             await Assert.ThrowsAnyAsync<Exception>(() =>
-                SealedBundleOffsite.DownloadHistoricalAsync(client, bucket, id,
+                SealedBundleOffsite.DownloadHistoricalAsync(reader, bucket, id,
                     tamperedDir, encryptionKey, tampered));
             Assert.False(Directory.Exists(tamperedDir));
 
             var wrongKeyDir = Path.Combine(root, "historical-wrong-key");
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                SealedBundleOffsite.DownloadHistoricalAsync(client, bucket, id,
+                SealedBundleOffsite.DownloadHistoricalAsync(reader, bucket, id,
                     wrongKeyDir, RandomNumberGenerator.GetBytes(32), selected));
             Assert.False(Directory.Exists(wrongKeyDir));
 
             var historical = Path.Combine(root, "historical-encrypted");
             var historicPlain = Path.Combine(root, "historical-plain");
-            await SealedBundleOffsite.DownloadHistoricalAsync(client, bucket, id,
+            await SealedBundleOffsite.DownloadHistoricalAsync(reader, bucket, id,
                 historical, encryptionKey, parsed);
             await SealedRecoveryBundle.UnsealAsync(historical, historicPlain,
                 encryptionKey, signingKey);
@@ -279,7 +310,7 @@ public sealed class ObjectLockWormIntegrationTests
             Assert.Equal(blob, await File.ReadAllBytesAsync(
                 Path.Combine(historicPlain, "s3", "objects", "00000000.blob")));
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                SealedBundleOffsite.DownloadHistoricalAsync(client, bucket, id,
+                SealedBundleOffsite.DownloadHistoricalAsync(reader, bucket, id,
                     historical, encryptionKey, selected));
         }
         finally
