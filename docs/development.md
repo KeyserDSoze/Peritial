@@ -126,6 +126,55 @@ altri tool, l'idempotenza estesa, ETag, compatibilità con client
 MCP esterni, upload firmato o UI/storico completi. Vedere
 `docs/mcp.md` e issue #9/#12/#21.
 
+## Modalità offline dichiarata, senza cache di dati autenticati (#13)
+
+La PWA utilizza già il plugin `vite-plugin-pwa` per il manifest e
+per il precaricamento degli asset **statici** della shell. In
+`src/frontend/vite.config.ts` la configurazione Workbox ora
+limita esplicitamente il fallback di navigazione al solo path
+`/` (`navigateFallbackAllowlist: [/^\\/$/]`) e disabilita
+qualsiasi `runtimeCaching`: richieste `/api`, `/mcp`,
+`/.well-known`, OAuth e altri endpoint server **non** vengono
+serviti dal fallback né archiviate in runtime cache dal service
+worker. Questa impostazione non sostituisce la revisione degli
+asset precache a ogni nuova release.
+
+`src/frontend/src/useOnlineStatus.ts` ascolta gli eventi browser
+`online` e `offline`. Quando il browser segnala assenza rete,
+`App.tsx` mostra un pannello con `role=status` e spiegazione
+it/en, anziché la schermata di autenticazione e le pratiche
+del tenant. Form di creazione, documenti e mutazioni perizia
+non sono renderizzati, né vengono **accodati per un futuro invio**;
+l'elenco locale e le revisioni temporanee vengono svuotati.
+Quando la connettività torna, la UI invia una **nuova GET REST
+autenticata** prima di ripopolare le pratiche.
+
+`navigator.onLine` è un *indicatore browser*, non una prova
+della raggiungibilità di Keycloak, PostgreSQL o delle API;
+l'applicazione deve comunque gestire le chiamate fallite.
+Una shell precache può essere visibile offline se il service
+worker è già installato, ma **lavorare sulle pratiche offline
+non è supportato**, l'accesso/rinnovo OIDC richiede rete, non
+c'è una copia consultabile dei documenti né una coda di scrittura.
+Non promettere disponibilità offline di dati protetti.
+
+Test di regressione:
+- `tests/frontend/smoke.spec.ts`, Playwright Chromium desktop/mobile:
+  transizione online → offline → online, messaggio localizzato,
+  niente accesso o pulsanti di modifica offline.
+- `tests/frontend/authenticated.spec.ts` (solo Compose/Keycloak):
+  pratica realmente creata prima della disconnessione,
+  assenza di riferimenti tenant e azioni offline, ritorno online
+  con refetch REST prima di mostrare di nuovo la pratica.
+- RED della nuova suite `smoke` su
+  [CI #43894072347](https://github.com/KeyserDSoze/Peritial/actions/runs/43894072347);
+  GREEN frontend 12/12 su
+  [CI #43894655555](https://github.com/KeyserDSoze/Peritial/actions/runs/43894655555).
+
+Il completamento della PWA installabile, l'audit WCAG,
+l'aggiornamento controllato del service worker e la verifica
+offline del build di produzione sono ancora aperti in #13.
+
 ## Preferenze PWA persistenti e accessibilità lingua/tema (#13)
 
 Il client memorizza **soltanto** due preferenze di interfaccia in
