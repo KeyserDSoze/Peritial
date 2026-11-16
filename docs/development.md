@@ -174,9 +174,22 @@ assenza di pratiche e comandi e riabilitazione
 solo dopo una nuova GET autenticata riuscita. Questo test
 non simula un vero outage di rete in produzione, né sostituisce
 fault injection multi-replica o controlli di scadenza JWT.
+Un secondo test controlla una race deterministica:
+fa partire una `GET /api/perizie` e la blocca, simula il
+fallimento HTTP 503 di una `assign` concorrente, poi
+completa la GET precedente. Il risultato obsoleto non deve
+far ricomparire pratiche e controlli; soltanto un nuovo
+`Riprova` autenticato può sbloccare la UI. Non è una prova
+multi-replica, ma protegge il contratto dell'epoch React.
+
 Test RED [CI #43902048937](https://github.com/KeyserDSoze/Peritial/actions/runs/43902048937)
 sulla UI precedente: 2 test browser falliti,
 38 test full-stack precedenti superati.
+Test GREEN con HTTP 503 GET/POST su
+[CI #43902848205](https://github.com/KeyserDSoze/Peritial/actions/runs/43902848205)
+(step `Authenticated OAuth + MCP integration` SUCCESS);
+ulteriori regressioni di rete abortita e interleaving GET/POST
+sono in verifica nella CI main.
 
 ## Aggiornamento controllato del service worker PWA (#13)
 
