@@ -38,6 +38,23 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     await expect(page.getByText(ref, {exact: true})).toBeVisible();
     await expect(page.getByRole("button", {name: "Crea"})).toBeEnabled();
 
+    // A browser may report online while DNS, proxy or origin connections fail.
+    // This must follow the same fail-closed path as the HTTP 503 case.
+    await page.route("**/api/perizie", async route => {
+      if (route.request().method() === "GET") {
+        await route.abort("failed");
+      } else {
+        await route.continue();
+      }
+    });
+    await page.getByRole("button", {name: "Aggiorna elenco"}).click();
+    await expect(page.getByRole("alert")).toContainText("Servizio perizie non disponibile");
+    await expect(page.getByText(ref, {exact: true})).toHaveCount(0);
+    expect(await page.evaluate(() => navigator.onLine)).toBe(true);
+    await page.unroute("**/api/perizie");
+    await page.getByRole("button", {name: "Riprova"}).click();
+    await expect(page.getByText(ref, {exact: true})).toBeVisible();
+
     const otherRef = "API-DOWN-WRITE-" + Date.now();
     await page.route("**/api/perizie", async route => {
       if (route.request().method() === "POST") {
