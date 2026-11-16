@@ -41,7 +41,7 @@ services:
     # Never publish Alertmanager's unauthenticated API outside Compose.
 
   prometheus:
-    image: prom/prometheus:v3.5.0
+    image: prom/prometheus:v3.5.0@sha256:63805ebb8d2b3920190daf1cb14a60871b16fd38bed42b857a3182bc621f4996
     depends_on:
       alertmanager: {condition: service_started}
     command:
