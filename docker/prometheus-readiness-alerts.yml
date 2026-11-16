@@ -1,0 +1,47 @@
+# Operational readiness signals for a future private Prometheus backend.
+# No tenant, subject, object, file, issuer or hostname variables in alert labels.
+# Prometheus receives normalized names from the OpenTelemetry Prometheus exporter.
+# Alertmanager/notifications are NOT configured by this file.
+groups:
+  - name: peritial-readiness
+    interval: 30s
+    rules:
+      - alert: PeritialReadinessFailures
+        expr: sum(increase(peritial_readiness_requests_total{outcome="not_ready"}[2m])) >= 3
+        for: 0m
+        labels:
+          severity: warning
+          service: peritial-api
+        annotations:
+          summary: "Readiness reported repeated failures"
+          description: "Three or more not_ready responses in two minutes; check dependency metrics and health."
+
+      - alert: PeritialReadinessDependencyFailed
+        expr: sum by (dependency) (increase(peritial_readiness_dependency_checks_total{outcome="failed",dependency=~"postgres|clamav|oidc|storage"}[2m])) >= 2
+        for: 0m
+        labels:
+          severity: warning
+          service: peritial-api
+        annotations:
+          summary: "Repeated failure of a readiness dependency"
+          description: "Dependency {{ $labels.dependency }} failed at least twice in two minutes."
+
+      - alert: PeritialReadinessSlow
+        expr: histogram_quantile(0.95, sum by (le) (rate(peritial_readiness_duration_seconds_bucket[5m]))) > 2
+        for: 2m
+        labels:
+          severity: warning
+          service: peritial-api
+        annotations:
+          summary: "Readiness p95 is near its time budget"
+          description: "Readiness p95 exceeded two seconds for two minutes."
+
+      - alert: PeritialReadinessTelemetryMissing
+        expr: absent_over_time(peritial_readiness_requests_total[3m]) == 1
+        for: 2m
+        labels:
+          severity: critical
+          service: peritial-api
+        annotations:
+          summary: "No readiness telemetry received"
+          description: "No readiness request series for three minutes; verify probes, collector and metrics delivery."
