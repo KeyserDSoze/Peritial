@@ -68,6 +68,35 @@ ancora ETag/If-Match pubblico, idempotenza completa degli altri tool,
 prova di race multi-replica o di commit-ACK incerto, UI di storico,
 notifiche o parità con le regole del legacy. #9 e #21 restano aperte.
 
+## Lettura puntuale di una perizia via REST/MCP (#12/#9)
+
+La route `GET /api/perizie/{id}` e il tool
+`get_perizia(id)` invocano entrambi `PeriziaService.GetAsync`
+con `RequireRead`. La query `FindAsync` del repository
+PostgreSQL usa il contesto tenant firmato, con FORCE RLS,
+senza parametri tenant dal client. Token con scope
+`peritial.read` oppure `peritial.write` possono accedere;
+un token senza scope viene rifiutato, anche quando il GUID
+rappresenta una pratica esistente.
+
+`SecurityAuditUseCaseTests` copre letture read-only e
+write-only, assenza di audit mutativo, not found per
+ID sconosciuto, `Guid.Empty` o altra tenant e diniego
+per assenza scope. `TenantIsolationTests` prova già
+`PgPeriziaRepository.FindAsync` con tenant diversi e
+pool di connessioni PostgreSQL reale. Playwright
+`tests/frontend/security.spec.ts` verifica lettura di
+una pratica con Keycloak read-only via REST e MCP,
+discovery `tools/list`, 401/403, 404 e mancata
+divulgazione di record inesistenti.
+
+I read non emettono `succeeded` su `security_audit`:
+l'audit append-only registrato dai casi d'uso resta
+dedicato alle mutazioni e ai dinieghi. Mancano
+catalogo completo MCP, read models paginati,
+compatibilità con client esterni e versionamento
+contrattuale (issue #12 ancora aperta).
+
 ## Assegnazione e avanzamento MCP: parità REST (#12/#9)
 
 `McpTools.AssignPerizia` (`assign_perizia(id, assignee)`) e
