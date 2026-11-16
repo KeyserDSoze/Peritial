@@ -52,7 +52,7 @@ zero() { awk -v value="$1" 'BEGIN { exit !(value == 0) }'; }
 webhook_count() {
   local records
   records=$("${stack[@]}" exec -T alert-sink cat /events/events.jsonl 2>/dev/null || true)
-  printf '%s\\n' "$records" | python3 -c '
+  printf '%s\n' "$records" | python3 -c '
 import json, sys
 status, name, dependency = sys.argv[1:]
 count = 0
