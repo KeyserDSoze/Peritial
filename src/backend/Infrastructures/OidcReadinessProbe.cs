@@ -9,7 +9,12 @@ namespace Peritial.Infrastructures;
 /// The configured discovery endpoint may be an internal development address,
 /// but any advertised JWKS URI must share the public issuer's origin.
 /// </summary>
-public sealed class OidcReadinessProbe : IDisposable
+public interface IOidcReadinessProbe
+{
+    Task<bool> CheckAsync(CancellationToken cancellationToken = default);
+}
+
+public sealed class OidcReadinessProbe : IOidcReadinessProbe, IDisposable
 {
     private readonly HttpClient _client;
     private readonly Uri _issuer;
