@@ -31,7 +31,8 @@ public static partial class SealedBundleOffsite
         // and a read-only verifier. Even S3-compatible servers that conflate
         // GetObject and GetObjectVersion cannot expose document bytes to
         // the uploader's credential. The demo-only path may share a client.
-        if (!disposableUnprotectedDemo && verificationSource is null)
+        if (!disposableUnprotectedDemo &&
+            (verificationSource is null || ReferenceEquals(verificationSource, destination)))
             throw new InvalidOperationException(
                 "Remote Object Lock upload requires a separate read-only verifier.");
         var verifier = verificationSource ?? destination;

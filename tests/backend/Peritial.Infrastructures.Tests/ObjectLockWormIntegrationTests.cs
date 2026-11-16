@@ -120,7 +120,16 @@ public sealed class ObjectLockWormIntegrationTests
             await SealedRecoveryBundle.SealAsync(pg, archive, sealedDirectory,
                 encryptionKey, signingKey);
 
-            // NO demo bypass: both upload and download must check Object Lock.
+            // No production upload without a distinct verifier; the
+            // failure happens BEFORE writing even the first ciphertext.
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                SealedBundleOffsite.UploadAsync(sealedDirectory, writer, bucket,
+                    id, encryptionKey));
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                SealedBundleOffsite.UploadAsync(sealedDirectory, writer, bucket,
+                    id, encryptionKey, verificationSource: writer));
+            // NO demo bypass: upload and download check real Object Lock,
+            // with independent write-only and read-only S3 credentials.
             await SealedBundleOffsite.UploadAsync(sealedDirectory, writer, bucket,
                 id, encryptionKey, verificationSource: reader);
             var completeKey = "sealed-v1/" + id + "/complete";
