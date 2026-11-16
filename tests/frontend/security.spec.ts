@@ -97,4 +97,44 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
     });
     expect(tools.status(), await tools.text()).toBe(403);
   });
+  test("Keycloak-signed expired access tokens deny REST and MCP after configured clock skew", async ({request}) => {
+    // The API intentionally allows 60 s clock skew. Test the real issuer's
+    // short-lived, correctly signed token rather than forging a JWT payload.
+    test.setTimeout(110_000);
+    const shortLived = await tokenFor(request, "peritial-test-expired");
+    const claims = JSON.parse(
+      Buffer.from(shortLived.split(".")[1], "base64url").toString("utf-8")
+    ) as {iat?: number; exp?: number};
+    expect(claims.iat).toBeGreaterThan(0);
+    expect(claims.exp).toBeGreaterThan(claims.iat!);
+    expect(claims.exp! - claims.iat!, "Keycloak test client must issue a short-lived JWT")
+      .toBeLessThanOrEqual(10);
+
+    const beforeRest = await request.get(api + "/api/perizie", {
+      headers: {Authorization: "Bearer " + shortLived}
+    });
+    expect(beforeRest.status(), await beforeRest.text()).toBe(200);
+    const beforeMcp = await request.post(api + "/mcp", {
+      headers: mcpHeaders(shortLived),
+      data: {jsonrpc: "2.0", id: 71, method: "tools/list"}
+    });
+    expect(beforeMcp.ok(), await beforeMcp.text()).toBeTruthy();
+
+    // After exp + the API's one-minute ClockSkew, neither HTTP entrypoint
+    // may accept the same token, even though its signature remains valid.
+    const expiryWithSkew = claims.exp! * 1_000 + 65_000;
+    await new Promise<void>(resolve =>
+      setTimeout(resolve, Math.max(0, expiryWithSkew - Date.now()))
+    );
+
+    const expiredRest = await request.get(api + "/api/perizie", {
+      headers: {Authorization: "Bearer " + shortLived}
+    });
+    expect(expiredRest.status(), await expiredRest.text()).toBe(401);
+    const expiredMcp = await request.post(api + "/mcp", {
+      headers: mcpHeaders(shortLived),
+      data: {jsonrpc: "2.0", id: 72, method: "tools/list"}
+    });
+    expect(expiredMcp.status(), await expiredMcp.text()).toBe(401);
+  });
 });
