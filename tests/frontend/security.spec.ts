@@ -454,10 +454,8 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
       request, "peritial-test-write-tenant-b", "otheruser", "local-only-other-user"
     );
     const readerA = await tokenFor(request, "peritial-test-readonly");
-    const claimsA = JSON.parse(Buffer.from(writerA.split(".")[1], "base64url").toString("utf-8"))
-      as {tenant_id: string; sub: string};
-    const claimsB = JSON.parse(Buffer.from(writerB.split(".")[1], "base64url").toString("utf-8"))
-      as {tenant_id: string; sub: string};
+    const claimsA = JSON.parse(Buffer.from(writerA.split(".")[1], "base64url").toString("utf-8")) as {tenant_id: string; sub: string};
+    const claimsB = JSON.parse(Buffer.from(writerB.split(".")[1], "base64url").toString("utf-8")) as {tenant_id: string; sub: string};
     expect(claimsA.tenant_id).toBe("11111111-1111-1111-1111-111111111111");
     expect(claimsB.tenant_id).toBe("22222222-2222-2222-2222-222222222222");
     expect(claimsB.sub).not.toBe(claimsA.sub);
