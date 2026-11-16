@@ -19,7 +19,24 @@ Le Activity `peritial.readiness` e `peritial.readiness.dependency` usano esattam
 
 ## Esportazione e allarmi
 
-Il codice **produce** le misure tramite API standard `System.Diagnostics.Metrics` e trace tramite `ActivitySource`. **Non è ancora configurato** un exporter OTLP/Prometheus, un collector, una dashboard o un alert di produzione; quindi non dichiarare osservabilità end-to-end attiva. Il prossimo intervento su #19 dovrà registrare il Meter/ActivitySource nel provider OpenTelemetry di ogni replica, usare un collector privato autenticato/TLS e garantire retention, accessi e test di consegna senza esporre dati personali.
+Il codice **produce** le misure tramite API standard `System.Diagnostics.Metrics` e trace tramite `ActivitySource`. L'API include ora un **exporter OTLP/HTTP-Protobuf opzionale**, ma non lo attiva in assenza di opt-in esplicito. Sono registrati **soltanto** Meter e ActivitySource `Peritial.Readiness`, senza exporter di log, body HTTP, utenti o altri provider framework. Il resource attribute `service.name` è `peritial-api`.
+
+### Abilitazione controllata dell'exporter
+
+In un'installazione con collector **privato, autenticato e TLS**, configurare queste variabili da secret manager / orchestratore, non nel repository:
+
+```sh
+Observability__Otlp__Enabled=true
+Observability__Otlp__Endpoint=https://collector.interno.example:4318/
+# Solo se il collector lo richiede, gestito tramite Secret Store:
+# OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer%20...
+```
+
+L'endpoint è una **base URL**: il client aggiunge esattamente `/v1/metrics` e `/v1/traces` e usa `application/x-protobuf`. Il validatore di startup rifiuta opt-in senza endpoint, URL senza HTTPS in ambienti non-Development, path diversi dalla radice, query, frammenti e credenziali embedded. `http://` è ammesso **solo in Development** per un ricevitore locale temporaneo, mai per un rilascio. Impostazione assente o `false` significa **nessuna trasmissione esterna**; la sola presenza di `Observability__Otlp__Endpoint` non abilita l'export. Le chiavi di autenticazione devono essere passate soltanto come variabili segrete/headers, mai tramite URI, labels o file versionati.
+
+**Prova CI**: test xUnit `ReadinessOtlpExportContractTests` con receiver OTLP/HTTP-Protobuf su loopback effettivamente acquisisce un batch di metriche e uno di trace, oltre ai test che verificano la disattivazione e i vincoli URL. Il test loopback non prova TLS, autenticazione, collector vero, retention, esportazione distribuita o dashboard.
+
+**Non è ancora configurato alcun collector persistente, dashboard o alert di produzione.** Occorrono provisioning di rete privata/TLS, rotazione delle credenziali del collector, regole di retention/ACL, metriche da tutte le repliche e test di consegna su collector gestito prima di dichiarare osservabilità end-to-end attiva.
 
 Una volta collegato un backend metriche, usare almeno i seguenti segnali per dashboard e alert:
 - rapporto tra incremento di `peritial.readiness.requests` con `outcome=not_ready` e richieste totali, con soglie da tarare su una finestra di minuti e su tutte le repliche;
