@@ -189,6 +189,11 @@ public sealed class ObjectLockWormIntegrationTests
                     VersioningConfig = new S3BucketVersioningConfig
                     { Status = VersionStatus.Suspended }
                 }));
+            await Assert.ThrowsAsync<AmazonS3Exception>(() =>
+                writer.ListVersionsAsync(new ListVersionsRequest
+                {
+                    BucketName = bucket, Prefix = "sealed-v1/" + id + "/"
+                }));
             // Bucket-name isolation is not sufficient: neither identity may
             // read or upload outside sealed-v1/* even inside the same bucket.
             await client.PutObjectAsync(new PutObjectRequest
