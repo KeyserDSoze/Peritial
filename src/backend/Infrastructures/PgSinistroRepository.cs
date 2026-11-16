@@ -6,11 +6,11 @@ using Peritial.Domains;
 namespace Peritial.Infrastructures;
 
 /// <summary>
-/// Read-only sinistro catalog and audited writes. The tenant is always taken
+/// Tenant-filtered sinistro catalog and audited writes. The tenant is always taken
 /// from a validated domain identity, and every operation uses transaction-local
-/// RLS context. Not registered as a public REST/MCP use case yet (#7).
+/// RLS context. Called only through the scope-aware Business service (#7).
 /// </summary>
-public sealed class PgSinistroRepository(NpgsqlDataSource dataSource)
+public sealed class PgSinistroRepository(NpgsqlDataSource dataSource) : ISinistroRepository
 {
     public async Task<IReadOnlyList<Sinistro>> ListAsync(
         TenantId tenant, int limit = 50, CancellationToken ct = default)
@@ -127,7 +127,3 @@ public sealed class PgSinistroRepository(NpgsqlDataSource dataSource)
     }
 }
 
-public sealed class SinistroConcurrencyConflictException()
-    : Exception("Sinistro has changed since it was read.")
-{
-}
