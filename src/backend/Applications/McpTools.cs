@@ -8,7 +8,7 @@ namespace Peritial.Applications;
 /// <summary>All tools use the exact same scoped services as the REST API.</summary>
 [McpServerToolType]
 public sealed class McpTools(
-    PeriziaService perizie, FileIngestionService ingestion, DocumentCatalogService documents)
+    PeriziaService perizie, FileIngestionService ingestion, DocumentCatalogService documents, SinistroService sinistri)
 {
     [McpServerTool(Name = "list_perizie"), Description("Lists perizie visible to the authenticated tenant (peritial.read).")]
     public Task<IReadOnlyList<PeriziaDto>> ListPerizie(CancellationToken ct = default) => perizie.ListAsync(ct);
@@ -36,6 +36,26 @@ public sealed class McpTools(
     [McpServerTool(Name = "cancel_perizia"), Description("Cancels a non-terminal perizia belonging to the authenticated tenant (peritial.write).")]
     public Task<PeriziaDto> CancelPerizia(Guid id, CancellationToken ct = default) =>
         perizie.CancelAsync(id, ct);
+
+    [McpServerTool(Name = "list_sinistri"), Description("Lists up to 100 sinistri in the signed tenant (peritial.read or peritial.write); no tenant IDs disclosed.")]
+    public Task<IReadOnlyList<SinistroDto>> ListSinistri(int limit = 50, CancellationToken ct = default) =>
+        sinistri.ListAsync(limit, ct);
+
+    [McpServerTool(Name = "get_sinistro"), Description("Gets a sinistro belonging to the signed tenant; missing/foreign IDs are indistinguishable (peritial.read).")]
+    public Task<SinistroDto> GetSinistro(Guid id, CancellationToken ct = default) =>
+        sinistri.GetAsync(id, ct);
+
+    [McpServerTool(Name = "create_sinistro"), Description("Creates a sinistro using signed tenant, required external reference and ISO calendar date; optional report date (peritial.write).")]
+    public Task<SinistroDto> CreateSinistro(
+        string externalReference, DateOnly occurredOn, DateOnly? reportedOn = null,
+        CancellationToken ct = default) =>
+        sinistri.CreateAsync(externalReference, occurredOn, reportedOn, ct);
+
+    [McpServerTool(Name = "update_sinistro"), Description("Updates a sinistro using a required last-seen version; stale versions are rejected (peritial.write).")]
+    public Task<SinistroDto> UpdateSinistro(
+        Guid id, string externalReference, DateOnly occurredOn, long expectedVersion,
+        DateOnly? reportedOn = null, CancellationToken ct = default) =>
+        sinistri.UpdateAsync(id, externalReference, occurredOn, reportedOn, expectedVersion, ct);
 
     [McpServerTool(Name = "list_documents"), Description("Lists up to 100 document metadata entries in the authenticated tenant (peritial.read or peritial.write); optional periziaId filter. Never exposes storage keys or file bytes.")]
     public Task<IReadOnlyList<DocumentSummaryDto>> ListDocuments(
