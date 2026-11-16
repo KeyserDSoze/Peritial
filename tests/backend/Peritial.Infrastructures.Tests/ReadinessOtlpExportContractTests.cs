@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -66,9 +67,16 @@ public sealed class ReadinessOtlpExportContractTests
         using var provider = services.BuildServiceProvider();
         var metrics = provider.GetRequiredService<MeterProvider>();
         var traces = provider.GetRequiredService<TracerProvider>();
+        // ASP.NET Core can create a current HTTP Activity whose sampled flag
+        // is false. Readiness-only tracing must still reach the collector
+        // rather than inheriting the upstream decision and vanishing.
+        using var unsampledHttpParent = new Activity("http-request-unsampled");
+        unsampledHttpParent.Start();
+        Assert.False(unsampledHttpParent.Recorded);
         Assert.False(await ReadinessTelemetry.RunRequestAsync(
             ct => ReadinessTelemetry.RunDependencyAsync(ReadinessDependency.Storage,
                 _ => Task.FromResult(false), ct), timeout.Token));
+        unsampledHttpParent.Stop();
 
         Assert.True(traces.ForceFlush(5000));
         Assert.True(metrics.ForceFlush(5000));
