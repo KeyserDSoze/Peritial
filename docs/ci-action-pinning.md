@@ -34,6 +34,44 @@ directory workflow. I test negativi servono a impedire che un nuovo job
 indebolisca silenziosamente la policy. Nuovi workflow vengono inclusi
 automaticamente dal controllo ricorsivo.
 
+## Baseline esplicita runner e SDK della CI (16 novembre 2026)
+
+La CI contiene ora anche una policy distinta
+`scripts/security/ci_toolchain_policy.py` e la suite
+`tests/security/test_ci_toolchain_pins.py`. Il job `supply-chain-actions`
+richiede **14 occorrenze** esatte nell'unico workflow CI:
+
+| Campo | Versione approvata | Occorrenze | Evidenza |
+| --- | --- | --- | --- |
+| `runs-on` | `ubuntu-26.04` | 9 | Runner Image `ubuntu26/20261111.196` nel job backend CI |
+| `dotnet-version` | `10.0.404` | 3 | Log `dotnet-install: .NET Core SDK ... 10.0.404` |
+| `node-version` | `22.23.4` | 2 | Log `node: v22.23.4` e cache toolchain |
+
+Evidenza: [run #43873685545](https://github.com/KeyserDSoze/Peritial/actions/runs/43873685545)
+sul commit precedente `5b476f43`. GitHub conferma il label
+`ubuntu-26.04` per i runner ospitati nella
+[documentazione ufficiale](https://docs.github.com/en/actions/how-tos/write-workflows/choose-where-workflows-run/choose-the-runner-for-a-job).
+
+Il gate aggiuntivo esegue:
+
+```sh
+python3 -m unittest discover -s tests/security -p test_ci_toolchain_pins.py -v
+```
+
+Verifica esatta del label e delle versioni, numero di occorrenze,
+mancanze/duplicati, espressioni di matrix e alternative non revisionate.
+TDD RED documentato in [run #43874811777](https://github.com/KeyserDSoze/Peritial/actions/runs/43874811777),
+dove la policy rifiuta `ubuntu-latest`, Node `22` e .NET `10.0.x`
+ancora presenti nel workflow.
+
+Il label `ubuntu-26.04` **stabilizza solo la famiglia OS**: GitHub può
+aggiornare l'immagine VM e il tooling preinstallato senza cambiare il label.
+Le versioni Node e SDK sono esatte **solo dove configurate nel workflow**;
+l'immagine Docker SDK e i tool di altri ecosistemi hanno una propria
+provenienza. Aggiornare runner/SDK soltanto con release notes, prova CI e
+cambio contestuale delle costanti di policy, documentando il nuovo numero
+di versione. Non usare versioni fluttuanti come fallback automatico.
+
 ## Upgrade controllato
 
 1. Aprire o aggiornare una issue; leggere release notes/security advisory
@@ -52,9 +90,10 @@ automaticamente dal controllo ricorsivo.
 
 Il job copre ora anche il controllo dei digest dei **due Dockerfile applicativi**,
 tramite `test_dockerfile_base_pins.py` (runbook: [pin OCI](oci-base-image-pinning.md)).
-Non copre ancora la supply chain completa: immagini Compose/CI con tag mobili,
-`runs-on: ubuntu-latest`, SDK `10.0.x`, Terraform installato tramite setup action,
-dipendenze transitive e mirror esterni devono essere affrontati separatamente. Uno SHA fisso **non
+Non copre ancora la supply chain completa: diverse immagini Compose/CI con tag mobili,
+build effettivo della VM Ubuntu, SDK incorporati nelle immagini OCI,
+Terraform installato tramite setup action, dipendenze transitive, pacchetti
+sistema e mirror esterni devono essere affrontati separatamente. Uno SHA fisso **non
 dimostra** da solo firma, provenance/SLSA, assenza vulnerabilità o
 approvazione del publisher. Non sostituisce branch protection, secrets
 security, permessi minimi o attestazioni del deploy. La issue #6 resta aperta.
