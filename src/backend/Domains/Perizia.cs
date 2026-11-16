@@ -8,6 +8,10 @@ public sealed class Perizia
     public PeriziaStatus Status { get; private set; }
     public string? AssignedTo { get; private set; }
     public DateTime CreatedAtUtc { get; }
+    // Optimistic concurrency snapshot, captured at restore / last confirmed
+    // database commit. Domain transitions do not change this snapshot.
+    public PeriziaStatus PersistedStatus { get; private set; }
+    public string? PersistedAssignedTo { get; private set; }
 
     private Perizia(Guid id, TenantId tenantId, string reference, PeriziaStatus status, string? assignedTo, DateTime createdAtUtc)
     {
@@ -20,6 +24,8 @@ public sealed class Perizia
         Status = status;
         AssignedTo = assignedTo;
         CreatedAtUtc = createdAtUtc;
+        PersistedStatus = status;
+        PersistedAssignedTo = assignedTo;
     }
 
     public static Perizia Create(TenantId tenantId, string reference) =>
@@ -30,6 +36,16 @@ public sealed class Perizia
     {
         if (id == Guid.Empty) throw new ArgumentException("Invalid id.", nameof(id));
         return new Perizia(id, tenantId, reference, status, assignedTo, createdAtUtc);
+    }
+
+    /// <summary>
+    /// Used by persistence ONLY after a successful database commit.
+    /// Failed or rolled-back writes must not advance the expected state.
+    /// </summary>
+    public void ConfirmPersisted()
+    {
+        PersistedStatus = Status;
+        PersistedAssignedTo = AssignedTo;
     }
 
     public void Assign(TenantId actorTenant, string assignee)
