@@ -183,6 +183,16 @@ public sealed class SinistroServiceTests
         public Task<IReadOnlyList<Sinistro>> ListAsync(TenantId tenant, int limit = 50, CancellationToken ct = default) =>
             Task.FromResult<IReadOnlyList<Sinistro>>(Saved.Values.Where(x => x.TenantId == tenant)
                 .Take(limit).Select(Snapshot).ToArray());
+        public Task<IReadOnlyList<Sinistro>> SearchAsync(
+            TenantId tenant, string prefix, DateOnly? occurredFrom = null,
+            DateOnly? occurredTo = null, int limit = 10, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<Sinistro>>(Saved.Values
+                .Where(x => x.TenantId == tenant &&
+                    x.ExternalReference.StartsWith(prefix.Trim(), StringComparison.OrdinalIgnoreCase) &&
+                    (!occurredFrom.HasValue || x.OccurredOn >= occurredFrom.Value) &&
+                    (!occurredTo.HasValue || x.OccurredOn <= occurredTo.Value))
+                .OrderByDescending(x => x.OccurredOn).ThenBy(x => x.Id)
+                .Take(limit).Select(Snapshot).ToArray());
         public Task<Sinistro?> FindAsync(TenantId tenant, Guid id, CancellationToken ct = default) =>
             Task.FromResult(Saved.TryGetValue(id, out var s) && s.TenantId == tenant ? Snapshot(s) : null);
         public async Task AddAuditedAsync(Sinistro item, SecurityAuditEvent entry, CancellationToken ct = default)
