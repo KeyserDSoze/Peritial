@@ -81,7 +81,7 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
       return entries.flat().map(entry => new URL(entry.url).pathname);
     });
     expect(cachedPaths.length, "production PWA must precache its public shell").toBeGreaterThan(0);
-    expect(cachedPaths.filter(path => /^\\/(?:api|mcp|realms|\\.well-known)(?:\\/|$)/.test(path)))
+    expect(cachedPaths.filter(path => /^\/(?:api|mcp|realms|\.well-known)(?:\/|$)/.test(path)))
       .toEqual([]);
 
     await context.setOffline(true);
