@@ -4,7 +4,8 @@ Prerequisiti: Docker Engine, Docker Compose v2.
 
 - Avvio: docker compose -f docker/compose.yml up --build -d
 - PWA http://localhost:5173 ; REST http://localhost:8080/api/perizie ; MCP http://localhost:8080/mcp
-- Health: http://localhost:8080/health/live
+- Liveness (processo attivo): http://localhost:8080/health/live
+- Readiness **parziale** (PostgreSQL applicativo + PING ClamAV): http://localhost:8080/health/ready
 - Keycloak: http://localhost:8081 ; SeaweedFS S3: http://localhost:8333
 - Utente solo locale: localuser / local-only-user; admin Keycloak locale: localadmin / local-only-admin.
 - Test backend PostgreSQL reale: docker compose -f docker/compose.yml --profile test run --rm tests
@@ -46,3 +47,9 @@ Il bootstrap locale è compatibile con schema preesistente e aggiunge `lease_exp
 ## Fault injection interruzione PUT (#21)
 
 La pipeline CI usa un overlay Compose separato, `docker/compose.chaos.yml`, che instrada il PUT S3 tramite un proxy Python capace di inoltrare i primi byte e bloccare il trasferimento. Solo dopo il segnale di byte inoltrati viene inviato SIGKILL al processo API; poi la stack standard viene riavviata ed è verificata la pulizia PostgreSQL/SeaweedFS. L'overlay è esclusivamente di **test**, non abilitarlo su installazioni operative e non esporre il proxy. ADR 0014.
+
+## Liveness e readiness applicativa (#19)
+
+`GET /health/live` restituisce HTTP 200 quando il processo HTTP risponde, **anche** se PostgreSQL o ClamAV sono temporaneamente indisponibili. `GET /health/ready` (senza token) esegue una query read-only `SELECT 1` con la **stessa connessione PostgreSQL non privilegiata** usata dall'applicazione e un `zPING` sul socket interno configurato di `clamd`: è pronto soltanto con esito PostgreSQL corretto e risposta esatta `PONG`. Il probe ha un budget complessivo di 3 secondi e restituisce HTTP 200 `{"status":"ready"}` oppure HTTP 503 `{"status":"not_ready"}`, senza hostname, credenziali o dettagli di errore. Non esegue scansioni di contenuti, non altera dati e non bypassa tenant RLS.
+
+Questo è un **primo gate**, non una prova di readiness produttiva completa: non verifica ancora S3/Azure Blob, disponibilità/validità delle chiavi e del metadata OIDC, freschezza delle firme ClamAV, worker recovery, queue backlog, multi-replica o limiti delle dipendenze. Non usare `/health/live` come controllo di ammissione del traffico; dove configurato, usare `/health/ready` soltanto con la consapevolezza di questi limiti. In CI Compose sono verificate sia la risposta positiva sia HTTP 503 quando `clamav` viene fermato, mantenendo `/health/live` a 200.
