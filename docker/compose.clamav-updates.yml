@@ -10,7 +10,7 @@ services:
     environment:
       # Official image starts both clamd and freshclam when not disabled.
       CLAMAV_NO_FRESHCLAMD: "false"
-      # Twice each hour; 48-hour API max age is an independent fail-closed gate.
+      # Twelve checks per day (every 2 hours); the API's 48-hour max age is an independent gate.
       FRESHCLAM_CHECKS: "12"
       # clamd's zVERSION timestamp has NO timezone offset.
       TZ: UTC
