@@ -105,7 +105,10 @@ export PERITIAL_ARCHIVE_HMAC_KEY_FILE=/secure/keys/s3-manifest.key
 export PERITIAL_OFFSITE_S3_ENDPOINT=https://remote-backup.example.invalid
 export PERITIAL_OFFSITE_S3_BUCKET=peritial-encrypted-recovery
 export PERITIAL_OFFSITE_S3_ACCESS_KEY='(dal secret manager)'
-export PERITIAL_OFFSITE_S3_SECRET_KEY='(dal secret manager)'
+export PERITIAL_OFFSITE_S3_SECRET_KEY='(segreto dell uploader)'
+# Secondo principal S3: reader per verifica SHA-256 dopo ogni PUT.
+export PERITIAL_OFFSITE_VERIFY_S3_ACCESS_KEY='(access key del reader)'
+export PERITIAL_OFFSITE_VERIFY_S3_SECRET_KEY='(segreto del reader)'
 export PERITIAL_OFFSITE_BACKUP_ID=0123456789abcdef0123456789abcdef
 export PERITIAL_BUNDLE_DIR=/secure/backup-sets/recovery-001.sealed
 
@@ -113,7 +116,7 @@ export PERITIAL_BUNDLE_CONFIRM=REMOTE_ENCRYPTED_UPLOAD
 dotnet run --project scripts/recovery/Peritial.RecoveryBundle -- push-sealed
 ```
 
-Per la prova di download **su un host separato** mantenere endpoint, bucket, backup ID e chiavi corretti, scegliere una directory nuova su storage protetto e richiedere il consenso specifico:
+Per il download **su un host separato**, mantenere endpoint, bucket e backup ID, ma assegnare `PERITIAL_OFFSITE_S3_ACCESS_KEY`/`PERITIAL_OFFSITE_S3_SECRET_KEY` al **reader** (non all uploader). Scegliere una directory nuova e richiedere il consenso specifico:
 
 ```bash
 export PERITIAL_BUNDLE_CONFIRM=ISOLATED_ENCRYPTED_DOWNLOAD
@@ -194,7 +197,7 @@ Il percorso storico è **sempre sottoposto a Object Lock**: il bypass `DISPOSABL
 
 **Nessuna credenziale root/admin S3 deve essere usata durante il normale `push-sealed`, `pull-sealed` o `pull-historic`.** Nel workflow di recupero remoto ci sono ora due profili IAM **distinti**, verificati con due utenti reali del server S3 compatibile nel job WORM:
 
-- **Uploader**: può leggere stato versioning/retention del bucket, verificare il prefisso `sealed-v1/`, fare `PutObject` solo nel prefisso dei bundle cifrati, `GetObject` e `GetObjectRetention` per controllare che il server abbia davvero conservato ciò che è stato caricato. Non può enumerare `VersionId` storici, cambiare il bucket o cancellare le versioni.
+- **Uploader**: legge soltanto configurazione di bucket, stato del prefisso `sealed-v1/` e retention S3; può fare `PutObject` nel prefisso, **non ha alcun permesso `GetObject` o `GetObjectVersion`**. Tutti i GET di verifica SHA-256 sono effettuati da un secondo client reader; nessuna cancellazione o amministrazione del bucket. La policy non concede `ListBucketVersions`, ma SILO può consentire ugualmente l'enumerazione sotto `ListBucket` (vedere sotto).
 - **Reader/recovery**: può leggere la stessa configurazione di sicurezza, elencare gli oggetti correnti **e le versioni**, fare `GetObject`/`GetObjectVersion` e `GetObjectRetention` nel prefisso. **Non può caricare, sovrascrivere, cancellare o cambiare retention**. Il file di selezione storica rimane fornito separatamente dall'operatore; il reader non acquisisce mai autorizzazioni di modifica.
 
 Per generare JSON IAM riproducibili per il bucket **esatto** di destinazione:
@@ -211,6 +214,8 @@ Il tool rifiuta nomi bucket non validi, ARN wildcard, output preesistente e sovr
 
 **Amministrazione e prerequisiti fuori banda:** un amministratore indipendente deve creare il bucket con Object Lock attivato, versioning `Enabled`, retention `COMPLIANCE` minima di 30 giorni, poi creare/associare le due identità IAM separate. Non assegnare agli utenti di servizio altri ruoli che riaprono operazioni vietate. Per AWS S3 preferire profili a breve durata tramite IAM Role/STS e limitare le trust policy; **il CLI Peritial attuale usa ancora credenziali S3 esplicite via variabili d'ambiente**, perciò l'integrazione con assume-role/rotazione automatica è lavoro aperto, non un risultato della tranche.
 
-La CI `worm-recovery` usa il client amministrativo `mcli` incluso nel container SILO **solo per provisioning dimostrativo** di due utenti e policy, poi esegue l'upload con l'identità uploader e il download corrente/storico con l'identità reader, senza usare credenziali root per queste operazioni. Il test prova fallimento delle operazioni non autorizzate (DELETE su una versione **non protetta** in un altro bucket per distinguere IAM da Object Lock, PUT del reader, configurazione bucket del writer, visibilità dello storico del writer e accesso al di fuori di `sealed-v1/`). Le credenziali del job sono usa-e-getta e non devono mai essere replicate in produzione.
+La CI `worm-recovery` usa il client amministrativo `mcli` incluso nel container SILO **solo per provisioning dimostrativo** di due utenti e policy, poi esegue l'upload con l'identità uploader e il download corrente/storico con l'identità reader, senza usare credenziali root per queste operazioni. Il test prova fallimento delle operazioni non autorizzate (DELETE su una versione **non protetta** in un altro bucket per distinguere IAM da Object Lock, GET corrente/storico del writer, PUT del reader, configurazione bucket del writer e accesso al di fuori di `sealed-v1/`). Le credenziali del job sono usa-e-getta e non devono mai essere replicate in produzione.
 
 **Rischi residui:** le policy sono modelli di permessi e la CI verifica **SILO**, non AWS IAM `SimulatePrincipalPolicy` o un account AWS gestito con trust policy, MFA, CloudTrail e scadenza STS. Il bucket può essere ancora compromesso da un amministratore con più permessi, un provider indisponibile oppure chiavi AES/HMAC perse. Il meccanismo non configura KMS, rotazione, archiviazione geografica o retention/scheduling di produzione; le issue #6, #18 e #21 restano aperte. Per le azioni IAM esatte vedere la [documentazione Amazon S3](https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-with-s3-policy-actions.html).
+
+**Correzione di sicurezza provata in CI:** PGSTY SILO mappa la lettura `GetObject(VersionId)` all'azione `GetObject` generica, e l'enumerazione versioni a `ListBucket`. Per evitare che la credenziale uploader legga byte storici, **il suo profilo non concede più alcun GET**. `SealedBundleOffsite.UploadAsync` in produzione esige una seconda istanza client `verificationSource` distinta, con il principal reader, per rileggere e verificare i ciphertext dopo ogni PUT. La CLI reale richiede le variabili `PERITIAL_OFFSITE_VERIFY_S3_ACCESS_KEY` e `PERITIAL_OFFSITE_VERIFY_S3_SECRET_KEY` del reader; la via demo SeaweedFS con bypass esplicito conserva il singolo client senza garanzie WORM/IAM. La CI SILO **non prova** che i VersionId siano invisibili all uploader: per la confidentialità dei metadati serve revisione del provider/AWS IAM. Inoltre, due client S3 distinti non dimostrano da soli due identità IAM differenti: sono indispensabili corretta associazione dei principal, policy del provider e audit credenziali.
