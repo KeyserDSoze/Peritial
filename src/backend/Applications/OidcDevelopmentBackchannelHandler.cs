@@ -9,8 +9,9 @@ public sealed class OidcDevelopmentBackchannelHandler : DelegatingHandler
     private readonly Uri _publicOrigin;
     private readonly Uri _internalOrigin;
 
-    public OidcDevelopmentBackchannelHandler(string publicIssuer, string internalOrigin)
-        : base(new HttpClientHandler())
+    public OidcDevelopmentBackchannelHandler(string publicIssuer, string internalOrigin,
+        bool allowRedirects = true)
+        : base(new HttpClientHandler { AllowAutoRedirect = allowRedirects })
     {
         var issuer = new Uri(publicIssuer, UriKind.Absolute);
         var network = new Uri(internalOrigin, UriKind.Absolute);
