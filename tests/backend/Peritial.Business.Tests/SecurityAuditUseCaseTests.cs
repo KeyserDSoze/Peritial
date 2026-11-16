@@ -17,8 +17,11 @@ public sealed class SecurityAuditUseCaseTests
         var created = await service.CreateAsync("PRIVATE-CLAIM-REF");
         await service.AssignAsync(created.Id, "PRIVATE-ASSIGNEE");
         await service.AdvanceAsync(created.Id, PeriziaStatus.ToBeRevised);
+        var cancelled = await service.CancelAsync(created.Id);
+        Assert.Equal(PeriziaStatus.Cancelled.ToString(), cancelled.Status);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.CancelAsync(created.Id));
 
-        Assert.Equal(new[] { "perizia.create", "perizia.assign", "perizia.advance" },
+        Assert.Equal(new[] { "perizia.create", "perizia.assign", "perizia.advance", "perizia.cancel" },
             audit.Events.Select(e => e.Action));
         Assert.All(audit.Events, e =>
         {
