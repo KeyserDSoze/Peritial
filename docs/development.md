@@ -95,3 +95,24 @@ Il job CI **`worm-recovery`**, separato dai cinque job esistenti, usa PGSTY SILO
 La suite `worm-recovery` genera due IAM JSON con `scripts/recovery/render_worm_iam.py`, li valida con `tests/backup/test_worm_iam_policies.py` (nomi bucket e scope, rifiuto di wildcard/DELETE/admin, permessi 0600 e nessun overwrite), e usa `mcli admin` sul solo server SILO effimero per associare policy a utenti **separati**. `ObjectLockWormIntegrationTests` continua a creare e configurare il bucket con identità admin, ma esegue `SealedBundleOffsite.UploadAsync` soltanto con il writer scoped, `DownloadAsync/DownloadHistoricalAsync` soltanto con il reader scoped. I test rifiutano DELETE su un bucket di controllo senza Object Lock, scritture del reader, modifiche del bucket da parte del writer, elenco dello storico da parte del writer e accesso alle key fuori da `sealed-v1/`. Credenziali CI dimostrative; AWS IAM role/STS e KMS produttivi non ancora integrati. Vedere il runbook di recovery e ADR 0028.
 
 **Revisione IAM:** il server SILO tratta `GetObjectVersion` come `GetObject` e può permettere `ListBucketVersions` con il normale `ListBucket`. L'uploader non ha perciò più `GetObject` né `GetObjectVersion`. `SealedBundleOffsite.UploadAsync` richiede in modalità reale un secondo client read-only `verificationSource`, distinto dall'uploader, per i GET di confronto SHA-256 dopo ogni PUT. Il comando `push-sealed` reale richiede credenziali separate `PERITIAL_OFFSITE_VERIFY_S3_ACCESS_KEY` e `PERITIAL_OFFSITE_VERIFY_S3_SECRET_KEY`. La CI WORM prova che l'uploader non può leggere ciphertext correnti o storici e che il reader non può modificarli; il mancato elenco di VersionId **non** è verificato su SILO. La simulazione AWS IAM/STS e la rotazione restano aperte.
+
+## Regressione JWT scaduti con issuer reale (#4)
+
+La CI `compose` crea **soltanto nel Keycloak dimostrativo effimero** il client
+`peritial-test-expired` a partire da
+`docker/keycloak/peritial-expiry-client.json`, usando le variabili bootstrap già
+presenti *dentro* il container Keycloak. Il client è separato da `peritial-web`
+(PKCE) e dagli altri client E2E: il suo access token firmato dura **5 secondi**
+ed è limitato ai permessi di lettura, con tenant e audience del test.
+
+`tests/frontend/security.spec.ts` prima controlla l'accesso a REST
+(`GET /api/perizie`) e MCP (`tools/list`) con il token valido, poi attende
+`exp + 65 s` (i 60 secondi di `ClockSkew` di ASP.NET Core più un margine
+deterministico) e richiede **401 su entrambe le superfici** con lo stesso
+JWT ancora correttamente firmato. Non stampa né persiste il bearer. Il test
+richiede `E2E_FULL_STACK=1`, perciò è saltato nella suite frontend isolata e
+obbligatorio solo nella Compose CI.
+
+Questa è una prova su Keycloak locale, **non** una validazione Entra ID reale,
+revoca/rotazione chiavi o client MCP esterni. Non importare il client di test
+in realm o ambienti produttivi; mantenere aperta la issue #4 per i gate residui.
