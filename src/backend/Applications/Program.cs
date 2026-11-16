@@ -215,6 +215,19 @@ app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
 // Limit the entire multipart HTTP request, not only the individual file section.
 app.Use(async (context, next) =>
 {
+    // The PWA precaches only public static shell assets. Even outside the
+    // service worker, no browser/proxy must store tenant-scoped REST or MCP
+    // responses (including authentication failures and streamed MCP output).
+    if (context.Request.Path.StartsWithSegments("/api") ||
+        context.Request.Path.StartsWithSegments("/mcp"))
+    {
+        context.Response.OnStarting(() =>
+        {
+            context.Response.Headers["Cache-Control"] = "no-store";
+            context.Response.Headers["Pragma"] = "no-cache";
+            return Task.CompletedTask;
+        });
+    }
     if (context.Request.Path.Equals("/api/files", StringComparison.OrdinalIgnoreCase))
     {
         var feature = context.Features.Get<IHttpMaxRequestBodySizeFeature>();
