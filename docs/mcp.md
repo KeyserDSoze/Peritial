@@ -16,11 +16,43 @@ Esporre le funzionalità tramite Model Context Protocol (SDK ufficiale .NET, HTT
 ## Catalogo atteso
 | Capability | Tool | Fase |
 |---|---|---|
-| Perizie | list_perizie, create_perizia, cancel_perizia | creazione/lettura + annullamento auditato (#9) |
+| Perizie | list_perizie, create_perizia, assign_perizia, advance_perizia, cancel_perizia | vertical slice perizie: REST/MCP con audit atomico e CAS (#9/#12) |
 | Documenti | ingest_file (base64 limitato); REST multipart per grandi file | vertical slice 1 |
 | Sinistri, anagrafiche, stati, import XML, documenti, report, messaggi, contabilità, KPI | tool dedicati per ciascun use case | iterazioni successive |
 
 Per file grandi: non trasportare payload di gigabyte via JSON MCP; fornire un tool per ottenere URL di upload firmati/scoped e una procedura di completamento (da implementare). Una tool call MCP non equivale ad accesso indiscriminato al filesystem.
+
+## Assegnazione e avanzamento perizie via MCP (#12/#9)
+
+Sono disponibili altri due tool MCP, con gli stessi use case delle route REST:
+
+| Tool MCP | Argomenti JSON | Endpoint REST equivalente |
+| --- | --- | --- |
+| `assign_perizia` | `{"id":"UUID","assignee":"operatore"}` | `POST /api/perizie/{id}/assign` con `{"assignee":"operatore"}` |
+| `advance_perizia` | `{"id":"UUID","target":"ToBeRevised"}` | `POST /api/perizie/{id}/advance` con `{"target":"ToBeRevised"}` |
+
+`advance_perizia.target` accetta **solo** i nomi simbolici case-sensitive
+`ToBeRevised`, `Revised`, `ToSend`, `Sent`, `Billed`; numeri,
+nomi terminali come `Cancelled` e input ignoti sono rifiutati
+**prima** di invocare il servizio. La state machine del dominio
+controlla inoltre che il target sia **esattamente lo stato successivo**;
+un nome corretto non autorizza salti di stato.
+
+Entrambi richiedono token firmato con tenant+subject e scope
+`peritial.write`; il token read-only può entrare in MCP ma non può
+mutare, e la tool call ritorna `isError:true` con audit `denied`.
+Per le invocazioni corrette, il repository PostgreSQL FORCE RLS
+esegue update CAS e audit di successo nella stessa transazione
+(ADR 0029). Conflitti o transizioni invalide non generano audit
+`succeeded`. Il catalogo è provato via `tools/list`, mentre
+`tests/frontend/security.spec.ts` verifica assegnazione, avanzamento,
+read-only, target invalido, replay e stato REST con Keycloak demo;
+la CI verifica anche le righe di audit in PostgreSQL.
+
+**Limiti:** non sono implementate tutte le funzionalità del legacy,
+né la discovery/versione del catalogo per client MCP esterni,
+l'idempotenza generale o il supporto di upload firmati.
+L'esito di errore MCP non è necessariamente un codice HTTP REST 409.
 
 ## Annullamento perizie REST/MCP (#9)
 
