@@ -246,7 +246,7 @@ public sealed class FileIngestionSecurityTests
     {
         var store = new SpyStore();
         var docs = new SpyDocuments();
-        return (new FileIngestionService(new FakeTenant(canWrite), new FakePerizie(), docs, store, new FakeAudit(), new CleanScanner(), new FakeIntents(), new FakeIdempotency()), store, docs);
+        return (new FileIngestionService(new FakeTenant(canWrite), new FakePerizie(), docs, store, new FakeAudit(), scanner ?? new CleanScanner(), new FakeIntents(), new FakeIdempotency()), store, docs);
     }
 
     private sealed class CountingScanner : IFileMalwareScanner
