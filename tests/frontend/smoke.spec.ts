@@ -48,3 +48,27 @@ test("preferenze sconosciute vengono ignorate senza eseguire contenuti memorizza
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
   await expect(page.locator("html")).toHaveClass(/dark/);
 });
+
+
+test("preferenze in sessione funzionano anche quando il browser blocca localStorage", async ({page}) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      get() { throw new DOMException("Storage denied", "SecurityError"); }
+    });
+  });
+  await page.goto("/");
+  await expect(page.getByRole("heading", {name: "Gestione perizie"})).toBeVisible();
+  const theme = page.getByRole("button", {name: "Cambia tema"});
+  await expect(theme).toHaveAttribute("aria-pressed", "false");
+  await theme.click();
+  await expect(theme).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", {name: "Lingua"}).click();
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await expect(page.locator("html")).toHaveClass(/dark/);
+  await page.reload();
+  // Preferences cannot persist in a blocked browser; secure defaults apply.
+  await expect(page.getByRole("heading", {name: "Gestione perizie"})).toBeVisible();
+  await expect(page.locator("html")).toHaveAttribute("lang", "it");
+  await expect(page.locator("html")).not.toHaveClass(/dark/);
+});
