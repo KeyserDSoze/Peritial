@@ -5,6 +5,44 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
 
   test.setTimeout(90_000);
 
+  test("workflow perizia UI: assign, advance, cancel con conferma e i18n", async ({page}) => {
+    await page.goto("/");
+    await page.getByRole("button", {name: "Accedi"}).click();
+    await expect(page.locator("#username")).toBeVisible({timeout: 30_000});
+    await page.locator("#username").fill("localuser");
+    await page.locator("#password").fill("local-only-user");
+    await page.locator("#kc-login").click();
+    await expect(page.getByRole("button", {name: "Esci"})).toBeVisible({timeout: 30_000});
+
+    const reference = "UI-WORKFLOW-" + Date.now() + "-" + Math.round(Math.random() * 100000);
+    await page.locator("#reference").fill(reference);
+    await page.getByRole("button", {name: "Crea"}).click();
+    const row = page.locator("li").filter({hasText: reference});
+    await expect(row).toBeVisible();
+    await expect(row.getByText("Registrata")).toBeVisible();
+
+    await row.getByRole("textbox", {name: "Assegnatario " + reference}).fill("ui-inspector");
+    await row.getByRole("button", {name: "Assegna"}).click();
+    await expect(row.getByText("Assegnata")).toBeVisible();
+    await expect(row.getByText("ui-inspector")).toBeVisible();
+
+    await page.getByRole("button", {name: "Lingua"}).click();
+    await expect(row.getByText("Assigned")).toBeVisible();
+    await page.getByRole("button", {name: "Lingua"}).click();
+
+    await row.getByRole("button", {name: "Avanza"}).click();
+    await expect(row.getByText("Da revisionare")).toBeVisible();
+
+    await row.getByRole("button", {name: "Annulla"}).click();
+    await expect(row.getByRole("button", {name: "Conferma annullamento"})).toBeVisible();
+    await expect(row.getByText("Da revisionare")).toBeVisible();
+    await row.getByRole("button", {name: "Conferma annullamento"}).click();
+    await expect(row.getByText("Annullata")).toBeVisible();
+    await expect(row.getByRole("button", {name: "Assegna"})).toHaveCount(0);
+    await expect(row.getByRole("button", {name: "Avanza"})).toHaveCount(0);
+    await expect(row.getByRole("button", {name: "Annulla"})).toHaveCount(0);
+  });
+
   test("un token JWT del tenant permette REST e discovery MCP, ma MCP anonimo è negato", async ({page, request}) => {
     await page.goto("/");
     await page.getByRole("button", {name: "Accedi"}).click();
