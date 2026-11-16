@@ -50,7 +50,7 @@ La pipeline CI usa un overlay Compose separato, `docker/compose.chaos.yml`, che 
 
 ## Liveness e readiness applicativa (#19)
 
-Le metriche e le trace della readiness (Meter/ActivitySource `Peritial.Readiness`) sono ora emesse con etichette fisse per dipendenza ed esito; non è ancora configurato l'export verso un collector. Contratto, privacy e limiti: [readiness-telemetry.md](readiness-telemetry.md).
+Le metriche e le trace della readiness (Meter/ActivitySource `Peritial.Readiness`) sono ora emesse con etichette fisse per dipendenza ed esito; l'export OTLP/HTTP-Protobuf può essere abilitato esplicitamente verso un collector privato, ma per default resta disattivato e non è provisionato alcun collector persistente. Contratto, privacy e limiti: [readiness-telemetry.md](readiness-telemetry.md).
 
 `GET /health/live` risponde HTTP 200 quando il processo HTTP funziona, **anche** se una dipendenza è indisponibile. `GET /health/ready` (senza token) controlla entro un **budget comune di 3 secondi**:
 1. `SELECT 1` usando il ruolo PostgreSQL applicativo, senza bypass RLS;
