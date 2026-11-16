@@ -41,6 +41,25 @@ public sealed class PeriziaTests
     }
 
     [Fact]
+    public void Annullamento_richiede_tenant_e_rifiuta_stati_terminali()
+    {
+        var tenant = Tenant();
+        var perizia = Perizia.Create(tenant, "PER-CANCEL");
+        Assert.Throws<UnauthorizedAccessException>(() => perizia.Cancel(Tenant()));
+        perizia.Cancel(tenant);
+        Assert.Equal(PeriziaStatus.Cancelled, perizia.Status);
+        Assert.Throws<InvalidOperationException>(() => perizia.Cancel(tenant));
+        Assert.Throws<InvalidOperationException>(() => perizia.Advance(tenant, PeriziaStatus.Billed));
+
+        var billed = Perizia.Restore(Guid.NewGuid(), tenant, "PER-BILLED",
+            PeriziaStatus.Billed, "operator", DateTime.UtcNow);
+        var duplicated = Perizia.Restore(Guid.NewGuid(), tenant, "PER-DUPLICATE",
+            PeriziaStatus.Duplicated, null, DateTime.UtcNow);
+        Assert.Throws<InvalidOperationException>(() => billed.Cancel(tenant));
+        Assert.Throws<InvalidOperationException>(() => duplicated.Cancel(tenant));
+    }
+
+    [Fact]
     public void Tenant_vuoto_e_riferimento_vuoto_non_sono_ammessi()
     {
         Assert.Throws<ArgumentException>(() => TenantId.From(Guid.Empty));
