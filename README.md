@@ -8,7 +8,7 @@ Backend .NET 10 DDD (Domains / Business / Infrastructures / Applications), API R
 - docker compose -f docker/compose.yml up --build -d
 - PWA: http://localhost:5173
 - API liveness: http://localhost:8080/health/live ; readiness parziale PostgreSQL + ClamAV + OIDC + storage S3/Azure: http://localhost:8080/health/ready
-- Metriche/trace readiness privacy-safe tramite `Peritial.Readiness` (exporter/alert non ancora attivati): [contratto operativo](docs/readiness-telemetry.md).
+- Metriche/trace readiness privacy-safe tramite `Peritial.Readiness` (export OTLP HTTPS opt-in disponibile, disabilitato di default; collector/alert non provisionati): [contratto operativo](docs/readiness-telemetry.md).
 - MCP: http://localhost:8080/mcp
 - docker compose -f docker/compose.yml --profile test run --rm tests
 - cd src/frontend && npm ci && npx playwright install chromium && npm run test:e2e
