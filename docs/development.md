@@ -43,10 +43,30 @@ annullata. `tests/frontend/security.spec.ts` esercita REST e MCP con
 token Keycloak `peritial-test-write` e prova il `403` con token read-only;
 il job Compose verifica gli eventi persistiti dopo Playwright.
 
-**Limiti**: non esiste ancora una versione/ETag dell'aggregato con compare-and-swap
-per *tutte* le transizioni e una prova di race multi-replica contro
-`assign`/`advance`; niente UI di storico, notifiche e comportamento
-legacy completo. #9 e #21 restano aperte.
+**Concorrenza ottimistica** (ADR 0029, #9/#21): ogni lettura di
+`Perizia` conserva una snapshot di `PersistedStatus` e
+`PersistedAssignedTo`. Tutti gli UPDATE dell'aggregato, inclusi
+`assign`, `advance`, `cancel`, confrontano in modo atomico lo stato e
+l'assegnatario attesi nella clausola `WHERE` di PostgreSQL; una
+mutazione obsoleta viene rifiutata **prima** di scrivere l'audit di
+successo. REST distingue record assente/di altro tenant (404) da
+versione confliggente (409); MCP restituisce un errore del tool.
+`ConfirmPersisted` avanza lo snapshot solo dopo `COMMIT` riuscito.
+
+`PeriziaAtomicAuditTests` verifica inoltre **quattro interleaving
+deterministici** con due snapshot PostgreSQL reali: assign dopo cancel,
+advance dopo cancel, cancel dopo assign e due assign concorrenti.
+I quattro test hanno fallito prima della correzione in
+[CI RED #43879181694](https://github.com/KeyserDSoze/Peritial/actions/runs/43879181694).
+Dopo l'implementazione e la correzione dell'asserzione xUnit sul
+tipo eccezione esatto, i 145 test Infrastructure sono passati in
+[CI GREEN #43880138783](https://github.com/KeyserDSoze/Peritial/actions/runs/43880138783).
+
+**Limiti:** lo snapshot status+assignee non è un contatore di versione
+monotono e non protegge da futuri cicli ABA dello stato; non esiste
+ancora ETag/If-Match pubblico, idempotenza completa degli altri tool,
+prova di race multi-replica o di commit-ACK incerto, UI di storico,
+notifiche o parità con le regole del legacy. #9 e #21 restano aperte.
 
 ## Fault injection documentale (#5/#21)
 
