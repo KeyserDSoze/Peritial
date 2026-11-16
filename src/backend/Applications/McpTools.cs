@@ -7,7 +7,8 @@ namespace Peritial.Applications;
 
 /// <summary>All tools use the exact same scoped services as the REST API.</summary>
 [McpServerToolType]
-public sealed class McpTools(PeriziaService perizie, FileIngestionService ingestion)
+public sealed class McpTools(
+    PeriziaService perizie, FileIngestionService ingestion, DocumentCatalogService documents)
 {
     [McpServerTool(Name = "list_perizie"), Description("Lists perizie visible to the authenticated tenant (peritial.read).")]
     public Task<IReadOnlyList<PeriziaDto>> ListPerizie(CancellationToken ct = default) => perizie.ListAsync(ct);
@@ -35,6 +36,15 @@ public sealed class McpTools(PeriziaService perizie, FileIngestionService ingest
     [McpServerTool(Name = "cancel_perizia"), Description("Cancels a non-terminal perizia belonging to the authenticated tenant (peritial.write).")]
     public Task<PeriziaDto> CancelPerizia(Guid id, CancellationToken ct = default) =>
         perizie.CancelAsync(id, ct);
+
+    [McpServerTool(Name = "list_documents"), Description("Lists up to 100 document metadata entries in the authenticated tenant (peritial.read or peritial.write); optional periziaId filter. Never exposes storage keys or file bytes.")]
+    public Task<IReadOnlyList<DocumentSummaryDto>> ListDocuments(
+        Guid? periziaId = null, int limit = 50, CancellationToken ct = default) =>
+        documents.ListAsync(periziaId, limit, ct);
+
+    [McpServerTool(Name = "get_document"), Description("Gets safe metadata for one document in the signed tenant (peritial.read or peritial.write); foreign and missing IDs are indistinguishable.")]
+    public Task<DocumentSummaryDto> GetDocument(Guid id, CancellationToken ct = default) =>
+        documents.GetAsync(id, ct);
 
     [McpServerTool(Name = "ingest_file"), Description("Uploads a PDF, XML, JPEG, PNG or DOCX document (base64, max 4 MiB, peritial.write).")]
     public Task<DocumentDto> IngestFile(
