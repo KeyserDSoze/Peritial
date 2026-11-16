@@ -282,6 +282,10 @@ api.MapPost("/perizie/{id:guid}/cancel", (Guid id, PeriziaService service, Cance
 // These routes require the explicit V003 schema migration; no startup DDL.
 api.MapGet("/sinistri", (int? limit, SinistroService service, CancellationToken ct) =>
     service.ListAsync(limit ?? 50, ct)).RequireAuthorization("peritial.read");
+api.MapGet("/sinistri/search", (string prefix, DateOnly? occurredFrom, DateOnly? occurredTo,
+    int? limit, SinistroService service, CancellationToken ct) =>
+    service.SearchAsync(prefix, occurredFrom, occurredTo, limit ?? 10, ct))
+    .RequireAuthorization("peritial.read");
 api.MapGet("/sinistri/{id:guid}", (Guid id, SinistroService service, CancellationToken ct) =>
     service.GetAsync(id, ct)).RequireAuthorization("peritial.read");
 api.MapPost("/sinistri", async (CreateSinistroRequest input, SinistroService service, CancellationToken ct) =>
