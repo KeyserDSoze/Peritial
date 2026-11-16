@@ -68,6 +68,59 @@ ancora ETag/If-Match pubblico, idempotenza completa degli altri tool,
 prova di race multi-replica o di commit-ACK incerto, UI di storico,
 notifiche o parità con le regole del legacy. #9 e #21 restano aperte.
 
+## Catalogo documenti: metadata tenant-scoped senza download (#11/#12)
+
+La nuova read model `DocumentSummaryDto` contiene solo
+`id`, `periziaId`, `fileName`, `contentType`,
+`length` e `createdAtUtc`: niente `tenantId`,
+`storageKey`, dati antivirus, URL interni, né byte
+dei documenti. La projection PostgreSQL in
+`PgDocumentCatalogRepository` seleziona esplicitamente
+questi campi, all'interno di `TenantDbScope` e FORCE RLS.
+L'interfaccia `IDocumentCatalogRepository` è separata dal
+repository mutativo di ingestion: nessuna append di audit
+succeeded su una semplice query.
+
+`DocumentCatalogService` richiede `peritial.read`
+oppure `peritial.write`, prima di interrogare il repository.
+Offre `ListAsync(periziaId?, limit=50)`, con limite hard cap
+1..100, e `GetAsync(id)`. In REST:
+`GET /api/files?periziaId=<uuid>&limit=50` e
+`GET /api/files/{id}`; in MCP:
+`list_documents(periziaId?,limit?)` e `get_document(id)`.
+ID non visibili di tenant diversi e sconosciuti
+non sono distinguibili. Un filtro `periziaId`
+sconosciuto restituisce elenco vuoto; nessuna query
+permette di specificare il tenant. Nessun download
+consentito tramite questi endpoint; per il listing
+completo con storico maggiore di 100 record
+manca ancora paginazione keyset/cursor.
+
+**Test TDD:**
+- `DocumentCatalogTests` (Business): token read-only e writer,
+  validazione limit, not found e filtro, assenza di proprietà
+  storage/tenant dal DTO;
+- `DocumentCatalogRepositoryTests` (Infrastructure PostgreSQL):
+  verifica stessi UUID perizia in tenant diversi,
+  tenant-scoped `FindAsync/ListAsync`, pool con
+  `MaxPoolSize=1`, sessione tenant non persistente nel pool,
+  ordine e cap di lettura, assenza di storage key serializzata;
+- `tests/frontend/security.spec.ts` (Keycloak reale):
+  upload PDF con JWT write, listing/dettaglio REST read-only,
+  filtro per perizia, cap, 401/403/404 e
+  `tools/list`/`tools/call` MCP read-only con stesso
+  metadata, senza chiavi storage.
+
+RED verificato in
+[CI #43907670151](https://github.com/KeyserDSoze/Peritial/actions/runs/43907670151):
+nuovi tipi Business inesistenti, e in
+[CI #43908081684](https://github.com/KeyserDSoze/Peritial/actions/runs/43908081684):
+manca il repository PostgreSQL. GREEN backend
+[CI #43908293363](https://github.com/KeyserDSoze/Peritial/actions/runs/43908293363):
+**Domain 5/5, Business 46/46, Infrastructure 148/148**.
+L'integrazione REST/MCP full-stack va confermata tramite
+il job Compose del commit che include il test Playwright.
+
 ## Lettura puntuale di una perizia via REST/MCP (#12/#9)
 
 La route `GET /api/perizie/{id}` e il tool
