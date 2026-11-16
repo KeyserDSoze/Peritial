@@ -19,6 +19,8 @@ export default function App() {
   const mutations = useRef<Map<string, number>>(new Map());
   // A failed mutation must invalidate GETs that began before that failure.
   const requestEpoch = useRef(0);
+  const activeToken = useRef<string | undefined>(undefined);
+  const [verifiedToken, setVerifiedToken] = useState<string | null>(null);
   const [reference, setReference] = useState("");
   const [upload, setUpload] = useState<File|null>(null);
   const [error, setError] = useState("");
@@ -30,6 +32,7 @@ export default function App() {
     // Never retain a potentially stale tenant record after REST, auth or
     // network failure. Invalidate any pre-existing GET that may finish late.
     requestEpoch.current += 1;
+    setVerifiedToken(null);
     mutations.current.clear();
     setItems([]);
     setDataStatus("unavailable");
@@ -55,6 +58,15 @@ export default function App() {
     saveTheme(next ? "dark" : "light");
   }
   useEffect(() => {
+    // A different signed-in identity must never inherit the previous tenant's
+    // locally merged records, even for one render while the next GET is pending.
+    if (activeToken.current !== token) {
+      activeToken.current = token;
+      requestEpoch.current += 1;
+      mutations.current.clear();
+      setItems([]);
+      setVerifiedToken(null);
+    }
     // Never display locally retained tenant data while disconnected.
     // After reconnect the app must fetch new data using the current JWT.
     if (!token || !online) {
@@ -85,6 +97,7 @@ export default function App() {
           ...data.filter(item => !changedAfterFetch.has(item.id))
         ];
       });
+      setVerifiedToken(token);
       setDataStatus("ready");
       setError("");
     }).catch(() => {
@@ -140,7 +153,7 @@ export default function App() {
           <h2 className="mb-3 text-xl font-semibold">{t("apiUnavailableTitle")}</h2>
           <p className="mb-4 text-slate-700 dark:text-slate-300">{t("apiUnavailableMessage")}</p>
           <Button type="button" onClick={refreshPerizie}>{t("retryConnection")}</Button>
-        </section> : dataStatus === "loading" ? <p role="status">{t("loading")}</p> :
+        </section> : (dataStatus === "loading" || verifiedToken !== token) ? <p role="status">{t("loading")}</p> :
         <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
           <section className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
             <div className="mb-5 flex flex-wrap items-center justify-between gap-2">
