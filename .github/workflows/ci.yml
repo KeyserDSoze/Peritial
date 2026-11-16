@@ -161,6 +161,18 @@ jobs:
                 AND (SELECT count(*) FROM security_audit WHERE action='perizia.create' AND outcome='denied') >= 1
                 AND (SELECT count(*) FROM security_audit WHERE action='perizia.cancel' AND outcome='succeeded') >= 2
                 AND (SELECT count(*) FROM security_audit WHERE action='perizia.cancel' AND outcome='denied') >= 2
+                AND (SELECT count(*) FROM security_audit WHERE action='perizia.assign' AND outcome='succeeded') >= 2
+                AND (SELECT count(*) FROM security_audit WHERE action='perizia.assign' AND outcome='denied') >= 2
+                AND (SELECT count(*) FROM security_audit WHERE action='perizia.advance' AND outcome='succeeded') >= 2
+                AND (SELECT count(*) FROM security_audit WHERE action='perizia.advance' AND outcome='denied') >= 2
+                AND NOT EXISTS (
+                  SELECT 1 FROM security_audit a
+                  JOIN perizie p ON p.id = a.resource_id AND p.tenant_id = a.tenant_id
+                  WHERE p.reference LIKE 'MCP-WORKFLOW-%'
+                    AND a.action IN ('perizia.assign','perizia.advance')
+                    AND a.outcome = 'succeeded'
+                  GROUP BY a.tenant_id,a.resource_id,a.action HAVING count(*) <> 1
+                )
                 AND NOT EXISTS (
                   SELECT 1 FROM security_audit
                   WHERE action='perizia.cancel' AND outcome='succeeded'
