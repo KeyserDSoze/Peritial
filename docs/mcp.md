@@ -17,10 +17,47 @@ Esporre le funzionalità tramite Model Context Protocol (SDK ufficiale .NET, HTT
 | Capability | Tool | Fase |
 |---|---|---|
 | Perizie | list_perizie, get_perizia, create_perizia, assign_perizia, advance_perizia, cancel_perizia | lettura scoped e mutazioni REST/MCP con audit atomico e CAS (#9/#12) |
-| Documenti | ingest_file (base64 limitato); REST multipart per grandi file | vertical slice 1 |
+| Documenti | list_documents, get_document (lettura metadata), ingest_file (base64 limitato); REST multipart | catalogo read-only tenant-scoped + ingestion; download/report ancora aperti (#11/#12) |
 | Sinistri, anagrafiche, stati, import XML, documenti, report, messaggi, contabilità, KPI | tool dedicati per ciascun use case | iterazioni successive |
 
 Per file grandi: non trasportare payload di gigabyte via JSON MCP; fornire un tool per ottenere URL di upload firmati/scoped e una procedura di completamento (da implementare). Una tool call MCP non equivale ad accesso indiscriminato al filesystem.
+
+## Catalogo metadati documenti REST/MCP (#11/#12)
+
+Le route `GET /api/files`, `GET /api/files/{id}` e i tool
+MCP `list_documents(periziaId?, limit?)`, `get_document(id)`
+usano lo stesso `DocumentCatalogService` di sola lettura.
+Richiedono un JWT firmato con tenant/subject e scope
+`peritial.read` **oppure** `peritial.write`.
+L'identità del tenant **non** è accettata dal client: ogni
+query passa per `TenantDbScope` con FORCE RLS PostgreSQL.
+
+- `GET /api/files?limit=50&periziaId=<UUID>`: restituisce i documenti
+  più recenti per il tenant, eventualmente filtrati per perizia;
+  limite obbligatoriamente compreso fra **1 e 100** (default 50).
+  Il risultato è ordinato per `createdAtUtc DESC, id DESC`.
+  Fino all'introduzione del cursor non è disponibile la lettura
+  dell'intero storico oltre il limite massimo.
+- `GET /api/files/{id}` e `get_document(id)`: restituiscono
+  metadata di un documento; ID inesistenti e di altri tenant
+  sono indistinguibili (404 REST, errore MCP).
+- Il DTO contiene **solo**
+  `id`, `periziaId`, `fileName`, `contentType`,
+  `length`, `createdAtUtc`. Il repository proietta esplicitamente
+  queste colonne, **senza** recuperare `storage_key`, URI interni,
+  token, contenuti, artefatti scanner o chiavi di cifratura.
+- Nessuna lettura genera un audit di *mutazione riuscita*.
+  La lettura non concede il download dei byte: endpoint di download
+  autorizzato, politiche di retention/delete, versioni, cartelle,
+  paginazione cursor e report rimangono aperti nella issue #11.
+
+I test Business coprono read-only e write-only, filtro, cap,
+not-found e scope negato; PostgreSQL reale verifica tenant diversi,
+stesso UUID perizia in due tenant, pool di connessioni e RLS.
+`tests/frontend/security.spec.ts` usa token Keycloak reali,
+upload multipart, REST e MCP per testare scope, filtri e DTO
+privi di chiavi storage. La risposta REST include
+`Cache-Control: no-store` come tutte le API tenant-scoped.
 
 ## Lettura puntuale perizia senza escalation OAuth (#12/#9)
 
