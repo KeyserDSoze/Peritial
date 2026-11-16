@@ -10,13 +10,16 @@ const mcpHeaders = (token: string) => ({
   "Content-Type": "application/json"
 });
 
-async function tokenFor(request: APIRequestContext, clientId: string): Promise<string> {
+async function tokenFor(
+  request: APIRequestContext, clientId: string,
+  username = "localuser", password = "local-only-user"
+): Promise<string> {
   const response = await request.post(issuer + "/protocol/openid-connect/token", {
     form: {
       grant_type: "password",
       client_id: clientId,
-      username: "localuser",
-      password: "local-only-user"
+      username,
+      password
     }
   });
   expect(response.status(), await response.text()).toBe(200);
@@ -442,6 +445,143 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
 
     const noScopeMcp = await tool(noScope, 304, id);
     expect(noScopeMcp.status(), await noScopeMcp.text()).toBe(403);
+  });
+
+  test("two distinct signed tenant identities cannot read, update or enumerate each other's sinistri through REST or MCP", async ({request}) => {
+    test.setTimeout(90_000);
+    const writerA = await tokenFor(request, "peritial-test-write");
+    const writerB = await tokenFor(
+      request, "peritial-test-write-tenant-b", "otheruser", "local-only-other-user"
+    );
+    const readerA = await tokenFor(request, "peritial-test-readonly");
+    const claimsA = JSON.parse(Buffer.from(writerA.split(".")[1], "base64url").toString("utf-8"))
+      as {tenant_id: string; sub: string};
+    const claimsB = JSON.parse(Buffer.from(writerB.split(".")[1], "base64url").toString("utf-8"))
+      as {tenant_id: string; sub: string};
+    expect(claimsA.tenant_id).toBe("11111111-1111-1111-1111-111111111111");
+    expect(claimsB.tenant_id).toBe("22222222-2222-2222-2222-222222222222");
+    expect(claimsB.sub).not.toBe(claimsA.sub);
+
+    const identityA = {Authorization: "Bearer " + writerA};
+    const identityB = {Authorization: "Bearer " + writerB};
+    const base = api + "/api/sinistri";
+    const unique = Date.now() + "-" + Math.round(Math.random() * 100000);
+    const aReference = "TENANT-A-CASE-" + unique;
+    const bReference = "TENANT-B-CASE-" + unique;
+    // Spoofing tenant_id in either HTTP headers or JSON must never override
+    // the server-verified JWT tenant identity.
+    const aCreated = await request.post(base, {
+      headers: {...identityA, "X-Tenant-Id": claimsB.tenant_id},
+      data: {
+        tenantId: claimsB.tenant_id,
+        externalReference: aReference, occurredOn: "2040-01-04", reportedOn: null
+      }
+    });
+    expect(aCreated.status(), await aCreated.text()).toBe(201);
+    const a = await aCreated.json() as {id: string; version: number; externalReference: string};
+    expect(a.version).toBe(1);
+    expect(await aCreated.text()).not.toContain("tenantId");
+    expect(await aCreated.text()).not.toContain(claimsA.tenant_id);
+    expect(await aCreated.text()).not.toContain(claimsB.tenant_id);
+
+    async function tool(token: string, name: string, args: Record<string, unknown>, id: number) {
+      const response = await request.post(api + "/mcp", {
+        headers: mcpHeaders(token),
+        data: {
+          jsonrpc: "2.0", id, method: "tools/call",
+          params: {name, arguments: args}
+        }
+      });
+      expect(response.ok(), await response.text()).toBeTruthy();
+      return response.text();
+    }
+    // Create B via MCP to prove both protocols are scoped to its JWT identity.
+    const bCreatedMcp = await tool(writerB, "create_sinistro", {
+      externalReference: bReference, occurredOn: "2040-01-05",
+      reportedOn: null, tenantId: claimsA.tenant_id
+    }, 901);
+    expect(bCreatedMcp).toContain(bReference);
+    expect(bCreatedMcp).not.toContain('"isError":true');
+    expect(bCreatedMcp).not.toContain(claimsA.tenant_id);
+    expect(bCreatedMcp).not.toContain(claimsB.tenant_id);
+
+    const ownB = await request.get(base + "?limit=100", {headers: identityB});
+    expect(ownB.status(), await ownB.text()).toBe(200);
+    const listB = await ownB.json() as {id: string;externalReference: string;version:number}[];
+    const b = listB.find(row => row.externalReference === bReference);
+    expect(b).toBeDefined();
+    expect(listB.some(row => row.id === a.id)).toBe(false);
+    expect(await ownB.text()).not.toContain(aReference);
+
+    const ownA = await request.get(base + "?limit=100", {headers: identityA});
+    expect(ownA.status(), await ownA.text()).toBe(200);
+    const listA = await ownA.json() as {id: string;externalReference: string}[];
+    expect(listA.some(row => row.id === a.id)).toBe(true);
+    expect(listA.some(row => row.id === b!.id)).toBe(false);
+    expect(await ownA.text()).not.toContain(bReference);
+
+    for (const [token,foreignId] of [[writerA,b!.id],[writerB,a.id]] as const) {
+      const missing = await request.get(base + "/00000000-0000-4000-8000-000000000007", {
+        headers: {Authorization: "Bearer " + token}
+      });
+      const foreign = await request.get(base + "/" + foreignId, {
+        headers: {Authorization: "Bearer " + token}
+      });
+      expect(missing.status()).toBe(404);
+      expect(foreign.status()).toBe(missing.status());
+      expect(await foreign.text()).toBe(await missing.text());
+
+      const update = await request.put(base + "/" + foreignId, {
+        headers: {Authorization: "Bearer " + token},
+        data: {
+          tenantId: claimsA.tenant_id,
+          externalReference: "FOREIGN-UPDATE-" + unique,
+          occurredOn: "2040-01-06", reportedOn: null,
+          expectedVersion: 1
+        }
+      });
+      expect(update.status(), await update.text()).toBe(404);
+    }
+
+    const foreignGet = await tool(writerB, "get_sinistro", {id: a.id}, 902);
+    expect(foreignGet).toContain('"isError":true');
+    expect(foreignGet).not.toContain(aReference);
+    const foreignUpdate = await tool(writerB, "update_sinistro", {
+      id: a.id, externalReference: "FORBIDDEN-MCP-" + unique,
+      occurredOn: "2040-01-08", expectedVersion: 1, tenantId: claimsA.tenant_id
+    }, 903);
+    expect(foreignUpdate).toContain('"isError":true');
+    expect(foreignUpdate).not.toContain(aReference);
+    const bCatalog = await tool(writerB, "list_sinistri", {limit: 100}, 904);
+    expect(bCatalog).toContain(bReference);
+    expect(bCatalog).not.toContain(aReference);
+    const aCatalog = await tool(writerA, "list_sinistri", {limit: 100}, 905);
+    expect(aCatalog).toContain(aReference);
+    expect(aCatalog).not.toContain(bReference);
+
+    // Read-only access cannot mutate its own tenant through either transport.
+    const aRead = await request.get(base + "/" + a.id, {
+      headers: {Authorization: "Bearer " + readerA}
+    });
+    expect(aRead.status(), await aRead.text()).toBe(200);
+    const blockedWrite = await request.put(base + "/" + a.id, {
+      headers: {Authorization: "Bearer " + readerA},
+      data: {externalReference: "DENIED-" + unique, occurredOn: "2040-01-09",
+        expectedVersion: 1}
+    });
+    expect(blockedWrite.status()).toBe(403);
+    const blockedMcp = await tool(readerA, "update_sinistro", {
+      id: a.id, externalReference: "DENIED-MCP-" + unique,
+      occurredOn: "2040-01-09", expectedVersion: 1
+    }, 906);
+    expect(blockedMcp).toContain('"isError":true');
+
+    const aFinal = await request.get(base + "/" + a.id, {headers: identityA});
+    const bFinal = await request.get(base + "/" + b!.id, {headers: identityB});
+    expect((await aFinal.json() as {externalReference: string; version:number}))
+      .toMatchObject({externalReference: aReference, version: 1});
+    expect((await bFinal.json() as {externalReference: string; version:number}))
+      .toMatchObject({externalReference: bReference, version: 1});
   });
 
   test("Keycloak-signed expired access tokens deny REST and MCP after configured clock skew", async ({request}) => {
