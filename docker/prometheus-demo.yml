@@ -10,6 +10,12 @@ otlp:
 rule_files:
   - /etc/prometheus/readiness-alerts.yml
 
+# Only in the isolated Compose overlay; no external notification endpoints.
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+
 scrape_configs:
   # This is for process self-health only. Application readiness metrics
   # are received via OTLP from the separate private Collector.
