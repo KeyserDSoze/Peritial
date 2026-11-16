@@ -225,6 +225,25 @@ public sealed class ObjectLockWormIntegrationTests
             Assert.True(versions.Versions.Any(v =>
                 v.Key == payloadKey && v.IsDeleteMarker));
 
+            // Operators must supply a strict, complete mapping for the CLI.
+            // It is a selector, NOT the integrity proof: the transfer HMAC
+            // and GCM tags authenticate all recovered ciphertext separately.
+            var selectionPath = Path.Combine(root, "historical-versions.json");
+            await File.WriteAllBytesAsync(selectionPath,
+                JsonSerializer.SerializeToUtf8Bytes(new { Version = 1, Versions = selected }));
+            var parsed = SealedBundleOffsite.LoadHistoricalVersionSelection(selectionPath);
+            Assert.Equal(selected.Count, parsed.Count);
+            Assert.Equal(selected["complete"], parsed["complete"]);
+            var invalidSelection = Path.Combine(root, "invalid-versions.json");
+            await File.WriteAllTextAsync(invalidSelection,
+                "{\"Version\":1,\"Versions\":{\"complete\":\"v1\",\"complete\":\"v2\"}}");
+            Assert.Throws<InvalidOperationException>(() =>
+                SealedBundleOffsite.LoadHistoricalVersionSelection(invalidSelection));
+            await File.WriteAllTextAsync(invalidSelection,
+                "{\"Version\":1,\"Versions\":{\"../escape\":\"v1\"}}");
+            Assert.Throws<InvalidOperationException>(() =>
+                SealedBundleOffsite.LoadHistoricalVersionSelection(invalidSelection));
+
             var missing = new Dictionary<string, string>(selected,
                 StringComparer.Ordinal);
             missing.Remove("complete");
@@ -252,7 +271,7 @@ public sealed class ObjectLockWormIntegrationTests
             var historical = Path.Combine(root, "historical-encrypted");
             var historicPlain = Path.Combine(root, "historical-plain");
             await SealedBundleOffsite.DownloadHistoricalAsync(client, bucket, id,
-                historical, encryptionKey, selected);
+                historical, encryptionKey, parsed);
             await SealedRecoveryBundle.UnsealAsync(historical, historicPlain,
                 encryptionKey, signingKey);
             Assert.Equal(source, await File.ReadAllBytesAsync(
