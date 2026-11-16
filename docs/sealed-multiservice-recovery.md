@@ -189,3 +189,28 @@ dotnet run --project scripts/recovery/Peritial.RecoveryBundle -- pull-historic
 4. Eseguire `unseal` verso `tmpfs` privata con swap disabilitato e gli ordinari restore su **nuovo** PostgreSQL e **nuovo** bucket S3 vuoti. Verificare identità tenant, hash, RLS e audit prima di qualsiasi switch di traffico.
 
 Il percorso storico è **sempre sottoposto a Object Lock**: il bypass `DISPOSABLE_TEST_ONLY` di SeaweedFS non può attivare `pull-historic`. Il job WORM del laboratorio esercita il recupero dopo delete marker su `complete` **e** su un file ciphertext, con selezione completa, chiavi errate, file mancanti, versione scorretta, JSON duplicato e divieto di overwrite, senza pubblicare partial. Lo storage WORM è una singola istanza usa-e-getta: restano da testare AWS S3 gestito, IAM con permessi di recupero minimi, KMS e restore *multi-tenant* interamente WORM su un provider offsite, oltre al disaster recovery in produzione.
+
+## Identità separate per caricamento e recupero S3 WORM (ADR 0028)
+
+**Nessuna credenziale root/admin S3 deve essere usata durante il normale `push-sealed`, `pull-sealed` o `pull-historic`.** Nel workflow di recupero remoto ci sono ora due profili IAM **distinti**, verificati con due utenti reali del server S3 compatibile nel job WORM:
+
+- **Uploader**: può leggere stato versioning/retention del bucket, verificare il prefisso `sealed-v1/`, fare `PutObject` solo nel prefisso dei bundle cifrati, `GetObject` e `GetObjectRetention` per controllare che il server abbia davvero conservato ciò che è stato caricato. Non può enumerare `VersionId` storici, cambiare il bucket o cancellare le versioni.
+- **Reader/recovery**: può leggere la stessa configurazione di sicurezza, elencare gli oggetti correnti **e le versioni**, fare `GetObject`/`GetObjectVersion` e `GetObjectRetention` nel prefisso. **Non può caricare, sovrascrivere, cancellare o cambiare retention**. Il file di selezione storica rimane fornito separatamente dall'operatore; il reader non acquisisce mai autorizzazioni di modifica.
+
+Per generare JSON IAM riproducibili per il bucket **esatto** di destinazione:
+
+```bash
+umask 077
+python3 scripts/recovery/render_worm_iam.py \
+  --bucket peritial-recovery-locked \
+  --output /secure/policies/peritial-recovery-locked
+# output: writer.json e reader.json (file 0600, directory 0700)
+```
+
+Il tool rifiuta nomi bucket non validi, ARN wildcard, output preesistente e sovrascrittura. I due JSON non contengono credenziali, ma restringono `Resource` a `arn:aws:s3:::<bucket>` per letture di configurazione e listing e a `arn:aws:s3:::<bucket>/sealed-v1/*` per gli oggetti. `s3:prefix` limita gli elenchi a `sealed-v1/*`. Non sono concessi `DeleteObject`, `DeleteObjectVersion`, `PutObjectRetention`, `PutBucketObjectLockConfiguration`, `PutBucketVersioning` o permessi `s3:*`. Conservare/gestire questi JSON come configurazione di infrastruttura e applicarli attraverso le procedure IAM del provider, **non** tramite il processo di backup.
+
+**Amministrazione e prerequisiti fuori banda:** un amministratore indipendente deve creare il bucket con Object Lock attivato, versioning `Enabled`, retention `COMPLIANCE` minima di 30 giorni, poi creare/associare le due identità IAM separate. Non assegnare agli utenti di servizio altri ruoli che riaprono operazioni vietate. Per AWS S3 preferire profili a breve durata tramite IAM Role/STS e limitare le trust policy; **il CLI Peritial attuale usa ancora credenziali S3 esplicite via variabili d'ambiente**, perciò l'integrazione con assume-role/rotazione automatica è lavoro aperto, non un risultato della tranche.
+
+La CI `worm-recovery` usa il client amministrativo `mcli` incluso nel container SILO **solo per provisioning dimostrativo** di due utenti e policy, poi esegue l'upload con l'identità uploader e il download corrente/storico con l'identità reader, senza usare credenziali root per queste operazioni. Il test prova fallimento delle operazioni non autorizzate (DELETE su una versione **non protetta** in un altro bucket per distinguere IAM da Object Lock, PUT del reader, configurazione bucket del writer, visibilità dello storico del writer e accesso al di fuori di `sealed-v1/`). Le credenziali del job sono usa-e-getta e non devono mai essere replicate in produzione.
+
+**Rischi residui:** le policy sono modelli di permessi e la CI verifica **SILO**, non AWS IAM `SimulatePrincipalPolicy` o un account AWS gestito con trust policy, MFA, CloudTrail e scadenza STS. Il bucket può essere ancora compromesso da un amministratore con più permessi, un provider indisponibile oppure chiavi AES/HMAC perse. Il meccanismo non configura KMS, rotazione, archiviazione geografica o retention/scheduling di produzione; le issue #6, #18 e #21 restano aperte. Per le azioni IAM esatte vedere la [documentazione Amazon S3](https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-with-s3-policy-actions.html).
