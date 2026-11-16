@@ -121,6 +121,51 @@ public sealed class PeriziaAtomicAuditTests
     }
 
     [Fact]
+    public async Task Assigned_to_drift_with_unchanged_status_still_conflicts_and_does_not_audit()
+    {
+        await using var db = await TestDatabases.OpenAsync();
+        var tenant = TenantId.From(Guid.NewGuid());
+        var repo = new PgPeriziaRepository(db.App);
+        var perizia = Perizia.Create(tenant, "ASSIGNEE-CAS-" + Guid.NewGuid().ToString("N"));
+        await repo.AddAuditedAsync(perizia, Entry(tenant, perizia.Id, "perizia.create"));
+        perizia.Assign(tenant, "first");
+        await repo.UpdateAuditedAsync(perizia, Entry(tenant, perizia.Id, "perizia.assign"));
+
+        var stale = (await repo.FindAsync(tenant, perizia.Id))!;
+        // Simulate a future reassignment feature: the row's status is still
+        // Assigned but the assignee changed after this caller's read.
+        await using (var update = db.Admin.CreateCommand(
+            "UPDATE perizie SET assigned_to='second' WHERE tenant_id=@tenant AND id=@id"))
+        {
+            update.Parameters.AddWithValue("tenant", tenant.Value);
+            update.Parameters.AddWithValue("id", perizia.Id);
+            Assert.Equal(1, await update.ExecuteNonQueryAsync());
+        }
+
+        stale.Advance(tenant, PeriziaStatus.ToBeRevised);
+        await Assert.ThrowsAsync<PeriziaConcurrencyConflictException>(() =>
+            repo.UpdateAuditedAsync(stale, Entry(tenant, perizia.Id, "perizia.advance")));
+        var current = (await repo.FindAsync(tenant, perizia.Id))!;
+        Assert.Equal(PeriziaStatus.Assigned, current.Status);
+        Assert.Equal("second", current.AssignedTo);
+        Assert.Equal(0L, await CountSuccessfulAuditAsync(db.Admin, tenant, perizia.Id, "perizia.advance"));
+    }
+
+    [Fact]
+    public async Task Missing_perizia_is_still_not_found_instead_of_conflict()
+    {
+        await using var db = await TestDatabases.OpenAsync();
+        var tenant = TenantId.From(Guid.NewGuid());
+        var absent = Perizia.Create(tenant, "MISSING-CAS-" + Guid.NewGuid().ToString("N"));
+        absent.Assign(tenant, "target");
+        var repo = new PgPeriziaRepository(db.App);
+
+        await Assert.ThrowsAsync<KeyNotFoundException>(() =>
+            repo.UpdateAuditedAsync(absent, Entry(tenant, absent.Id, "perizia.assign")));
+        Assert.Equal(0L, await CountSuccessfulAuditAsync(db.Admin, tenant, absent.Id, "perizia.assign"));
+    }
+
+    [Fact]
     public async Task Cancel_is_atomic_and_records_only_one_success_event()
     {
         await using var databases = await TestDatabases.OpenAsync();
