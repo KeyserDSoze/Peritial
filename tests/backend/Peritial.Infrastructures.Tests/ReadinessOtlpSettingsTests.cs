@@ -59,7 +59,7 @@ public sealed class ReadinessOtlpSettingsTests
     [InlineData("sometimes")]
     public void Invalid_switch_fails_closed(string value) =>
         Assert.Throws<InvalidOperationException>(() => ReadinessOtlpSettings.FromConfiguration(Config(
-            ["Observability:Otlp:Enabled"] = value), isDevelopment: true));
+            ("Observability:Otlp:Enabled", value)), isDevelopment: true));
 
     private static IConfiguration Config(params (string Key, string? Value)[] values) =>
         new ConfigurationBuilder().AddInMemoryCollection(values.Select(pair =>
