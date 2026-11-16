@@ -97,6 +97,38 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
     });
     expect(tools.status(), await tools.text()).toBe(403);
   });
+  test("REST advance accepts only exact symbolic workflow targets, like MCP", async ({request}) => {
+    const writer = await tokenFor(request, "peritial-test-write");
+    const headers = {Authorization: "Bearer " + writer};
+    const created = await request.post(api + "/api/perizie", {
+      headers,
+      data: {reference: "REST-ADVANCE-" + Date.now() + "-" + Math.random()}
+    });
+    expect(created.status(), await created.text()).toBe(201);
+    const id = (await created.json() as {id: string}).id;
+    const assigned = await request.post(api + "/api/perizie/" + id + "/assign", {
+      headers, data: {assignee: "api-operator"}
+    });
+    expect(assigned.status(), await assigned.text()).toBe(200);
+
+    for (const invalidTarget of [2, "Cancelled", "toberevised", "999"]) {
+      const invalid = await request.post(api + "/api/perizie/" + id + "/advance", {
+        headers, data: {target: invalidTarget}
+      });
+      expect(invalid.status(), await invalid.text()).toBe(400);
+    }
+
+    const advanced = await request.post(api + "/api/perizie/" + id + "/advance", {
+      headers, data: {target: "ToBeRevised"}
+    });
+    expect(advanced.status(), await advanced.text()).toBe(200);
+    expect((await advanced.json() as {status: string}).status).toBe("ToBeRevised");
+    const replay = await request.post(api + "/api/perizie/" + id + "/advance", {
+      headers, data: {target: "ToBeRevised"}
+    });
+    expect(replay.status(), await replay.text()).toBe(400);
+  });
+
   test("perizia cancellation is scoped, audited and exposed in REST and MCP", async ({request}) => {
     const readOnly = await tokenFor(request, "peritial-test-readonly");
     const writer = await tokenFor(request, "peritial-test-write");
