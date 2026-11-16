@@ -119,6 +119,7 @@ var connectionString = builder.Configuration.GetConnectionString("Postgres")
 builder.Services.AddSingleton(NpgsqlDataSource.Create(connectionString));
 builder.Services.AddScoped<ITenantContext, TenantContext>();
 builder.Services.AddScoped<IPeriziaRepository, PgPeriziaRepository>();
+builder.Services.AddScoped<ISinistroRepository, PgSinistroRepository>();
 builder.Services.AddScoped<IDocumentRepository, PgDocumentRepository>();
 builder.Services.AddScoped<IDocumentCatalogRepository, PgDocumentCatalogRepository>();
 builder.Services.AddScoped<DocumentCatalogService>();
@@ -126,6 +127,7 @@ builder.Services.AddScoped<IUploadIntentLedger, PgUploadIntentLedger>();
 builder.Services.AddScoped<IUploadIdempotencyStore, PgUploadIdempotencyStore>();
 builder.Services.AddScoped<ISecurityAuditTrail, PgSecurityAuditTrail>();
 builder.Services.AddScoped<PeriziaService>();
+builder.Services.AddScoped<SinistroService>();
 builder.Services.AddSingleton<IFileMalwareScanner, ClamdFileMalwareScanner>();
 // Probe the same OIDC issuer as JWT validation, with the existing Keycloak
 // development backchannel mapping only when explicitly running Development.
@@ -199,6 +201,7 @@ app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
         FileThreatDetectedException => StatusCodes.Status422UnprocessableEntity,
         UploadIdempotencyConflictException => StatusCodes.Status409Conflict,
         PeriziaConcurrencyConflictException => StatusCodes.Status409Conflict,
+        SinistroConcurrencyConflictException => StatusCodes.Status409Conflict,
         UploadLeaseExpiredException => StatusCodes.Status503ServiceUnavailable,
         MalwareScannerUnavailableException => StatusCodes.Status503ServiceUnavailable,
         InvalidDataException => StatusCodes.Status413PayloadTooLarge,
@@ -275,6 +278,21 @@ api.MapPost("/perizie/{id:guid}/advance", (Guid id, AdvancePeriziaRequest reques
 api.MapPost("/perizie/{id:guid}/cancel", (Guid id, PeriziaService service, CancellationToken ct) =>
     service.CancelAsync(id, ct)).RequireAuthorization("peritial.write");
 
+// Both REST and MCP delegate to the same JWT-tenant-aware Business service.
+// These routes require the explicit V003 schema migration; no startup DDL.
+api.MapGet("/sinistri", (int? limit, SinistroService service, CancellationToken ct) =>
+    service.ListAsync(limit ?? 50, ct)).RequireAuthorization("peritial.read");
+api.MapGet("/sinistri/{id:guid}", (Guid id, SinistroService service, CancellationToken ct) =>
+    service.GetAsync(id, ct)).RequireAuthorization("peritial.read");
+api.MapPost("/sinistri", async (CreateSinistroRequest input, SinistroService service, CancellationToken ct) =>
+{
+    var item = await service.CreateAsync(input.ExternalReference, input.OccurredOn, input.ReportedOn, ct);
+    return Results.Created($"/api/sinistri/{item.Id}", item);
+}).RequireAuthorization("peritial.write");
+api.MapPut("/sinistri/{id:guid}", (Guid id, UpdateSinistroRequest input, SinistroService service, CancellationToken ct) =>
+    service.UpdateAsync(id, input.ExternalReference, input.OccurredOn,
+        input.ReportedOn, input.ExpectedVersion, ct)).RequireAuthorization("peritial.write");
+
 // Read-only document catalog returns an allowlisted metadata projection:
  // never storage keys, scanned bytes, internal object URLs, or tenant IDs.
 api.MapGet("/files", (Guid? periziaId, int? limit, DocumentCatalogService service, CancellationToken ct) =>
@@ -299,6 +317,9 @@ api.MapPost("/files", async (HttpRequest request, FileIngestionService service, 
 app.MapMcp("/mcp").RequireAuthorization("peritial.access");
 app.Run();
 
+public sealed record CreateSinistroRequest(string ExternalReference, DateOnly OccurredOn, DateOnly? ReportedOn);
+public sealed record UpdateSinistroRequest(
+    string ExternalReference, DateOnly OccurredOn, DateOnly? ReportedOn, long ExpectedVersion);
 public sealed record CreatePeriziaRequest(string Reference);
 public sealed record AssignPeriziaRequest(string Assignee);
 public sealed record AdvancePeriziaRequest(string Target);
