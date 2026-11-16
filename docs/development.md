@@ -68,6 +68,35 @@ ancora ETag/If-Match pubblico, idempotenza completa degli altri tool,
 prova di race multi-replica o di commit-ACK incerto, UI di storico,
 notifiche o parità con le regole del legacy. #9 e #21 restano aperte.
 
+## Assegnazione e avanzamento MCP: parità REST (#12/#9)
+
+`McpTools.AssignPerizia` (`assign_perizia(id, assignee)`) e
+`McpTools.AdvancePerizia` (`advance_perizia(id, target)`) usano
+gli **stessi** metodi `PeriziaService.AssignAsync` e
+`PeriziaService.AdvanceAsync` delle route REST, senza parametro
+tenant o bypass del controllo di scope `peritial.write`.
+Il target MCP è un nome stringa esplicito, case-sensitive,
+limitato ai cinque successori `ToBeRevised`, `Revised`,
+`ToSend`, `Sent`, `Billed`; il servizio/dominio verifica
+comunque la transizione. Anche gli errori per scope mancante o
+transizione non valida passano per il protocollo MCP con
+`isError:true`.
+
+La prova `tests/frontend/security.spec.ts` richiede i due
+tool in `tools/list`, crea una pratica reale con Keycloak,
+verifica il rifiuto con token read-only, assegna tramite MCP,
+avanza tramite MCP, ne rifiuta il replay e confronta il
+risultato tramite REST; il job CI Compose richiede le righe
+`perizia.assign` e `perizia.advance` (`succeeded` e
+`denied`) su PostgreSQL e verifica l'assenza di doppi successi
+per le pratiche di questo test. L'audit PostgreSQL REST/MCP
+continua a essere atomico con le mutazioni.
+
+**Non sono ancora coperte** tutte le operazioni legacy e gli
+altri tool, l'idempotenza estesa, ETag, compatibilità con client
+MCP esterni, upload firmato o UI/storico completi. Vedere
+`docs/mcp.md` e issue #9/#12/#21.
+
 ## Fault injection documentale (#5/#21)
 
 FileIngestionCompensationTests esercita lo storage fake con upload parziale, errore metadata dopo PUT, cleanup fallito, cancellazione HTTP a metà commit, retry dopo errore e successo senza cancellazione. L'adapter S3 e quello Azure implementano DeleteAsync, con cancellazione idempotente. Le prove reali contro entrambi i provider e il recupero persistente dopo crash non sono ancora completati: ADR 0009.
