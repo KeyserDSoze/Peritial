@@ -1,0 +1,29 @@
+# Only used by the opt-in Compose observability overlay.
+# Disposable OTLP/HTTP -> console; NOT a production collector or durable store.
+# No log pipeline, no external exporter and no persisted telemetry.
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    timeout: 1s
+
+exporters:
+  debug:
+    verbosity: detailed
+    sampling_initial: 100
+    sampling_thereafter: 1
+
+service:
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [debug]
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [debug]
