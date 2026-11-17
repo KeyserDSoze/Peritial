@@ -655,6 +655,130 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
     expect(forbidden.status()).toBe(403);
   });
 
+  test("signed tenants link Perizie to their own Sinistri across REST and MCP with 404 and CAS", async ({request}) => {
+    test.setTimeout(110_000);
+    const a = await tokenFor(request, "peritial-test-write");
+    const b = await tokenFor(request, "peritial-test-write-tenant-b",
+      "otheruser", "local-only-other-user");
+    const reader = await tokenFor(request, "peritial-test-readonly");
+    const unique = Date.now() + "-" + Math.floor(Math.random() * 100000);
+    const auth = (token: string) => ({Authorization: "Bearer " + token});
+
+    async function create(token: string, path: string, data: Record<string, unknown>) {
+      const response = await request.post(api + path, {headers: auth(token), data});
+      expect(response.status(), await response.text()).toBe(201);
+      return response.json() as Promise<{id:string}>;
+    }
+    const aSinistro = await create(a, "/api/sinistri", {
+      externalReference: "LINK-A-" + unique, occurredOn: "2026-11-15"
+    });
+    const bSinistro = await create(b, "/api/sinistri", {
+      externalReference: "LINK-B-" + unique, occurredOn: "2026-11-15"
+    });
+    const aPerizia = await create(a, "/api/perizie", {reference: "LINK-PA-" + unique});
+    const bPerizia = await create(b, "/api/perizie", {reference: "LINK-PB-" + unique});
+    const aUnlinked = await create(a, "/api/perizie", {reference: "LINK-UNLINKED-" + unique});
+
+    async function mcp(token: string, name: string, args: Record<string, unknown>, id: number) {
+      const response = await request.post(api + "/mcp", {
+        headers: mcpHeaders(token),
+        data: {jsonrpc: "2.0", id, method: "tools/call",
+          params: {name, arguments: args}}
+      });
+      expect(response.ok(), await response.text()).toBeTruthy();
+      return response.text();
+    }
+    const link = await request.post(api + "/api/perizie/" + aPerizia.id + "/sinistro", {
+      headers: {...auth(a), "X-Tenant-Id": "22222222-2222-2222-2222-222222222222"},
+      data: {sinistroId: aSinistro.id, tenantId: "22222222-2222-2222-2222-222222222222"}
+    });
+    expect(link.status(), await link.text()).toBe(201);
+    expect(await link.json()).toMatchObject({
+      periziaId: aPerizia.id, sinistroId: aSinistro.id
+    });
+    expect(await link.text()).not.toContain("tenantId");
+
+    const mcpB = await mcp(b, "link_perizia_sinistro", {
+      periziaId: bPerizia.id, sinistroId: bSinistro.id
+    }, 1201);
+    expect(mcpB).not.toContain('"isError":true');
+    expect(mcpB).toContain(bPerizia.id);
+    expect(mcpB).not.toContain(aPerizia.id);
+
+    const listA = await request.get(api + "/api/sinistri/" + aSinistro.id + "/perizie", {
+      headers: auth(reader)
+    });
+    expect(listA.status(), await listA.text()).toBe(200);
+    expect(listA.headers()["cache-control"]).toContain("no-store");
+    expect(await listA.json()).toEqual([aPerizia.id]);
+    const listB = await request.get(api + "/api/sinistri/" + bSinistro.id + "/perizie", {
+      headers: auth(b)
+    });
+    expect(listB.status(), await listB.text()).toBe(200);
+    expect(await listB.json()).toEqual([bPerizia.id]);
+
+    const toolA = await mcp(reader, "list_perizie_for_sinistro",
+      {sinistroId: aSinistro.id}, 1202);
+    expect(toolA).toContain(aPerizia.id);
+    expect(toolA).not.toContain(bPerizia.id);
+    const toolB = await mcp(b, "list_perizie_for_sinistro",
+      {sinistroId: bSinistro.id}, 1203);
+    expect(toolB).toContain(bPerizia.id);
+    expect(toolB).not.toContain(aPerizia.id);
+
+    // Missing and foreign records share the same externally visible 404.
+    const missing = await request.get(api +
+      "/api/sinistri/00000000-0000-4000-8000-000000000003/perizie", {headers: auth(b)});
+    const foreignList = await request.get(api +
+      "/api/sinistri/" + aSinistro.id + "/perizie", {headers: auth(b)});
+    expect(missing.status()).toBe(404);
+    expect(foreignList.status()).toBe(404);
+    expect(await foreignList.text()).toBe(await missing.text());
+
+    const foreignTarget = await request.post(api +
+      "/api/perizie/" + aUnlinked.id + "/sinistro", {
+      headers: auth(a), data: {sinistroId: bSinistro.id}
+    });
+    expect(foreignTarget.status(), await foreignTarget.text()).toBe(404);
+    const foreignPerizia = await request.post(api +
+      "/api/perizie/" + aUnlinked.id + "/sinistro", {
+      headers: auth(b), data: {sinistroId: bSinistro.id}
+    });
+    expect(foreignPerizia.status(), await foreignPerizia.text()).toBe(404);
+
+    const replay = await request.post(api + "/api/perizie/" + aPerizia.id + "/sinistro", {
+      headers: auth(a), data: {sinistroId: aSinistro.id}
+    });
+    expect(replay.status(), await replay.text()).toBe(409);
+    const mcpForeign = await mcp(b, "link_perizia_sinistro", {
+      periziaId: aUnlinked.id, sinistroId: bSinistro.id
+    }, 1204);
+    expect(mcpForeign).toContain('"isError":true');
+    expect(mcpForeign).not.toContain("LINK-UNLINKED-" + unique);
+    const mcpForeignList = await mcp(b, "list_perizie_for_sinistro",
+      {sinistroId: aSinistro.id}, 1205);
+    expect(mcpForeignList).toContain('"isError":true');
+    expect(mcpForeignList).not.toContain(aPerizia.id);
+
+    const denied = await request.post(api +
+      "/api/perizie/" + aUnlinked.id + "/sinistro", {
+      headers: auth(reader), data: {sinistroId: aSinistro.id}
+    });
+    expect(denied.status()).toBe(403);
+    const deniedMcp = await mcp(reader, "link_perizia_sinistro", {
+      periziaId: aUnlinked.id, sinistroId: aSinistro.id
+    }, 1206);
+    expect(deniedMcp).toContain('"isError":true');
+    const anonymous = await request.get(api +
+      "/api/sinistri/" + aSinistro.id + "/perizie");
+    expect(anonymous.status()).toBe(401);
+
+    // Rejected attempts did not create or change any association.
+    const final = await request.get(api +
+      "/api/sinistri/" + aSinistro.id + "/perizie", {headers: auth(a)});
+    expect(await final.json()).toEqual([aPerizia.id]);
+  });
+
   test("Keycloak-signed expired access tokens deny REST and MCP after configured clock skew", async ({request}) => {
     // The API intentionally allows 60 s clock skew. Test the real issuer's
     // short-lived, correctly signed token rather than forging a JWT payload.
