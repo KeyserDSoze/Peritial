@@ -668,3 +668,66 @@ Mancano cursor, full-text/fuzzy, collegamento Sinistri–Perizie,
 autocomplete PWA e deployment/tenancy Entra reali. Non chiudere
 la #7 né la #12. Dettagli in
 [ADR 0033](../adr/0033-sinistri-prefix-autocomplete.md).
+
+
+## Perizia ↔ Sinistro: V004, RLS e audit atomico (#7/#9/#12/#21)
+
+L'ADR 0034 registra la nuova migrazione forward-only
+`scripts/db/migrations/V004__perizie_sinistro_link.sql`.
+La tabella `perizie` ottiene un `sinistro_id uuid NULL` con
+FK composta `(tenant_id,sinistro_id)` verso
+`sinistri(tenant_id,id)`. La PK composta e le policy
+FORCE RLS già attive non cambiano; il vecchio schema
+V001 e la migrazione V003 rimangono immutati.
+Nessuna perizia viene collegata automaticamente e
+non esiste un modello di reparent/unlink silenzioso.
+
+**Operazioni**: `POST /api/perizie/{id}/sinistro` con body
+`{"sinistroId":"UUID"}` / tool MCP
+`link_perizia_sinistro(periziaId,sinistroId)`, scope
+`peritial.write`. Il POST ritorna 201 con il solo
+`{periziaId,sinistroId}`; sinistro o perizia
+assente/estero → 404, link già presente → 409.
+`GET /api/sinistri/{id}/perizie` / tool
+`list_perizie_for_sinistro(sinistroId)` ritorna
+soltanto gli ID della perizia, scope
+`peritial.read` oppure `peritial.write`.
+Il tenant e il subject sono ricavati dal JWT
+firmato, mai da header/body.
+
+`PgPeriziaSinistroLinkRepository` usa un
+`TenantDbScope` unico: verifica le due risorse con
+RLS, esegue `UPDATE ... WHERE sinistro_id IS NULL`,
+poi append `perizia.link-sinistro/succeeded`
+nella **medesima transazione PG**. Race concorrenti:
+solo un link può confermarsi; nessun audit di
+successo per conflitto. Audit duplicato/fallito:
+rollback dell'associazione. La FK composta
+impedisce cross-tenant anche con SQL elevato.
+
+**Test**: `PeriziaSinistroLinkServiceTests` valida
+scope, audit denied, DTO allowlist e lettura tenant;
+`SinistroPersistenceTests` usa PostgreSQL
+reale, due tenant, replay 409, test FK diretto
+cross-tenant e audit duplicato con rollback.
+`tests/frontend/security.spec.ts` crea casi e
+perizie con due JWT Keycloak, collega A via REST
+e B via MCP, verifica 404 simmetrico
+missing/foreign, 409 replay, 401/403,
+cataloghi id isolati e assenza di aggiornamenti
+dopo tentativi respinti. La CI `database-recovery`
+fa il dump/restore del link e della versione
+V001–V004 del journal.
+
+**Importante per sviluppo**: Compose demo
+continua a creare lo schema V001 **senza journal**.
+Soltanto il job Compose CI su stack effimera
+applica V003 e poi V004 come fixture SQL prima
+dei test Keycloak. Non copiare questa tecnica
+su database con dati: usare sempre il migrator
+privilegiato e il runbook `docs/database-migrations.md`,
+con backup e lock. V004 è disponibile soltanto
+dopo applicazione esplicita della migrazione.
+Non è completato il modello legacy di polizze,
+anagrafiche, ricerca composita, UI, reparent o
+import Accertatore/Classic.
