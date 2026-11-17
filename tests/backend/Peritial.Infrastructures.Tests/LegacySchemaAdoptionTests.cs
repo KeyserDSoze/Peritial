@@ -31,13 +31,13 @@ public sealed class LegacySchemaAdoptionTests
             // Ordinary 'apply' must continue rejecting unjournaled schemas.
             await Assert.ThrowsAsync<InvalidOperationException>(() => SchemaMigrator.ApplyAsync(db));
 
-            Assert.Equal(2, await SchemaMigrator.AdoptLegacyAsync(db));
+            Assert.Equal(3, await SchemaMigrator.AdoptLegacyAsync(db));
             Assert.Equal(0, await SchemaMigrator.ApplyAsync(db));
             await Assert.ThrowsAsync<InvalidOperationException>(() => SchemaMigrator.AdoptLegacyAsync(db));
 
             await using var verify = await db.OpenConnectionAsync();
             await using var cmd = new NpgsqlCommand(
-                "SELECT (SELECT count(*) FROM schema_migrations)=3 " +
+                "SELECT (SELECT count(*) FROM schema_migrations)=4 " +
                 "AND (SELECT count(*) FROM perizie WHERE tenant_id=@tenant AND id=@id AND reference='LEGACY-TEST')=1 " +
                 "AND to_regclass('ix_security_audit_tenant_action_time') IS NOT NULL " +
                 "AND (SELECT count(*) FROM pg_class WHERE relname IN ('perizie','documents','security_audit'," +
@@ -115,13 +115,13 @@ public sealed class LegacySchemaAdoptionTests
             await Assert.ThrowsAsync<InvalidOperationException>(() => SchemaMigrator.AdoptLegacyAsync(db));
             await Assert.ThrowsAsync<InvalidOperationException>(() => SchemaMigrator.ApplyAsync(db));
 
-            Assert.Equal(2, await SchemaMigrator.AdoptPreLeaseLegacyAsync(db));
+            Assert.Equal(3, await SchemaMigrator.AdoptPreLeaseLegacyAsync(db));
             Assert.Equal(0, await SchemaMigrator.ApplyAsync(db));
             await Assert.ThrowsAsync<InvalidOperationException>(() => SchemaMigrator.AdoptPreLeaseLegacyAsync(db));
 
             await using var conn2 = await db.OpenConnectionAsync();
             await using var check = new NpgsqlCommand(
-                "SELECT (SELECT count(*) FROM schema_migrations)=3 " +
+                "SELECT (SELECT count(*) FROM schema_migrations)=4 " +
                 "AND to_regclass('ix_upload_intents_lease') IS NOT NULL " +
                 "AND (SELECT count(*) FROM upload_intents WHERE tenant_id=@tenant " +
                 "  AND document_id=@doc AND storage_key='legacy/key.pdf' " +
@@ -229,10 +229,10 @@ public sealed class LegacySchemaAdoptionTests
                 insert.Parameters.AddWithValue("id", doc);
                 await insert.ExecuteNonQueryAsync();
             }
-            Assert.Equal(2, await SchemaMigrator.AdoptPreLeaseLegacyAsync(db));
+            Assert.Equal(3, await SchemaMigrator.AdoptPreLeaseLegacyAsync(db));
             await using var verify = await db.OpenConnectionAsync();
             await using var check = new NpgsqlCommand(
-                "SELECT (SELECT count(*) FROM schema_migrations)=3 " +
+                "SELECT (SELECT count(*) FROM schema_migrations)=4 " +
                 "AND (SELECT count(*) FROM upload_intents WHERE tenant_id=@tenant " +
                 " AND document_id=@id AND lease_expires_at_utc > created_at_utc)=1 " +
                 "AND (SELECT attnum FROM pg_attribute " +
