@@ -177,6 +177,91 @@ public sealed class SinistroPersistenceTests
         Assert.Equal(escape.Id, (await repo.SearchAsync(a, "esc!_%")).Single().Id);
     }
 
+    [Fact]
+    public async Task V004_links_perizie_to_own_sinistro_with_tenant_composite_FK_and_atomic_audit()
+    {
+        await using var db = await IsolatedDatabases.CreateAsync();
+        var tenantA = TenantId.From(Guid.NewGuid());
+        var tenantB = TenantId.From(Guid.NewGuid());
+        var sinistri = new PgSinistroRepository(db.App);
+        var perizie = new PgPeriziaRepository(db.App);
+        var links = new PgPeriziaSinistroLinkRepository(db.App);
+        var a = Sinistro.Create(tenantA, "SIN-LINK-A", new DateOnly(2026, 10, 1));
+        var b = Sinistro.Create(tenantB, "SIN-LINK-B", new DateOnly(2026, 10, 2));
+        await sinistri.AddAuditedAsync(a, Event(tenantA, a.Id, "sinistro.create"));
+        await sinistri.AddAuditedAsync(b, Event(tenantB, b.Id, "sinistro.create"));
+        var periziaA = Perizia.Create(tenantA, "PERIZIA-LINK-A-" + Guid.NewGuid().ToString("N"));
+        var periziaB = Perizia.Create(tenantB, "PERIZIA-LINK-B-" + Guid.NewGuid().ToString("N"));
+        await perizie.AddAuditedAsync(periziaA, Event(tenantA, periziaA.Id, "perizia.create"));
+        await perizie.AddAuditedAsync(periziaB, Event(tenantB, periziaB.Id, "perizia.create"));
+
+        Assert.Empty(await links.ListPeriziaIdsAsync(tenantA, a.Id));
+        await Assert.ThrowsAsync<KeyNotFoundException>(() =>
+            links.LinkAuditedAsync(tenantA, periziaA.Id, b.Id,
+                Event(tenantA, periziaA.Id, "perizia.link-sinistro")));
+        await Assert.ThrowsAsync<KeyNotFoundException>(() =>
+            links.LinkAuditedAsync(tenantB, periziaA.Id, b.Id,
+                Event(tenantB, periziaA.Id, "perizia.link-sinistro")));
+        Assert.Empty(await links.ListPeriziaIdsAsync(tenantA, a.Id));
+
+        await links.LinkAuditedAsync(tenantA, periziaA.Id, a.Id,
+            Event(tenantA, periziaA.Id, "perizia.link-sinistro"));
+        Assert.Equal(new[] { periziaA.Id }, await links.ListPeriziaIdsAsync(tenantA, a.Id));
+        Assert.Empty(await links.ListPeriziaIdsAsync(tenantB, b.Id));
+        await Assert.ThrowsAsync<PeriziaConcurrencyConflictException>(() =>
+            links.LinkAuditedAsync(tenantA, periziaA.Id, a.Id,
+                Event(tenantA, periziaA.Id, "perizia.link-sinistro")));
+        Assert.Equal(1L, await CountLinkAuditAsync(db.Admin, tenantA, periziaA.Id));
+
+        // Direct elevated SQL must still respect the FK: A's perizia cannot
+        // refer to B's sinistro even if the application role is bypassed.
+        await using var sql = db.Admin.CreateCommand(
+            "UPDATE perizie SET sinistro_id=@sinistro WHERE tenant_id=@tenant AND id=@perizia");
+        sql.Parameters.AddWithValue("sinistro", b.Id);
+        sql.Parameters.AddWithValue("tenant", tenantA.Value);
+        sql.Parameters.AddWithValue("perizia", periziaA.Id);
+        var fk = await Assert.ThrowsAsync<PostgresException>(() => sql.ExecuteNonQueryAsync());
+        Assert.Equal(PostgresErrorCodes.ForeignKeyViolation, fk.SqlState);
+        Assert.Equal(new[] { periziaA.Id }, await links.ListPeriziaIdsAsync(tenantA, a.Id));
+    }
+
+    [Fact]
+    public async Task V004_failed_audit_rolls_back_link_and_does_not_generate_success()
+    {
+        await using var db = await IsolatedDatabases.CreateAsync();
+        var tenant = TenantId.From(Guid.NewGuid());
+        var sinistro = Sinistro.Create(tenant, "SIN-ROLLBACK", new DateOnly(2026, 10, 9));
+        await new PgSinistroRepository(db.App).AddAuditedAsync(
+            sinistro, Event(tenant, sinistro.Id, "sinistro.create"));
+        var perizia = Perizia.Create(tenant, "LINK-ROLLBACK-" + Guid.NewGuid().ToString("N"));
+        await new PgPeriziaRepository(db.App).AddAuditedAsync(
+            perizia, Event(tenant, perizia.Id, "perizia.create"));
+        var repository = new PgPeriziaSinistroLinkRepository(db.App);
+        var repeated = Event(tenant, perizia.Id, "perizia.link-sinistro");
+        await new PgSecurityAuditTrail(db.App).AppendAsync(repeated);
+
+        var conflict = await Assert.ThrowsAsync<PostgresException>(() =>
+            repository.LinkAuditedAsync(tenant, perizia.Id, sinistro.Id, repeated));
+        Assert.Equal(PostgresErrorCodes.UniqueViolation, conflict.SqlState);
+        Assert.Empty(await repository.ListPeriziaIdsAsync(tenant, sinistro.Id));
+        Assert.Equal(1L, await CountLinkAuditAsync(db.Admin, tenant, perizia.Id));
+
+        await repository.LinkAuditedAsync(tenant, perizia.Id, sinistro.Id,
+            Event(tenant, perizia.Id, "perizia.link-sinistro"));
+        Assert.Equal(new[] { perizia.Id }, await repository.ListPeriziaIdsAsync(tenant, sinistro.Id));
+        Assert.Equal(2L, await CountLinkAuditAsync(db.Admin, tenant, perizia.Id));
+    }
+
+    private static async Task<long> CountLinkAuditAsync(NpgsqlDataSource db, TenantId tenant, Guid id)
+    {
+        await using var cmd = db.CreateCommand(
+            "SELECT count(*) FROM security_audit WHERE tenant_id=@tenant AND resource_id=@id " +
+            "AND action='perizia.link-sinistro' AND outcome='succeeded'");
+        cmd.Parameters.AddWithValue("tenant", tenant.Value);
+        cmd.Parameters.AddWithValue("id", id);
+        return (long)(await cmd.ExecuteScalarAsync())!;
+    }
+
     private static SecurityAuditEvent Event(TenantId tenant, Guid id, string action) =>
         new(Guid.NewGuid(), tenant, "signed-subject", action, "succeeded", id, DateTime.UtcNow);
 
