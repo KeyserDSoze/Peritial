@@ -21,6 +21,19 @@ public interface IPeriziaRepository
     Task UpdateAuditedAsync(Perizia perizia, SecurityAuditEvent audit, CancellationToken cancellationToken = default);
 }
 
+/// <summary>
+/// V004: optional one-to-many Sinistro -> Perizie relation. The repository
+/// verifies both endpoints in the signed tenant, uses SQL CAS for the link,
+/// and commits the link and its successful security audit atomically.
+/// </summary>
+public interface IPeriziaSinistroLinkRepository
+{
+    Task LinkAuditedAsync(TenantId tenant, Guid periziaId, Guid sinistroId,
+        SecurityAuditEvent audit, CancellationToken ct = default);
+    Task<IReadOnlyList<Guid>> ListPeriziaIdsAsync(TenantId tenant, Guid sinistroId,
+        CancellationToken ct = default);
+}
+
 /// <summary>Tenant-filtered sinistri store. All mutations include successful audit in one database transaction.</summary>
 public interface ISinistroRepository
 {
