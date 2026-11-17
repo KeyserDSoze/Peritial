@@ -3,7 +3,7 @@
 Il porting dei sinistri inizia con `src/backend/Domains/Sinistro.cs`
 e `tests/backend/Peritial.Domains.Tests/SinistroTests.cs`.
 Il dominio e la migrazione V003 sono seguiti dal primo slice REST/MCP
-**list/search/read/create/update**. Mancano ancora DELETE, relazioni, import e UI.
+**list/search/read/create/update**. Mancano ancora DELETE, reparent/unlink della relazione, import e UI.
 
 ## Caratterizzazione minima
 
@@ -36,7 +36,8 @@ REST/MCP; l'isolamento DB è invece applicato dalla nuova V003.
 - Ricerca avanzata (full-text/fuzzy, filtri per assicurazione/polizza, paginazione cursor),
   indice di prefisso dimensionato e benchmark su volumi realistici; il primo
   autocomplete del riferimento esterno con date è ora disponibile via REST/MCP.
-- Collegamento a compagnie, polizze, anagrafiche e perizie (#8);
+- Collegamento a compagnie, polizze e anagrafiche (#8), reparent/unlink
+  Perizie–Sinistri con audit dedicato e UI;
   import Classic/Accertatore (#10) senza assunzioni sul legacy.
 - UI PWA it/en, test E2E desktop/mobile e documentazione API.
 
@@ -68,14 +69,14 @@ mutazione. La versione attesa del dominio aumenta solo dopo commit.
 I test `SinistroPersistenceTests` usano PostgreSQL reale con schemi
 isolati, il ruolo `peritial_app` non privilegiato, pool da una connessione,
 rifiuto di scrittura cross-tenant, rollback dell'audit e conflitto CAS.
-La suite delle migrazioni copre V001–V003 anche in caso di adozione
+La suite delle migrazioni copre V001–V004 anche in caso di adozione
 esplicita legacy e backup/restore. Il bootstrap demo `001_init.sql`
 **non include V003**: chi vuole esercitare la tabella deve lanciare
 esplicitamente il migrator DDL in un ambiente appropriato prima di
 usare il repository, seguendo `docs/database-migrations.md`.
 REST e MCP riusano ora il servizio Business autorizzato che accede a questo repository.
 
-**Restano fuori scope:** relazioni anagrafiche e perizie, delete, import/merge,
+**Restano fuori scope:** relazioni anagrafiche/polizze, reparent/unlink perizie, delete, import/merge,
 ricerca full-text/fuzzy, cursor e UI; i test E2E cross-tenant con due identità
 sono già presenti. I campi temporali di data-only richiedono
 un confronto con i datetime del legacy prima di importare dati.
@@ -119,10 +120,10 @@ GET/list, update, stale 409, 401 anonimo e
 `Cache-Control: no-store`, senza esporre tenant ID.
 
 **Demo locale:** lo storico Compose V001 non è una
-installazione V003. La CI effimera applica soltanto
-`V003__sinistri_rls.sql` come fixture prima dell'E2E,
+installazione V003. La CI effimera applica soltanto le fixture additive
+`V003__sinistri_rls.sql` e `V004__perizie_sinistro_link.sql` prima dell'E2E,
 senza alterare bootstrap o registrare un finto journal
-V001–V003. Per ambienti reali migrare offline con
+V001–V004. Per ambienti reali migrare offline con
 `dotnet run --project scripts/db/Peritial.DbMigrator -- apply`
 su database **già versionati** con ruolo DDL separato,
 backup e procedure del runbook. Non usare il trucco
@@ -158,7 +159,8 @@ tenant: su Keycloak demo i client password-grant pubblici
 hanno claim hardcoded per semplificare il laboratorio.
 Entra ID reale, ruoli e provisioning di utenti organizzativi,
 test con MCP esterni e l'autorizzazione di nuove relazioni
-Sinistri–Perizie restano da implementare e verificare.
+L'autorizzazione delle nuove relazioni Sinistri–Perizie è verificata
+ora via REST/MCP su Keycloak locale; Entra ID produttivo resta da verificare.
 
 
 
@@ -199,6 +201,64 @@ fuzzy/full-text o per dati collegati, cursor/paginazione
 completa, autocomplete PWA e benchmark con grandi dataset.
 L'indice esistente copre tenant e data; `ILIKE` su
 riferimento può richiedere un nuovo indice funzionale o
-trigramma in una futura migrazione **V004** dopo
+trigramma in una futura migrazione **V005** dopo
 `EXPLAIN ANALYZE` su dati rappresentativi.
 Non modificare V003 storica. [ADR 0033](../adr/0033-sinistri-prefix-autocomplete.md).
+
+## Collegamento Perizie–Sinistri con FK V004 (#7/#9/#12/#21)
+
+La migrazione **V004** aggiunge `perizie.sinistro_id uuid NULL` e
+la chiave esterna composta `(tenant_id, sinistro_id)`
+verso `sinistri(tenant_id, id)`: il database **impedisce
+fisicamente** di associare una perizia a un sinistro di un
+altro tenant, anche con una query SQL elevata.
+La colonna nullable preserva tutte le perizie già inserite;
+un sinistro può avere più perizie, una perizia al massimo
+un sinistro. Una FK con `ON DELETE/UPDATE RESTRICT`
+impedisce la rimozione accidentale del genitore collegato.
+
+`POST /api/perizie/{id}/sinistro`, body
+`{"sinistroId":"UUID"}`, e il tool
+`link_perizia_sinistro(periziaId,sinistroId)`
+richiedono `peritial.write` e usano
+`PeriziaSinistroLinkService` con il tenant firmato.
+Il repository verifica entrambi gli ID nello stesso
+tenant prima di aggiornare. La singola transazione PG
+esegue `UPDATE ... WHERE sinistro_id IS NULL`
+(CAS unidirezionale) e append dell'audit
+`perizia.link-sinistro / succeeded`.
+Un tentativo di nuovo link produce **409 REST**,
+anche se si ripete l'ID già associato; foreign/missing
+producono **404**. Qualsiasi errore audit causa
+**rollback del link**. Nessuna riassegnazione o
+scollegamento impliciti.
+
+`GET /api/sinistri/{id}/perizie` e il tool
+`list_perizie_for_sinistro(sinistroId)` accettano
+`peritial.read` oppure `peritial.write` e
+restituiscono un array di **UUID delle perizie**,
+non una vista aggregata di dati personali.
+Sinistro inesistente o di altro tenant produce
+404 REST/errore MCP indistinguibile.
+Tutti i DTO escludono `tenantId`, subject
+e metadati audit.
+
+I test xUnit con PostgreSQL reale coprono FK composta
+cross-tenant, CAS/replay, tenant RLS, rollback audit
+duplicato e salvataggio corretto. I test Business
+coprono autorizzazioni, denial audit e DTO allowlist.
+La suite Playwright con due JWT Keycloak distinti
+verifica link A via REST e B via MCP, list
+REST/MCP, 404, 409, 401 e 403.
+Il restore PG su server indipendente verifica anche
+il `sinistro_id` collegato dopo dump/ripristino.
+
+**Non ancora implementato:** spostamento/scollegamento,
+UI PWA per selezionare il sinistro, validazioni su
+polizze/anagrafiche, import Classic/Accertatore e
+autorizzazioni Entra ID di produzione.
+Il bootstrap demo V001 resta non journaled:
+solo la CI effimera applica V003 **poi** V004;
+i database reali usano un migrator DDL separato con
+backup e journal V001–V004.
+Decisione: [ADR 0034](../adr/0034-perizie-sinistri-v004-tenant-fk.md).
