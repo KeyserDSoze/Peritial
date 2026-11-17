@@ -18,7 +18,7 @@ Esporre le funzionalità tramite Model Context Protocol (SDK ufficiale .NET, HTT
 |---|---|---|
 | Perizie | list_perizie, get_perizia, create_perizia, assign_perizia, advance_perizia, cancel_perizia | lettura scoped e mutazioni REST/MCP con audit atomico e CAS (#9/#12) |
 | Documenti | list_documents, get_document (lettura metadata), ingest_file (base64 limitato); REST multipart | catalogo read-only tenant-scoped + ingestion; download/report ancora aperti (#11/#12) |
-| Sinistri | list_sinistri, search_sinistri, get_sinistro, create_sinistro, update_sinistro | list/search/read/create/update tenant-scoped, CAS e audit atomico; delete/UI ancora da fare (#7/#12) |
+| Sinistri e collegamenti perizie | list_sinistri, search_sinistri, get_sinistro, create_sinistro, update_sinistro, link_perizia_sinistro, list_perizie_for_sinistro | list/search/read/create/update Sinistri; relazione opzionale FK tenant-scoped e audit atomico, senza reparent/delete/UI (#7/#9/#12) |
 | Anagrafiche, import XML, report, messaggi, contabilità, KPI | tool dedicati per ciascun use case | iterazioni successive |
 
 Per file grandi: non trasportare payload di gigabyte via JSON MCP; fornire un tool per ottenere URL di upload firmati/scoped e una procedura di completamento (da implementare). Una tool call MCP non equivale ad accesso indiscriminato al filesystem.
@@ -87,6 +87,48 @@ e backup verificato come da [runbook](database-migrations.md).
 **Limitazioni:** nessun DELETE, filtri full-text/fuzzy, indice specifico per ILIKE a scala produttiva,
 cursor, relazioni polizze/anagrafiche/perizie, UI PWA o import
 Classic/Accertatore. Non è un CRUD completo. [ADR 0032](../adr/0032-sinistri-rest-mcp-oauth-cas.md).
+
+## Collegamento Perizie–Sinistri, V004 (#7/#9/#12)
+
+La migrazione amministrativa **V004** crea una relazione opzionale
+`perizie.sinistro_id` con FK composta `(tenant_id,sinistro_id)`
+verso `sinistri(tenant_id,id)`. La tabella perizie rimane
+protetta da FORCE RLS. Un sinistro può avere più perizie; una perizia
+può essere collegata a **un solo sinistro**, senza scollegamento
+o riassegnazione automatica.
+
+| Operazione | REST | MCP | Scope |
+|---|---|---|---|
+| Collegare una perizia già esistente | `POST /api/perizie/{id}/sinistro` con `{"sinistroId":"UUID"}` → 201 | `link_perizia_sinistro(periziaId,sinistroId)` | `peritial.write` |
+| Elencare gli ID perizia di un sinistro | `GET /api/sinistri/{id}/perizie` → UUID[] | `list_perizie_for_sinistro(sinistroId)` | `peritial.read` o `peritial.write` |
+
+Entrambe le superfici usano **lo stesso** `PeriziaSinistroLinkService`.
+Il tenant e il subject arrivano solo dal JWT firmato.
+Nel database le due risorse sono verificate nel tenant
+prima del link e la FK composta impedisce associazioni
+cross-tenant anche a chi bypassa accidentalmente il controllo
+Business. ID esterno/inesistente: **404 REST**; link già presente:
+**409 REST**. Il link si salva con una UPDATE CAS
+`WHERE sinistro_id IS NULL` e il suo
+`perizia.link-sinistro / succeeded` viene scritto
+**nella stessa transazione PostgreSQL**.
+Un errore audit provoca rollback completo. Il Business
+audita `denied` per chi invoca senza scope; il blocco
+REST avviene prima tramite policy globale.
+
+La lista espone **solo UUID**, non dati personali di
+perizie/sinistri di altri tenant, token, tenant ID o audit.
+Le risposte API sono `Cache-Control: no-store`.
+
+**Installazione e limiti:** V004 viene applicata solo
+dal migrator amministrativo dopo V003, con backup e
+journal. La CI usa **esclusivamente sulla Compose
+effimera** le fixture SQL V003 e poi V004, senza
+alterare il bootstrap storico V001 né simulare il journal.
+Non sono implementati reparent, unlink, eliminazione
+sinistri/perizie in cascata, UI per selezionare il sinistro
+o il mapping degli ID legacy. Verifiche via due JWT
+Keycloak di test, non Entra ID produttivo. [ADR 0034](../adr/0034-perizie-sinistri-v004-tenant-fk.md).
 
 ## Catalogo metadati documenti REST/MCP (#11/#12)
 
