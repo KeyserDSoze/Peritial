@@ -8,7 +8,8 @@ namespace Peritial.Applications;
 /// <summary>All tools use the exact same scoped services as the REST API.</summary>
 [McpServerToolType]
 public sealed class McpTools(
-    PeriziaService perizie, FileIngestionService ingestion, DocumentCatalogService documents, SinistroService sinistri)
+    PeriziaService perizie, FileIngestionService ingestion, DocumentCatalogService documents,
+    SinistroService sinistri, PeriziaSinistroLinkService periziaSinistroLinks)
 {
     [McpServerTool(Name = "list_perizie"), Description("Lists perizie visible to the authenticated tenant (peritial.read).")]
     public Task<IReadOnlyList<PeriziaDto>> ListPerizie(CancellationToken ct = default) => perizie.ListAsync(ct);
@@ -36,6 +37,16 @@ public sealed class McpTools(
     [McpServerTool(Name = "cancel_perizia"), Description("Cancels a non-terminal perizia belonging to the authenticated tenant (peritial.write).")]
     public Task<PeriziaDto> CancelPerizia(Guid id, CancellationToken ct = default) =>
         perizie.CancelAsync(id, ct);
+
+    [McpServerTool(Name = "link_perizia_sinistro"), Description("Links an unlinked perizia to one sinistro in the same signed tenant. Requires peritial.write, rejects reparenting and audits the successful link atomically.")]
+    public Task<PeriziaSinistroLinkDto> LinkPeriziaSinistro(
+        Guid periziaId, Guid sinistroId, CancellationToken ct = default) =>
+        periziaSinistroLinks.LinkAsync(periziaId, sinistroId, ct);
+
+    [McpServerTool(Name = "list_perizie_for_sinistro"), Description("Returns perizia UUIDs linked to a sinistro in the signed tenant. Requires peritial.read or peritial.write; foreign and missing sinistri are indistinguishable.")]
+    public Task<IReadOnlyList<Guid>> ListPerizieForSinistro(
+        Guid sinistroId, CancellationToken ct = default) =>
+        periziaSinistroLinks.ListPeriziaIdsAsync(sinistroId, ct);
 
     [McpServerTool(Name = "list_sinistri"), Description("Lists up to 100 sinistri in the signed tenant (peritial.read or peritial.write); no tenant IDs disclosed.")]
     public Task<IReadOnlyList<SinistroDto>> ListSinistri(int limit = 50, CancellationToken ct = default) =>
