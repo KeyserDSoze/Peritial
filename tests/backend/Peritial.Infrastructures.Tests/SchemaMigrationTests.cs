@@ -11,13 +11,13 @@ public sealed class SchemaMigrationTests
     {
         await WithIsolatedSchemaAsync(async db =>
         {
-            Assert.Equal(3, await SchemaMigrator.ApplyAsync(db));
+            Assert.Equal(4, await SchemaMigrator.ApplyAsync(db));
             Assert.Equal(0, await SchemaMigrator.ApplyAsync(db));
 
             await using var conn = await db.OpenConnectionAsync();
             await using (var query = new NpgsqlCommand(
-                "SELECT count(*) FROM schema_migrations WHERE version IN (1, 2, 3)", conn))
-                Assert.Equal(3L, (long)(await query.ExecuteScalarAsync())!);
+                "SELECT count(*) FROM schema_migrations WHERE version IN (1, 2, 3, 4)", conn))
+                Assert.Equal(4L, (long)(await query.ExecuteScalarAsync())!);
             await using (var index = new NpgsqlCommand(
                 "SELECT to_regclass('ix_security_audit_tenant_action_time') IS NOT NULL", conn))
                 Assert.True((bool)(await index.ExecuteScalarAsync())!);
@@ -53,11 +53,11 @@ public sealed class SchemaMigrationTests
         {
             var results = await Task.WhenAll(
                 SchemaMigrator.ApplyAsync(db), SchemaMigrator.ApplyAsync(db));
-            Assert.Equal(3, results.Sum());
+            Assert.Equal(4, results.Sum());
             await using var conn = await db.OpenConnectionAsync();
             await using var cmd = new NpgsqlCommand(
                 "SELECT count(*) FROM schema_migrations", conn);
-            Assert.Equal(3L, (long)(await cmd.ExecuteScalarAsync())!);
+            Assert.Equal(4L, (long)(await cmd.ExecuteScalarAsync())!);
         });
     }
 
