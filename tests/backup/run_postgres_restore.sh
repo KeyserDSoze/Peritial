@@ -42,6 +42,10 @@ INSERT INTO perizie(tenant_id,id,reference,status,created_at_utc) VALUES
 INSERT INTO sinistri(tenant_id,id,external_reference,occurred_on,reported_on,created_at_utc,version)
  VALUES('11111111-1111-1111-1111-111111111111','12121212-1212-1212-1212-121212121212',
  'RESTORE-SINISTRO','2026-11-01','2026-11-03',now(),4);
+-- V004: the restored perizia must retain the SAME-tenant link.
+UPDATE perizie SET sinistro_id='12121212-1212-1212-1212-121212121212'
+ WHERE tenant_id='11111111-1111-1111-1111-111111111111'
+   AND id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 INSERT INTO documents(tenant_id,id,perizia_id,file_name,content_type,length_bytes,storage_key,created_at_utc)
  VALUES('11111111-1111-1111-1111-111111111111','cccccccc-cccc-cccc-cccc-cccccccccccc',
  'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','fixture.pdf','application/pdf',8,
@@ -112,10 +116,17 @@ SELECT
         AND external_reference='RESTORE-SINISTRO'
         AND occurred_on='2026-11-01'
         AND reported_on='2026-11-03' AND version=4)=1
+ AND (SELECT count(*) FROM perizie
+      WHERE tenant_id='11111111-1111-1111-1111-111111111111'
+        AND id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+        AND sinistro_id='12121212-1212-1212-1212-121212121212')=1
+ AND (SELECT count(*) FROM perizie
+      WHERE tenant_id='22222222-2222-2222-2222-222222222222'
+        AND sinistro_id IS NULL)=1
  AND (SELECT count(*) FROM security_audit)=2
  AND (SELECT count(*) FROM upload_intents)=1
  AND (SELECT count(*) FROM upload_request_keys WHERE status='completed')=1
- AND (SELECT count(*) FROM schema_migrations)=3
+ AND (SELECT count(*) FROM schema_migrations)=4
  AND (SELECT count(*) FROM pg_class WHERE relname IN
     ('perizie','documents','security_audit','upload_intents','upload_request_keys','sinistri')
     AND relrowsecurity AND relforcerowsecurity)=6
