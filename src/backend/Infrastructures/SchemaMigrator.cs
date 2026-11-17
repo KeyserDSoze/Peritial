@@ -22,7 +22,8 @@ public static partial class SchemaMigrator
         {
             (1, "001_init.sql"),
             (2, "V002__security_audit_action_index.sql"),
-            (3, "V003__sinistri_rls.sql")
+            (3, "V003__sinistri_rls.sql"),
+            (4, "V004__perizie_sinistro_link.sql")
         };
         var scripts = new List<Script>();
         foreach (var (version, file) in definitions)
