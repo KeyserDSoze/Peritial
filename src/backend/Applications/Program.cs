@@ -120,6 +120,7 @@ builder.Services.AddSingleton(NpgsqlDataSource.Create(connectionString));
 builder.Services.AddScoped<ITenantContext, TenantContext>();
 builder.Services.AddScoped<IPeriziaRepository, PgPeriziaRepository>();
 builder.Services.AddScoped<ISinistroRepository, PgSinistroRepository>();
+builder.Services.AddScoped<IPeriziaSinistroLinkRepository, PgPeriziaSinistroLinkRepository>();
 builder.Services.AddScoped<IDocumentRepository, PgDocumentRepository>();
 builder.Services.AddScoped<IDocumentCatalogRepository, PgDocumentCatalogRepository>();
 builder.Services.AddScoped<DocumentCatalogService>();
@@ -128,6 +129,7 @@ builder.Services.AddScoped<IUploadIdempotencyStore, PgUploadIdempotencyStore>();
 builder.Services.AddScoped<ISecurityAuditTrail, PgSecurityAuditTrail>();
 builder.Services.AddScoped<PeriziaService>();
 builder.Services.AddScoped<SinistroService>();
+builder.Services.AddScoped<PeriziaSinistroLinkService>();
 builder.Services.AddSingleton<IFileMalwareScanner, ClamdFileMalwareScanner>();
 // Probe the same OIDC issuer as JWT validation, with the existing Keycloak
 // development backchannel mapping only when explicitly running Development.
@@ -280,6 +282,18 @@ api.MapPost("/perizie/{id:guid}/cancel", (Guid id, PeriziaService service, Cance
 
 // Both REST and MCP delegate to the same JWT-tenant-aware Business service.
 // These routes require the explicit V003 schema migration; no startup DDL.
+// V004 links are additive and manually migrated before enabling this surface.
+api.MapGet("/sinistri/{id:guid}/perizie",
+    (Guid id, PeriziaSinistroLinkService links, CancellationToken ct) =>
+        links.ListPeriziaIdsAsync(id, ct)).RequireAuthorization("peritial.read");
+api.MapPost("/perizie/{id:guid}/sinistro",
+    async (Guid id, LinkPeriziaSinistroRequest input,
+        PeriziaSinistroLinkService links, CancellationToken ct) =>
+    {
+        var link = await links.LinkAsync(id, input.SinistroId, ct);
+        return Results.Created($"/api/sinistri/{link.SinistroId}/perizie", link);
+    }).RequireAuthorization("peritial.write");
+
 api.MapGet("/sinistri", (int? limit, SinistroService service, CancellationToken ct) =>
     service.ListAsync(limit ?? 50, ct)).RequireAuthorization("peritial.read");
 api.MapGet("/sinistri/search", (string prefix, DateOnly? occurredFrom, DateOnly? occurredTo,
@@ -321,6 +335,7 @@ api.MapPost("/files", async (HttpRequest request, FileIngestionService service, 
 app.MapMcp("/mcp").RequireAuthorization("peritial.access");
 app.Run();
 
+public sealed record LinkPeriziaSinistroRequest(Guid SinistroId);
 public sealed record CreateSinistroRequest(string ExternalReference, DateOnly OccurredOn, DateOnly? ReportedOn);
 public sealed record UpdateSinistroRequest(
     string ExternalReference, DateOnly OccurredOn, DateOnly? ReportedOn, long ExpectedVersion);
