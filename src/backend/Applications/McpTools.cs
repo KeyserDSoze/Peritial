@@ -38,6 +38,11 @@ public sealed class McpTools(
     public Task<PeriziaDto> CancelPerizia(Guid id, CancellationToken ct = default) =>
         perizie.CancelAsync(id, ct);
 
+    [McpServerTool(Name = "get_perizia_sinistro"), Description("Returns a perizia's current sinistro association or null for an unlinked perizia in the signed tenant; foreign and missing perizie are indistinguishable. Requires peritial.read or peritial.write.")]
+    public Task<PeriziaSinistroAssociationDto> GetPeriziaSinistro(
+        Guid periziaId, CancellationToken ct = default) =>
+        periziaSinistroLinks.GetPeriziaAssociationAsync(periziaId, ct);
+
     [McpServerTool(Name = "link_perizia_sinistro"), Description("Links an unlinked perizia to one sinistro in the same signed tenant. Requires peritial.write, rejects reparenting and audits the successful link atomically.")]
     public Task<PeriziaSinistroLinkDto> LinkPeriziaSinistro(
         Guid periziaId, Guid sinistroId, CancellationToken ct = default) =>
