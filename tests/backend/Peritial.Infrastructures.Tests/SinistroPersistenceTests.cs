@@ -226,6 +226,34 @@ public sealed class SinistroPersistenceTests
     }
 
     [Fact]
+    public async Task V004_association_read_returns_unlinked_or_linked_and_hides_foreign_perizia_as_missing()
+    {
+        await using var db = await IsolatedDatabases.CreateAsync();
+        var a = TenantId.From(Guid.NewGuid());
+        var b = TenantId.From(Guid.NewGuid());
+        var perizie = new PgPeriziaRepository(db.App);
+        var links = new PgPeriziaSinistroLinkRepository(db.App);
+        var owned = Perizia.Create(a, "LINK-READ-" + Guid.NewGuid().ToString("N"));
+        var foreign = Perizia.Create(b, "LINK-FOREIGN-" + Guid.NewGuid().ToString("N"));
+        await perizie.AddAuditedAsync(owned, Event(a, owned.Id, "perizia.create"));
+        await perizie.AddAuditedAsync(foreign, Event(b, foreign.Id, "perizia.create"));
+        Assert.Null(await links.FindSinistroIdForPeriziaAsync(a, owned.Id));
+        Assert.Null(await links.FindSinistroIdForPeriziaAsync(b, foreign.Id));
+        await Assert.ThrowsAsync<KeyNotFoundException>(() =>
+            links.FindSinistroIdForPeriziaAsync(a, foreign.Id));
+        await Assert.ThrowsAsync<KeyNotFoundException>(() =>
+            links.FindSinistroIdForPeriziaAsync(a, Guid.NewGuid()));
+
+        var sinistro = Sinistro.Create(a, "LINK-READ-SINISTRO", new DateOnly(2026, 11, 16));
+        await new PgSinistroRepository(db.App).AddAuditedAsync(
+            sinistro, Event(a, sinistro.Id, "sinistro.create"));
+        await links.LinkAuditedAsync(a, owned.Id, sinistro.Id,
+            Event(a, owned.Id, "perizia.link-sinistro"));
+        Assert.Equal(sinistro.Id, await links.FindSinistroIdForPeriziaAsync(a, owned.Id));
+        Assert.Equal(1L, await CountLinkAuditAsync(db.Admin, a, owned.Id));
+    }
+
+    [Fact]
     public async Task V004_failed_audit_rolls_back_link_and_does_not_generate_success()
     {
         await using var db = await IsolatedDatabases.CreateAsync();
