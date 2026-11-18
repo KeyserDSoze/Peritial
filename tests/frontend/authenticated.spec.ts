@@ -852,6 +852,7 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
       response.request().method() === "POST");
     await row.getByRole("button", {name: "Collega sinistro", exact: true}).click();
     expect((await linked).status()).toBe(201);
+    await expect(row.getByText("Revisione collegamento 2")).toBeVisible();
     await expect(row.getByText("Sinistro collegato", {exact:true})).toBeVisible();
     await expect(row.getByText(sinRef)).toBeVisible();
     await expect(row.getByRole("button", {name: "Collega sinistro", exact: true})).toHaveCount(0);
@@ -915,7 +916,7 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     await raceRow.getByRole("combobox", {name: "Seleziona sinistro"}).selectOption({index: 1});
     const externalLink = await request.post(
       "http://localhost:8080/api/perizie/" + raceId + "/sinistro",
-      {headers, data: {sinistroId: sinId}}
+      {headers, data: {sinistroId: sinId, expectedLinkVersion:1}}
     );
     expect(externalLink.status(), await externalLink.text()).toBe(201);
     await raceRow.getByRole("button", {name: "Collega sinistro", exact: true}).click();
@@ -1065,15 +1066,16 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
       sinistri.push((await item.json() as {id:string}).id);
     }
     const linked = await request.post(root + "/perizie/" + id + "/sinistro", {
-      headers, data:{sinistroId:sinistri[0]}});
+      headers, data:{sinistroId:sinistri[0],expectedLinkVersion:1}});
     expect(linked.status(), await linked.text()).toBe(201);
 
     const url = root + "/perizie/" + id + "/sinistro";
     const reparent = (expectedSinistroId:string, newSinistroId:string,
-      h?:Record<string,string>) => request.put(url, {
-        ...(h ? {headers:h} : {}), data:{expectedSinistroId,newSinistroId}
+      expectedLinkVersion:number, h?:Record<string,string>) => request.put(url, {
+        ...(h ? {headers:h} : {}),
+        data:{expectedSinistroId,newSinistroId,expectedLinkVersion}
       });
-    expect((await reparent(sinistri[0],sinistri[1])).status()).toBe(401);
+    expect((await reparent(sinistri[0],sinistri[1],2)).status()).toBe(401);
     const readGrant = await request.post(
       "http://localhost:8081/realms/peritial/protocol/openid-connect/token", {
         form:{grant_type:"password",client_id:"peritial-test-readonly",
@@ -1081,36 +1083,46 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
       });
     expect(readGrant.status(),await readGrant.text()).toBe(200);
     const readToken = (await readGrant.json() as {access_token:string}).access_token;
-    expect((await reparent(sinistri[0],sinistri[1],
+    expect((await reparent(sinistri[0],sinistri[1],2,
       {Authorization:"Bearer " + readToken})).status()).toBe(403);
-    expect((await reparent(sinistri[0],sinistri[0],headers)).status()).toBe(400);
-    expect((await reparent(sinistri[1],sinistri[0],headers)).status()).toBe(409);
-    expect((await reparent(sinistri[0],"00000000-0000-0000-0000-000000000099",headers)).status()).toBe(404);
+    expect((await reparent(sinistri[0],sinistri[0],2,headers)).status()).toBe(400);
+    expect((await reparent(sinistri[1],sinistri[0],2,headers)).status()).toBe(409);
+    expect((await reparent(sinistri[0],"00000000-0000-0000-0000-000000000099",2,headers)).status()).toBe(404);
     const before = await request.get(url,{headers});
     expect((await before.json() as {sinistroId:string}).sinistroId).toBe(sinistri[0]);
 
-    const moved = await reparent(sinistri[0],sinistri[1],headers);
+    const moved = await reparent(sinistri[0],sinistri[1],2,headers);
     expect(moved.status(),await moved.text()).toBe(200);
-    expect(await moved.json()).toEqual({periziaId:id,sinistroId:sinistri[1]});
+    expect(await moved.json()).toEqual({periziaId:id,sinistroId:sinistri[1],linkVersion:3});
     expect((await request.get(url,{headers}).then(r=>r.json()) as {sinistroId:string}).sinistroId)
       .toBe(sinistri[1]);
     expect((await request.get(root + "/sinistri/" + sinistri[0],{headers})).status()).toBe(200);
     expect((await request.get(root + "/sinistri/" + sinistri[1],{headers})).status()).toBe(200);
-    expect((await reparent(sinistri[0],sinistri[1],headers)).status()).toBe(409);
+    expect((await reparent(sinistri[0],sinistri[1],2,headers)).status()).toBe(409);
 
     const mcp = await request.post("http://localhost:8080/mcp", {
       headers:{...headers,Accept:"application/json,text/event-stream",
         "Content-Type":"application/json"},
       data:{jsonrpc:"2.0",id:944,method:"tools/call",params:{
         name:"reparent_perizia_sinistro",arguments:{
-          periziaId:id, expectedSinistroId:sinistri[1],newSinistroId:sinistri[0]
+          periziaId:id, expectedSinistroId:sinistri[1],newSinistroId:sinistri[0],
+          expectedLinkVersion:3
         }
       }}
     });
     expect(mcp.ok(),await mcp.text()).toBeTruthy();
     expect(await mcp.text()).not.toContain('"isError":true');
-    expect((await request.get(url,{headers}).then(r=>r.json()) as {sinistroId:string}).sinistroId)
-      .toBe(sinistri[0]);
+    const returned = await request.get(url,{headers}).then(r=>r.json()) as
+      {sinistroId:string;linkVersion:number};
+    expect(returned.sinistroId).toBe(sinistri[0]);
+    expect(returned.linkVersion).toBe(4);
+    // ABA: the first reader observed A at revision 2; after A->B->A
+    // its old revision MUST be rejected even though the UUID matches.
+    const aba = await reparent(sinistri[0],sinistri[1],2,headers);
+    expect(aba.status(),await aba.text()).toBe(409);
+    const afterAba = await request.get(url,{headers}).then(r=>r.json()) as
+      {sinistroId:string;linkVersion:number};
+    expect(afterAba).toMatchObject({sinistroId:sinistri[0],linkVersion:4});
   });
 
   test("PWA reparent requires two confirmations, rejects stale link and refetches committed target", async ({page, request}) => {
@@ -1144,7 +1156,7 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     expect(p.status(),await p.text()).toBe(201);
     const periziaId = (await p.json() as {id:string}).id;
     const linked = await request.post(root + "/perizie/" + periziaId + "/sinistro",
-      {headers,data:{sinistroId:ids[0]}});
+      {headers,data:{sinistroId:ids[0],expectedLinkVersion:1}});
     expect(linked.status(),await linked.text()).toBe(201);
 
     await page.getByRole("button", {name:"Aggiorna elenco"}).click();
@@ -1216,7 +1228,7 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     await expect(row.getByText(targetRef,{exact:true})).toBeVisible();
     await expect(row.getByRole("button",{name:"Cambia sinistro collegato"})).toHaveCount(0);
     const terminalAttempt = await request.put(root + "/perizie/" + periziaId + "/sinistro",{
-      headers,data:{expectedSinistroId:ids[1],newSinistroId:ids[0]}
+      headers,data:{expectedSinistroId:ids[1],newSinistroId:ids[0],expectedLinkVersion:3}
     });
     expect(terminalAttempt.status(),await terminalAttempt.text()).toBe(409);
     expect((await request.get(root + "/perizie/" + periziaId + "/sinistro",{headers})
@@ -1253,11 +1265,11 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
       sinistri.push((await c.json() as {id:string}).id);
     }
     const link = await request.post(root + "/perizie/" + periziaId + "/sinistro", {
-      headers, data:{sinistroId:sinistri[0]}
+      headers, data:{sinistroId:sinistri[0],expectedLinkVersion:1}
     });
     expect(link.status(), await link.text()).toBe(201);
     const url = (expected:string) => root + "/perizie/" + periziaId +
-      "/sinistro?expectedSinistroId=" + expected;
+      "/sinistro?expectedSinistroId=" + expected + "&expectedLinkVersion=2";
 
     expect((await request.delete(url(sinistri[0]))).status()).toBe(401);
     expect((await request.delete(root + "/perizie/" + periziaId + "/sinistro", {headers})).status()).toBe(400);
@@ -1268,12 +1280,12 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     const ok = await request.delete(url(sinistri[0]), {headers});
     expect(ok.status(), await ok.text()).toBe(204);
     const unlinked = await request.get(root + "/perizie/" + periziaId + "/sinistro", {headers});
-    expect((await unlinked.json() as {periziaId:string;sinistroId:null}))
-      .toEqual({periziaId, sinistroId:null});
+    expect((await unlinked.json() as {periziaId:string;sinistroId:null;linkVersion:number}))
+      .toEqual({periziaId, sinistroId:null, linkVersion:3});
     expect(await unlinked.text()).not.toContain("tenantId");
     expect((await request.delete(url(sinistri[0]), {headers})).status()).toBe(409);
     const relink = await request.post(root + "/perizie/" + periziaId + "/sinistro", {
-      headers, data:{sinistroId:sinistri[1]}
+      headers, data:{sinistroId:sinistri[1],expectedLinkVersion:3}
     });
     expect(relink.status(), await relink.text()).toBe(201);
     const mcp = await request.post("http://localhost:8080/mcp", {
@@ -1281,12 +1293,12 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
         "Content-Type":"application/json"},
       data:{jsonrpc:"2.0",id:941,method:"tools/call",params:{
         name:"unlink_perizia_sinistro",
-        arguments:{periziaId,expectedSinistroId:sinistri[1]}
+        arguments:{periziaId,expectedSinistroId:sinistri[1],expectedLinkVersion:4}
       }}
     });
     expect(mcp.ok(), await mcp.text()).toBeTruthy();
     expect(await mcp.text()).not.toContain('"isError":true');
-    expect((await request.get(root + "/perizie/" + periziaId + "/sinistro", {headers}).then(r=>r.json()) as {sinistroId:null}).sinistroId).toBeNull();
+    expect((await request.get(root + "/perizie/" + periziaId + "/sinistro", {headers}).then(r=>r.json()) as {sinistroId:null;linkVersion:number})).toMatchObject({sinistroId:null,linkVersion:5});
   });
 
   test("Sinistri V005 deletes only unlinked cases with signed CAS and MCP, rejects FK and stale versions", async ({page, request}) => {
@@ -1334,7 +1346,7 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     expect(perizia.status(), await perizia.text()).toBe(201);
     const periziaId = (await perizia.json() as {id:string}).id;
     const link = await request.post(base + "/perizie/" + periziaId + "/sinistro", {
-      headers, data:{sinistroId:linked.id}
+      headers, data:{sinistroId:linked.id,expectedLinkVersion:1}
     });
     expect(link.status(), await link.text()).toBe(201);
 
