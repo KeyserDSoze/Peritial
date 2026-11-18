@@ -153,6 +153,9 @@ SELECT
     ('perizie','documents','security_audit','upload_intents','upload_request_keys',
      'sinistri','perizia_sinistro_history')
     AND relrowsecurity AND relforcerowsecurity)=7
+ AND NOT has_table_privilege('peritial_app','perizie','DELETE')
+ AND NOT has_table_privilege('peritial_recovery','perizie','DELETE')
+ AND has_table_privilege('peritial_app','perizie','UPDATE')
  AND has_table_privilege('peritial_app','sinistri','DELETE')
  AND has_table_privilege('peritial_app','perizia_sinistro_history','INSERT')
  AND NOT has_table_privilege('peritial_app','perizia_sinistro_history','SELECT')
