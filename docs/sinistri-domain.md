@@ -321,3 +321,63 @@ scollegamento, import legacy, collegamenti polizze/
 anagrafiche o certificazione WCAG/Entra ID.
 V004 resta una migrazione amministrativa esplicita.
 Vedere [ADR 0035](../adr/0035-pwa-sinistro-link-authoritative-read.md).
+
+
+## Catalogo e creazione Sinistri nella PWA (#7/#13)
+
+Il nuovo componente `SinistroCatalog` è disponibile nella
+schermata autenticata delle Perizie, **chiuso per default**:
+soltanto il pulsante «Apri catalogo sinistri» avvia
+`GET /api/sinistri?limit=50`, già tenant-scoped
+da PostgreSQL FORCE RLS. In questo modo il bootstrap
+Compose demo V001 (senza migrazioni V003/V004) non
+blocca la PWA principale con un fetch automatico
+del catalogo non ancora migrato.
+
+Il catalogo mostra riferimento, data evento e data
+denuncia opzionale, ordinati per `occurredOn DESC,id`
+dalla query SQL. L'utente con scope
+`peritial.write` può compilare un form con
+`externalReference` di 1–100 caratteri,
+`occurredOn` obbligatoria e `reportedOn`
+opzionale e inviare **una sola** richiesta
+`POST /api/sinistri`. Il browser non trasmette
+un tenant ID; il server verifica JWT/scope
+e rende atomici creazione e audit. Soltanto
+un **201 confermato** aggiorna i risultati.
+Il record confermato mantiene l'ordinamento
+SQL per data evento; se più vecchio dei
+50 mostrati, rimane comunque visibile nella
+ricevuta di creazione. Un 400 non produce
+record locale né finge una scrittura riuscita.
+
+Su rete/REST non disponibile o 401/403/503
+la UI invalida i dati protetti e sospende
+le operazioni. Offline il catalogo e i
+controlli di creazione spariscono completamente;
+non sono previste code di POST, replay
+automatici, cache di risposte API o
+associazioni tra token diversi. Dopo refresh
+o riconnessione, la lista proviene da
+nuova richiesta firmata al server.
+Etichette, campi e messaggi sono disponibili
+in italiano e inglese.
+
+**Test:** `authenticated.spec.ts` verifica
+login reale PKCE, apertura on-demand,
+fallimento POST 400 senza riga locale,
+creazione 201 con data e riferimento,
+allowlist senza `tenantId`,
+`Cache-Control: no-store`, persistenza
+REST/refresh e fail-closed offline
+su desktop e mobile. I test PG/Business
+già verificano l'isolamento tenant e
+l'audit atomico del POST.
+
+**Fuori scope:** modifica UI dei Sinistri
+con CAS, eliminazione, gestione paginata oltre
+i primi 50, filtri avanzati e relazione
+con polizze/anagrafiche. V003/V004 non vengono
+applicate automaticamente: usare il migrator
+amministrativo esplicito prima del rilascio.
+[ADR 0036](../adr/0036-pwa-sinistri-catalog-create.md).
