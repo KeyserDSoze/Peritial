@@ -485,6 +485,111 @@ public sealed class SinistroPersistenceTests
     }
 
     [Fact]
+    public async Task V007_database_guards_block_unversioned_and_unaudited_direct_link_writes()
+    {
+        await using var db = await IsolatedDatabases.CreateAsync();
+        var tenant = TenantId.From(Guid.NewGuid());
+        var perizie = new PgPeriziaRepository(db.App);
+        var sinistri = new PgSinistroRepository(db.App);
+        var links = new PgPeriziaSinistroLinkRepository(db.App);
+        var claim = Sinistro.Create(tenant, "V007-RAW-GUARD", new DateOnly(2026,11,18));
+        var perizia = Perizia.Create(tenant, "V007-RAW-" + Guid.NewGuid().ToString("N"));
+        await sinistri.AddAuditedAsync(claim, Event(tenant, claim.Id, "sinistro.create"));
+        await perizie.AddAuditedAsync(perizia, Event(tenant, perizia.Id, "perizia.create"));
+
+        async Task<(NpgsqlConnection Connection, NpgsqlTransaction Tx)> StartAsync()
+        {
+            var connection = await db.App.OpenConnectionAsync();
+            var transaction = await connection.BeginTransactionAsync();
+            await using var set = new NpgsqlCommand(
+                "SELECT set_config('peritial.tenant_id',@tenant,true)", connection, transaction);
+            set.Parameters.AddWithValue("tenant",tenant.Value.ToString("D"));
+            await set.ExecuteNonQueryAsync();
+            return (connection, transaction);
+        }
+        async Task<int> DirectUpdateAsync(NpgsqlConnection conn,
+            NpgsqlTransaction transaction, bool bump)
+        {
+            await using var cmd = new NpgsqlCommand(
+                "UPDATE perizie SET sinistro_id=@sinistro" +
+                (bump ? ",sinistro_link_version=sinistro_link_version+1" : "") +
+                " WHERE tenant_id=@tenant AND id=@perizia",conn,transaction);
+            cmd.Parameters.AddWithValue("tenant",tenant.Value);
+            cmd.Parameters.AddWithValue("perizia",perizia.Id);
+            cmd.Parameters.AddWithValue("sinistro",claim.Id);
+            return await cmd.ExecuteNonQueryAsync();
+        }
+
+        {
+            var (conn,tx) = await StartAsync();
+            await using (conn)
+            await using (tx)
+            {
+                var error = await Assert.ThrowsAsync<PostgresException>(() =>
+                    DirectUpdateAsync(conn,tx,bump:false));
+                Assert.Equal("P0001",error.SqlState);
+            }
+        }
+        Assert.Equal(1,(await links.ReadAssociationAsync(tenant,perizia.Id)).LinkVersion);
+
+        {
+            var (conn,tx) = await StartAsync();
+            await using (conn)
+            await using (tx)
+            {
+                Assert.Equal(1,await DirectUpdateAsync(conn,tx,bump:true));
+                // Deferred check must reject commit when no matching
+                // audit and provenance were appended in this transaction.
+                var error = await Assert.ThrowsAsync<PostgresException>(() =>
+                    tx.CommitAsync());
+                Assert.Equal("P0001",error.SqlState);
+            }
+        }
+        Assert.Null((await links.ReadAssociationAsync(tenant,perizia.Id)).SinistroId);
+
+        {
+            var (conn,tx) = await StartAsync();
+            await using (conn)
+            await using (tx)
+            {
+                Assert.Equal(1,await DirectUpdateAsync(conn,tx,bump:true));
+                var auditId = Guid.NewGuid();
+                await using(var wrong = new NpgsqlCommand(
+                    "INSERT INTO security_audit " +
+                    "(tenant_id,id,subject,action,outcome,resource_id,occurred_at_utc) " +
+                    "VALUES (@tenant,@audit,'app','perizia.create','succeeded',@perizia,now())",
+                    conn,tx))
+                {
+                    wrong.Parameters.AddWithValue("tenant",tenant.Value);
+                    wrong.Parameters.AddWithValue("audit",auditId);
+                    wrong.Parameters.AddWithValue("perizia",perizia.Id);
+                    await wrong.ExecuteNonQueryAsync();
+                }
+                await using(var history = new NpgsqlCommand(
+                    "INSERT INTO perizia_sinistro_history " +
+                    "(tenant_id,perizia_id,revision,previous_sinistro_id,new_sinistro_id,audit_id) " +
+                    "VALUES (@tenant,@perizia,2,NULL,@sinistro,@audit)",conn,tx))
+                {
+                    history.Parameters.AddWithValue("tenant",tenant.Value);
+                    history.Parameters.AddWithValue("perizia",perizia.Id);
+                    history.Parameters.AddWithValue("sinistro",claim.Id);
+                    history.Parameters.AddWithValue("audit",auditId);
+                    await history.ExecuteNonQueryAsync();
+                }
+                var error = await Assert.ThrowsAsync<PostgresException>(() =>
+                    tx.CommitAsync());
+                Assert.Equal("P0001",error.SqlState);
+            }
+        }
+        Assert.Equal(1,(await links.ReadAssociationAsync(tenant,perizia.Id)).LinkVersion);
+        Assert.Null((await links.ReadAssociationAsync(tenant,perizia.Id)).SinistroId);
+        var linked = await links.LinkAuditedAsync(tenant,perizia.Id,claim.Id,1,
+            Event(tenant,perizia.Id,"perizia.link-sinistro"));
+        Assert.Equal(2,linked);
+        Assert.Equal(claim.Id,(await links.ReadAssociationAsync(tenant,perizia.Id)).SinistroId);
+    }
+
+    [Fact]
     public async Task V006_monotonic_link_revision_and_history_reject_ABA_and_rollback_audit()
     {
         await using var db = await IsolatedDatabases.CreateAsync();
