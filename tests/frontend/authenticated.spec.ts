@@ -428,7 +428,7 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
       .getByText(included, {exact:true})).toBeVisible();
 
     const defaultFetch = page.waitForResponse(response =>
-      response.url().endsWith("/api/sinistri?limit=50") && response.status() === 200);
+      response.url().endsWith("/api/sinistri/page?limit=50") && response.status() === 200);
     await catalog.getByRole("button", {name: "Cancella filtri sinistri"}).click();
     await defaultFetch;
     await expect(catalog.getByRole("textbox", {name: "Prefisso riferimento catalogo"})).toHaveValue("");
@@ -440,6 +440,108 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     await page.getByRole("button", {name: "Apri catalogo sinistri"}).click();
     await expect(page.getByRole("region", {name:"Catalogo sinistri"})
       .getByRole("textbox", {name:"Prefisso riferimento catalogo"})).toHaveValue("");
+  });
+
+  test("Sinistri keyset REST and MCP read return stable nextCursor, reject invalid cursors and never expose tenant", async ({page, request}) => {
+    test.setTimeout(120_000);
+    await page.goto("/");
+    await page.getByRole("button", {name:"Accedi"}).click();
+    await expect(page.locator("#username")).toBeVisible({timeout:30_000});
+    await page.locator("#username").fill("localuser");
+    await page.locator("#password").fill("local-only-user");
+    await page.locator("#kc-login").click();
+    await expect(page.getByRole("button", {name:"Esci"})).toBeVisible({timeout:30_000});
+    const token = await page.evaluate(() => {
+      const key = Object.keys(sessionStorage).find(x => x.startsWith("oidc.user:"));
+      return key ? (JSON.parse(sessionStorage.getItem(key) || "{}") as {access_token?:string}).access_token : undefined;
+    });
+    expect(token).toBeTruthy();
+    const headers = {Authorization:"Bearer " + token};
+    const path = "http://localhost:8080/api/sinistri";
+    const ids: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      const created = await request.post(path, {headers, data: {
+        externalReference:"PAGE-E2E-" + Date.now() + "-" + i,
+        occurredOn:"9998-12-30"
+      }});
+      expect(created.status(), await created.text()).toBe(201);
+      ids.push((await created.json() as {id:string}).id);
+    }
+    const first = await request.get(path + "/page?limit=2", {headers});
+    expect(first.status(), await first.text()).toBe(200);
+    expect(first.headers()["cache-control"]).toContain("no-store");
+    type Page = {items: Array<{id:string;externalReference:string}>; nextCursor:string|null};
+    const page1 = await first.json() as Page;
+    expect(page1.items.length).toBe(2);
+    expect(page1.nextCursor).toBeTruthy();
+    expect(page1.items.map(x => x.id)).toEqual([...ids].sort().slice(0, 2));
+    expect(await first.text()).not.toContain("tenantId");
+
+    // Adding a newer Sinistro cannot shift the existing keyset boundary.
+    const concurrent = await request.post(path, {headers, data: {
+      externalReference:"PAGE-LATE-" + Date.now(), occurredOn:"9999-01-01"
+    }});
+    expect(concurrent.status(), await concurrent.text()).toBe(201);
+    const second = await request.get(path + "/page?limit=2&cursor=" +
+      encodeURIComponent(page1.nextCursor!), {headers});
+    expect(second.status(), await second.text()).toBe(200);
+    const page2 = await second.json() as Page;
+    expect(page2.items.map(x => x.id)).toEqual([...ids].sort().slice(2));
+    expect(page2.nextCursor).toBeNull();
+    expect(new Set([...page1.items, ...page2.items].map(x => x.id)).size).toBe(3);
+
+    expect((await request.get(path + "/page?limit=0", {headers})).status()).toBe(400);
+    expect((await request.get(path + "/page?limit=51", {headers})).status()).toBe(400);
+    expect((await request.get(path + "/page?limit=2&cursor=broken", {headers})).status()).toBe(400);
+    expect((await request.get(path + "/page?limit=2")).status()).toBe(401);
+
+    const mcp = await request.post("http://localhost:8080/mcp", {
+      headers:{...headers, Accept:"application/json,text/event-stream", "Content-Type":"application/json"},
+      data:{jsonrpc:"2.0", id:991, method:"tools/call",
+        params:{name:"page_sinistri", arguments:{limit:2}}}
+    });
+    expect(mcp.ok(), await mcp.text()).toBeTruthy();
+    expect(await mcp.text()).toContain("nextCursor");
+    expect(await mcp.text()).not.toContain("tenantId");
+  });
+
+  test("PWA appends Sinistri pages without duplicate rows and refresh drops old cursor", async ({page}) => {
+    await page.goto("/");
+    await page.getByRole("button", {name:"Accedi"}).click();
+    await expect(page.locator("#username")).toBeVisible({timeout:30_000});
+    await page.locator("#username").fill("localuser");
+    await page.locator("#password").fill("local-only-user");
+    await page.locator("#kc-login").click();
+    await expect(page.getByRole("button", {name:"Esci"})).toBeVisible({timeout:30_000});
+
+    const sample = (suffix:string, date:string) => ({
+      id:"00000000-0000-0000-0000-00000000000" + suffix,
+      externalReference:"PAGED-MOCK-" + suffix, occurredOn:date,
+      reportedOn:null, createdAtUtc:"2026-11-18T09:00:00Z", version:1
+    });
+    const cursors: Array<string|null> = [];
+    await page.route(/\/api\/sinistri\/page\?/, async route => {
+      const cursor = new URL(route.request().url()).searchParams.get("cursor");
+      cursors.push(cursor);
+      await route.fulfill({status:200, contentType:"application/json", headers:{"Cache-Control":"no-store"},
+        body:JSON.stringify(cursor === null
+          ? {items:[sample("1","9998-12-30"), sample("2","9998-12-29")], nextCursor:"UI-SENTINEL"}
+          : {items:[sample("2","9998-12-29"), sample("3","9998-12-28")], nextCursor:null})});
+    });
+    await page.getByRole("button", {name:"Apri catalogo sinistri"}).click();
+    const catalog = page.getByRole("region", {name:"Catalogo sinistri"});
+    await expect(catalog.getByText("PAGED-MOCK-1", {exact:true})).toBeVisible();
+    await expect(catalog.getByRole("button", {name:"Carica altri sinistri"})).toBeVisible();
+    await catalog.getByRole("button", {name:"Carica altri sinistri"}).click();
+    await expect(catalog.getByText("PAGED-MOCK-3", {exact:true})).toBeVisible();
+    await expect(catalog.getByRole("list", {name:"Catalogo sinistri"}).locator("li")).toHaveCount(3);
+    await expect(catalog.getByRole("button", {name:"Carica altri sinistri"})).toHaveCount(0);
+    expect(cursors).toEqual([null, "UI-SENTINEL"]);
+
+    await catalog.getByRole("button", {name:"Aggiorna sinistri"}).click();
+    await expect(catalog.getByText("PAGED-MOCK-3", {exact:true})).toHaveCount(0);
+    await expect(catalog.getByRole("button", {name:"Carica altri sinistri"})).toBeVisible();
+    expect(cursors).toEqual([null, "UI-SENTINEL", null]);
   });
 
   test("PWA edits Sinistri with authoritative expectedVersion, invalid input and external CAS conflict", async ({page, request}) => {
