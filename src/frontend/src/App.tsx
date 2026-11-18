@@ -5,6 +5,7 @@ import { FileUp, Moon, Sun, ShieldCheck } from "lucide-react";
 import { Button } from "./components/ui/button";
 import { createPerizia, isApiUnavailable, listDocuments, listPerizie, uploadDocument, type DocumentSummary, type Perizia } from "./api";
 import { PeriziaWorkflow } from "./components/PeriziaWorkflow";
+import {PeriziaSinistroPicker} from "./components/PeriziaSinistroPicker";
 import {preferredTheme, saveLanguage, saveTheme} from "./uiPreferences";
 import {useOnlineStatus} from "./useOnlineStatus";
 import {PwaUpdatePrompt} from "./components/PwaUpdatePrompt";
@@ -31,6 +32,8 @@ export default function App() {
   const [dataStatus, setDataStatus] = useState<"loading" | "ready" | "unavailable">("loading");
   const [refreshIndex, setRefreshIndex] = useState(0);
   const token = auth.user?.access_token;
+  // UI hints only: the server performs the actual signed JWT scope check.
+  const canLinkSinistro = Boolean(auth.user?.scope?.split(/\\s+/).includes("peritial.write"));
   function lockProtectedUi() {
     // Never retain a potentially stale tenant record after REST, auth or
     // network failure. Invalidate any pre-existing GET that may finish late.
@@ -205,11 +208,13 @@ export default function App() {
             </form>
             {items.length===0 ? <p className="text-slate-500">{t("empty")}</p> :
               <ul aria-label={t("perizie")} className="divide-y divide-slate-200 dark:divide-slate-800">{items.map(item =>
-                <li key={item.id} className="py-4">
+                <li key={item.id} data-perizia-id={item.id} className="py-4">
                   <PeriziaWorkflow item={item} token={token!} onUnavailable={lockProtectedUi} onUpdated={updated => {
                     mutations.current.set(updated.id, (mutations.current.get(updated.id) ?? 0) + 1);
                     setItems(current => current.map(value => value.id === updated.id ? updated : value));
                   }} />
+                  <PeriziaSinistroPicker periziaId={item.id} token={token!}
+                    canWrite={canLinkSinistro} onUnavailable={lockProtectedUi} />
                 </li>)}</ul>}
           </section>
           <section className="h-fit rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
