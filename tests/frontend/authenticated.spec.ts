@@ -387,9 +387,8 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
 
     await page.getByRole("button", {name: "Apri catalogo sinistri"}).click();
     const catalog = page.getByRole("region", {name: "Catalogo sinistri"});
-    // Old incident dates lie outside the recent-50 window. Search MUST
-    // query PostgreSQL, not filter the currently loaded browser rows.
-    await expect(catalog.getByText(included, {exact:true})).toHaveCount(0);
+    // Verify the browser issues an authenticated server search, rather
+    // than filtering whichever cases happen to fit the recent-50 window.
     await catalog.getByRole("textbox", {name: "Prefisso riferimento catalogo"}).fill(prefix);
     await catalog.getByLabel("Data evento da").fill("1981-01-10");
     await catalog.getByLabel("Data evento a").fill("1981-12-31");
@@ -409,9 +408,12 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     await catalog.getByRole("button", {name: "Aggiorna sinistri"}).click();
     await expect(catalog.getByText(included, {exact:true})).toBeVisible();
 
+    const defaultFetch = page.waitForResponse(response =>
+      response.url().endsWith("/api/sinistri?limit=50") && response.status() === 200);
     await catalog.getByRole("button", {name: "Cancella filtri sinistri"}).click();
-    await expect(catalog.getByText(included, {exact:true})).toHaveCount(0);
+    await defaultFetch;
     await expect(catalog.getByRole("textbox", {name: "Prefisso riferimento catalogo"})).toHaveValue("");
+    await expect(catalog.getByText("Risultati server per il prefisso:")).toHaveCount(0);
     await context.setOffline(true);
     await expect(page.getByRole("region", {name: "Catalogo sinistri"})).toHaveCount(0);
     await context.setOffline(false);
