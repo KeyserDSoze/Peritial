@@ -70,9 +70,15 @@ export const updateSinistro = (token: string, id: string, externalReference: str
     method: "PUT", headers: {"Content-Type": "application/json"},
     body: JSON.stringify({externalReference, occurredOn, reportedOn, expectedVersion})
   });
-export const searchSinistri = (token: string, prefix: string) =>
-  request<SinistroSummary[]>("/sinistri/search?prefix=" +
-    encodeURIComponent(prefix.trim()) + "&limit=20", token);
+// Filters are evaluated server-side BEFORE the bounded result window. The
+// picker keeps its 20-row default; the full catalog can request 50 rows.
+export const searchSinistri = (token: string, prefix: string,
+  occurredFrom?: string, occurredTo?: string, limit = 20) => {
+  const params = new URLSearchParams({prefix: prefix.trim(), limit: String(limit)});
+  if (occurredFrom) params.set("occurredFrom", occurredFrom);
+  if (occurredTo) params.set("occurredTo", occurredTo);
+  return request<SinistroSummary[]>("/sinistri/search?" + params.toString(), token);
+};
 export const linkPeriziaSinistro = (token: string, periziaId: string, sinistroId: string) =>
   request<PeriziaSinistroLink>("/perizie/" + encodeURIComponent(periziaId) + "/sinistro",
     token, {method: "POST", headers: {"Content-Type": "application/json"},
