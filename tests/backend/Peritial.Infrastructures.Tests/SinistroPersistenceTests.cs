@@ -466,7 +466,10 @@ public sealed class SinistroPersistenceTests
         await links.ReparentAuditedAsync(a, perizia.Id, source.Id, target.Id,
             Event(a, perizia.Id, "perizia.reparent-sinistro"));
         Assert.Equal(target.Id, await links.FindSinistroIdForPeriziaAsync(a, perizia.Id));
-        Assert.Empty(await links.ListPeriziaIdsAsync(a, source.Id));
+        // The cancelled perizia is intentionally still linked to source;
+        // moving the active case must not alter another workflow row.
+        Assert.Equal(new[] {cancelled.Id},
+            await links.ListPeriziaIdsAsync(a, source.Id));
         Assert.Equal(new[] {perizia.Id}, await links.ListPeriziaIdsAsync(a, target.Id));
         await Assert.ThrowsAsync<PeriziaConcurrencyConflictException>(() =>
             links.ReparentAuditedAsync(a, perizia.Id, source.Id, target.Id,
