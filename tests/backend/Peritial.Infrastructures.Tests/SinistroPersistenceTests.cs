@@ -27,12 +27,12 @@ public sealed class SinistroPersistenceTests
             "SELECT has_table_privilege('peritial_app','sinistri','SELECT') " +
             "AND has_table_privilege('peritial_app','sinistri','INSERT') " +
             "AND has_table_privilege('peritial_app','sinistri','UPDATE') " +
-            "AND NOT has_table_privilege('peritial_app','sinistri','DELETE') " +
+            "AND has_table_privilege('peritial_app','sinistri','DELETE') " +
             "AND NOT has_table_privilege('peritial_recovery','sinistri','SELECT')", conn))
             Assert.True((bool)(await role.ExecuteScalarAsync())!);
         await using (var versions = new NpgsqlCommand(
             "SELECT array_agg(version ORDER BY version) FROM schema_migrations", conn))
-            Assert.Equal(new[] {1, 2, 3, 4}, (int[])(await versions.ExecuteScalarAsync())!);
+            Assert.Equal(new[] {1, 2, 3, 4, 5}, (int[])(await versions.ExecuteScalarAsync())!);
     }
 
     [Fact]
@@ -436,7 +436,7 @@ public sealed class SinistroPersistenceTests
                     await command.ExecuteNonQueryAsync();
                 admin = NpgsqlDataSource.Create(new NpgsqlConnectionStringBuilder(cs)
                 { SearchPath = schema }.ConnectionString);
-                Assert.Equal(4, await SchemaMigrator.ApplyAsync(admin));
+                Assert.Equal(5, await SchemaMigrator.ApplyAsync(admin));
                 await TestDbRoleProvisioner.ConfigureAsync(admin);
                 await using (var conn = await root.OpenConnectionAsync())
                 await using (var grant = new NpgsqlCommand(

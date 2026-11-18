@@ -231,6 +231,7 @@ public sealed class SinistroServiceTests
     private sealed class InMemorySinistri(SpyAudit audit) : ISinistroRepository
     {
         public Dictionary<Guid, Sinistro> Saved { get; } = [];
+        public HashSet<Guid> LinkedIds { get; } = [];
         private static Sinistro Snapshot(Sinistro s) => Sinistro.Restore(
             s.Id, s.TenantId, s.ExternalReference, s.OccurredOn, s.ReportedOn, s.CreatedAtUtc, s.PersistedVersion);
         public Task<IReadOnlyList<Sinistro>> PageAsync(TenantId tenant,
@@ -268,6 +269,17 @@ public sealed class SinistroServiceTests
                 .Take(fetchLimit).Select(Snapshot).ToArray());
         public Task<Sinistro?> FindAsync(TenantId tenant, Guid id, CancellationToken ct = default) =>
             Task.FromResult(Saved.TryGetValue(id, out var s) && s.TenantId == tenant ? Snapshot(s) : null);
+        public async Task DeleteAuditedAsync(TenantId tenant, Guid id,
+            long expectedVersion, SecurityAuditEvent entry, CancellationToken ct = default)
+        {
+            if (!Saved.TryGetValue(id, out var current) || current.TenantId != tenant)
+                throw new KeyNotFoundException("Sinistro not found.");
+            if (current.PersistedVersion != expectedVersion)
+                throw new SinistroConcurrencyConflictException();
+            if (LinkedIds.Contains(id)) throw new SinistroLinkedPerizieException();
+            await audit.AppendAsync(entry, ct);
+            Saved.Remove(id);
+        }
         public async Task AddAuditedAsync(Sinistro item, SecurityAuditEvent entry, CancellationToken ct = default)
         {
             await audit.AppendAsync(entry, ct);

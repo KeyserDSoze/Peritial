@@ -169,6 +169,9 @@ public sealed class SinistroPaginationTests
             Task.FromResult<IReadOnlyList<Sinistro>>(Array.Empty<Sinistro>());
         public Task<Sinistro?> FindAsync(TenantId tenant, Guid id, CancellationToken ct = default) =>
             Task.FromResult(Items.FirstOrDefault(i => i.TenantId == tenant && i.Id == id));
+        public Task DeleteAuditedAsync(TenantId tenant, Guid id,
+            long expectedVersion, SecurityAuditEvent audit, CancellationToken ct = default) =>
+            throw new NotSupportedException();
         public Task AddAuditedAsync(Sinistro item, SecurityAuditEvent audit, CancellationToken ct = default) =>
             throw new NotSupportedException();
         public Task UpdateAuditedAsync(Sinistro item, SecurityAuditEvent audit, CancellationToken ct = default) =>
