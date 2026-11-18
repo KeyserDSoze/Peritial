@@ -43,21 +43,24 @@ public sealed class McpTools(
         Guid periziaId, CancellationToken ct = default) =>
         periziaSinistroLinks.GetPeriziaAssociationAsync(periziaId, ct);
 
-    [McpServerTool(Name = "link_perizia_sinistro"), Description("Links an unlinked perizia to one sinistro in the same signed tenant. Requires peritial.write, rejects reparenting and audits the successful link atomically.")]
+    [McpServerTool(Name = "link_perizia_sinistro"), Description("V006: links with positive expectedLinkVersion from get_perizia_sinistro. Requires signed peritial.write, increments revision and writes audit/history in the same transaction. Missing version is rejected.")]
     public Task<PeriziaSinistroLinkDto> LinkPeriziaSinistro(
-        Guid periziaId, Guid sinistroId, CancellationToken ct = default) =>
-        periziaSinistroLinks.LinkAsync(periziaId, sinistroId, ct);
+        Guid periziaId, Guid sinistroId, long expectedLinkVersion,
+        CancellationToken ct = default) =>
+        periziaSinistroLinks.LinkAsync(periziaId, sinistroId, expectedLinkVersion, ct);
 
-    [McpServerTool(Name = "reparent_perizia_sinistro"), Description("Atomically replaces the caller's last-observed Sinistro association with a distinct target in the same signed tenant. Requires peritial.write, expectedSinistroId and newSinistroId; 409 on concurrent change, 404 for foreign/missing resources, atomic audit. Never performs unlink then link or deletes records.")]
+    [McpServerTool(Name = "reparent_perizia_sinistro"), Description("V006: atomic reparent requires expectedSinistroId, newSinistroId AND positive expectedLinkVersion from get_perizia_sinistro. ABA returns 409. Requires signed peritial.write, tenant RLS and atomic audit/history; never unlinks transiently.")]
     public Task<PeriziaSinistroLinkDto> ReparentPeriziaSinistro(
         Guid periziaId, Guid expectedSinistroId, Guid newSinistroId,
-        CancellationToken ct = default) =>
-        periziaSinistroLinks.ReparentAsync(periziaId, expectedSinistroId, newSinistroId, ct);
+        long expectedLinkVersion, CancellationToken ct = default) =>
+        periziaSinistroLinks.ReparentAsync(periziaId, expectedSinistroId, newSinistroId,
+            expectedLinkVersion, ct);
 
-    [McpServerTool(Name = "unlink_perizia_sinistro"), Description("Explicitly detaches the caller's last-observed Sinistro from a Perizia, with signed peritial.write, tenant RLS, expectedSinistroId CAS and atomic success audit. Does not delete either entity or implicitly reparent. Conflicts if already unlinked or changed.")]
+    [McpServerTool(Name = "unlink_perizia_sinistro"), Description("V006: unlink requires expectedSinistroId AND positive expectedLinkVersion read from get_perizia_sinistro; ABA returns conflict. Signed peritial.write, RLS and atomic audit/history. Does not delete cases.")]
     public Task<PeriziaSinistroAssociationDto> UnlinkPeriziaSinistro(
-        Guid periziaId, Guid expectedSinistroId, CancellationToken ct = default) =>
-        periziaSinistroLinks.UnlinkAsync(periziaId, expectedSinistroId, ct);
+        Guid periziaId, Guid expectedSinistroId, long expectedLinkVersion,
+        CancellationToken ct = default) =>
+        periziaSinistroLinks.UnlinkAsync(periziaId, expectedSinistroId, expectedLinkVersion, ct);
 
     [McpServerTool(Name = "list_perizie_for_sinistro"), Description("Returns perizia UUIDs linked to a sinistro in the signed tenant. Requires peritial.read or peritial.write; foreign and missing sinistri are indistinguishable.")]
     public Task<IReadOnlyList<Guid>> ListPerizieForSinistro(

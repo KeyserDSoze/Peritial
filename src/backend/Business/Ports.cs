@@ -26,6 +26,8 @@ public interface IPeriziaRepository
 /// verifies both endpoints in the signed tenant, uses SQL CAS for the link,
 /// and commits the link and its successful security audit atomically.
 /// </summary>
+public sealed record PeriziaSinistroState(Guid? SinistroId, long LinkVersion);
+
 public interface IPeriziaSinistroLinkRepository
 {
     // Explicit compare-and-swap unlink: the association still must match
@@ -33,13 +35,19 @@ public interface IPeriziaSinistroLinkRepository
     // atomically; missing/foreign perizia yields 404, stale/unlinked 409.
     // Atomic reparent never creates a transient null association. A stale
     // source produces 409 and the new target must exist in the signed tenant.
-    Task ReparentAuditedAsync(TenantId tenant, Guid periziaId,
-        Guid expectedSinistroId, Guid newSinistroId,
+    // Every write requires a positive last-seen revision and returns the
+    // increased revision. An unchanged UUID after an ABA cycle is NOT enough.
+    // All three operations must append both audit and revision-history rows
+    // in the same transaction as the versioned CAS SQL mutation.
+    Task<long> ReparentAuditedAsync(TenantId tenant, Guid periziaId,
+        Guid expectedSinistroId, Guid newSinistroId, long expectedLinkVersion,
         SecurityAuditEvent audit, CancellationToken ct = default);
-    Task UnlinkAuditedAsync(TenantId tenant, Guid periziaId, Guid expectedSinistroId,
-        SecurityAuditEvent audit, CancellationToken ct = default);
-    Task LinkAuditedAsync(TenantId tenant, Guid periziaId, Guid sinistroId,
-        SecurityAuditEvent audit, CancellationToken ct = default);
+    Task<long> UnlinkAuditedAsync(TenantId tenant, Guid periziaId, Guid expectedSinistroId,
+        long expectedLinkVersion, SecurityAuditEvent audit, CancellationToken ct = default);
+    Task<long> LinkAuditedAsync(TenantId tenant, Guid periziaId, Guid sinistroId,
+        long expectedLinkVersion, SecurityAuditEvent audit, CancellationToken ct = default);
+    Task<PeriziaSinistroState> ReadAssociationAsync(TenantId tenant, Guid periziaId,
+        CancellationToken ct = default);
     Task<IReadOnlyList<Guid>> ListPeriziaIdsAsync(TenantId tenant, Guid sinistroId,
         CancellationToken ct = default);
     // Null means a visible unlinked perizia; missing/foreign IDs throw 404.

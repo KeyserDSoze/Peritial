@@ -299,20 +299,21 @@ api.MapGet("/perizie/{id:guid}/sinistro",
 api.MapPut("/perizie/{id:guid}/sinistro",
     (Guid id, ReparentPeriziaSinistroRequest input,
         PeriziaSinistroLinkService links, CancellationToken ct) =>
-        links.ReparentAsync(id, input.ExpectedSinistroId, input.NewSinistroId, ct))
+        links.ReparentAsync(id, input.ExpectedSinistroId, input.NewSinistroId,
+            input.ExpectedLinkVersion, ct))
     .RequireAuthorization("peritial.write");
 api.MapDelete("/perizie/{id:guid}/sinistro",
-    async (Guid id, Guid expectedSinistroId,
+    async (Guid id, Guid expectedSinistroId, long expectedLinkVersion,
         PeriziaSinistroLinkService links, CancellationToken ct) =>
     {
-        await links.UnlinkAsync(id, expectedSinistroId, ct);
+        await links.UnlinkAsync(id, expectedSinistroId, expectedLinkVersion, ct);
         return Results.NoContent();
     }).RequireAuthorization("peritial.write");
 api.MapPost("/perizie/{id:guid}/sinistro",
     async (Guid id, LinkPeriziaSinistroRequest input,
         PeriziaSinistroLinkService links, CancellationToken ct) =>
     {
-        var link = await links.LinkAsync(id, input.SinistroId, ct);
+        var link = await links.LinkAsync(id, input.SinistroId, input.ExpectedLinkVersion, ct);
         return Results.Created($"/api/sinistri/{link.SinistroId}/perizie", link);
     }).RequireAuthorization("peritial.write");
 
@@ -372,8 +373,8 @@ app.MapMcp("/mcp").RequireAuthorization("peritial.access");
 app.Run();
 
 public sealed record ReparentPeriziaSinistroRequest(
-    Guid ExpectedSinistroId, Guid NewSinistroId);
-public sealed record LinkPeriziaSinistroRequest(Guid SinistroId);
+    Guid ExpectedSinistroId, Guid NewSinistroId, long ExpectedLinkVersion);
+public sealed record LinkPeriziaSinistroRequest(Guid SinistroId, long ExpectedLinkVersion);
 public sealed record CreateSinistroRequest(string ExternalReference, DateOnly OccurredOn, DateOnly? ReportedOn);
 public sealed record UpdateSinistroRequest(
     string ExternalReference, DateOnly OccurredOn, DateOnly? ReportedOn, long ExpectedVersion);

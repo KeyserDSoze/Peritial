@@ -3,9 +3,9 @@ using Peritial.Domains;
 namespace Peritial.Business;
 
 /// <summary>Allowlisted link response: never exposes tenant, subject or audit metadata.</summary>
-public sealed record PeriziaSinistroLinkDto(Guid PeriziaId, Guid SinistroId);
+public sealed record PeriziaSinistroLinkDto(Guid PeriziaId, Guid SinistroId, long LinkVersion);
 /// <summary>Tenant-safe read projection; a visible unlinked perizia returns null.</summary>
-public sealed record PeriziaSinistroAssociationDto(Guid PeriziaId, Guid? SinistroId);
+public sealed record PeriziaSinistroAssociationDto(Guid PeriziaId, Guid? SinistroId, long LinkVersion);
 
 /// <summary>
 /// Associations require an explicit signed write: link when null, unlink
@@ -16,17 +16,18 @@ public sealed class PeriziaSinistroLinkService(
     ITenantContext context, IPeriziaSinistroLinkRepository links, ISecurityAuditTrail audit)
 {
     public async Task<PeriziaSinistroLinkDto> LinkAsync(
-        Guid periziaId, Guid sinistroId, CancellationToken ct = default)
+        Guid periziaId, Guid sinistroId, long expectedLinkVersion, CancellationToken ct = default)
     {
         await RequireWriteAsync("perizia.link-sinistro", ct);
         if (periziaId == Guid.Empty)
             throw new ArgumentException("Perizia id required.", nameof(periziaId));
         if (sinistroId == Guid.Empty)
             throw new ArgumentException("Sinistro id required.", nameof(sinistroId));
-
+        ValidateVersion(expectedLinkVersion);
         var success = Event("perizia.link-sinistro", "succeeded", periziaId);
-        await links.LinkAuditedAsync(context.TenantId, periziaId, sinistroId, success, ct);
-        return new PeriziaSinistroLinkDto(periziaId, sinistroId);
+        var version = await links.LinkAuditedAsync(context.TenantId, periziaId,
+            sinistroId, expectedLinkVersion, success, ct);
+        return new PeriziaSinistroLinkDto(periziaId, sinistroId, version);
     }
 
     /// <summary>
@@ -35,7 +36,7 @@ public sealed class PeriziaSinistroLinkService(
     /// </summary>
     public async Task<PeriziaSinistroLinkDto> ReparentAsync(
         Guid periziaId, Guid expectedSinistroId, Guid newSinistroId,
-        CancellationToken ct = default)
+        long expectedLinkVersion, CancellationToken ct = default)
     {
         await RequireWriteAsync("perizia.reparent-sinistro", ct);
         if (periziaId == Guid.Empty)
@@ -46,11 +47,11 @@ public sealed class PeriziaSinistroLinkService(
             throw new ArgumentException("New Sinistro id required.", nameof(newSinistroId));
         if (newSinistroId == expectedSinistroId)
             throw new ArgumentException("A different target Sinistro is required.", nameof(newSinistroId));
-
-        await links.ReparentAuditedAsync(context.TenantId, periziaId,
-            expectedSinistroId, newSinistroId,
+        ValidateVersion(expectedLinkVersion);
+        var version = await links.ReparentAuditedAsync(context.TenantId, periziaId,
+            expectedSinistroId, newSinistroId, expectedLinkVersion,
             Event("perizia.reparent-sinistro", "succeeded", periziaId), ct);
-        return new PeriziaSinistroLinkDto(periziaId, newSinistroId);
+        return new PeriziaSinistroLinkDto(periziaId, newSinistroId, version);
     }
 
     /// <summary>
@@ -58,7 +59,8 @@ public sealed class PeriziaSinistroLinkService(
     /// No implicit reparent, cascade or modification of either entity.
     /// </summary>
     public async Task<PeriziaSinistroAssociationDto> UnlinkAsync(
-        Guid periziaId, Guid expectedSinistroId, CancellationToken ct = default)
+        Guid periziaId, Guid expectedSinistroId, long expectedLinkVersion,
+        CancellationToken ct = default)
     {
         await RequireWriteAsync("perizia.unlink-sinistro", ct);
         if (periziaId == Guid.Empty)
@@ -66,9 +68,11 @@ public sealed class PeriziaSinistroLinkService(
         if (expectedSinistroId == Guid.Empty)
             throw new ArgumentException("Expected Sinistro id required.", nameof(expectedSinistroId));
 
+        ValidateVersion(expectedLinkVersion);
         var success = Event("perizia.unlink-sinistro", "succeeded", periziaId);
-        await links.UnlinkAuditedAsync(context.TenantId, periziaId, expectedSinistroId, success, ct);
-        return new PeriziaSinistroAssociationDto(periziaId, null);
+        var version = await links.UnlinkAuditedAsync(context.TenantId, periziaId,
+            expectedSinistroId, expectedLinkVersion, success, ct);
+        return new PeriziaSinistroAssociationDto(periziaId, null, version);
     }
 
     public async Task<PeriziaSinistroAssociationDto> GetPeriziaAssociationAsync(
@@ -77,9 +81,9 @@ public sealed class PeriziaSinistroLinkService(
         RequireRead();
         if (periziaId == Guid.Empty)
             throw new ArgumentException("Perizia id required.", nameof(periziaId));
-        var sinistroId = await links.FindSinistroIdForPeriziaAsync(
-            context.TenantId, periziaId, ct);
-        return new PeriziaSinistroAssociationDto(periziaId, sinistroId);
+        var association = await links.ReadAssociationAsync(context.TenantId, periziaId, ct);
+        return new PeriziaSinistroAssociationDto(periziaId,
+            association.SinistroId, association.LinkVersion);
     }
 
     public Task<IReadOnlyList<Guid>> ListPeriziaIdsAsync(
@@ -89,6 +93,13 @@ public sealed class PeriziaSinistroLinkService(
         if (sinistroId == Guid.Empty)
             throw new ArgumentException("Sinistro id required.", nameof(sinistroId));
         return links.ListPeriziaIdsAsync(context.TenantId, sinistroId, ct);
+    }
+
+    private static void ValidateVersion(long version)
+    {
+        if (version < 1)
+            throw new ArgumentOutOfRangeException(nameof(version),
+                "A positive last-observed link revision is required.");
     }
 
     private void RequireRead()
