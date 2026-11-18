@@ -16,7 +16,8 @@ public sealed record SinistroDto(
 }
 
 public sealed class SinistroService(
-    ITenantContext context, ISinistroRepository repository, ISecurityAuditTrail audit)
+    ITenantContext context, ISinistroRepository repository, ISecurityAuditTrail audit,
+    SinistroDeletionGate? deleteGate = null)
 {
     public async Task<IReadOnlyList<SinistroDto>> ListAsync(int limit = 50, CancellationToken ct = default)
     {
@@ -120,6 +121,15 @@ public sealed class SinistroService(
     public async Task DeleteAsync(Guid id, long expectedVersion, CancellationToken ct = default)
     {
         await RequireWriteAsync("sinistro.delete", ct);
+        // Both requirements must be satisfied. No record lookup is allowed
+        // before the gate and dedicated signed scope have been checked.
+        // A denied attempt never includes a resource UUID in the audit.
+        if (!context.HasScope("peritial.sinistri.delete") ||
+            deleteGate?.Enabled != true)
+        {
+            await audit.AppendAsync(Event("sinistro.delete", "denied", null), ct);
+            throw new UnauthorizedAccessException("Sinistro hard deletion is not authorized.");
+        }
         if (expectedVersion < 1)
             throw new ArgumentOutOfRangeException(nameof(expectedVersion));
         var item = await FindRequiredAsync(id, ct);

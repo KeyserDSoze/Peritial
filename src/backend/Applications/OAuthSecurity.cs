@@ -50,7 +50,7 @@ public sealed class OAuthProtectedResource
     {
         resource,
         authorization_servers = new[] { issuer },
-        scopes_supported = new[] { "peritial.read", "peritial.write" },
+        scopes_supported = new[] { "peritial.read", "peritial.write", "peritial.sinistri.delete" },
         bearer_methods_supported = new[] { "header" }
     };
 }

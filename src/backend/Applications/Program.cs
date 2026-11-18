@@ -128,6 +128,12 @@ builder.Services.AddScoped<IUploadIntentLedger, PgUploadIntentLedger>();
 builder.Services.AddScoped<IUploadIdempotencyStore, PgUploadIdempotencyStore>();
 builder.Services.AddScoped<ISecurityAuditTrail, PgSecurityAuditTrail>();
 builder.Services.AddScoped<PeriziaService>();
+// Fail closed everywhere by default, including local Development. The
+// explicit flag is only accepted in the disposable demo/test environment;
+// production fails startup rather than silently enabling hard deletion.
+builder.Services.AddSingleton(SinistroDeletionGate.ForEnvironment(
+    builder.Environment.IsDevelopment(),
+    builder.Configuration.GetValue<bool>("Sinistri:EnableDevelopmentDelete")));
 builder.Services.AddScoped<SinistroService>();
 builder.Services.AddScoped<PeriziaSinistroLinkService>();
 builder.Services.AddSingleton<IFileMalwareScanner, ClamdFileMalwareScanner>();
