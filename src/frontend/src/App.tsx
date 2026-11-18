@@ -33,7 +33,7 @@ export default function App() {
   const [refreshIndex, setRefreshIndex] = useState(0);
   const token = auth.user?.access_token;
   // UI hints only: the server performs the actual signed JWT scope check.
-  const canLinkSinistro = Boolean(auth.user?.scope?.split(/\\s+/).includes("peritial.write"));
+  const canLinkSinistro = Boolean(auth.user?.scope?.split(/\s+/).includes("peritial.write"));
   function lockProtectedUi() {
     // Never retain a potentially stale tenant record after REST, auth or
     // network failure. Invalidate any pre-existing GET that may finish late.
