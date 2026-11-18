@@ -281,6 +281,105 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     await expect(list.getByText(secondName, {exact: true})).toBeVisible();
   });
 
+  test("PWA searches and links Sinistri to Perizie with persistence, conflict reload and offline-safe state", async ({page, request, context}) => {
+    await page.goto("/");
+    await page.getByRole("button", {name: "Accedi"}).click();
+    await expect(page.locator("#username")).toBeVisible({timeout: 30_000});
+    await page.locator("#username").fill("localuser");
+    await page.locator("#password").fill("local-only-user");
+    await page.locator("#kc-login").click();
+    await expect(page.getByRole("button", {name: "Esci"})).toBeVisible({timeout: 30_000});
+    const token = await page.evaluate(() => {
+      const key = Object.keys(sessionStorage).find(x => x.startsWith("oidc.user:"));
+      return key
+        ? (JSON.parse(sessionStorage.getItem(key) || "{}") as {access_token?:string}).access_token
+        : undefined;
+    });
+    expect(token).toBeTruthy();
+    const headers = {Authorization: "Bearer " + token};
+    const unique = Date.now() + "-" + Math.round(Math.random() * 100000);
+    const sinRef = "UI-SIN-LINK-" + unique;
+    const sinistro = await request.post("http://localhost:8080/api/sinistri", {
+      headers, data: {externalReference: sinRef, occurredOn: "2026-11-17"}
+    });
+    expect(sinistro.status(), await sinistro.text()).toBe(201);
+    const sinId = (await sinistro.json() as {id:string}).id;
+    const reference = "UI-PERIZIA-LINK-" + unique;
+
+    await page.locator("#reference").fill(reference);
+    await page.getByRole("button", {name: "Crea"}).click();
+    const row = page.getByRole("list", {name: /^(Perizie|Appraisals)$/})
+      .locator("li").filter({hasText: reference});
+    await expect(row).toBeVisible();
+    const periziaId = await row.getAttribute("data-perizia-id");
+    expect(periziaId).toBeTruthy();
+
+    await row.getByRole("button", {name: "Sinistro della perizia"}).click();
+    await expect(row.getByText("Perizia senza sinistro")).toBeVisible();
+    await row.getByRole("textbox", {name: "Cerca per riferimento sinistro"}).fill("UI-SIN-LINK-" + unique);
+    await row.getByRole("button", {name: "Cerca sinistri"}).click();
+    await expect(row.getByRole("combobox", {name: "Seleziona sinistro"}))
+      .toContainText(sinRef);
+    await row.getByRole("combobox", {name: "Seleziona sinistro"})
+      .selectOption({index: 1});
+    const linked = page.waitForResponse(response =>
+      response.url().endsWith("/api/perizie/" + periziaId + "/sinistro") &&
+      response.request().method() === "POST");
+    await row.getByRole("button", {name: "Collega sinistro"}).click();
+    expect((await linked).status()).toBe(201);
+    await expect(row.getByText("Sinistro collegato")).toBeVisible();
+    await expect(row.getByText(sinRef)).toBeVisible();
+    await expect(row.getByRole("button", {name: "Collega sinistro"})).toHaveCount(0);
+
+    // Reload must not mistake a pre-existing link for an unlinked record.
+    await page.reload();
+    await expect(page.getByRole("list", {name: /^(Perizie|Appraisals)$/})
+      .getByText(reference)).toBeVisible({timeout: 30_000});
+    const restored = page.getByRole("list", {name: /^(Perizie|Appraisals)$/})
+      .locator("li").filter({hasText: reference});
+    await restored.getByRole("button", {name: "Sinistro della perizia"}).click();
+    await expect(restored.getByText(sinRef)).toBeVisible({timeout: 30_000});
+    await expect(restored.getByRole("button", {name: "Collega sinistro"})).toHaveCount(0);
+
+    // A concurrent link from a different client must become 409, never a
+    // false optimistic UI success nor an automatic duplicate submission.
+    const raceRef = "UI-PERIZIA-RACE-" + unique;
+    await page.locator("#reference").fill(raceRef);
+    await page.getByRole("button", {name: "Crea"}).click();
+    const raceRow = page.getByRole("list", {name: /^(Perizie|Appraisals)$/})
+      .locator("li").filter({hasText: raceRef});
+    await expect(raceRow).toBeVisible();
+    const raceId = await raceRow.getAttribute("data-perizia-id");
+    expect(raceId).toBeTruthy();
+    await raceRow.getByRole("button", {name: "Sinistro della perizia"}).click();
+    await expect(raceRow.getByText("Perizia senza sinistro")).toBeVisible();
+    await raceRow.getByRole("textbox", {name: "Cerca per riferimento sinistro"}).fill(sinRef);
+    await raceRow.getByRole("button", {name: "Cerca sinistri"}).click();
+    await expect(raceRow.getByRole("combobox", {name: "Seleziona sinistro"}))
+      .toContainText(sinRef);
+    await raceRow.getByRole("combobox", {name: "Seleziona sinistro"}).selectOption({index: 1});
+    const externalLink = await request.post(
+      "http://localhost:8080/api/perizie/" + raceId + "/sinistro",
+      {headers, data: {sinistroId: sinId}}
+    );
+    expect(externalLink.status(), await externalLink.text()).toBe(201);
+    await raceRow.getByRole("button", {name: "Collega sinistro"}).click();
+    await expect(raceRow.getByRole("alert")).toContainText("Ricarica il collegamento");
+    await expect(raceRow.getByRole("button", {name: "Collega sinistro"})).toHaveCount(0);
+    await raceRow.getByRole("button", {name: "Ricarica collegamento"}).click();
+    await expect(raceRow.getByText(sinRef)).toBeVisible({timeout: 30_000});
+    await expect(raceRow.getByRole("alert")).toHaveCount(0);
+
+    // Offline does not expose retained tenant data or allow queued writes.
+    await context.setOffline(true);
+    await expect(page.getByRole("status")).toContainText("Sei offline");
+    await expect(page.getByText(reference, {exact:true})).toHaveCount(0);
+    await expect(page.getByRole("button", {name: "Collega sinistro"})).toHaveCount(0);
+    await context.setOffline(false);
+    await expect(page.getByRole("list", {name: /^(Perizie|Appraisals)$/})
+      .getByText(reference, {exact:true})).toBeVisible({timeout: 30_000});
+  });
+
   test("workflow perizia UI: assign, advance, cancel con conferma e i18n", async ({page}) => {
     await page.goto("/");
     await page.getByRole("button", {name: "Accedi"}).click();
