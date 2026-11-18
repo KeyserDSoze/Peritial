@@ -27,6 +27,26 @@ public sealed class SinistroService(
         return items.Select(SinistroDto.From).ToArray();
     }
 
+    /// <summary>
+    /// Keyset pagination for the complete tenant catalog, independent from
+    /// the 50-row autocomplete. Only a signed tenant's records are queried.
+    /// </summary>
+    public async Task<SinistroPageDto> PageAsync(
+        int limit = 50, string? cursor = null, CancellationToken ct = default)
+    {
+        RequireRead();
+        if (limit is < 1 or > 50)
+            throw new ArgumentOutOfRangeException(nameof(limit));
+        var boundary = cursor is null ? null : SinistroPageCursor.Decode(cursor);
+        var records = await repository.PageAsync(context.TenantId, boundary, limit + 1, ct);
+        var items = records.Take(limit).ToArray();
+        var nextCursor = records.Count > limit && items.Length > 0
+            ? SinistroPageCursor.Encode(new SinistroPageBoundary(
+                items[^1].OccurredOn, items[^1].Id))
+            : null;
+        return new SinistroPageDto(items.Select(SinistroDto.From).ToArray(), nextCursor);
+    }
+
     /// <summary>Server-side, case-insensitive autocomplete prefix plus optional date bounds.</summary>
     public async Task<IReadOnlyList<SinistroDto>> SearchAsync(
         string prefix, DateOnly? occurredFrom = null, DateOnly? occurredTo = null,
