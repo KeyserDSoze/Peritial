@@ -6,6 +6,7 @@ import { Button } from "./components/ui/button";
 import { createPerizia, isApiUnavailable, listDocuments, listPerizie, uploadDocument, type DocumentSummary, type Perizia } from "./api";
 import { PeriziaWorkflow } from "./components/PeriziaWorkflow";
 import {PeriziaSinistroPicker} from "./components/PeriziaSinistroPicker";
+import {SinistroCatalog} from "./components/SinistroCatalog";
 import {preferredTheme, saveLanguage, saveTheme} from "./uiPreferences";
 import {useOnlineStatus} from "./useOnlineStatus";
 import {PwaUpdatePrompt} from "./components/PwaUpdatePrompt";
@@ -216,6 +217,7 @@ export default function App() {
                   <PeriziaSinistroPicker periziaId={item.id} token={token!}
                     canWrite={canLinkSinistro} onUnavailable={lockProtectedUi} />
                 </li>)}</ul>}
+            <SinistroCatalog token={token!} canWrite={canLinkSinistro} onUnavailable={lockProtectedUi} />
           </section>
           <section className="h-fit rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
             <h2 className="mb-5 text-xl font-semibold">{t("upload")}</h2>
