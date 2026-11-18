@@ -527,6 +527,34 @@ public sealed class SinistroPersistenceTests
         var rev6 = await links.LinkAuditedAsync(tenant,p.Id,b.Id,rev5,
             Event(tenant,p.Id,"perizia.link-sinistro"));
         Assert.Equal(6,rev6);
+        // Two independent signed writers started from the SAME revision:
+        // the PG row lock + versioned CAS admits exactly one success.
+        var attempts = await Task.WhenAll(Enumerable.Range(0, 2).Select(async _ =>
+        {
+            try
+            {
+                return await links.ReparentAuditedAsync(tenant, p.Id, b.Id, a.Id, rev6,
+                    Event(tenant,p.Id,"perizia.reparent-sinistro"));
+            }
+            catch (PeriziaConcurrencyConflictException)
+            {
+                return -1L;
+            }
+        }));
+        Assert.Single(attempts.Where(v => v == 7L));
+        Assert.Single(attempts.Where(v => v == -1L));
+        Assert.Equal(a.Id, (await links.ReadAssociationAsync(tenant,p.Id)).SinistroId);
+        Assert.Equal(7, (await links.ReadAssociationAsync(tenant,p.Id)).LinkVersion);
+
+        // App and recovery roles have no history SELECT/UPDATE/DELETE:
+        // provenance is append-only and available only to privileged auditors.
+        await using (var privileges = db.Admin.CreateCommand(
+            "SELECT has_table_privilege('peritial_app','perizia_sinistro_history','INSERT') " +
+            "AND NOT has_table_privilege('peritial_app','perizia_sinistro_history','SELECT') " +
+            "AND NOT has_table_privilege('peritial_app','perizia_sinistro_history','UPDATE') " +
+            "AND NOT has_table_privilege('peritial_app','perizia_sinistro_history','DELETE') " +
+            "AND NOT has_table_privilege('peritial_recovery','perizia_sinistro_history','SELECT')"))
+            Assert.True((bool)(await privileges.ExecuteScalarAsync())!);
         await using var cmd = db.Admin.CreateCommand(
             "SELECT revision, previous_sinistro_id, new_sinistro_id " +
             "FROM perizia_sinistro_history WHERE tenant_id=@tenant AND perizia_id=@p ORDER BY revision");
@@ -538,7 +566,8 @@ public sealed class SinistroPersistenceTests
             history.Add((reader.GetInt64(0),reader.IsDBNull(1)?null:reader.GetGuid(1),
                 reader.IsDBNull(2)?null:reader.GetGuid(2)));
         Assert.Equal(new (long,Guid?,Guid?)[] {
-            (2,null,a.Id),(3,a.Id,b.Id),(4,b.Id,a.Id),(5,a.Id,null),(6,null,b.Id)
+            (2,null,a.Id),(3,a.Id,b.Id),(4,b.Id,a.Id),(5,a.Id,null),(6,null,b.Id),
+            (7,b.Id,a.Id)
         },history);
     }
 
