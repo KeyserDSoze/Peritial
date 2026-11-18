@@ -408,6 +408,25 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     await catalog.getByRole("button", {name: "Aggiorna sinistri"}).click();
     await expect(catalog.getByText(included, {exact:true})).toBeVisible();
 
+    // Creating a record while a search is applied must not put an unrelated
+    // confirmed row into the filtered window. The receipt is still valid.
+    const outside = "UI-SIN-OUTSIDE-" + Date.now();
+    await catalog.getByRole("textbox", {name:"Riferimento sinistro"}).fill(outside);
+    await catalog.getByLabel("Data sinistro").fill("2097-05-02");
+    const post = page.waitForResponse(response =>
+      response.url().endsWith("/api/sinistri") &&
+      response.request().method() === "POST" && response.status() === 201);
+    const refreshedMatches = page.waitForResponse(response =>
+      response.url().includes("/api/sinistri/search?") && response.status() === 200);
+    await catalog.getByRole("button", {name:"Crea sinistro"}).click();
+    await post;
+    await refreshedMatches;
+    await expect(catalog.getByText("Sinistro creato e salvato.")).toBeVisible();
+    await expect(catalog.getByRole("list", {name:"Catalogo sinistri"})
+      .getByText(outside, {exact:true})).toHaveCount(0);
+    await expect(catalog.getByRole("list", {name:"Catalogo sinistri"})
+      .getByText(included, {exact:true})).toBeVisible();
+
     const defaultFetch = page.waitForResponse(response =>
       response.url().endsWith("/api/sinistri?limit=50") && response.status() === 200);
     await catalog.getByRole("button", {name: "Cancella filtri sinistri"}).click();
