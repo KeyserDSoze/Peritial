@@ -374,10 +374,80 @@ su desktop e mobile. I test PG/Business
 già verificano l'isolamento tenant e
 l'audit atomico del POST.
 
-**Fuori scope:** modifica UI dei Sinistri
-con CAS, eliminazione, gestione paginata oltre
+**Fuori scope in questo slice di creazione:** modifica UI dei Sinistri
+con CAS (aggiunta successivamente, vedi ADR 0037), eliminazione, gestione paginata oltre
 i primi 50, filtri avanzati e relazione
 con polizze/anagrafiche. V003/V004 non vengono
 applicate automaticamente: usare il migrator
 amministrativo esplicito prima del rilascio.
 [ADR 0036](../adr/0036-pwa-sinistri-catalog-create.md).
+
+
+## Modifica Sinistri nella PWA con CAS e reload firmato (#7/#13)
+
+Il catalogo `SinistroCatalog` offre ora `SinistroEditor`
+**per ogni riga** soltanto quando lo scope OIDC
+include `peritial.write` (il vero controllo rimane
+server-side). L'editor parte chiuso e non si affida
+alla versione eventualmente superata del catalogo.
+Quando viene aperto legge
+`GET /api/sinistri/{id}` con il token corrente,
+poi mostra riferimento, data evento, data denuncia
+opzionale e **versione persistita**.
+
+Il pulsante «Salva modifiche sinistro» invia
+`PUT /api/sinistri/{id}` con
+`{externalReference,occurredOn,reportedOn,expectedVersion}`
+e con **expectedVersion uguale all'ultima
+versione confermata dal GET/PUT**. Nessun tenant ID
+o dato audit deriva dal browser. Soltanto una
+**risposta 200 realmente riuscita** aggiorna
+i valori e la versione nella PWA; l'ordinamento
+delle 50 voci resta `occurredOn DESC,id`.
+Questo usa l'UPDATE compare-and-swap PostgreSQL
+e il log di audit atomico `sinistro.update`
+già implementati nel Business e in V003.
+
+Su **400** il form conserva i campi da correggere,
+ma il record in elenco e la versione rimangono
+immutati. Su **409 CAS**, l'editor elimina
+immediatamente la snapshot vecchia e i
+campi modificabili, maschera anche i valori
+non più attendibili nella riga dell'elenco,
+disabilita il salvataggio e mostra
+«Ricarica sinistro». Solo dopo un nuovo
+GET autenticato vengono mostrate la
+versione vincente e le informazioni
+correnti: non esiste retry automatico né
+un override silenzioso dei dati del collega.
+
+Un 404 su lettura/scrittura (perizia non più
+visibile, sinistro cancellato o tenant
+cambiato) invalida la vista protetta,
+così come 401/403/5xx e errori di rete.
+Offline non sono accodati POST o PUT,
+nessuna risposta API viene memorizzata
+in CacheStorage e le risposte asincrone
+stale vengono invalidate alla chiusura
+del form, cambio JWT o unmount.
+Form e messaggi sono tradotti in italiano
+e inglese.
+
+**Playwright con PKCE reale** verifica:
+GET v1, PUT 400 simulato senza modifica,
+PUT v1→v2 con expectedVersion=1, GET
+persistito, PUT concorrente v2→v3 da
+altro client e risposta 409 al salvataggio
+con snapshot v2, occultamento dati stale,
+reload GET v3, PUT v3→v4 e refresh
+con versione persistita. Gli unit test
+Business e PostgreSQL già verificano
+CAS e audit atomico sotto tenant RLS.
+
+Restano aperti eliminazione Sinistri,
+ricerca avanzata, paginazione/cursor,
+integrazione polizze/anagrafiche,
+import legacy e parità completa del
+workflow della PWA. V003/V004 non vengono
+applicate automaticamente su database reali.
+[ADR 0037](../adr/0037-pwa-sinistri-cas-editor.md).
