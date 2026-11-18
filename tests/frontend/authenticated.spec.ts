@@ -703,9 +703,15 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     const get = await request.get(path + "/" + initial.id, {headers});
     expect(get.status()).toBe(200);
     expect((await get.json() as {version: number}).version).toBe(1);
+    // A bounded catalog is ordered by occurredOn, not by creation time;
+    // an older case need not be among the first 10 as suites add cases.
     const list = await request.get(path + "?limit=10", {headers});
     expect(list.status()).toBe(200);
-    expect(await list.text()).toContain(reference);
+    expect((await list.json() as {id: string}[]).length).toBeLessThanOrEqual(10);
+    const searched = await request.get(path + "/search?prefix=" +
+      encodeURIComponent(reference) + "&limit=10", {headers});
+    expect(searched.status(), await searched.text()).toBe(200);
+    expect(await searched.text()).toContain(reference);
     const badLimit = await request.get(path + "?limit=101", {headers});
     expect(badLimit.status()).toBe(400);
 
@@ -726,7 +732,9 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
       return body;
     }
     expect(await mcp("get_sinistro", {id: initial.id}, 601)).toContain(reference);
-    expect(await mcp("list_sinistri", {limit: 10}, 602)).toContain(reference);
+    await mcp("list_sinistri", {limit: 10}, 602);
+    expect(await mcp("search_sinistri", {prefix: reference, limit: 10}, 604))
+      .toContain(reference);
 
     const updated = await request.put(path + "/" + initial.id, {headers, data: {
       externalReference: reference + "-EDIT", occurredOn: "2026-11-02",
