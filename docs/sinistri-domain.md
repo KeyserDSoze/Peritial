@@ -451,3 +451,36 @@ import legacy e parità completa del
 workflow della PWA. V003/V004 non vengono
 applicate automaticamente su database reali.
 [ADR 0037](../adr/0037-pwa-sinistri-cas-editor.md).
+
+## Ricerca del catalogo Sinistri PWA (#7/#13, ADR 0038)
+
+Oltre alla lista iniziale `GET /api/sinistri?limit=50`, il catalogo
+include la **ricerca server-side** esplicita `GET /api/sinistri/search`
+con `prefix` letterale 2–100 caratteri, `occurredFrom` e `occurredTo`
+facoltativi (inclusivi), e `limit=50`. La PWA non filtra il batch
+precedente dei recent-50: anche i casi storici sono ricercabili fuori
+da quella finestra. Le date invertite impediscono il submit; i simboli
+`%` e `_` sono codificati nell'URL e interpretati come testo dal
+repository (non wildcard SQL). Il picker Perizie–Sinistri continua a
+chiedere 20 suggerimenti.
+
+Il pulsante di ricerca sostituisce immediatamente la lista precedente
+con una GET firmata e mostra il filtro applicato. «Aggiorna sinistri»
+ripete **la stessa ricerca**; «Cancella filtri sinistri» rilegge gli
+ultimi 50 dal server. Nuove richieste invalidano le risposte in ritardo;
+offline, cambio token, 401/403/503 e rete indisponibile non lasciano
+pratiche visibili né code di scrittura. I dati tenant non sono salvati
+in cache. Un POST 201 durante una ricerca attiva ricarica i match da
+PostgreSQL e non inserisce il nuovo record a prescindere dal filtro.
+Le letture/PUT confermate di righe già visualizzate aggiornano soltanto
+quella finestra (la lista completa richiede «Aggiorna sinistri»).
+L'editor CAS e la richiesta di reload su 409 non cambiano.
+
+Il nuovo test Playwright PKCE desktop/mobile nel file
+`tests/frontend/authenticated.spec.ts` crea tre sinistri con prefissi
+contenenti `%_`, date differenti e decoy; verifica query REST
+parametrica, date, cap 50, escaping, refresh, reset e offline.
+I limiti restano **massimo 50 per ricerca**, nessun cursor/full-text/fuzzy,
+ottimizzazione dell'indice a scala, filtri anagrafiche/polizze, DELETE,
+Entra reale o audit WCAG completo. V003/V004 richiedono sempre
+migrazioni esplicite. [ADR 0038](../adr/0038-pwa-sinistri-server-search.md).
