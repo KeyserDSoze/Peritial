@@ -1200,6 +1200,20 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     expect((await request.get(root + "/perizie/" + periziaId + "/sinistro",{headers})
       .then(r=>r.json()) as {sinistroId:string}).sinistroId).toBe(ids[1]);
     expect((await request.get(root + "/sinistri/" + ids[0],{headers})).status()).toBe(200);
+
+    // Terminal status is an explicit server-side workflow gate. The PWA
+    // should not offer an operation the signed backend must reject.
+    const cancelled = await request.post(root + "/perizie/" + periziaId + "/cancel",{headers});
+    expect(cancelled.status(),await cancelled.text()).toBe(200);
+    await page.getByRole("button",{name:"Aggiorna elenco"}).click();
+    await expect(row.getByText("Annullata",{exact:true})).toBeVisible();
+    await expect(row.getByRole("button",{name:"Cambia sinistro collegato"})).toHaveCount(0);
+    const terminalAttempt = await request.put(root + "/perizie/" + periziaId + "/sinistro",{
+      headers,data:{expectedSinistroId:ids[1],newSinistroId:ids[0]}
+    });
+    expect(terminalAttempt.status(),await terminalAttempt.text()).toBe(409);
+    expect((await request.get(root + "/perizie/" + periziaId + "/sinistro",{headers})
+      .then(r=>r.json()) as {sinistroId:string}).sinistroId).toBe(ids[1]);
   });
 
   test("Perizia–Sinistro unlink requires signed expected association and commits via REST/MCP", async ({page, request}) => {
