@@ -28,6 +28,11 @@ public interface IPeriziaRepository
 /// </summary>
 public interface IPeriziaSinistroLinkRepository
 {
+    // Explicit compare-and-swap unlink: the association still must match
+    // the caller's last observed Sinistro UUID. Audit and mutation commit
+    // atomically; missing/foreign perizia yields 404, stale/unlinked 409.
+    Task UnlinkAuditedAsync(TenantId tenant, Guid periziaId, Guid expectedSinistroId,
+        SecurityAuditEvent audit, CancellationToken ct = default);
     Task LinkAuditedAsync(TenantId tenant, Guid periziaId, Guid sinistroId,
         SecurityAuditEvent audit, CancellationToken ct = default);
     Task<IReadOnlyList<Guid>> ListPeriziaIdsAsync(TenantId tenant, Guid sinistroId,

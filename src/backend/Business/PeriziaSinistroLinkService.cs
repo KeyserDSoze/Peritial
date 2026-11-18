@@ -8,9 +8,9 @@ public sealed record PeriziaSinistroLinkDto(Guid PeriziaId, Guid SinistroId);
 public sealed record PeriziaSinistroAssociationDto(Guid PeriziaId, Guid? SinistroId);
 
 /// <summary>
-/// First conservative relation slice: a perizia can be linked exactly once,
-/// with no implicit unlink or reparent operation. Both endpoints must belong
-/// to the signed tenant. Only successful audited writes can reach persistence.
+/// Association changes are deliberate: initial link, or unlink with a
+/// caller-supplied expected Sinistro ID. Never implicitly reparent a Perizia.
+/// Both operations are tenant-scoped, CAS-checked and atomically audited.
 /// </summary>
 public sealed class PeriziaSinistroLinkService(
     ITenantContext context, IPeriziaSinistroLinkRepository links, ISecurityAuditTrail audit)
@@ -18,7 +18,7 @@ public sealed class PeriziaSinistroLinkService(
     public async Task<PeriziaSinistroLinkDto> LinkAsync(
         Guid periziaId, Guid sinistroId, CancellationToken ct = default)
     {
-        await RequireWriteAsync(ct);
+        await RequireWriteAsync("perizia.link-sinistro", ct);
         if (periziaId == Guid.Empty)
             throw new ArgumentException("Perizia id required.", nameof(periziaId));
         if (sinistroId == Guid.Empty)
@@ -27,6 +27,24 @@ public sealed class PeriziaSinistroLinkService(
         var success = Event("perizia.link-sinistro", "succeeded", periziaId);
         await links.LinkAuditedAsync(context.TenantId, periziaId, sinistroId, success, ct);
         return new PeriziaSinistroLinkDto(periziaId, sinistroId);
+    }
+
+    /// <summary>
+    /// Detaches only the Sinistro link the client actually observed.
+    /// No implicit reparent, cascade or modification of either entity.
+    /// </summary>
+    public async Task<PeriziaSinistroAssociationDto> UnlinkAsync(
+        Guid periziaId, Guid expectedSinistroId, CancellationToken ct = default)
+    {
+        await RequireWriteAsync("perizia.unlink-sinistro", ct);
+        if (periziaId == Guid.Empty)
+            throw new ArgumentException("Perizia id required.", nameof(periziaId));
+        if (expectedSinistroId == Guid.Empty)
+            throw new ArgumentException("Expected Sinistro id required.", nameof(expectedSinistroId));
+
+        var success = Event("perizia.unlink-sinistro", "succeeded", periziaId);
+        await links.UnlinkAuditedAsync(context.TenantId, periziaId, expectedSinistroId, success, ct);
+        return new PeriziaSinistroAssociationDto(periziaId, null);
     }
 
     public async Task<PeriziaSinistroAssociationDto> GetPeriziaAssociationAsync(
@@ -55,10 +73,10 @@ public sealed class PeriziaSinistroLinkService(
             throw new UnauthorizedAccessException("Insufficient OAuth scope.");
     }
 
-    private async Task RequireWriteAsync(CancellationToken ct)
+    private async Task RequireWriteAsync(string action, CancellationToken ct)
     {
         if (context.HasScope("peritial.write")) return;
-        await audit.AppendAsync(Event("perizia.link-sinistro", "denied", null), ct);
+        await audit.AppendAsync(Event(action, "denied", null), ct);
         throw new UnauthorizedAccessException("Insufficient OAuth scope.");
     }
 

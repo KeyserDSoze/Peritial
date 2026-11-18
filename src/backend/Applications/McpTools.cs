@@ -48,6 +48,11 @@ public sealed class McpTools(
         Guid periziaId, Guid sinistroId, CancellationToken ct = default) =>
         periziaSinistroLinks.LinkAsync(periziaId, sinistroId, ct);
 
+    [McpServerTool(Name = "unlink_perizia_sinistro"), Description("Explicitly detaches the caller's last-observed Sinistro from a Perizia, with signed peritial.write, tenant RLS, expectedSinistroId CAS and atomic success audit. Does not delete either entity or implicitly reparent. Conflicts if already unlinked or changed.")]
+    public Task<PeriziaSinistroAssociationDto> UnlinkPeriziaSinistro(
+        Guid periziaId, Guid expectedSinistroId, CancellationToken ct = default) =>
+        periziaSinistroLinks.UnlinkAsync(periziaId, expectedSinistroId, ct);
+
     [McpServerTool(Name = "list_perizie_for_sinistro"), Description("Returns perizia UUIDs linked to a sinistro in the signed tenant. Requires peritial.read or peritial.write; foreign and missing sinistri are indistinguishable.")]
     public Task<IReadOnlyList<Guid>> ListPerizieForSinistro(
         Guid sinistroId, CancellationToken ct = default) =>

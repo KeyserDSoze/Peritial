@@ -296,6 +296,13 @@ api.MapGet("/sinistri/{id:guid}/perizie",
 api.MapGet("/perizie/{id:guid}/sinistro",
     (Guid id, PeriziaSinistroLinkService links, CancellationToken ct) =>
         links.GetPeriziaAssociationAsync(id, ct)).RequireAuthorization("peritial.read");
+api.MapDelete("/perizie/{id:guid}/sinistro",
+    async (Guid id, Guid expectedSinistroId,
+        PeriziaSinistroLinkService links, CancellationToken ct) =>
+    {
+        await links.UnlinkAsync(id, expectedSinistroId, ct);
+        return Results.NoContent();
+    }).RequireAuthorization("peritial.write");
 api.MapPost("/perizie/{id:guid}/sinistro",
     async (Guid id, LinkPeriziaSinistroRequest input,
         PeriziaSinistroLinkService links, CancellationToken ct) =>

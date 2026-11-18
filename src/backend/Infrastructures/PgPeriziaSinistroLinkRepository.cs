@@ -61,6 +61,46 @@ public sealed class PgPeriziaSinistroLinkRepository(NpgsqlDataSource source)
         await scope.CommitAsync(ct);
     }
 
+    /// <summary>
+    /// Single-shot CAS unlink scoped to signed tenant. A concurrent re-link
+    /// or unlink returns conflict rather than silently deleting a new link.
+    /// Persist the matching UPDATE and append-only audit in one transaction.
+    /// </summary>
+    public async Task UnlinkAuditedAsync(
+        TenantId tenant, Guid periziaId, Guid expectedSinistroId,
+        SecurityAuditEvent audit, CancellationToken ct = default)
+    {
+        if (periziaId == Guid.Empty || expectedSinistroId == Guid.Empty)
+            throw new ArgumentException("Perizia and last-observed Sinistro IDs required.");
+        if (audit.TenantId != tenant)
+            throw new UnauthorizedAccessException("Cross-tenant unlink audit denied.");
+        if (audit.ResourceId != periziaId ||
+            audit.Action != "perizia.unlink-sinistro" || audit.Outcome != "succeeded")
+            throw new ArgumentException("Audit must describe successful unlink.", nameof(audit));
+
+        await using var scope = await TenantDbScope.OpenAsync(source, tenant, ct);
+        await using (var update = scope.Command(
+            "UPDATE perizie SET sinistro_id=NULL " +
+            "WHERE tenant_id=@tenant AND id=@perizia AND sinistro_id=@expected"))
+        {
+            update.Parameters.AddWithValue("tenant", tenant.Value);
+            update.Parameters.AddWithValue("perizia", periziaId);
+            update.Parameters.AddWithValue("expected", expectedSinistroId);
+            if (await update.ExecuteNonQueryAsync(ct) != 1)
+            {
+                await using var exists = scope.Command(
+                    "SELECT 1 FROM perizie WHERE tenant_id=@tenant AND id=@perizia");
+                exists.Parameters.AddWithValue("tenant", tenant.Value);
+                exists.Parameters.AddWithValue("perizia", periziaId);
+                if (await exists.ExecuteScalarAsync(ct) is null)
+                    throw new KeyNotFoundException("Resource not found.");
+                throw new PeriziaConcurrencyConflictException();
+            }
+        }
+        await PgSecurityAuditTrail.AppendWithinScopeAsync(scope, audit, ct);
+        await scope.CommitAsync(ct);
+    }
+
     public async Task<Guid?> FindSinistroIdForPeriziaAsync(
         TenantId tenant, Guid periziaId, CancellationToken ct = default)
     {
