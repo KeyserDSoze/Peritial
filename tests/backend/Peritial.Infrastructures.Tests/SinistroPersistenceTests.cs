@@ -178,6 +178,40 @@ public sealed class SinistroPersistenceTests
     }
 
     [Fact]
+    public async Task Filtered_keyset_search_pages_in_sql_with_literal_wildcards_date_bounds_and_RLS()
+    {
+        await using var db = await IsolatedDatabases.CreateAsync();
+        var repo = new PgSinistroRepository(db.App);
+        var tenant = TenantId.From(Guid.NewGuid());
+        var foreign = TenantId.From(Guid.NewGuid());
+        var date = new DateOnly(2026, 11, 18);
+        var ids = Enumerable.Range(1, 3).Select(i =>
+            Guid.Parse($"00000000-0000-0000-0000-{i:000000000000}")).ToArray();
+        var items = new[]
+        {
+            Sinistro.Restore(ids[1], tenant, "PG_%SECOND", date, null, DateTime.UtcNow),
+            Sinistro.Restore(ids[0], tenant, "PG_%FIRST", date, null, DateTime.UtcNow),
+            Sinistro.Restore(ids[2], tenant, "PG_%OLDER", date.AddDays(-1), null, DateTime.UtcNow),
+            Sinistro.Create(tenant, "PGZZDECOY", date.AddDays(3)),
+            Sinistro.Create(tenant, "PG_%OUTSIDE", date.AddDays(-30)),
+            Sinistro.Create(foreign, "PG_%SECRET", date.AddDays(2)),
+        };
+        foreach (var item in items)
+            await repo.AddAuditedAsync(item, Event(item.TenantId, item.Id, "sinistro.create"));
+
+        var filter = SinistroSearchFilter.Create(" pg_% ", date.AddDays(-2), date.AddDays(1), 2);
+        var first = await repo.SearchPageAsync(tenant, filter, null, fetchLimit: 3);
+        Assert.Equal(ids, first.Select(x => x.Id));
+        Assert.All(first, item => Assert.Equal(tenant, item.TenantId));
+        var second = await repo.SearchPageAsync(tenant, filter,
+            new SinistroPageBoundary(date, ids[1]), fetchLimit: 3);
+        Assert.Equal(new[] {ids[2]}, second.Select(x => x.Id));
+        Assert.Empty(await repo.SearchPageAsync(foreign, filter, null, fetchLimit: 3));
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            repo.SearchPageAsync(tenant, filter, null, fetchLimit: 52));
+    }
+
+    [Fact]
     public async Task Keyset_page_uses_tenant_RLS_and_date_id_boundary_in_postgres_not_offset()
     {
         await using var db = await IsolatedDatabases.CreateAsync();

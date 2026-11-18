@@ -62,6 +62,55 @@ public sealed class SinistroPaginationTests
         Assert.Equal(0, repository.PageQueries);
     }
 
+    [Fact]
+    public async Task Filtered_keyset_paging_uses_literal_prefix_dates_and_binds_cursor_to_filter()
+    {
+        var actor = new Reader();
+        var repo = new Cases();
+        var audit = new Audit();
+        var service = new SinistroService(actor, repo, audit);
+        var date = new DateOnly(2026, 11, 18);
+        var firstId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+        var secondId = Guid.Parse("00000000-0000-0000-0000-000000000002");
+        repo.Items.Add(Sinistro.Restore(firstId, actor.TenantId,
+            "PRE_%FIRST", date, null, DateTime.UtcNow));
+        repo.Items.Add(Sinistro.Restore(secondId, actor.TenantId,
+            "pre_%second", date, null, DateTime.UtcNow));
+        repo.Items.Add(Sinistro.Create(actor.TenantId, "PRE-AB-DECOY", date.AddDays(1)));
+        repo.Items.Add(Sinistro.Create(actor.TenantId, "PRE_%OUTSIDE", date.AddDays(-30)));
+        repo.Items.Add(Sinistro.Create(TenantId.From(Guid.NewGuid()),
+            "PRE_%FOREIGN", date.AddDays(1)));
+        var from = date.AddDays(-1);
+        var to = date.AddDays(1);
+        var page1 = await service.SearchPageAsync("  PRE_%  ", from, to, limit: 1);
+        Assert.Equal(firstId, Assert.Single(page1.Items).Id);
+        Assert.NotNull(page1.NextCursor);
+        Assert.DoesNotContain("TenantId", JsonSerializer.Serialize(page1));
+
+        // A newer matching insert cannot shift the seek boundary.
+        repo.Items.Add(Sinistro.Create(actor.TenantId, "PRE_%NEW", date.AddDays(1)));
+        var page2 = await service.SearchPageAsync("PRE_%", from, to, 1, page1.NextCursor);
+        Assert.Equal(secondId, Assert.Single(page2.Items).Id);
+        Assert.Null(page2.NextCursor);
+        Assert.Equal(2, repo.FilterQueries);
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.SearchPageAsync("PRE_A", from, to, 1, page1.NextCursor));
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.SearchPageAsync("PRE_%", from, to.AddDays(1), 1, page1.NextCursor));
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.SearchPageAsync("PRE_%", from, to, 1, "not-a-cursor"));
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.SearchPageAsync("PRE_%", to, from, 1));
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            service.SearchPageAsync("PRE_%", from, to, 51));
+        Assert.Equal(2, repo.FilterQueries);
+        Assert.Empty(audit.Events);
+        var denied = new SinistroService(new Reader(false), repo, audit);
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+            denied.SearchPageAsync("PRE_%", from, to));
+        Assert.Equal(2, repo.FilterQueries);
+    }
+
     private sealed class Reader(bool allowed = true) : ITenantContext
     {
         public TenantId TenantId { get; } = TenantId.From(Guid.NewGuid());
@@ -90,6 +139,22 @@ public sealed class SinistroPaginationTests
             return Task.FromResult<IReadOnlyList<Sinistro>>(Items
                 .Where(i => i.TenantId == tenant && (after is null ||
                     i.OccurredOn < after.OccurredOn ||
+                    (i.OccurredOn == after.OccurredOn && i.Id.CompareTo(after.Id) > 0)))
+                .OrderByDescending(i => i.OccurredOn).ThenBy(i => i.Id)
+                .Take(fetchLimit).ToArray());
+        }
+        public int FilterQueries { get; private set; }
+        public Task<IReadOnlyList<Sinistro>> SearchPageAsync(
+            TenantId tenant, SinistroSearchFilter filter,
+            SinistroPageBoundary? after, int fetchLimit, CancellationToken ct = default)
+        {
+            FilterQueries++;
+            return Task.FromResult<IReadOnlyList<Sinistro>>(Items.Where(i =>
+                i.TenantId == tenant &&
+                i.ExternalReference.StartsWith(filter.Prefix, StringComparison.OrdinalIgnoreCase) &&
+                (!filter.OccurredFrom.HasValue || i.OccurredOn >= filter.OccurredFrom.Value) &&
+                (!filter.OccurredTo.HasValue || i.OccurredOn <= filter.OccurredTo.Value) &&
+                (after is null || i.OccurredOn < after.OccurredOn ||
                     (i.OccurredOn == after.OccurredOn && i.Id.CompareTo(after.Id) > 0)))
                 .OrderByDescending(i => i.OccurredOn).ThenBy(i => i.Id)
                 .Take(fetchLimit).ToArray());
