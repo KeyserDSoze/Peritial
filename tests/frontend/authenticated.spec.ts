@@ -281,6 +281,83 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     await expect(list.getByText(secondName, {exact: true})).toBeVisible();
   });
 
+  test("PWA creates and lists tenant Sinistri with signed JWT, persisted refresh and no offline writes", async ({page, request, context}) => {
+    await page.goto("/");
+    await page.getByRole("button", {name: "Accedi"}).click();
+    await expect(page.locator("#username")).toBeVisible({timeout: 30_000});
+    await page.locator("#username").fill("localuser");
+    await page.locator("#password").fill("local-only-user");
+    await page.locator("#kc-login").click();
+    await expect(page.getByRole("button", {name: "Esci"})).toBeVisible({timeout: 30_000});
+
+    const token = await page.evaluate(() => {
+      const key = Object.keys(sessionStorage).find(x => x.startsWith("oidc.user:"));
+      return key ? (JSON.parse(sessionStorage.getItem(key) || "{}") as {access_token?:string}).access_token : undefined;
+    });
+    expect(token).toBeTruthy();
+    const reference = "UI-SIN-CREATE-" + Date.now() + "-" + Math.floor(Math.random() * 100000);
+    const catalog = page.getByRole("region", {name: "Catalogo sinistri"});
+    await expect(page.getByRole("button", {name: "Apri catalogo sinistri"})).toBeVisible();
+    await expect(page.getByRole("button", {name: "Crea sinistro"})).toHaveCount(0);
+    await page.getByRole("button", {name: "Apri catalogo sinistri"}).click();
+    await expect(catalog.getByRole("heading", {name: "Catalogo sinistri"})).toBeVisible();
+    await expect(catalog.getByRole("textbox", {name: "Riferimento sinistro"})).toBeVisible();
+    const referenceInput = catalog.getByRole("textbox", {name: "Riferimento sinistro"});
+    const occurred = catalog.getByLabel("Data sinistro");
+    const reported = catalog.getByLabel("Data denuncia");
+    await referenceInput.fill(reference);
+    await occurred.fill("2026-11-17");
+    await reported.fill("2026-11-18");
+
+    // A failed create must never appear as a successful local tenant record.
+    await page.route("**/api/sinistri", async route => {
+      if (route.request().method() === "POST") {
+        await route.fulfill({status: 400, contentType: "application/json", body:'{"error":"invalid"}'});
+      } else await route.continue();
+    });
+    await catalog.getByRole("button", {name: "Crea sinistro"}).click();
+    await expect(catalog.getByRole("alert")).toContainText("Impossibile creare");
+    await expect(catalog.getByText(reference, {exact:true})).toHaveCount(0);
+    await page.unroute("**/api/sinistri");
+
+    const created = page.waitForResponse(response => response.url().endsWith("/api/sinistri") &&
+      response.request().method() === "POST");
+    await catalog.getByRole("button", {name: "Crea sinistro"}).click();
+    const result = await created;
+    expect(result.status(), await result.text()).toBe(201);
+    expect(result.headers()["cache-control"]).toContain("no-store");
+    const sinistro = await result.json() as {id:string; externalReference:string; occurredOn:string; reportedOn:string; version:number};
+    expect(sinistro.externalReference).toBe(reference);
+    expect(sinistro.occurredOn).toBe("2026-11-17");
+    expect(sinistro.reportedOn).toBe("2026-11-18");
+    expect(sinistro.version).toBe(1);
+    expect(await result.text()).not.toContain("tenantId");
+    await expect(catalog.getByText(reference, {exact:true})).toBeVisible();
+    await expect(referenceInput).toHaveValue("");
+
+    const persisted = await request.get("http://localhost:8080/api/sinistri/" + sinistro.id,
+      {headers: {Authorization: "Bearer " + token}});
+    expect(persisted.status(), await persisted.text()).toBe(200);
+    expect((await persisted.json() as {externalReference:string}).externalReference).toBe(reference);
+
+    await page.reload();
+    await expect(page.getByRole("button", {name:"Apri catalogo sinistri"})).toBeVisible({timeout:30_000});
+    await page.getByRole("button", {name:"Apri catalogo sinistri"}).click();
+    await expect(page.getByRole("region", {name:"Catalogo sinistri"})
+      .getByText(reference, {exact:true})).toBeVisible({timeout:30_000});
+
+    // The browser's offline state must hide this catalog and all write controls.
+    await context.setOffline(true);
+    await expect(page.getByRole("status")).toContainText("Sei offline");
+    await expect(page.getByRole("region", {name:"Catalogo sinistri"})).toHaveCount(0);
+    await expect(page.getByRole("button", {name:"Crea sinistro"})).toHaveCount(0);
+    await context.setOffline(false);
+    await expect(page.getByRole("button", {name:"Apri catalogo sinistri"})).toBeVisible({timeout:30_000});
+    await page.getByRole("button", {name:"Apri catalogo sinistri"}).click();
+    await expect(page.getByRole("region", {name:"Catalogo sinistri"})
+      .getByText(reference, {exact:true})).toBeVisible({timeout:30_000});
+  });
+
   test("PWA searches and links Sinistri to Perizie with persistence, conflict reload and offline-safe state", async ({page, request, context}) => {
     await page.goto("/");
     await page.getByRole("button", {name: "Accedi"}).click();
