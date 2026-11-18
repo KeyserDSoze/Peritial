@@ -70,6 +70,38 @@ public sealed class PeriziaSinistroLinkServiceTests
         Assert.Single(audit.Events);
     }
 
+    [Fact]
+    public async Task Signed_readers_can_check_link_state_without_enumerating_foreign_perizie_or_auditing()
+    {
+        var tenantA = TenantId.From(Guid.NewGuid());
+        var tenantB = TenantId.From(Guid.NewGuid());
+        var own = Guid.NewGuid();
+        var unlinked = Guid.NewGuid();
+        var foreign = Guid.NewGuid();
+        var sinistro = Guid.NewGuid();
+        var audit = new SpyAudit();
+        var repo = new FakeLinks(audit);
+        repo.OwnedPerizie[own] = tenantA;
+        repo.OwnedPerizie[unlinked] = tenantA;
+        repo.OwnedPerizie[foreign] = tenantB;
+        repo.OwnedSinistri[sinistro] = tenantA;
+        repo.Linked[own] = sinistro;
+        var reader = new PeriziaSinistroLinkService(new Actor(tenantA, read: true), repo, audit);
+        var writer = new PeriziaSinistroLinkService(new Actor(tenantA, write: true), repo, audit);
+
+        var linked = await reader.GetPeriziaAssociationAsync(own);
+        Assert.Equal(new PeriziaSinistroAssociationDto(own, sinistro), linked);
+        Assert.Equal(new PeriziaSinistroAssociationDto(unlinked, null),
+            await writer.GetPeriziaAssociationAsync(unlinked));
+        Assert.DoesNotContain("TenantId", System.Text.Json.JsonSerializer.Serialize(linked));
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => reader.GetPeriziaAssociationAsync(foreign));
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => reader.GetPeriziaAssociationAsync(Guid.NewGuid()));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+            new PeriziaSinistroLinkService(new Actor(tenantA), repo, audit)
+                .GetPeriziaAssociationAsync(own));
+        Assert.Empty(audit.Events);
+    }
+
     private sealed class Actor(TenantId tenant, bool read = false, bool write = false) : ITenantContext
     {
         public TenantId TenantId => tenant;
