@@ -41,6 +41,10 @@ public interface IPeriziaSinistroLinkRepository
 public interface ISinistroRepository
 {
     Task<IReadOnlyList<Sinistro>> ListAsync(TenantId tenant, int limit = 50, CancellationToken ct = default);
+    // Deterministic keyset page. Fetch limit+1 to detect a next page;
+    // never use OFFSET over a mutable tenant catalog.
+    Task<IReadOnlyList<Sinistro>> PageAsync(TenantId tenant,
+        SinistroPageBoundary? after, int fetchLimit, CancellationToken ct = default);
     Task<Sinistro?> FindAsync(TenantId tenant, Guid id, CancellationToken ct = default);
     Task<IReadOnlyList<Sinistro>> SearchAsync(TenantId tenant, string prefix,
         DateOnly? occurredFrom = null, DateOnly? occurredTo = null, int limit = 10,
