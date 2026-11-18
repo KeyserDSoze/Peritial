@@ -126,7 +126,7 @@ SELECT
  AND (SELECT count(*) FROM security_audit)=2
  AND (SELECT count(*) FROM upload_intents)=1
  AND (SELECT count(*) FROM upload_request_keys WHERE status='completed')=1
- AND (SELECT count(*) FROM schema_migrations)=5
+ AND (SELECT count(*) FROM schema_migrations)=6
  AND (SELECT count(*) FROM pg_class WHERE relname IN
     ('perizie','documents','security_audit','upload_intents','upload_request_keys','sinistri')
     AND relrowsecurity AND relforcerowsecurity)=6

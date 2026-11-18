@@ -32,7 +32,7 @@ public sealed class SinistroPersistenceTests
             Assert.True((bool)(await role.ExecuteScalarAsync())!);
         await using (var versions = new NpgsqlCommand(
             "SELECT array_agg(version ORDER BY version) FROM schema_migrations", conn))
-            Assert.Equal(new[] {1, 2, 3, 4, 5}, (int[])(await versions.ExecuteScalarAsync())!);
+            Assert.Equal(new[] {1, 2, 3, 4, 5, 6}, (int[])(await versions.ExecuteScalarAsync())!);
     }
 
     [Fact]
@@ -261,7 +261,7 @@ public sealed class SinistroPersistenceTests
         await new PgPeriziaRepository(db.App).AddAuditedAsync(perizia,
             Event(a, perizia.Id, "perizia.create"));
         await new PgPeriziaSinistroLinkRepository(db.App).LinkAuditedAsync(
-            a, perizia.Id, linked.Id, Event(a, perizia.Id, "perizia.link-sinistro"));
+            a, perizia.Id, linked.Id, 1, Event(a, perizia.Id, "perizia.link-sinistro"));
 
         await Assert.ThrowsAsync<SinistroLinkedPerizieException>(() =>
             repo.DeleteAuditedAsync(a, linked.Id, 1, Event(a, linked.Id, "sinistro.delete")));
@@ -319,19 +319,19 @@ public sealed class SinistroPersistenceTests
 
         Assert.Empty(await links.ListPeriziaIdsAsync(tenantA, a.Id));
         await Assert.ThrowsAsync<KeyNotFoundException>(() =>
-            links.LinkAuditedAsync(tenantA, periziaA.Id, b.Id,
+            links.LinkAuditedAsync(tenantA, periziaA.Id, b.Id, 1,
                 Event(tenantA, periziaA.Id, "perizia.link-sinistro")));
         await Assert.ThrowsAsync<KeyNotFoundException>(() =>
-            links.LinkAuditedAsync(tenantB, periziaA.Id, b.Id,
+            links.LinkAuditedAsync(tenantB, periziaA.Id, b.Id, 1,
                 Event(tenantB, periziaA.Id, "perizia.link-sinistro")));
         Assert.Empty(await links.ListPeriziaIdsAsync(tenantA, a.Id));
 
-        await links.LinkAuditedAsync(tenantA, periziaA.Id, a.Id,
+        await links.LinkAuditedAsync(tenantA, periziaA.Id, a.Id, 1,
             Event(tenantA, periziaA.Id, "perizia.link-sinistro"));
         Assert.Equal(new[] { periziaA.Id }, await links.ListPeriziaIdsAsync(tenantA, a.Id));
         Assert.Empty(await links.ListPeriziaIdsAsync(tenantB, b.Id));
         await Assert.ThrowsAsync<PeriziaConcurrencyConflictException>(() =>
-            links.LinkAuditedAsync(tenantA, periziaA.Id, a.Id,
+            links.LinkAuditedAsync(tenantA, periziaA.Id, a.Id, 2,
                 Event(tenantA, periziaA.Id, "perizia.link-sinistro")));
         Assert.Equal(1L, await CountLinkAuditAsync(db.Admin, tenantA, periziaA.Id));
 
@@ -364,34 +364,34 @@ public sealed class SinistroPersistenceTests
         var foreign = Perizia.Create(foreignTenant, "UNLINK-PG-FOREIGN-" + Guid.NewGuid().ToString("N"));
         await perizie.AddAuditedAsync(caseA, Event(tenant, caseA.Id, "perizia.create"));
         await perizie.AddAuditedAsync(foreign, Event(foreignTenant, foreign.Id, "perizia.create"));
-        await links.LinkAuditedAsync(tenant, caseA.Id, sinistro.Id,
+        await links.LinkAuditedAsync(tenant, caseA.Id, sinistro.Id, 1,
             Event(tenant, caseA.Id, "perizia.link-sinistro"));
         await Assert.ThrowsAsync<KeyNotFoundException>(() =>
-            links.UnlinkAuditedAsync(foreignTenant, caseA.Id, sinistro.Id,
+            links.UnlinkAuditedAsync(foreignTenant, caseA.Id, sinistro.Id, 2,
                 Event(foreignTenant, caseA.Id, "perizia.unlink-sinistro")));
         await Assert.ThrowsAsync<KeyNotFoundException>(() =>
-            links.UnlinkAuditedAsync(tenant, foreign.Id, sinistro.Id,
+            links.UnlinkAuditedAsync(tenant, foreign.Id, sinistro.Id, 2,
                 Event(tenant, foreign.Id, "perizia.unlink-sinistro")));
         await Assert.ThrowsAsync<PeriziaConcurrencyConflictException>(() =>
-            links.UnlinkAuditedAsync(tenant, caseA.Id, second.Id,
+            links.UnlinkAuditedAsync(tenant, caseA.Id, second.Id, 2,
                 Event(tenant, caseA.Id, "perizia.unlink-sinistro")));
         Assert.Equal(sinistro.Id, await links.FindSinistroIdForPeriziaAsync(tenant, caseA.Id));
 
         var duplicate = Event(tenant, caseA.Id, "perizia.unlink-sinistro");
         await new PgSecurityAuditTrail(db.App).AppendAsync(duplicate);
         var conflict = await Assert.ThrowsAsync<PostgresException>(() =>
-            links.UnlinkAuditedAsync(tenant, caseA.Id, sinistro.Id, duplicate));
+            links.UnlinkAuditedAsync(tenant, caseA.Id, sinistro.Id, 2, duplicate));
         Assert.Equal(PostgresErrorCodes.UniqueViolation, conflict.SqlState);
         Assert.Equal(sinistro.Id, await links.FindSinistroIdForPeriziaAsync(tenant, caseA.Id));
 
-        await links.UnlinkAuditedAsync(tenant, caseA.Id, sinistro.Id,
+        await links.UnlinkAuditedAsync(tenant, caseA.Id, sinistro.Id, 2,
             Event(tenant, caseA.Id, "perizia.unlink-sinistro"));
         Assert.Null(await links.FindSinistroIdForPeriziaAsync(tenant, caseA.Id));
         Assert.Empty(await links.ListPeriziaIdsAsync(tenant, sinistro.Id));
         await Assert.ThrowsAsync<PeriziaConcurrencyConflictException>(() =>
-            links.UnlinkAuditedAsync(tenant, caseA.Id, sinistro.Id,
+            links.UnlinkAuditedAsync(tenant, caseA.Id, sinistro.Id, 3,
                 Event(tenant, caseA.Id, "perizia.unlink-sinistro")));
-        await links.LinkAuditedAsync(tenant, caseA.Id, second.Id,
+        await links.LinkAuditedAsync(tenant, caseA.Id, second.Id, 3,
             Event(tenant, caseA.Id, "perizia.link-sinistro"));
         Assert.Equal(second.Id, await links.FindSinistroIdForPeriziaAsync(tenant, caseA.Id));
 
@@ -421,23 +421,23 @@ public sealed class SinistroPersistenceTests
         var foreignPerizia = Perizia.Create(b, "REPAR-PG-FOREIGN-" + Guid.NewGuid().ToString("N"));
         await perizie.AddAuditedAsync(perizia, Event(a, perizia.Id, "perizia.create"));
         await perizie.AddAuditedAsync(foreignPerizia, Event(b, foreignPerizia.Id, "perizia.create"));
-        await links.LinkAuditedAsync(a, perizia.Id, source.Id,
+        await links.LinkAuditedAsync(a, perizia.Id, source.Id, 1,
             Event(a, perizia.Id, "perizia.link-sinistro"));
 
         await Assert.ThrowsAsync<KeyNotFoundException>(() =>
-            links.ReparentAuditedAsync(a, perizia.Id, source.Id, foreignTarget.Id,
+            links.ReparentAuditedAsync(a, perizia.Id, source.Id, foreignTarget.Id, 2,
                 Event(a, perizia.Id, "perizia.reparent-sinistro")));
         await Assert.ThrowsAsync<KeyNotFoundException>(() =>
-            links.ReparentAuditedAsync(a, perizia.Id, source.Id, Guid.NewGuid(),
+            links.ReparentAuditedAsync(a, perizia.Id, source.Id, Guid.NewGuid(), 2,
                 Event(a, perizia.Id, "perizia.reparent-sinistro")));
         await Assert.ThrowsAsync<KeyNotFoundException>(() =>
-            links.ReparentAuditedAsync(b, perizia.Id, source.Id, foreignTarget.Id,
+            links.ReparentAuditedAsync(b, perizia.Id, source.Id, foreignTarget.Id, 2,
                 Event(b, perizia.Id, "perizia.reparent-sinistro")));
         await Assert.ThrowsAsync<KeyNotFoundException>(() =>
-            links.ReparentAuditedAsync(a, foreignPerizia.Id, source.Id, target.Id,
+            links.ReparentAuditedAsync(a, foreignPerizia.Id, source.Id, target.Id, 2,
                 Event(a, foreignPerizia.Id, "perizia.reparent-sinistro")));
         await Assert.ThrowsAsync<PeriziaConcurrencyConflictException>(() =>
-            links.ReparentAuditedAsync(a, perizia.Id, Guid.NewGuid(), target.Id,
+            links.ReparentAuditedAsync(a, perizia.Id, Guid.NewGuid(), target.Id, 2,
                 Event(a, perizia.Id, "perizia.reparent-sinistro")));
         Assert.Equal(source.Id, await links.FindSinistroIdForPeriziaAsync(a, perizia.Id));
         Assert.Equal(new[] {perizia.Id}, await links.ListPeriziaIdsAsync(a, source.Id));
@@ -446,24 +446,24 @@ public sealed class SinistroPersistenceTests
         // cancelled perizia must never have its Sinistro silently replaced.
         var cancelled = Perizia.Create(a, "REPAR-PG-CANCELLED-" + Guid.NewGuid().ToString("N"));
         await perizie.AddAuditedAsync(cancelled, Event(a, cancelled.Id, "perizia.create"));
-        await links.LinkAuditedAsync(a, cancelled.Id, source.Id,
+        await links.LinkAuditedAsync(a, cancelled.Id, source.Id, 1,
             Event(a, cancelled.Id, "perizia.link-sinistro"));
         cancelled.Cancel(a);
         await perizie.UpdateAuditedAsync(cancelled,
             Event(a, cancelled.Id, "perizia.cancel"));
         await Assert.ThrowsAsync<PeriziaConcurrencyConflictException>(() =>
-            links.ReparentAuditedAsync(a, cancelled.Id, source.Id, target.Id,
+            links.ReparentAuditedAsync(a, cancelled.Id, source.Id, target.Id, 2,
                 Event(a, cancelled.Id, "perizia.reparent-sinistro")));
         Assert.Equal(source.Id, await links.FindSinistroIdForPeriziaAsync(a, cancelled.Id));
 
         var duplicate = Event(a, perizia.Id, "perizia.reparent-sinistro");
         await new PgSecurityAuditTrail(db.App).AppendAsync(duplicate);
         var error = await Assert.ThrowsAsync<PostgresException>(() =>
-            links.ReparentAuditedAsync(a, perizia.Id, source.Id, target.Id, duplicate));
+            links.ReparentAuditedAsync(a, perizia.Id, source.Id, target.Id, 2, duplicate));
         Assert.Equal(PostgresErrorCodes.UniqueViolation, error.SqlState);
         Assert.Equal(source.Id, await links.FindSinistroIdForPeriziaAsync(a, perizia.Id));
 
-        await links.ReparentAuditedAsync(a, perizia.Id, source.Id, target.Id,
+        await links.ReparentAuditedAsync(a, perizia.Id, source.Id, target.Id, 2,
             Event(a, perizia.Id, "perizia.reparent-sinistro"));
         Assert.Equal(target.Id, await links.FindSinistroIdForPeriziaAsync(a, perizia.Id));
         // The cancelled perizia is intentionally still linked to source;
@@ -472,7 +472,7 @@ public sealed class SinistroPersistenceTests
             await links.ListPeriziaIdsAsync(a, source.Id));
         Assert.Equal(new[] {perizia.Id}, await links.ListPeriziaIdsAsync(a, target.Id));
         await Assert.ThrowsAsync<PeriziaConcurrencyConflictException>(() =>
-            links.ReparentAuditedAsync(a, perizia.Id, source.Id, target.Id,
+            links.ReparentAuditedAsync(a, perizia.Id, source.Id, target.Id, 3,
                 Event(a, perizia.Id, "perizia.reparent-sinistro")));
         Assert.Equal(target.Id, await links.FindSinistroIdForPeriziaAsync(a, perizia.Id));
 
@@ -564,7 +564,7 @@ public sealed class SinistroPersistenceTests
         var sinistro = Sinistro.Create(a, "LINK-READ-SINISTRO", new DateOnly(2026, 11, 16));
         await new PgSinistroRepository(db.App).AddAuditedAsync(
             sinistro, Event(a, sinistro.Id, "sinistro.create"));
-        await links.LinkAuditedAsync(a, owned.Id, sinistro.Id,
+        await links.LinkAuditedAsync(a, owned.Id, sinistro.Id, 1,
             Event(a, owned.Id, "perizia.link-sinistro"));
         Assert.Equal(sinistro.Id, await links.FindSinistroIdForPeriziaAsync(a, owned.Id));
         Assert.Equal(1L, await CountLinkAuditAsync(db.Admin, a, owned.Id));
@@ -586,12 +586,12 @@ public sealed class SinistroPersistenceTests
         await new PgSecurityAuditTrail(db.App).AppendAsync(repeated);
 
         var conflict = await Assert.ThrowsAsync<PostgresException>(() =>
-            repository.LinkAuditedAsync(tenant, perizia.Id, sinistro.Id, repeated));
+            repository.LinkAuditedAsync(tenant, perizia.Id, sinistro.Id, 1, repeated));
         Assert.Equal(PostgresErrorCodes.UniqueViolation, conflict.SqlState);
         Assert.Empty(await repository.ListPeriziaIdsAsync(tenant, sinistro.Id));
         Assert.Equal(1L, await CountLinkAuditAsync(db.Admin, tenant, perizia.Id));
 
-        await repository.LinkAuditedAsync(tenant, perizia.Id, sinistro.Id,
+        await repository.LinkAuditedAsync(tenant, perizia.Id, sinistro.Id, 1,
             Event(tenant, perizia.Id, "perizia.link-sinistro"));
         Assert.Equal(new[] { perizia.Id }, await repository.ListPeriziaIdsAsync(tenant, sinistro.Id));
         Assert.Equal(2L, await CountLinkAuditAsync(db.Admin, tenant, perizia.Id));
@@ -631,7 +631,7 @@ public sealed class SinistroPersistenceTests
                     await command.ExecuteNonQueryAsync();
                 admin = NpgsqlDataSource.Create(new NpgsqlConnectionStringBuilder(cs)
                 { SearchPath = schema }.ConnectionString);
-                Assert.Equal(5, await SchemaMigrator.ApplyAsync(admin));
+                Assert.Equal(6, await SchemaMigrator.ApplyAsync(admin));
                 await TestDbRoleProvisioner.ConfigureAsync(admin);
                 await using (var conn = await root.OpenConnectionAsync())
                 await using (var grant = new NpgsqlCommand(
