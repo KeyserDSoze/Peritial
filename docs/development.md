@@ -828,9 +828,10 @@ protetta solo con un token verificato e connessione online.
 sinistri» carica soltanto i 50 Sinistri più recenti per
 data evento dal backend usando
 `GET /api/sinistri?limit=50` e il JWT corrente.
-Non filtra la prima pagina per cercare altri record:
-la ricerca per prefisso resta sul server tramite il
-selettore Perizia–Sinistro o gli endpoint REST/MCP.
+La ricerca per prefisso/dati evento nel catalogo usa
+ora la GET server-side dedicata (ADR 0038), **non** un filtro
+locale delle prime 50 righe. Anche il selettore
+Perizia–Sinistro usa la ricerca REST già esistente.
 Il catalogo non viene caricato automaticamente a
 ogni lista perizie perché la Compose demo inizia
 dal V001 storico senza le fixture V003/V004.
@@ -985,3 +986,32 @@ L'upgrade V003/V004 continua
 a richiedere il migrator esplicito
 e backup per volumi persistenti.
 [ADR 0037](../adr/0037-pwa-sinistri-cas-editor.md).
+
+## PWA: ricerca Sinistri per prefisso/date dal catalogo (#7/#13, ADR 0038)
+
+Nella vista autenticata il form «Cerca nel catalogo» invia
+`GET /api/sinistri/search?prefix=...&occurredFrom=...&occurredTo=...&limit=50`
+con il JWT corrente, solo su click e con almeno 2 caratteri. Le
+date incidente sono opzionali e inclusive; i limiti 2–100, la relazione
+from<=to e gli scope sono validati dal servizio Business, non
+delegati all'interfaccia. Ricerca letterale `%_` supportata, query
+PostgreSQL FORCE RLS prima del limit; il browser non passa tenant ID.
+Il picker associazione resta con il cap 20 precedente.
+
+La ricerca non dipende dai recent-50 della vista iniziale. Il catalogo
+mostra il filtro applicato e un avviso di limite, ripete la ricerca
+con «Aggiorna sinistri» e torna a `GET /api/sinistri?limit=50` quando
+si cancellano i filtri. Nessuna GET vecchia ripristina la lista dopo
+cambio ricerca, chiusura, token o offline. 401/403/503 e rete
+indisponibile seguono il fail-closed della pagina. Un POST confermato
+durante una ricerca attiva rilegge i match, senza inserire una riga
+incoerente nella finestra filtrata. La riconciliazione dell'editor
+riguarda solo righe già mostrate; nessun nuovo risultato viene dedotto
+dal browser. E2E Keycloak desktop/mobile con escaping letterale
+`%_`, date, cap, refresh, reset e offline in
+`tests/frontend/authenticated.spec.ts`.
+
+Ancora aperti cursor/oltre 50, full-text/fuzzy, indice e benchmark
+su grandi cataloghi, filtri polizze/anagrafiche, DELETE e WCAG.
+V003/V004 sempre con migrazione amministrativa esplicita.
+[ADR 0038](../adr/0038-pwa-sinistri-server-search.md).
