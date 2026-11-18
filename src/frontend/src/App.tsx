@@ -214,8 +214,8 @@ export default function App() {
                     mutations.current.set(updated.id, (mutations.current.get(updated.id) ?? 0) + 1);
                     setItems(current => current.map(value => value.id === updated.id ? updated : value));
                   }} />
-                  <PeriziaSinistroPicker periziaId={item.id} token={token!}
-                    canWrite={canLinkSinistro} onUnavailable={lockProtectedUi} />
+                  <PeriziaSinistroPicker periziaId={item.id} periziaStatus={item.status}
+                    token={token!} canWrite={canLinkSinistro} onUnavailable={lockProtectedUi} />
                 </li>)}</ul>}
             <SinistroCatalog token={token!} canWrite={canLinkSinistro} onUnavailable={lockProtectedUi} />
           </section>

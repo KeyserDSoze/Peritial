@@ -78,3 +78,15 @@ Rimangono policy di approvazione per stati sensibili,
 audit WCAG formale, estensione a provider reali,
 anagrafiche/polizze e import. Tutte le issue restano
 aperte per i rispettivi criteri di accettazione.
+
+## Aggiornamento UX stati terminali
+
+La PWA riceve ora lo stato della Perizia dal proprio elenco
+firmato e nasconde l'azione «Cambia sinistro collegato» per
+`Billed`, `Duplicated` e `Cancelled`. Una transizione di
+workflow verso stato terminale azzera ogni proposta locale di
+riassegnazione. Il controllo di autorizzazione resta comunque
+nell'UPDATE CAS PostgreSQL: nascondere un pulsante non è una
+misura di sicurezza sufficiente. Playwright verifica che, dopo
+l'annullamento della Perizia, l'azione scompaia e il REST PUT
+rifiuti comunque la mutazione con 409.

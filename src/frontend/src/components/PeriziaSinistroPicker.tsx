@@ -7,6 +7,7 @@ import {Button} from "./ui/button";
 
 type Props = {
   periziaId: string;
+  periziaStatus: string;
   token: string;
   canWrite: boolean;
   onUnavailable: () => void;
@@ -17,7 +18,7 @@ type Props = {
  * unlinked perizia from the parent list (which has no relation field).
  * Mutations are authoritative and never replayed/queued after 409/503.
  */
-export function PeriziaSinistroPicker({periziaId, token, canWrite, onUnavailable}: Props) {
+export function PeriziaSinistroPicker({periziaId, periziaStatus, token, canWrite, onUnavailable}: Props) {
   const {t} = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState<"read" | "search" | "link" | "unlink" | "reparent" | null>(null);
@@ -34,6 +35,23 @@ export function PeriziaSinistroPicker({periziaId, token, canWrite, onUnavailable
   const [reparentedSuccess, setReparentedSuccess] = useState(false);
   const [error, setError] = useState<"conflict" | "error" | null>(null);
   const sequence = useRef(0);
+  // Match the backend's row-locked terminal-status predicate. The backend
+  // remains authoritative; hiding the action is only a UX safeguard.
+  const canReparent = canWrite &&
+    !["Billed","Duplicated","Cancelled"].includes(periziaStatus);
+
+  // A concurrent workflow transition to a terminal state invalidates a
+  // pending proposal. Never allow an old visible selection to be submitted.
+  useEffect(() => {
+    if (!canReparent) {
+      sequence.current += 1;
+      setReparenting(false);
+      setConfirmReparent(false);
+      setSelectedId("");
+      setResults([]);
+      setSearched(false);
+    }
+  }, [canReparent]);
 
   // A rotated identity or an unmounted perizia must not receive late tenant
   // search results or a previous request's resolved association.
@@ -210,7 +228,7 @@ export function PeriziaSinistroPicker({periziaId, token, canWrite, onUnavailable
   }
 
   function beginReparent() {
-    if (busy || !canWrite || !association?.sinistroId) return;
+    if (busy || !canReparent || !association?.sinistroId) return;
     sequence.current += 1;
     setReparenting(true);
     setConfirmUnlink(false);
@@ -230,7 +248,7 @@ export function PeriziaSinistroPicker({periziaId, token, canWrite, onUnavailable
   }
 
   async function reparent() {
-    if (busy || !canWrite || !confirmReparent || !reparenting ||
+    if (busy || !canReparent || !confirmReparent || !reparenting ||
         !association?.sinistroId || !selectedId ||
         selectedId === association.sinistroId ||
         !results.some(item => item.id === selectedId)) return;
@@ -298,7 +316,7 @@ export function PeriziaSinistroPicker({periziaId, token, canWrite, onUnavailable
           disabled={busy !== null} onClick={() => setConfirmUnlink(true)}>
           {t("unlinkSinistro")}
         </Button>}
-        {canWrite && !confirmUnlink && !reparenting && <Button type="button" variant="outline"
+        {canReparent && !confirmUnlink && !reparenting && <Button type="button" variant="outline"
           disabled={busy !== null} onClick={beginReparent}>{t("reparentSinistro")}</Button>}
         {canWrite && confirmUnlink && <div className="space-y-2">
           <p className="text-sm" role="status">{t("sinistroUnlinkWarning")}</p>
