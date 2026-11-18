@@ -1005,6 +1005,69 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     await expect(page.getByRole("button", {name: "Crea"})).toBeEnabled();
   });
 
+  test("Sinistri V005 deletes only unlinked cases with signed CAS and MCP, rejects FK and stale versions", async ({page, request}) => {
+    test.setTimeout(120_000);
+    await page.goto("/");
+    await page.getByRole("button", {name: "Accedi"}).click();
+    await expect(page.locator("#username")).toBeVisible({timeout: 30_000});
+    await page.locator("#username").fill("localuser");
+    await page.locator("#password").fill("local-only-user");
+    await page.locator("#kc-login").click();
+    await expect(page.getByRole("button", {name: "Esci"})).toBeVisible({timeout: 30_000});
+    const token = await page.evaluate(() => {
+      const key = Object.keys(sessionStorage).find(x => x.startsWith("oidc.user:"));
+      return key ? (JSON.parse(sessionStorage.getItem(key) || "{}") as {access_token?:string}).access_token : undefined;
+    });
+    expect(token).toBeTruthy();
+    const headers = {Authorization: "Bearer " + token};
+    const base = "http://localhost:8080/api";
+    const stamp = Date.now() + "-" + Math.round(Math.random() * 100000);
+    async function createSinistro(suffix: string) {
+      const result = await request.post(base + "/sinistri", {headers,
+        data:{externalReference:"DELETE-E2E-" + stamp + "-" + suffix,
+          occurredOn:"2026-11-18"}});
+      expect(result.status(), await result.text()).toBe(201);
+      return await result.json() as {id:string; version:number};
+    }
+    const free = await createSinistro("FREE");
+    const forMcp = await createSinistro("MCP");
+    const linked = await createSinistro("LINKED");
+    const perizia = await request.post(base + "/perizie", {headers,
+      data:{reference:"DELETE-PERIZIA-" + stamp}});
+    expect(perizia.status(), await perizia.text()).toBe(201);
+    const periziaId = (await perizia.json() as {id:string}).id;
+    const link = await request.post(base + "/perizie/" + periziaId + "/sinistro", {
+      headers, data:{sinistroId:linked.id}
+    });
+    expect(link.status(), await link.text()).toBe(201);
+
+    const url = (id:string, version?:number) => base + "/sinistri/" + id +
+      (version === undefined ? "" : "?expectedVersion=" + version);
+    expect((await request.delete(url(free.id, 1))).status()).toBe(401);
+    expect((await request.delete(url(free.id), {headers})).status()).toBe(400);
+    expect((await request.delete(url(free.id, 0), {headers})).status()).toBe(400);
+    expect((await request.delete(url(free.id, 2), {headers})).status()).toBe(409);
+    expect((await request.delete(url(linked.id, linked.version), {headers})).status()).toBe(409);
+    expect((await request.get(url(linked.id), {headers})).status()).toBe(200);
+    expect((await request.get(base + "/perizie/" + periziaId + "/sinistro", {headers})).status()).toBe(200);
+
+    const deleted = await request.delete(url(free.id, free.version), {headers});
+    expect(deleted.status(), await deleted.text()).toBe(204);
+    expect((await request.get(url(free.id), {headers})).status()).toBe(404);
+    expect((await request.delete(url(free.id, 1), {headers})).status()).toBe(404);
+
+    const tool = await request.post("http://localhost:8080/mcp", {
+      headers:{...headers, Accept:"application/json,text/event-stream",
+        "Content-Type":"application/json"},
+      data:{jsonrpc:"2.0", id:809, method:"tools/call",
+        params:{name:"delete_sinistro", arguments:{id:forMcp.id,expectedVersion:1}}}
+    });
+    expect(tool.ok(), await tool.text()).toBeTruthy();
+    expect(await tool.text()).not.toContain('"isError":true');
+    expect((await request.get(url(forMcp.id), {headers})).status()).toBe(404);
+    expect((await request.get(url(linked.id), {headers})).status()).toBe(200);
+  });
+
   test("sinistri REST e MCP condividono JWT, tenant, audit e conflitto CAS", async ({page, request}) => {
     await page.goto("/");
     await page.getByRole("button", {name: "Accedi"}).click();
