@@ -56,6 +56,13 @@ export const getSinistro = (token: string, sinistroId: string) =>
 // Catalog is always server-side, signed-tenant scoped and bounded.
 export const listSinistri = (token: string) =>
   request<SinistroSummary[]>("/sinistri?limit=50", token);
+// Page cursor is an opaque, bounded REST value; the browser never parses
+// database ordering keys or uses a tenant-selected offset.
+export type SinistroPage = {items: SinistroSummary[]; nextCursor: string | null};
+export const pageSinistri = (token: string, cursor?: string, limit = 50) =>
+  request<SinistroPage>("/sinistri/page?" + new URLSearchParams({
+    limit: String(limit), ...(cursor === undefined ? {} : {cursor})
+  }).toString(), token);
 export const createSinistro = (token: string, externalReference: string,
   occurredOn: string, reportedOn: string | null) =>
   request<SinistroSummary>("/sinistri", token, {
