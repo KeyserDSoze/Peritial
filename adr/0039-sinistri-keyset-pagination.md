@@ -67,3 +67,10 @@ filtri assicurazioni/polizze o indici/benchmark a scala.
   assenza di tenant nel JSON; PWA append/refresh e scarto dei duplicati.
 - La CI dell'HEAD è il criterio finale: eventuali run intermedi RED
   sono intenzionali o errori corretti, non valgono come GREEN.
+
+## Evoluzione successiva
+
+La limitazione «ricerca filtrata senza cursore» indicata in questa
+decisione è stata superata dall'[ADR 0040](0040-sinistri-filtered-keyset-search.md)
+con un endpoint e tool MCP separati. Il contratto originario di
+`page_sinistri` e la compatibilità di `search_sinistri` non cambiano.

@@ -1041,3 +1041,33 @@ contro UPDATE concorrenti della data evento. Requisiti restanti:
 paginazione della **ricerca filtrata**, UX/virtualizzazione di liste
 molto grandi, indice a scala, CRUD completo e WCAG.
 [ADR 0039](../adr/0039-sinistri-keyset-pagination.md).
+
+## PWA: ricerca Sinistri filtrata e paginata (#7/#12/#13, ADR 0040)
+
+La ricerca per prefisso e date evento offre ora le **stesse pagine
+keyset** del catalogo generale: `GET /api/sinistri/search/page` con
+`prefix`, `occurredFrom`, `occurredTo`, `limit=50` e `cursor` opzionale.
+Il pulsante «Carica altri sinistri» resta visibile anche quando
+un filtro è applicato, se `nextCursor` non è nullo. Il server filtra
+prima di `ORDER BY occurred_on DESC,id ASC LIMIT 51`; la PWA aggiunge
+i record firmati senza duplicare gli UUID. Non interroga la lista
+`/api/sinistri/search` dell'autocomplete né filtra i 50 record locali.
+
+Il cursore `s1` contiene posizione e digest del filtro normalizzato:
+una ricerca con altro prefisso o intervallo non può riusare un cursore
+stale; cursori noncanonici, filtri invertiti o cap fuori range
+sono 400. Il digest rileva il cambio filtro ma **non autorizza**;
+tenant e scope derivano sempre dal JWT validato. Nessuna migrazione
+DDL né tenant ID lato browser. Refresh, reset, chiusura, offline,
+rotazione token e GET fallite invalidano cursori e dati obsoleti.
+Dopo una creazione confermata durante la ricerca, la prima pagina
+filtrata viene ricaricata dal server con il proprio nuovo
+`nextCursor`. La ricerca resta on-demand; testi it/en aggiornati.
+
+Test: Business, PG 17 RLS reale, Playwright PKCE desktop/mobile
+con data inclusive, letterali `%_`, inserimenti concorrenti
+più recenti, disallineamento filtro/cursore, reset e UI load-more.
+Non è uno snapshot tra UPDATE concorrenti della data evento;
+restano da caratterizzare grandi volumi, indici specifici ILIKE,
+full-text/fuzzy, UX virtualizzata e WCAG di produzione.
+[ADR 0040](../adr/0040-sinistri-filtered-keyset-search.md).

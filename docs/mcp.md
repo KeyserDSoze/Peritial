@@ -297,6 +297,23 @@ Restituisce `items` e `nextCursor` (null all'ultima pagina), max
 50 elementi per chiamata. Il cursore è opaco/canonico e contiene soltanto
 la chiave posizionale data evento+UUID: **non è un token di accesso**.
 Cursori invalidi o limiti fuori 1–50 sono rifiutati. `list_sinistri`
-e `search_sinistri` restano compatibili; la ricerca per prefisso non
-dispone ancora di cursore. Non esiste audit mutativo per questa lettura.
+e `search_sinistri` restano compatibili. La ricerca per prefisso viene
+paginata da un tool distinto `search_sinistri_page` (ADR 0040).
+Non esiste audit mutativo per queste letture.
 [ADR 0039](../adr/0039-sinistri-keyset-pagination.md).
+
+## Ricerca Sinistri paginata MCP (#7/#12, ADR 0040)
+
+Il nuovo tool `search_sinistri_page(prefix, occurredFrom?, occurredTo?,
+limit=50, cursor?)` replica `GET /api/sinistri/search/page`. In ogni richiesta
+il backend valida l'identità OAuth e lo scope `peritial.read|write`,
+normalizza il prefisso letterale (2–100 caratteri) e applica date evento
+inclusive. La query PostgreSQL con FORCE RLS filtra tenant, prefisso
+`ILIKE` con escaping di `%`, `_`, `!`, date e cursore **prima** del
+limite (max 50 + lookahead). La risposta è `items,nextCursor`, senza
+tenant ID. Il cursore di ricerca `s1` combina la posizione data/UUID
+con un digest del prefisso/date; riutilizzarlo con filtri differenti
+genera errore, ma non è una firma né un'autorizzazione.
+Il tool `search_sinistri` resta invariato per l'autocomplete del picker
+e continua a restituire un elenco limitato (default 10, max 50).
+[ADR 0040](../adr/0040-sinistri-filtered-keyset-search.md).

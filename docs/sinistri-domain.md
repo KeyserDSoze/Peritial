@@ -515,3 +515,31 @@ cursor per la ricerca filtrata, delete e autorizzazioni conseguenti, filtri
 polizze/anagrafiche, full-text e benchmark sui grandi cataloghi.
 V003/V004 sono sempre migrazioni amministrative manuali.
 [Test e decisione ADR 0039](../adr/0039-sinistri-keyset-pagination.md).
+
+## Ricerca filtrata keyset su più pagine (#7/#12/#13, ADR 0040)
+
+`GET /api/sinistri/search/page?prefix=...&occurredFrom=...&occurredTo=...
+&limit=50&cursor=...` e `search_sinistri_page` eseguono la ricerca
+literal-prefix con intervallo evento inclusivo su più pagine, senza OFFSET.
+La query di `PgSinistroRepository.SearchPageAsync` applica insieme
+FORCE RLS, tenant SQL, `ILIKE` escaped, date inclusive e
+`(occurred_on DESC,id ASC)` prima di `LIMIT 51`.
+La risposta `{items,nextCursor}` non rivela tenant ID, audit o dati interni.
+Il cursore filtrato versione `s1` include soltanto data/UUID e
+fingerprint SHA256 troncata del prefisso/data normalizzati; mismatch
+con il filtro o encoding malformato è rifiutato. Non è una credenziale.
+L'endpoint precedente `/api/sinistri/search` e l'MCP
+`search_sinistri` mantengono il contratto bounded, per il picker.
+
+La PWA continua a caricare soltanto su richiesta e mostra
+«Carica altri sinistri» anche durante una ricerca. Refresh/reset
+rimuovono il cursor precedente; un POST confermato durante il filtro
+esegue un nuovo GET della prima pagina e recupera il nuovo
+`nextCursor`. Nessuna cache/offline queue, autorizzazione o paginazione
+delegata al browser. I test sono aggiunti prima del codice Business
+e coprono PostgreSQL FORCE RLS, filtri `%_`, date, tie-break UUID,
+isolamento di due tenant, page boundary, mismatched cursor,
+Playwright Keycloak e MCP. Resta fuori scope il full-text,
+indice performante ad alto volume, garanzia di snapshot sotto
+UPDATE concorrenti, DELETE e relazioni assicurative.
+[ADR 0040](../adr/0040-sinistri-filtered-keyset-search.md).
