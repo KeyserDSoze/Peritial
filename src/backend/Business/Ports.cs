@@ -32,6 +32,9 @@ public interface IPeriziaSinistroLinkRepository
         SecurityAuditEvent audit, CancellationToken ct = default);
     Task<IReadOnlyList<Guid>> ListPeriziaIdsAsync(TenantId tenant, Guid sinistroId,
         CancellationToken ct = default);
+    // Null means a visible unlinked perizia; missing/foreign IDs throw 404.
+    Task<Guid?> FindSinistroIdForPeriziaAsync(TenantId tenant, Guid periziaId,
+        CancellationToken ct = default);
 }
 
 /// <summary>Tenant-filtered sinistri store. All mutations include successful audit in one database transaction.</summary>
