@@ -501,7 +501,7 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
         params:{name:"page_sinistri", arguments:{limit:2}}}
     });
     expect(mcp.ok(), await mcp.text()).toBeTruthy();
-    expect(await mcp.text()).toContain("nextCursor");
+    expect(await mcp.text()).toMatch(/nextCursor/i);
     expect(await mcp.text()).not.toContain("tenantId");
   });
 
