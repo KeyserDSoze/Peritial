@@ -26,7 +26,7 @@ export function SinistroCatalog({token, canWrite, onUnavailable}: Props) {
   const [reference, setReference] = useState("");
   const [occurredOn, setOccurredOn] = useState("");
   const [reportedOn, setReportedOn] = useState("");
-  const [createdId, setCreatedId] = useState<string | null>(null);
+  const [createdReference, setCreatedReference] = useState<string | null>(null);
   const epoch = useRef(0);
 
   // When the parent unmounts this tenant view (logout, token rotation,
@@ -38,7 +38,7 @@ export function SinistroCatalog({token, canWrite, onUnavailable}: Props) {
     const current = ++epoch.current;
     setBusy("load");
     setError(null);
-    setCreatedId(null);
+    setCreatedReference(null);
     setRows([]);
     try {
       const results = await listSinistri(token);
@@ -60,7 +60,7 @@ export function SinistroCatalog({token, canWrite, onUnavailable}: Props) {
       setExpanded(false);
       setRows([]);
       setError(null);
-      setCreatedId(null);
+      setCreatedReference(null);
     } else {
       setExpanded(true);
       void load();
@@ -75,16 +75,18 @@ export function SinistroCatalog({token, canWrite, onUnavailable}: Props) {
     const current = ++epoch.current;
     setBusy("create");
     setError(null);
-    setCreatedId(null);
+    setCreatedReference(null);
     try {
       const confirmed = await createSinistro(token, normalized,
         occurredOn, reportedOn || null);
       if (epoch.current !== current) return;
       // The response came from the server after atomic PostgreSQL/audit
-      // commit. Include the confirmed item even if its event date is older
-      // than the current list window; a later reload is server-authoritative.
-      setRows(previous => [confirmed, ...previous.filter(x => x.id !== confirmed.id)].slice(0, 50));
-      setCreatedId(confirmed.id);
+      // commit. Keep the same server ordering/window; show a separate
+      // receipt even if an old event date falls outside the recent 50.
+      setRows(previous => [...previous.filter(x => x.id !== confirmed.id), confirmed]
+        .sort((a, b) => b.occurredOn.localeCompare(a.occurredOn) || a.id.localeCompare(b.id))
+        .slice(0, 50));
+      setCreatedReference(confirmed.externalReference);
       setReference("");
       setOccurredOn("");
       setReportedOn("");
@@ -141,8 +143,8 @@ export function SinistroCatalog({token, canWrite, onUnavailable}: Props) {
       {error && <p role="alert" className="text-sm text-red-700 dark:text-red-400">
         {t(error === "create" ? "sinistroCreateError" : "sinistroCatalogError")}
       </p>}
-      {createdId && <p role="status" className="text-sm text-emerald-700 dark:text-emerald-400">
-        {t("sinistroCreated")}
+      {createdReference && <p role="status" className="text-sm text-emerald-700 dark:text-emerald-400">
+        {t("sinistroCreated")} {createdReference}
       </p>}
       {!busy && rows.length === 0 && !error && <p className="text-sm text-slate-600 dark:text-slate-300">
         {t("sinistroCatalogEmpty")}
