@@ -437,7 +437,7 @@ public sealed class SinistroPersistenceTests
             links.ReparentAuditedAsync(a, foreignPerizia.Id, source.Id, target.Id,
                 Event(a, foreignPerizia.Id, "perizia.reparent-sinistro")));
         await Assert.ThrowsAsync<PeriziaConcurrencyConflictException>(() =>
-            links.ReparentAuditedAsync(a, perizia.Id, target.Id, target.Id,
+            links.ReparentAuditedAsync(a, perizia.Id, Guid.NewGuid(), target.Id,
                 Event(a, perizia.Id, "perizia.reparent-sinistro")));
         Assert.Equal(source.Id, await links.FindSinistroIdForPeriziaAsync(a, perizia.Id));
         Assert.Equal(new[] {perizia.Id}, await links.ListPeriziaIdsAsync(a, source.Id));

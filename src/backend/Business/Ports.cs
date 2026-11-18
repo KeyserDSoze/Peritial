@@ -31,6 +31,11 @@ public interface IPeriziaSinistroLinkRepository
     // Explicit compare-and-swap unlink: the association still must match
     // the caller's last observed Sinistro UUID. Audit and mutation commit
     // atomically; missing/foreign perizia yields 404, stale/unlinked 409.
+    // Atomic reparent never creates a transient null association. A stale
+    // source produces 409 and the new target must exist in the signed tenant.
+    Task ReparentAuditedAsync(TenantId tenant, Guid periziaId,
+        Guid expectedSinistroId, Guid newSinistroId,
+        SecurityAuditEvent audit, CancellationToken ct = default);
     Task UnlinkAuditedAsync(TenantId tenant, Guid periziaId, Guid expectedSinistroId,
         SecurityAuditEvent audit, CancellationToken ct = default);
     Task LinkAuditedAsync(TenantId tenant, Guid periziaId, Guid sinistroId,

@@ -62,6 +62,69 @@ public sealed class PgPeriziaSinistroLinkRepository(NpgsqlDataSource source)
     }
 
     /// <summary>
+    /// One SQL UPDATE changes source to target only if the old link is still
+    /// exactly as observed. Both the target existence check and mutation
+    /// run in the signed tenant's transaction, with append-only audit.
+    /// </summary>
+    public async Task ReparentAuditedAsync(
+        TenantId tenant, Guid periziaId, Guid expectedSinistroId,
+        Guid newSinistroId, SecurityAuditEvent audit, CancellationToken ct = default)
+    {
+        if (periziaId == Guid.Empty || expectedSinistroId == Guid.Empty ||
+            newSinistroId == Guid.Empty || newSinistroId == expectedSinistroId)
+            throw new ArgumentException("Distinct, nonempty perizia/source/target IDs required.");
+        if (audit.TenantId != tenant)
+            throw new UnauthorizedAccessException("Cross-tenant reparent audit denied.");
+        if (audit.ResourceId != periziaId ||
+            audit.Action != "perizia.reparent-sinistro" || audit.Outcome != "succeeded")
+            throw new ArgumentException("Audit must describe successful reparent.", nameof(audit));
+
+        await using var scope = await TenantDbScope.OpenAsync(source, tenant, ct);
+        await using (var exists = scope.Command(
+            "SELECT 1 FROM sinistri WHERE tenant_id=@tenant AND id=@target"))
+        {
+            exists.Parameters.AddWithValue("tenant", tenant.Value);
+            exists.Parameters.AddWithValue("target", newSinistroId);
+            if (await exists.ExecuteScalarAsync(ct) is null)
+                throw new KeyNotFoundException("Resource not found.");
+        }
+        await using (var command = scope.Command(
+            "UPDATE perizie SET sinistro_id=@target " +
+            "WHERE tenant_id=@tenant AND id=@perizia AND sinistro_id=@expected"))
+        {
+            command.Parameters.AddWithValue("tenant", tenant.Value);
+            command.Parameters.AddWithValue("perizia", periziaId);
+            command.Parameters.AddWithValue("target", newSinistroId);
+            command.Parameters.AddWithValue("expected", expectedSinistroId);
+            int affected;
+            try
+            {
+                affected = await command.ExecuteNonQueryAsync(ct);
+            }
+            catch (PostgresException ex) when (
+                ex.SqlState == PostgresErrorCodes.ForeignKeyViolation &&
+                ex.ConstraintName == "fk_perizie_sinistro_same_tenant")
+            {
+                // Target vanished (or became inaccessible) between SELECT
+                // and UPDATE. No success audit, no tenant identifier leaked.
+                throw new KeyNotFoundException("Resource not found.", ex);
+            }
+            if (affected != 1)
+            {
+                await using var check = scope.Command(
+                    "SELECT 1 FROM perizie WHERE tenant_id=@tenant AND id=@perizia");
+                check.Parameters.AddWithValue("tenant", tenant.Value);
+                check.Parameters.AddWithValue("perizia", periziaId);
+                if (await check.ExecuteScalarAsync(ct) is null)
+                    throw new KeyNotFoundException("Resource not found.");
+                throw new PeriziaConcurrencyConflictException();
+            }
+        }
+        await PgSecurityAuditTrail.AppendWithinScopeAsync(scope, audit, ct);
+        await scope.CommitAsync(ct);
+    }
+
+    /// <summary>
     /// Single-shot CAS unlink scoped to signed tenant. A concurrent re-link
     /// or unlink returns conflict rather than silently deleting a new link.
     /// Persist the matching UPDATE and append-only audit in one transaction.

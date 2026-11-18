@@ -246,6 +246,21 @@ public sealed class PeriziaSinistroLinkServiceTests
         public Dictionary<Guid,TenantId> OwnedSinistri { get; } = [];
         public Dictionary<Guid,Guid> Linked { get; } = [];
 
+        public async Task ReparentAuditedAsync(TenantId tenant, Guid periziaId,
+            Guid expectedSinistroId, Guid newSinistroId, SecurityAuditEvent entry,
+            CancellationToken ct = default)
+        {
+            if (!OwnedPerizie.TryGetValue(periziaId, out var periziaTenant) ||
+                periziaTenant != tenant ||
+                !OwnedSinistri.TryGetValue(newSinistroId, out var targetTenant) ||
+                targetTenant != tenant)
+                throw new KeyNotFoundException("Resource not found.");
+            if (!Linked.TryGetValue(periziaId, out var old) || old != expectedSinistroId)
+                throw new PeriziaConcurrencyConflictException();
+            await audit.AppendAsync(entry, ct);
+            Linked[periziaId] = newSinistroId;
+        }
+
         public async Task UnlinkAuditedAsync(TenantId tenant, Guid periziaId,
             Guid expectedSinistroId, SecurityAuditEvent entry, CancellationToken ct = default)
         {

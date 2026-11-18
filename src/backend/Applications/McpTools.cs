@@ -48,6 +48,12 @@ public sealed class McpTools(
         Guid periziaId, Guid sinistroId, CancellationToken ct = default) =>
         periziaSinistroLinks.LinkAsync(periziaId, sinistroId, ct);
 
+    [McpServerTool(Name = "reparent_perizia_sinistro"), Description("Atomically replaces the caller's last-observed Sinistro association with a distinct target in the same signed tenant. Requires peritial.write, expectedSinistroId and newSinistroId; 409 on concurrent change, 404 for foreign/missing resources, atomic audit. Never performs unlink then link or deletes records.")]
+    public Task<PeriziaSinistroLinkDto> ReparentPeriziaSinistro(
+        Guid periziaId, Guid expectedSinistroId, Guid newSinistroId,
+        CancellationToken ct = default) =>
+        periziaSinistroLinks.ReparentAsync(periziaId, expectedSinistroId, newSinistroId, ct);
+
     [McpServerTool(Name = "unlink_perizia_sinistro"), Description("Explicitly detaches the caller's last-observed Sinistro from a Perizia, with signed peritial.write, tenant RLS, expectedSinistroId CAS and atomic success audit. Does not delete either entity or implicitly reparent. Conflicts if already unlinked or changed.")]
     public Task<PeriziaSinistroAssociationDto> UnlinkPeriziaSinistro(
         Guid periziaId, Guid expectedSinistroId, CancellationToken ct = default) =>

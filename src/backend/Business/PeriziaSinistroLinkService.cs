@@ -8,9 +8,9 @@ public sealed record PeriziaSinistroLinkDto(Guid PeriziaId, Guid SinistroId);
 public sealed record PeriziaSinistroAssociationDto(Guid PeriziaId, Guid? SinistroId);
 
 /// <summary>
-/// Association changes are deliberate: initial link, or unlink with a
-/// caller-supplied expected Sinistro ID. Never implicitly reparent a Perizia.
-/// Both operations are tenant-scoped, CAS-checked and atomically audited.
+/// Associations require an explicit signed write: link when null, unlink
+/// with expected ID, or reparent in one atomic source-to-target CAS.
+/// No operation silently overwrites a concurrently changed association.
 /// </summary>
 public sealed class PeriziaSinistroLinkService(
     ITenantContext context, IPeriziaSinistroLinkRepository links, ISecurityAuditTrail audit)
@@ -27,6 +27,30 @@ public sealed class PeriziaSinistroLinkService(
         var success = Event("perizia.link-sinistro", "succeeded", periziaId);
         await links.LinkAuditedAsync(context.TenantId, periziaId, sinistroId, success, ct);
         return new PeriziaSinistroLinkDto(periziaId, sinistroId);
+    }
+
+    /// <summary>
+    /// A single source-to-target compare-and-swap: no intermediate unlink,
+    /// no silent overwrite of another writer, no deletion of either record.
+    /// </summary>
+    public async Task<PeriziaSinistroLinkDto> ReparentAsync(
+        Guid periziaId, Guid expectedSinistroId, Guid newSinistroId,
+        CancellationToken ct = default)
+    {
+        await RequireWriteAsync("perizia.reparent-sinistro", ct);
+        if (periziaId == Guid.Empty)
+            throw new ArgumentException("Perizia id required.", nameof(periziaId));
+        if (expectedSinistroId == Guid.Empty)
+            throw new ArgumentException("Expected Sinistro id required.", nameof(expectedSinistroId));
+        if (newSinistroId == Guid.Empty)
+            throw new ArgumentException("New Sinistro id required.", nameof(newSinistroId));
+        if (newSinistroId == expectedSinistroId)
+            throw new ArgumentException("A different target Sinistro is required.", nameof(newSinistroId));
+
+        await links.ReparentAuditedAsync(context.TenantId, periziaId,
+            expectedSinistroId, newSinistroId,
+            Event("perizia.reparent-sinistro", "succeeded", periziaId), ct);
+        return new PeriziaSinistroLinkDto(periziaId, newSinistroId);
     }
 
     /// <summary>

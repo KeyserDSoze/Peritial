@@ -296,6 +296,11 @@ api.MapGet("/sinistri/{id:guid}/perizie",
 api.MapGet("/perizie/{id:guid}/sinistro",
     (Guid id, PeriziaSinistroLinkService links, CancellationToken ct) =>
         links.GetPeriziaAssociationAsync(id, ct)).RequireAuthorization("peritial.read");
+api.MapPut("/perizie/{id:guid}/sinistro",
+    (Guid id, ReparentPeriziaSinistroRequest input,
+        PeriziaSinistroLinkService links, CancellationToken ct) =>
+        links.ReparentAsync(id, input.ExpectedSinistroId, input.NewSinistroId, ct))
+    .RequireAuthorization("peritial.write");
 api.MapDelete("/perizie/{id:guid}/sinistro",
     async (Guid id, Guid expectedSinistroId,
         PeriziaSinistroLinkService links, CancellationToken ct) =>
@@ -366,6 +371,8 @@ api.MapPost("/files", async (HttpRequest request, FileIngestionService service, 
 app.MapMcp("/mcp").RequireAuthorization("peritial.access");
 app.Run();
 
+public sealed record ReparentPeriziaSinistroRequest(
+    Guid ExpectedSinistroId, Guid NewSinistroId);
 public sealed record LinkPeriziaSinistroRequest(Guid SinistroId);
 public sealed record CreateSinistroRequest(string ExternalReference, DateOnly OccurredOn, DateOnly? ReportedOn);
 public sealed record UpdateSinistroRequest(
