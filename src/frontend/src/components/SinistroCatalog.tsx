@@ -1,8 +1,10 @@
 import {useEffect, useRef, useState, type FormEvent} from "react";
 import {useTranslation} from "react-i18next";
-import {createSinistro, isApiUnavailable, listSinistri, type SinistroSummary} from "../api";
+import {createSinistro, isApiUnavailable, listSinistri, searchSinistri, type SinistroSummary} from "../api";
 import {Button} from "./ui/button";
 import {SinistroEditor} from "./SinistroEditor";
+
+type CatalogFilter = {prefix: string; from: string; to: string};
 
 type Props = {
   token: string;
@@ -29,13 +31,24 @@ export function SinistroCatalog({token, canWrite, onUnavailable}: Props) {
   const [occurredOn, setOccurredOn] = useState("");
   const [reportedOn, setReportedOn] = useState("");
   const [createdReference, setCreatedReference] = useState<string | null>(null);
+  const [searchPrefix, setSearchPrefix] = useState("");
+  const [searchFrom, setSearchFrom] = useState("");
+  const [searchTo, setSearchTo] = useState("");
+  const [appliedPrefix, setAppliedPrefix] = useState<string | null>(null);
+  const activeFilter = useRef<CatalogFilter | null>(null);
   const epoch = useRef(0);
 
   // When the parent unmounts this tenant view (logout, token rotation,
   // network failure, offline), no late REST result can restore its rows.
   useEffect(() => () => {epoch.current += 1;}, [token]);
 
-  async function load() {
+  function fetchCatalog(filter: CatalogFilter | null) {
+    return filter
+      ? searchSinistri(token, filter.prefix, filter.from || undefined, filter.to || undefined, 50)
+      : listSinistri(token);
+  }
+
+  async function load(filter: CatalogFilter | null = activeFilter.current) {
     if (busy) return;
     const current = ++epoch.current;
     setBusy("load");
@@ -44,7 +57,7 @@ export function SinistroCatalog({token, canWrite, onUnavailable}: Props) {
     setRows([]);
     setConflictedIds(new Set());
     try {
-      const results = await listSinistri(token);
+      const results = await fetchCatalog(filter);
       if (epoch.current !== current) return;
       setRows(results);
     } catch (cause) {
@@ -65,17 +78,59 @@ export function SinistroCatalog({token, canWrite, onUnavailable}: Props) {
       setConflictedIds(new Set());
       setError(null);
       setCreatedReference(null);
+      activeFilter.current = null;
+      setAppliedPrefix(null);
+      setSearchPrefix("");
+      setSearchFrom("");
+      setSearchTo("");
     } else {
+      activeFilter.current = null;
       setExpanded(true);
-      void load();
+      void load(null);
     }
   }
 
+  function search(event: FormEvent) {
+    event.preventDefault();
+    const prefix = searchPrefix.trim();
+    if (!expanded || busy || prefix.length < 2 || prefix.length > 100 ||
+        (searchFrom && searchTo && searchFrom > searchTo)) return;
+    const filter = {prefix, from: searchFrom, to: searchTo};
+    activeFilter.current = filter;
+    setAppliedPrefix(prefix);
+    void load(filter);
+  }
+
+  function resetSearch() {
+    if (busy) return;
+    activeFilter.current = null;
+    setAppliedPrefix(null);
+    setSearchPrefix("");
+    setSearchFrom("");
+    setSearchTo("");
+    void load(null);
+  }
+
   function applyServerRecord(confirmed: SinistroSummary) {
-    setRows(previous => [...previous.filter(item => item.id !== confirmed.id), confirmed]
-      .sort((a, b) => b.occurredOn.localeCompare(a.occurredOn) ||
-        a.id.localeCompare(b.id))
-      .slice(0, 50));
+    setRows(previous => {
+      const remaining = previous.filter(item => item.id !== confirmed.id);
+      const filter = activeFilter.current;
+      if (filter) {
+        // The initial search and bounded window are authoritative PostgreSQL
+        // reads. Reconcile only an already displayed row after signed GET/PUT;
+        // do not accidentally inject an out-of-window record into search.
+        if (!previous.some(item => item.id === confirmed.id)) return previous;
+        const matches = confirmed.externalReference.toLocaleLowerCase()
+          .startsWith(filter.prefix.toLocaleLowerCase()) &&
+          (!filter.from || confirmed.occurredOn >= filter.from) &&
+          (!filter.to || confirmed.occurredOn <= filter.to);
+        if (!matches) return remaining;
+      }
+      return [...remaining, confirmed]
+        .sort((a, b) => b.occurredOn.localeCompare(a.occurredOn) ||
+          a.id.localeCompare(b.id))
+        .slice(0, 50);
+    });
     setConflictedIds(previous => {
       const next = new Set(previous);
       next.delete(confirmed.id);
@@ -89,6 +144,7 @@ export function SinistroCatalog({token, canWrite, onUnavailable}: Props) {
     if (!canWrite || busy || !expanded || normalized.length < 1 ||
         normalized.length > 100 || !occurredOn) return;
     const current = ++epoch.current;
+    let committed = false;
     setBusy("create");
     setError(null);
     setCreatedReference(null);
@@ -96,18 +152,27 @@ export function SinistroCatalog({token, canWrite, onUnavailable}: Props) {
       const confirmed = await createSinistro(token, normalized,
         occurredOn, reportedOn || null);
       if (epoch.current !== current) return;
-      // The response came from the server after atomic PostgreSQL/audit
-      // commit. Keep the same server ordering/window; show a separate
-      // receipt even if an old event date falls outside the recent 50.
-      applyServerRecord(confirmed);
+      // A successful POST is definitive. When a search is active, refresh
+      // that query from the server rather than inserting a nonmatching case
+      // into its bounded result window.
+      committed = true;
       setCreatedReference(confirmed.externalReference);
       setReference("");
       setOccurredOn("");
       setReportedOn("");
+      if (activeFilter.current) {
+        setRows([]);
+        setBusy("load");
+        const refreshed = await fetchCatalog(activeFilter.current);
+        if (epoch.current !== current) return;
+        setRows(refreshed);
+      } else {
+        applyServerRecord(confirmed);
+      }
     } catch (cause) {
       if (epoch.current !== current) return;
       if (isApiUnavailable(cause)) onUnavailable();
-      else setError("create");
+      else setError(committed ? "load" : "create");
     } finally {
       if (epoch.current === current) setBusy(null);
     }
@@ -124,6 +189,41 @@ export function SinistroCatalog({token, canWrite, onUnavailable}: Props) {
         <Button type="button" variant="outline" disabled={busy !== null}
           onClick={() => void load()}>{t("refreshSinistri")}</Button>
       </div>
+      <form onSubmit={search} className="space-y-3" aria-label={t("sinistroCatalogSearch")}>
+        <div>
+          <label htmlFor="sinistro-catalog-prefix" className="mb-1 block text-sm">{t("sinistroCatalogPrefix")}</label>
+          <input id="sinistro-catalog-prefix" value={searchPrefix} minLength={2} maxLength={100}
+            required autoComplete="off" disabled={busy !== null}
+            onChange={event => setSearchPrefix(event.target.value)}
+            className="w-full rounded-md border border-slate-300 bg-transparent px-3 py-2 dark:border-slate-700" />
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t("sinistroCatalogSearchHint")}</p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label htmlFor="sinistro-catalog-from" className="mb-1 block text-sm">{t("sinistroCatalogFrom")}</label>
+            <input id="sinistro-catalog-from" type="date" value={searchFrom} disabled={busy !== null}
+              onChange={event => setSearchFrom(event.target.value)}
+              className="w-full rounded-md border border-slate-300 bg-transparent px-3 py-2 dark:border-slate-700" />
+          </div>
+          <div>
+            <label htmlFor="sinistro-catalog-to" className="mb-1 block text-sm">{t("sinistroCatalogTo")}</label>
+            <input id="sinistro-catalog-to" type="date" value={searchTo} min={searchFrom || undefined}
+              disabled={busy !== null} onChange={event => setSearchTo(event.target.value)}
+              className="w-full rounded-md border border-slate-300 bg-transparent px-3 py-2 dark:border-slate-700" />
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button type="submit" disabled={busy !== null || searchPrefix.trim().length < 2 ||
+            searchPrefix.trim().length > 100 || Boolean(searchFrom && searchTo && searchFrom > searchTo)}>
+            {t("sinistroCatalogSearch")}
+          </Button>
+          {appliedPrefix && <Button type="button" variant="outline" disabled={busy !== null}
+            onClick={resetSearch}>{t("sinistroCatalogReset")}</Button>}
+        </div>
+      </form>
+      {appliedPrefix && <p role="status" className="text-xs text-slate-600 dark:text-slate-300">
+        {t("sinistroCatalogSearchApplied")} {appliedPrefix}
+      </p>}
       {canWrite && <form onSubmit={event => void create(event)} className="space-y-3">
         <div>
           <label htmlFor="sinistro-create-ref" className="mb-1 block text-sm">{t("sinistroReference")}</label>
@@ -164,7 +264,9 @@ export function SinistroCatalog({token, canWrite, onUnavailable}: Props) {
         {t("sinistroCatalogEmpty")}
       </p>}
       {rows.length > 0 && <>
-        <p className="text-xs text-slate-500 dark:text-slate-400">{t("sinistroCatalogLimit")}</p>
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          {t(appliedPrefix ? "sinistroCatalogSearchLimit" : "sinistroCatalogLimit")}
+        </p>
         <ul aria-label={t("sinistroCatalog")} className="divide-y divide-slate-200 dark:divide-slate-800">
           {rows.map(item => <li key={item.id} data-sinistro-id={item.id} className="py-2 text-sm">
             {conflictedIds.has(item.id) ?
