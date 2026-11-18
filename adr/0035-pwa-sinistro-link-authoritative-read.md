@@ -26,6 +26,12 @@ dopo il cambio d'identità o un errore API.
    `GET /api/perizie/{id}/sinistro`; MCP:
    `get_perizia_sinistro(periziaId)`. Nessun tenant o
    subject è esposto nel DTO.
+   Il serializer del tool MCP omette nel JSON-RPC `sinistroId`
+   quando è `null` (perizia visibile e non collegata):
+   per il REST è invece un campo `sinistroId:null` esplicito.
+   Il tool MCP con ID assente/estraneo restituisce errore,
+   non un successo con campo omesso. Il selettore PWA usa
+   soltanto REST, quindi non dipende da questa differenza.
 2. Aggiungere un componente PWA **`PeriziaSinistroPicker`** per
    ogni perizia, chiuso per default. L'apertura effettua il
    `GET` autoritativo con il JWT corrente; se il link esiste,
