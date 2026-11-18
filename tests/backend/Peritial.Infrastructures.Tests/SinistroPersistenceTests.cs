@@ -404,6 +404,70 @@ public sealed class SinistroPersistenceTests
     }
 
     [Fact]
+    public async Task Reparent_is_atomic_CAS_tenant_RLS_target_validation_and_audit_rollback_in_postgres()
+    {
+        await using var db = await IsolatedDatabases.CreateAsync();
+        var a = TenantId.From(Guid.NewGuid());
+        var b = TenantId.From(Guid.NewGuid());
+        var perizie = new PgPeriziaRepository(db.App);
+        var sinistri = new PgSinistroRepository(db.App);
+        var links = new PgPeriziaSinistroLinkRepository(db.App);
+        var source = Sinistro.Create(a, "REPAR-PG-SOURCE", new DateOnly(2026, 11, 18));
+        var target = Sinistro.Create(a, "REPAR-PG-TARGET", new DateOnly(2026, 11, 17));
+        var foreignTarget = Sinistro.Create(b, "REPAR-PG-FOREIGN", new DateOnly(2026, 11, 16));
+        foreach (var item in new[] {source, target, foreignTarget})
+            await sinistri.AddAuditedAsync(item, Event(item.TenantId, item.Id, "sinistro.create"));
+        var perizia = Perizia.Create(a, "REPAR-PG-" + Guid.NewGuid().ToString("N"));
+        var foreignPerizia = Perizia.Create(b, "REPAR-PG-FOREIGN-" + Guid.NewGuid().ToString("N"));
+        await perizie.AddAuditedAsync(perizia, Event(a, perizia.Id, "perizia.create"));
+        await perizie.AddAuditedAsync(foreignPerizia, Event(b, foreignPerizia.Id, "perizia.create"));
+        await links.LinkAuditedAsync(a, perizia.Id, source.Id,
+            Event(a, perizia.Id, "perizia.link-sinistro"));
+
+        await Assert.ThrowsAsync<KeyNotFoundException>(() =>
+            links.ReparentAuditedAsync(a, perizia.Id, source.Id, foreignTarget.Id,
+                Event(a, perizia.Id, "perizia.reparent-sinistro")));
+        await Assert.ThrowsAsync<KeyNotFoundException>(() =>
+            links.ReparentAuditedAsync(a, perizia.Id, source.Id, Guid.NewGuid(),
+                Event(a, perizia.Id, "perizia.reparent-sinistro")));
+        await Assert.ThrowsAsync<KeyNotFoundException>(() =>
+            links.ReparentAuditedAsync(b, perizia.Id, source.Id, foreignTarget.Id,
+                Event(b, perizia.Id, "perizia.reparent-sinistro")));
+        await Assert.ThrowsAsync<KeyNotFoundException>(() =>
+            links.ReparentAuditedAsync(a, foreignPerizia.Id, source.Id, target.Id,
+                Event(a, foreignPerizia.Id, "perizia.reparent-sinistro")));
+        await Assert.ThrowsAsync<PeriziaConcurrencyConflictException>(() =>
+            links.ReparentAuditedAsync(a, perizia.Id, target.Id, target.Id,
+                Event(a, perizia.Id, "perizia.reparent-sinistro")));
+        Assert.Equal(source.Id, await links.FindSinistroIdForPeriziaAsync(a, perizia.Id));
+        Assert.Equal(new[] {perizia.Id}, await links.ListPeriziaIdsAsync(a, source.Id));
+
+        var duplicate = Event(a, perizia.Id, "perizia.reparent-sinistro");
+        await new PgSecurityAuditTrail(db.App).AppendAsync(duplicate);
+        var error = await Assert.ThrowsAsync<PostgresException>(() =>
+            links.ReparentAuditedAsync(a, perizia.Id, source.Id, target.Id, duplicate));
+        Assert.Equal(PostgresErrorCodes.UniqueViolation, error.SqlState);
+        Assert.Equal(source.Id, await links.FindSinistroIdForPeriziaAsync(a, perizia.Id));
+
+        await links.ReparentAuditedAsync(a, perizia.Id, source.Id, target.Id,
+            Event(a, perizia.Id, "perizia.reparent-sinistro"));
+        Assert.Equal(target.Id, await links.FindSinistroIdForPeriziaAsync(a, perizia.Id));
+        Assert.Empty(await links.ListPeriziaIdsAsync(a, source.Id));
+        Assert.Equal(new[] {perizia.Id}, await links.ListPeriziaIdsAsync(a, target.Id));
+        await Assert.ThrowsAsync<PeriziaConcurrencyConflictException>(() =>
+            links.ReparentAuditedAsync(a, perizia.Id, source.Id, target.Id,
+                Event(a, perizia.Id, "perizia.reparent-sinistro")));
+        Assert.Equal(target.Id, await links.FindSinistroIdForPeriziaAsync(a, perizia.Id));
+
+        await using var count = db.Admin.CreateCommand(
+            "SELECT count(*) FROM security_audit WHERE tenant_id=@tenant AND " +
+            "resource_id=@id AND action='perizia.reparent-sinistro' AND outcome='succeeded'");
+        count.Parameters.AddWithValue("tenant", a.Value);
+        count.Parameters.AddWithValue("id", perizia.Id);
+        Assert.Equal(2L, (long)(await count.ExecuteScalarAsync())!); // pre-inserted plus committed
+    }
+
+    [Fact]
     public async Task V004_association_read_returns_unlinked_or_linked_and_hides_foreign_perizia_as_missing()
     {
         await using var db = await IsolatedDatabases.CreateAsync();

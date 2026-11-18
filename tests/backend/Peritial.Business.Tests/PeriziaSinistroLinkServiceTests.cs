@@ -158,6 +158,70 @@ public sealed class PeriziaSinistroLinkServiceTests
         Assert.Equal(nextSinistro, (await writer.GetPeriziaAssociationAsync(perizia)).SinistroId);
     }
 
+    [Fact]
+    public async Task Reparent_changes_only_observed_link_with_signed_writer_scope_and_atomic_audit()
+    {
+        var tenant = TenantId.From(Guid.NewGuid());
+        var other = TenantId.From(Guid.NewGuid());
+        var periziaId = Guid.NewGuid();
+        var sourceId = Guid.NewGuid();
+        var targetId = Guid.NewGuid();
+        var foreignId = Guid.NewGuid();
+        var audit = new SpyAudit();
+        var links = new FakeLinks(audit);
+        links.OwnedPerizie[periziaId] = tenant;
+        links.OwnedSinistri[sourceId] = tenant;
+        links.OwnedSinistri[targetId] = tenant;
+        links.OwnedSinistri[foreignId] = other;
+        var writer = new PeriziaSinistroLinkService(new Actor(tenant, write: true), links, audit);
+        var reader = new PeriziaSinistroLinkService(new Actor(tenant, read: true), links, audit);
+        await writer.LinkAsync(periziaId, sourceId);
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+            reader.ReparentAsync(periziaId, sourceId, targetId));
+        Assert.Equal("perizia.reparent-sinistro", audit.Events[^1].Action);
+        Assert.Equal("denied", audit.Events[^1].Outcome);
+        Assert.Null(audit.Events[^1].ResourceId);
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            writer.ReparentAsync(Guid.Empty, sourceId, targetId));
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            writer.ReparentAsync(periziaId, Guid.Empty, targetId));
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            writer.ReparentAsync(periziaId, sourceId, Guid.Empty));
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            writer.ReparentAsync(periziaId, sourceId, sourceId));
+
+        await Assert.ThrowsAsync<KeyNotFoundException>(() =>
+            writer.ReparentAsync(periziaId, sourceId, foreignId));
+        await Assert.ThrowsAsync<KeyNotFoundException>(() =>
+            writer.ReparentAsync(periziaId, sourceId, Guid.NewGuid()));
+        await Assert.ThrowsAsync<PeriziaConcurrencyConflictException>(() =>
+            writer.ReparentAsync(periziaId, targetId, sourceId));
+        await Assert.ThrowsAsync<KeyNotFoundException>(() =>
+            writer.ReparentAsync(Guid.NewGuid(), sourceId, targetId));
+        Assert.Equal(sourceId, (await reader.GetPeriziaAssociationAsync(periziaId)).SinistroId);
+        Assert.Equal(0, audit.Events.Count(x =>
+            x.Action == "perizia.reparent-sinistro" && x.Outcome == "succeeded"));
+
+        var moved = await writer.ReparentAsync(periziaId, sourceId, targetId);
+        Assert.Equal(new PeriziaSinistroLinkDto(periziaId, targetId), moved);
+        Assert.DoesNotContain("tenant", System.Text.Json.JsonSerializer.Serialize(moved),
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(await reader.ListPeriziaIdsAsync(sourceId));
+        Assert.Equal(new[] {periziaId}, await reader.ListPeriziaIdsAsync(targetId));
+        Assert.Equal(targetId, (await reader.GetPeriziaAssociationAsync(periziaId)).SinistroId);
+        var success = Assert.Single(audit.Events.Where(x =>
+            x.Action == "perizia.reparent-sinistro" && x.Outcome == "succeeded"));
+        Assert.Equal(tenant, success.TenantId);
+        Assert.Equal(periziaId, success.ResourceId);
+        await Assert.ThrowsAsync<PeriziaConcurrencyConflictException>(() =>
+            writer.ReparentAsync(periziaId, sourceId, targetId));
+        var foreignWriter = new PeriziaSinistroLinkService(new Actor(other, write: true), links, audit);
+        await Assert.ThrowsAsync<KeyNotFoundException>(() =>
+            foreignWriter.ReparentAsync(periziaId, targetId, foreignId));
+        Assert.Equal(targetId, (await reader.GetPeriziaAssociationAsync(periziaId)).SinistroId);
+    }
+
     private sealed class Actor(TenantId tenant, bool read = false, bool write = false) : ITenantContext
     {
         public TenantId TenantId => tenant;
