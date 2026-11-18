@@ -358,6 +358,120 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
       .getByText(reference, {exact:true})).toBeVisible({timeout:30_000});
   });
 
+  test("PWA edits Sinistri with authoritative expectedVersion, invalid input and external CAS conflict", async ({page, request}) => {
+    test.setTimeout(120_000);
+    await page.goto("/");
+    await page.getByRole("button", {name: "Accedi"}).click();
+    await expect(page.locator("#username")).toBeVisible({timeout: 30_000});
+    await page.locator("#username").fill("localuser");
+    await page.locator("#password").fill("local-only-user");
+    await page.locator("#kc-login").click();
+    await expect(page.getByRole("button", {name: "Esci"})).toBeVisible({timeout: 30_000});
+
+    const token = await page.evaluate(() => {
+      const key = Object.keys(sessionStorage).find(x => x.startsWith("oidc.user:"));
+      return key ? (JSON.parse(sessionStorage.getItem(key) || "{}") as {access_token?:string}).access_token : undefined;
+    });
+    expect(token).toBeTruthy();
+    const headers = {Authorization: "Bearer " + token};
+    const seed = "UI-SIN-CAS-" + Date.now() + "-" + Math.floor(Math.random() * 100000);
+    const created = await request.post("http://localhost:8080/api/sinistri", {
+      headers, data: {externalReference: seed, occurredOn: "2098-08-09"}
+    });
+    expect(created.status(), await created.text()).toBe(201);
+    const id = (await created.json() as {id:string;version:number}).id;
+    const row = page.locator('[data-sinistro-id="' + id + '"]');
+    await page.getByRole("button", {name: "Apri catalogo sinistri"}).click();
+    await expect(row.getByText(seed, {exact:true})).toBeVisible();
+    await row.getByRole("button", {name: "Modifica sinistro"}).click();
+    await expect(row.getByRole("textbox", {name: "Modifica riferimento sinistro"})).toHaveValue(seed);
+    await expect(row.getByText("Versione 1")).toBeVisible();
+
+    const refInput = row.getByRole("textbox", {name: "Modifica riferimento sinistro"});
+    const occurredInput = row.getByLabel("Modifica data sinistro");
+    const reportedInput = row.getByLabel("Modifica data denuncia");
+    const first = seed + "-V2";
+    await refInput.fill(first);
+    await occurredInput.fill("2098-08-10");
+    await reportedInput.fill("2098-08-11");
+    const routePattern = "**/api/sinistri/" + id;
+    // Server-side validation rejects this PUT. The UI must not claim
+    // success, increment its version or change the catalog row.
+    await page.route(routePattern, async route => {
+      if (route.request().method() === "PUT")
+        await route.fulfill({status: 400, contentType:"application/json", body:'{"error":"invalid"}'});
+      else await route.continue();
+    });
+    await row.getByRole("button", {name:"Salva modifiche sinistro"}).click();
+    await expect(row.getByRole("alert")).toContainText("Dati sinistro non validi");
+    await expect(row.getByText(seed, {exact:true})).toBeVisible();
+    await expect(row.getByText("Versione 1")).toBeVisible();
+    await page.unroute(routePattern);
+
+    const update1 = page.waitForResponse(response =>
+      response.url().endsWith("/api/sinistri/" + id) &&
+      response.request().method() === "PUT");
+    await row.getByRole("button", {name:"Salva modifiche sinistro"}).click();
+    const response1 = await update1;
+    expect(response1.status(), await response1.text()).toBe(200);
+    const requestBody = response1.request().postDataJSON() as {expectedVersion:number;externalReference:string};
+    expect(requestBody.expectedVersion).toBe(1);
+    expect(requestBody.externalReference).toBe(first);
+    const updated1 = await response1.json() as {version:number;externalReference:string};
+    expect(updated1).toMatchObject({version:2, externalReference:first});
+    await expect(row.getByText(first, {exact:true})).toBeVisible();
+    await expect(row.getByText("Versione 2")).toBeVisible();
+
+    const authoritative = await request.get("http://localhost:8080/api/sinistri/" + id, {headers});
+    expect(authoritative.status(), await authoritative.text()).toBe(200);
+    expect(await authoritative.json()).toMatchObject({
+      version:2, externalReference:first, occurredOn:"2098-08-10", reportedOn:"2098-08-11"
+    });
+    // Another client modifies the row after this editor read version 2.
+    const foreignWriterReference = seed + "-OTHER";
+    const other = await request.put("http://localhost:8080/api/sinistri/" + id, {
+      headers,
+      data: {externalReference:foreignWriterReference, occurredOn:"2098-08-12",
+        reportedOn:null, expectedVersion:2}
+    });
+    expect(other.status(), await other.text()).toBe(200);
+    expect((await other.json() as {version:number}).version).toBe(3);
+
+    await refInput.fill(seed + "-STALE");
+    const conflictResponse = page.waitForResponse(response =>
+      response.url().endsWith("/api/sinistri/" + id) &&
+      response.request().method() === "PUT");
+    await row.getByRole("button", {name:"Salva modifiche sinistro"}).click();
+    expect((await conflictResponse).status()).toBe(409);
+    await expect(row.getByRole("alert")).toContainText("Ricarica il sinistro");
+    await expect(row.getByText(first, {exact:true})).toHaveCount(0);
+    await expect(row.getByRole("button", {name:"Salva modifiche sinistro"})).toHaveCount(0);
+
+    // No invisible auto-retry: a fresh GET is required before re-editing.
+    await row.getByRole("button", {name:"Ricarica sinistro"}).click();
+    await expect(row.getByText(foreignWriterReference, {exact:true})).toBeVisible();
+    await expect(refInput).toHaveValue(foreignWriterReference);
+    await expect(row.getByText("Versione 3")).toBeVisible();
+    await expect(row.getByRole("alert")).toHaveCount(0);
+
+    const finalRef = seed + "-V4";
+    await refInput.fill(finalRef);
+    const update4 = page.waitForResponse(response =>
+      response.url().endsWith("/api/sinistri/" + id) &&
+      response.request().method() === "PUT");
+    await row.getByRole("button", {name:"Salva modifiche sinistro"}).click();
+    const response4 = await update4;
+    expect(response4.status()).toBe(200);
+    expect((response4.request().postDataJSON() as {expectedVersion:number}).expectedVersion).toBe(3);
+    await expect(row.getByText(finalRef, {exact:true})).toBeVisible();
+    await page.reload();
+    await page.getByRole("button", {name:"Apri catalogo sinistri"}).click();
+    await expect(page.locator('[data-sinistro-id="' + id + '"]')
+      .getByText(finalRef, {exact:true})).toBeVisible();
+    const final = await request.get("http://localhost:8080/api/sinistri/" + id, {headers});
+    expect(await final.json()).toMatchObject({externalReference:finalRef, version:4});
+  });
+
   test("PWA searches and links Sinistri to Perizie with persistence, conflict reload and offline-safe state", async ({page, request, context}) => {
     await page.goto("/");
     await page.getByRole("button", {name: "Accedi"}).click();
