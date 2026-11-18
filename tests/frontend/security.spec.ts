@@ -719,16 +719,16 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
     }
     const link = await request.post(api + "/api/perizie/" + aPerizia.id + "/sinistro", {
       headers: {...auth(a), "X-Tenant-Id": "22222222-2222-2222-2222-222222222222"},
-      data: {sinistroId: aSinistro.id, tenantId: "22222222-2222-2222-2222-222222222222"}
+      data: {sinistroId: aSinistro.id, expectedLinkVersion:1, tenantId: "22222222-2222-2222-2222-222222222222"}
     });
     expect(link.status(), await link.text()).toBe(201);
     expect(await link.json()).toMatchObject({
-      periziaId: aPerizia.id, sinistroId: aSinistro.id
+      periziaId: aPerizia.id, sinistroId: aSinistro.id, linkVersion:2
     });
     expect(await link.text()).not.toContain("tenantId");
 
     const mcpB = await mcp(b, "link_perizia_sinistro", {
-      periziaId: bPerizia.id, sinistroId: bSinistro.id
+      periziaId: bPerizia.id, sinistroId: bSinistro.id, expectedLinkVersion:1
     }, 1201);
     expect(mcpB).not.toContain('"isError":true');
     expect(mcpB).toContain(bPerizia.id);
@@ -741,14 +741,16 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
     });
     expect(linkedA.status(), await linkedA.text()).toBe(200);
     expect(linkedA.headers()["cache-control"]).toContain("no-store");
-    expect(await linkedA.json()).toEqual({periziaId: aPerizia.id, sinistroId: aSinistro.id});
+    expect(await linkedA.json()).toEqual({
+      periziaId: aPerizia.id, sinistroId: aSinistro.id, linkVersion:2
+    });
     expect(await linkedA.text()).not.toContain("tenantId");
 
     const unlinkedA = await request.get(api + "/api/perizie/" + aUnlinked.id + "/sinistro", {
       headers: auth(reader)
     });
     expect(unlinkedA.status(), await unlinkedA.text()).toBe(200);
-    expect(await unlinkedA.json()).toEqual({periziaId: aUnlinked.id, sinistroId: null});
+    expect(await unlinkedA.json()).toEqual({periziaId: aUnlinked.id, sinistroId: null, linkVersion:1});
 
     const linkedB = await mcp(b, "get_perizia_sinistro", {periziaId: bPerizia.id}, 1210);
     expect(linkedB).toContain(bSinistro.id);
@@ -808,23 +810,39 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
     expect(foreignList.status()).toBe(404);
     expect(await foreignList.text()).toBe(await missing.text());
 
+    // Older POST/MCP clients without the last observed link revision must
+    // fail closed, not silently replay a mutation against the current UUID.
+    const legacy = await request.post(api + "/api/perizie/" + aUnlinked.id + "/sinistro", {
+      headers:auth(a), data:{sinistroId:aSinistro.id}
+    });
+    expect(legacy.status(), await legacy.text()).toBe(400);
+    const oldMcp = await mcp(a, "link_perizia_sinistro", {
+      periziaId:aUnlinked.id, sinistroId:aSinistro.id
+    }, 1245);
+    expect(oldMcp).toContain('"isError":true');
+    const unchanged = await request.get(api + "/api/perizie/" + aUnlinked.id + "/sinistro",
+      {headers:auth(reader)});
+    expect(await unchanged.json()).toEqual({
+      periziaId:aUnlinked.id, sinistroId:null, linkVersion:1
+    });
+
     const foreignTarget = await request.post(api +
       "/api/perizie/" + aUnlinked.id + "/sinistro", {
-      headers: auth(a), data: {sinistroId: bSinistro.id}
+      headers: auth(a), data: {sinistroId: bSinistro.id, expectedLinkVersion:1}
     });
     expect(foreignTarget.status(), await foreignTarget.text()).toBe(404);
     const foreignPerizia = await request.post(api +
       "/api/perizie/" + aUnlinked.id + "/sinistro", {
-      headers: auth(b), data: {sinistroId: bSinistro.id}
+      headers: auth(b), data: {sinistroId: bSinistro.id, expectedLinkVersion:1}
     });
     expect(foreignPerizia.status(), await foreignPerizia.text()).toBe(404);
 
     const replay = await request.post(api + "/api/perizie/" + aPerizia.id + "/sinistro", {
-      headers: auth(a), data: {sinistroId: aSinistro.id}
+      headers: auth(a), data: {sinistroId: aSinistro.id, expectedLinkVersion:2}
     });
     expect(replay.status(), await replay.text()).toBe(409);
     const mcpForeign = await mcp(b, "link_perizia_sinistro", {
-      periziaId: aUnlinked.id, sinistroId: bSinistro.id
+      periziaId: aUnlinked.id, sinistroId: bSinistro.id, expectedLinkVersion:1
     }, 1204);
     expect(mcpForeign).toContain('"isError":true');
     expect(mcpForeign).not.toContain("LINK-UNLINKED-" + unique);
@@ -835,11 +853,11 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
 
     const denied = await request.post(api +
       "/api/perizie/" + aUnlinked.id + "/sinistro", {
-      headers: auth(reader), data: {sinistroId: aSinistro.id}
+      headers: auth(reader), data: {sinistroId: aSinistro.id, expectedLinkVersion:1}
     });
     expect(denied.status()).toBe(403);
     const deniedMcp = await mcp(reader, "link_perizia_sinistro", {
-      periziaId: aUnlinked.id, sinistroId: aSinistro.id
+      periziaId: aUnlinked.id, sinistroId: aSinistro.id, expectedLinkVersion:1
     }, 1206);
     expect(deniedMcp).toContain('"isError":true');
     const anonymous = await request.get(api +
