@@ -4,7 +4,7 @@ Esame statico dei progetti Expertiser.* sul commit death `35b043e6f6392bde3e45fa
 
 | Epic | Funzioni osservate | Stato nuovo |
 |---|---|---|
-| Sinistri | CRUD, ricerca, autocomplete, import | aggregate + PG V003, REST/MCP list/search/get/create/update; V004 collega perizie al sinistro con FK same-tenant, CAS e audit, esposto REST/MCP. PWA: selettore per associare una perizia con lettura persistita, catalogo Sinistri tenant-scoped e form di creazione; ancora senza DELETE, modifica Sinistri UI con CAS, ricerca avanzata/cursor, reparent/unlink, anagrafiche o import (#7/#9/#13) |
+| Sinistri | CRUD, ricerca, autocomplete, import | aggregate + PG V003, REST/MCP list/search/get/create/update; V004 collega perizie al sinistro con FK same-tenant, CAS e audit, esposto REST/MCP. PWA: selettore per associare una perizia con lettura persistita, catalogo Sinistri tenant-scoped, form di creazione e modifica con CAS/409/reload; ancora senza DELETE, ricerca avanzata/cursor, reparent/unlink, anagrafiche o import (#7/#9/#13) |
 | Perizie | CRUD, assegnazione, filtro utente, workflow | primo vertical slice in corso |
 | Stati | Registered(-1), Assigned(0), ToBeRevised(1), Revised(2), ToSend(3), Sent(4), Billed(5), Duplicated(6), Cancelled(7) | regole nuove da validare |
 | Import | XML Classic/Accertatore, auto-detection, anagrafiche e allegati | da implementare |
