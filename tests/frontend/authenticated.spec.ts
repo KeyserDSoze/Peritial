@@ -852,7 +852,7 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
       response.request().method() === "POST");
     await row.getByRole("button", {name: "Collega sinistro", exact: true}).click();
     expect((await linked).status()).toBe(201);
-    await expect(row.getByText("Sinistro collegato")).toBeVisible();
+    await expect(row.getByText("Sinistro collegato", {exact:true})).toBeVisible();
     await expect(row.getByText(sinRef)).toBeVisible();
     await expect(row.getByRole("button", {name: "Collega sinistro", exact: true})).toHaveCount(0);
 
