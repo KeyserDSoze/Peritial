@@ -62,6 +62,14 @@ export const createSinistro = (token: string, externalReference: string,
     method: "POST", headers: {"Content-Type": "application/json"},
     body: JSON.stringify({externalReference, occurredOn, reportedOn})
   });
+// The caller MUST provide the last version returned by GET/PUT. Never
+// auto-fetch the newest version and overwrite a concurrent operator's work.
+export const updateSinistro = (token: string, id: string, externalReference: string,
+  occurredOn: string, reportedOn: string | null, expectedVersion: number) =>
+  request<SinistroSummary>("/sinistri/" + encodeURIComponent(id), token, {
+    method: "PUT", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({externalReference, occurredOn, reportedOn, expectedVersion})
+  });
 export const searchSinistri = (token: string, prefix: string) =>
   request<SinistroSummary[]>("/sinistri/search?prefix=" +
     encodeURIComponent(prefix.trim()) + "&limit=20", token);
