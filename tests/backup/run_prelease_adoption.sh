@@ -102,7 +102,7 @@ result="$(docker exec "$name" psql -X -qAt -v ON_ERROR_STOP=1 -U peritial -d per
         AND storage_key='22222222/legacy-pending.pdf'
         AND lease_expires_at_utc > created_at_utc)=1
    AND to_regclass('ix_upload_intents_lease') IS NOT NULL
-   AND (SELECT count(*) FROM schema_migrations)=7
+   AND (SELECT count(*) FROM schema_migrations)=8
    AND (SELECT count(*) FROM pg_class
      WHERE relname IN ('perizie','documents','security_audit','upload_intents','upload_request_keys','sinistri')
        AND relrowsecurity AND relforcerowsecurity)=6
