@@ -30,6 +30,87 @@ public sealed class SchemaMigrationTests
     }
 
     [Fact]
+    public async Task Upgrade_from_real_versioned_V005_keeps_existing_link_and_assigns_V006_baseline()
+    {
+        await WithIsolatedSchemaAsync(async db =>
+        {
+            await using var conn = await db.OpenConnectionAsync();
+            await using var tx = await conn.BeginTransactionAsync();
+            await using (var journal = new NpgsqlCommand(
+                "CREATE TABLE schema_migrations (" +
+                "version integer PRIMARY KEY, filename text NOT NULL, " +
+                "sha256 varchar(64) NOT NULL CHECK(length(sha256)=64), " +
+                "applied_at_utc timestamptz NOT NULL DEFAULT now())",conn,tx))
+                await journal.ExecuteNonQueryAsync();
+            string[] scripts = [
+                "001_init.sql", "V002__security_audit_action_index.sql",
+                "V003__sinistri_rls.sql", "V004__perizie_sinistro_link.sql",
+                "V005__sinistri_audited_delete.sql"
+            ];
+            var assembly = typeof(SchemaMigrator).Assembly;
+            for(var i=0;i<scripts.Length;i++)
+            {
+                var name = scripts[i];
+                var resource = assembly.GetManifestResourceNames().Single(n =>
+                    n.EndsWith(name,StringComparison.Ordinal));
+                await using var resourceStream = assembly.GetManifestResourceStream(resource)!;
+                using var reader = new StreamReader(resourceStream,System.Text.Encoding.UTF8);
+                var sql = await reader.ReadToEndAsync();
+                await using(var cmd = new NpgsqlCommand(sql,conn,tx))
+                    await cmd.ExecuteNonQueryAsync();
+                var hash = Convert.ToHexString(
+                    System.Security.Cryptography.SHA256.HashData(
+                        System.Text.Encoding.UTF8.GetBytes(sql))).ToLowerInvariant();
+                await using(var record = new NpgsqlCommand(
+                    "INSERT INTO schema_migrations(version,filename,sha256) VALUES (@v,@name,@sha)",
+                    conn,tx))
+                {
+                    record.Parameters.AddWithValue("v",i+1);
+                    record.Parameters.AddWithValue("name",name);
+                    record.Parameters.AddWithValue("sha",hash);
+                    await record.ExecuteNonQueryAsync();
+                }
+            }
+            var tenant = Guid.NewGuid();
+            var sinistro = Guid.NewGuid();
+            var perizia = Guid.NewGuid();
+            await using(var existing = new NpgsqlCommand(
+                "INSERT INTO sinistri(tenant_id,id,external_reference,occurred_on,created_at_utc) " +
+                "VALUES (@tenant,@sinistro,'PRE-V006','2026-11-18',now()); " +
+                "INSERT INTO perizie(tenant_id,id,reference,status,created_at_utc,sinistro_id) " +
+                "VALUES (@tenant,@perizia,'PRE-V006-P',-1,now(),@sinistro)", conn,tx))
+            {
+                existing.Parameters.AddWithValue("tenant",tenant);
+                existing.Parameters.AddWithValue("sinistro",sinistro);
+                existing.Parameters.AddWithValue("perizia",perizia);
+                await existing.ExecuteNonQueryAsync();
+            }
+            await tx.CommitAsync();
+            await conn.CloseAsync();
+            Assert.Equal(1,await SchemaMigrator.ApplyAsync(db));
+            Assert.Equal(0,await SchemaMigrator.ApplyAsync(db));
+            await using var verify = await db.OpenConnectionAsync();
+            await using(var record = new NpgsqlCommand(
+                "SELECT sinistro_id,sinistro_link_version FROM perizie " +
+                "WHERE tenant_id=@tenant AND id=@perizia",verify))
+            {
+                record.Parameters.AddWithValue("tenant",tenant);
+                record.Parameters.AddWithValue("perizia",perizia);
+                await using var row = await record.ExecuteReaderAsync();
+                Assert.True(await row.ReadAsync());
+                Assert.Equal(sinistro,row.GetGuid(0));
+                Assert.Equal(1L,row.GetInt64(1));
+            }
+            await using var history = new NpgsqlCommand(
+                "SELECT count(*) FROM perizia_sinistro_history",verify);
+            Assert.Equal(0L,(long)(await history.ExecuteScalarAsync())!);
+            await using var journalCount = new NpgsqlCommand(
+                "SELECT count(*) FROM schema_migrations WHERE version BETWEEN 1 AND 6",verify);
+            Assert.Equal(6L,(long)(await journalCount.ExecuteScalarAsync())!);
+        });
+    }
+
+    [Fact]
     public async Task Untracked_legacy_schema_is_rejected_without_creating_a_journal()
     {
         await WithIsolatedSchemaAsync(async db =>
