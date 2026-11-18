@@ -850,11 +850,11 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     const linked = page.waitForResponse(response =>
       response.url().endsWith("/api/perizie/" + periziaId + "/sinistro") &&
       response.request().method() === "POST");
-    await row.getByRole("button", {name: "Collega sinistro"}).click();
+    await row.getByRole("button", {name: "Collega sinistro", exact: true}).click();
     expect((await linked).status()).toBe(201);
     await expect(row.getByText("Sinistro collegato")).toBeVisible();
     await expect(row.getByText(sinRef)).toBeVisible();
-    await expect(row.getByRole("button", {name: "Collega sinistro"})).toHaveCount(0);
+    await expect(row.getByRole("button", {name: "Collega sinistro", exact: true})).toHaveCount(0);
 
     // Reload must not mistake a pre-existing link for an unlinked record.
     await page.reload();
@@ -864,7 +864,7 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
       .locator("li").filter({hasText: reference});
     await restored.getByRole("button", {name: "Sinistro della perizia"}).click();
     await expect(restored.getByText(sinRef)).toBeVisible({timeout: 30_000});
-    await expect(restored.getByRole("button", {name: "Collega sinistro"})).toHaveCount(0);
+    await expect(restored.getByRole("button", {name: "Collega sinistro", exact: true})).toHaveCount(0);
 
     // Explicit unlink never triggers from the initial button alone.
     // A simulated CAS conflict must invalidate stale relation UI instead of
@@ -918,9 +918,9 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
       {headers, data: {sinistroId: sinId}}
     );
     expect(externalLink.status(), await externalLink.text()).toBe(201);
-    await raceRow.getByRole("button", {name: "Collega sinistro"}).click();
+    await raceRow.getByRole("button", {name: "Collega sinistro", exact: true}).click();
     await expect(raceRow.getByRole("alert")).toContainText("Ricarica il collegamento");
-    await expect(raceRow.getByRole("button", {name: "Collega sinistro"})).toHaveCount(0);
+    await expect(raceRow.getByRole("button", {name: "Collega sinistro", exact: true})).toHaveCount(0);
     await raceRow.getByRole("button", {name: "Ricarica collegamento"}).click();
     await expect(raceRow.getByText(sinRef)).toBeVisible({timeout: 30_000});
     await expect(raceRow.getByRole("alert")).toHaveCount(0);
@@ -929,7 +929,7 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     await context.setOffline(true);
     await expect(page.getByRole("status")).toContainText("Sei offline");
     await expect(page.getByText(reference, {exact:true})).toHaveCount(0);
-    await expect(page.getByRole("button", {name: "Collega sinistro"})).toHaveCount(0);
+    await expect(page.getByRole("button", {name: "Collega sinistro", exact: true})).toHaveCount(0);
     await context.setOffline(false);
     await expect(page.getByRole("list", {name: /^(Perizie|Appraisals)$/})
       .getByText(reference, {exact:true})).toBeVisible({timeout: 30_000});
