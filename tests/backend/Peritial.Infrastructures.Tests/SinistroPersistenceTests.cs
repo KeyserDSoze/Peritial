@@ -485,6 +485,64 @@ public sealed class SinistroPersistenceTests
     }
 
     [Fact]
+    public async Task V006_monotonic_link_revision_and_history_reject_ABA_and_rollback_audit()
+    {
+        await using var db = await IsolatedDatabases.CreateAsync();
+        var tenant = TenantId.From(Guid.NewGuid());
+        var ps = new PgPeriziaRepository(db.App);
+        var ss = new PgSinistroRepository(db.App);
+        var links = new PgPeriziaSinistroLinkRepository(db.App);
+        var a = Sinistro.Create(tenant, "V006-ABA-A", new DateOnly(2026,11,18));
+        var b = Sinistro.Create(tenant, "V006-ABA-B", new DateOnly(2026,11,17));
+        var p = Perizia.Create(tenant, "V006-ABA-" + Guid.NewGuid().ToString("N"));
+        await ss.AddAuditedAsync(a, Event(tenant,a.Id,"sinistro.create"));
+        await ss.AddAuditedAsync(b, Event(tenant,b.Id,"sinistro.create"));
+        await ps.AddAuditedAsync(p, Event(tenant,p.Id,"perizia.create"));
+        var initial = await links.ReadAssociationAsync(tenant,p.Id);
+        Assert.Equal(1L, initial.LinkVersion);
+        Assert.Null(initial.SinistroId);
+
+        var rev2 = await links.LinkAuditedAsync(tenant,p.Id,a.Id,1,
+            Event(tenant,p.Id,"perizia.link-sinistro"));
+        var rev3 = await links.ReparentAuditedAsync(tenant,p.Id,a.Id,b.Id,rev2,
+            Event(tenant,p.Id,"perizia.reparent-sinistro"));
+        var rev4 = await links.ReparentAuditedAsync(tenant,p.Id,b.Id,a.Id,rev3,
+            Event(tenant,p.Id,"perizia.reparent-sinistro"));
+        Assert.Equal(new[] {2L,3L,4L}, new[] {rev2,rev3,rev4});
+        Assert.Equal(a.Id, (await links.ReadAssociationAsync(tenant,p.Id)).SinistroId);
+        await Assert.ThrowsAsync<PeriziaConcurrencyConflictException>(() =>
+            links.UnlinkAuditedAsync(tenant,p.Id,a.Id,rev2,
+                Event(tenant,p.Id,"perizia.unlink-sinistro")));
+        await Assert.ThrowsAsync<PeriziaConcurrencyConflictException>(() =>
+            links.ReparentAuditedAsync(tenant,p.Id,a.Id,b.Id,rev2,
+                Event(tenant,p.Id,"perizia.reparent-sinistro")));
+        var duplicate = Event(tenant,p.Id,"perizia.unlink-sinistro");
+        await new PgSecurityAuditTrail(db.App).AppendAsync(duplicate);
+        await Assert.ThrowsAsync<PostgresException>(() =>
+            links.UnlinkAuditedAsync(tenant,p.Id,a.Id,rev4,duplicate));
+        Assert.Equal(rev4,(await links.ReadAssociationAsync(tenant,p.Id)).LinkVersion);
+        var rev5 = await links.UnlinkAuditedAsync(tenant,p.Id,a.Id,rev4,
+            Event(tenant,p.Id,"perizia.unlink-sinistro"));
+        Assert.Equal(5,rev5);
+        var rev6 = await links.LinkAuditedAsync(tenant,p.Id,b.Id,rev5,
+            Event(tenant,p.Id,"perizia.link-sinistro"));
+        Assert.Equal(6,rev6);
+        await using var cmd = db.Admin.CreateCommand(
+            "SELECT revision, previous_sinistro_id, new_sinistro_id " +
+            "FROM perizia_sinistro_history WHERE tenant_id=@tenant AND perizia_id=@p ORDER BY revision");
+        cmd.Parameters.AddWithValue("tenant",tenant.Value);
+        cmd.Parameters.AddWithValue("p",p.Id);
+        await using var reader = await cmd.ExecuteReaderAsync();
+        var history = new List<(long,Guid?,Guid?)>();
+        while (await reader.ReadAsync())
+            history.Add((reader.GetInt64(0),reader.IsDBNull(1)?null:reader.GetGuid(1),
+                reader.IsDBNull(2)?null:reader.GetGuid(2)));
+        Assert.Equal(new (long,Guid?,Guid?)[] {
+            (2,null,a.Id),(3,a.Id,b.Id),(4,b.Id,a.Id),(5,a.Id,null),(6,null,b.Id)
+        },history);
+    }
+
+    [Fact]
     public async Task V004_association_read_returns_unlinked_or_linked_and_hides_foreign_perizia_as_missing()
     {
         await using var db = await IsolatedDatabases.CreateAsync();

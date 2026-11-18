@@ -222,6 +222,59 @@ public sealed class PeriziaSinistroLinkServiceTests
         Assert.Equal(targetId, (await reader.GetPeriziaAssociationAsync(periziaId)).SinistroId);
     }
 
+    [Fact]
+    public async Task V006_aba_rejects_stale_association_version_even_if_sinistro_returns_to_same_uuid()
+    {
+        var tenant = TenantId.From(Guid.NewGuid());
+        var p = Guid.NewGuid();
+        var source = Guid.NewGuid();
+        var target = Guid.NewGuid();
+        var audit = new SpyAudit();
+        var repo = new FakeLinks(audit);
+        repo.OwnedPerizie[p] = tenant;
+        repo.OwnedSinistri[source] = tenant;
+        repo.OwnedSinistri[target] = tenant;
+        var user1 = new PeriziaSinistroLinkService(new Actor(tenant, write:true), repo, audit);
+        var user2 = new PeriziaSinistroLinkService(new Actor(tenant, write:true), repo, audit);
+
+        var snapshot = await user1.GetPeriziaAssociationAsync(p);
+        Assert.Equal(1, snapshot.LinkVersion);
+        Assert.Null(snapshot.SinistroId);
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            user1.LinkAsync(p, source, expectedLinkVersion:0));
+        var first = await user1.LinkAsync(p, source, expectedLinkVersion:snapshot.LinkVersion);
+        Assert.Equal(2, first.LinkVersion);
+        var original = await user1.GetPeriziaAssociationAsync(p);
+        Assert.Equal(source, original.SinistroId);
+
+        var moved = await user2.ReparentAsync(p, source, target,
+            expectedLinkVersion:first.LinkVersion);
+        Assert.Equal(3, moved.LinkVersion);
+        var movedBack = await user2.ReparentAsync(p, target, source,
+            expectedLinkVersion:moved.LinkVersion);
+        Assert.Equal(4, movedBack.LinkVersion);
+        Assert.Equal(source, (await user1.GetPeriziaAssociationAsync(p)).SinistroId);
+
+        // An old reader sees exactly the same UUID as before (ABA), but MUST
+        // NOT be allowed to overwrite/unlink it with a stale link revision.
+        await Assert.ThrowsAsync<PeriziaConcurrencyConflictException>(() =>
+            user1.UnlinkAsync(p, source, expectedLinkVersion:original.LinkVersion));
+        await Assert.ThrowsAsync<PeriziaConcurrencyConflictException>(() =>
+            user1.ReparentAsync(p, source, target, expectedLinkVersion:original.LinkVersion));
+        var current = await user1.GetPeriziaAssociationAsync(p);
+        Assert.Equal(4, current.LinkVersion);
+        Assert.Equal(source, current.SinistroId);
+        var deleted = await user2.UnlinkAsync(p, source,
+            expectedLinkVersion:current.LinkVersion);
+        Assert.Equal(5, deleted.LinkVersion);
+        Assert.Null(deleted.SinistroId);
+        var linkedAgain = await user2.LinkAsync(p, target,
+            expectedLinkVersion:deleted.LinkVersion);
+        Assert.Equal(6, linkedAgain.LinkVersion);
+        Assert.Equal(target, (await user1.GetPeriziaAssociationAsync(p)).SinistroId);
+        Assert.Equal(5, audit.Events.Count(e => e.Outcome == "succeeded"));
+    }
+
     private sealed class Actor(TenantId tenant, bool read = false, bool write = false) : ITenantContext
     {
         public TenantId TenantId => tenant;
