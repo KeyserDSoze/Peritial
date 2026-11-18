@@ -727,7 +727,8 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
     const unlinkedMcp = await mcp(reader, "get_perizia_sinistro", {
       periziaId: aUnlinked.id
     }, 1211);
-    expect(unlinkedMcp).toContain('"sinistroId":null');
+    // JSON-RPC text content may escape the inner DTO quotes.
+    expect(unlinkedMcp).toMatch(/sinistroId.{0,7}null/);
     expect(unlinkedMcp).not.toContain('"isError":true');
 
     const missingReverse = await request.get(api +
