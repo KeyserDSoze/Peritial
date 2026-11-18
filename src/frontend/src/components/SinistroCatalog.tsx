@@ -2,6 +2,7 @@ import {useEffect, useRef, useState, type FormEvent} from "react";
 import {useTranslation} from "react-i18next";
 import {createSinistro, isApiUnavailable, listSinistri, type SinistroSummary} from "../api";
 import {Button} from "./ui/button";
+import {SinistroEditor} from "./SinistroEditor";
 
 type Props = {
   token: string;
@@ -21,6 +22,7 @@ export function SinistroCatalog({token, canWrite, onUnavailable}: Props) {
   const {t} = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const [rows, setRows] = useState<SinistroSummary[]>([]);
+  const [conflictedIds, setConflictedIds] = useState<Set<string>>(() => new Set());
   const [busy, setBusy] = useState<"load" | "create" | null>(null);
   const [error, setError] = useState<"load" | "create" | null>(null);
   const [reference, setReference] = useState("");
@@ -40,6 +42,7 @@ export function SinistroCatalog({token, canWrite, onUnavailable}: Props) {
     setError(null);
     setCreatedReference(null);
     setRows([]);
+    setConflictedIds(new Set());
     try {
       const results = await listSinistri(token);
       if (epoch.current !== current) return;
@@ -59,12 +62,25 @@ export function SinistroCatalog({token, canWrite, onUnavailable}: Props) {
       epoch.current += 1;
       setExpanded(false);
       setRows([]);
+      setConflictedIds(new Set());
       setError(null);
       setCreatedReference(null);
     } else {
       setExpanded(true);
       void load();
     }
+  }
+
+  function applyServerRecord(confirmed: SinistroSummary) {
+    setRows(previous => [...previous.filter(item => item.id !== confirmed.id), confirmed]
+      .sort((a, b) => b.occurredOn.localeCompare(a.occurredOn) ||
+        a.id.localeCompare(b.id))
+      .slice(0, 50));
+    setConflictedIds(previous => {
+      const next = new Set(previous);
+      next.delete(confirmed.id);
+      return next;
+    });
   }
 
   async function create(event: FormEvent) {
@@ -83,9 +99,7 @@ export function SinistroCatalog({token, canWrite, onUnavailable}: Props) {
       // The response came from the server after atomic PostgreSQL/audit
       // commit. Keep the same server ordering/window; show a separate
       // receipt even if an old event date falls outside the recent 50.
-      setRows(previous => [...previous.filter(x => x.id !== confirmed.id), confirmed]
-        .sort((a, b) => b.occurredOn.localeCompare(a.occurredOn) || a.id.localeCompare(b.id))
-        .slice(0, 50));
+      applyServerRecord(confirmed);
       setCreatedReference(confirmed.externalReference);
       setReference("");
       setOccurredOn("");
@@ -152,12 +166,19 @@ export function SinistroCatalog({token, canWrite, onUnavailable}: Props) {
       {rows.length > 0 && <>
         <p className="text-xs text-slate-500 dark:text-slate-400">{t("sinistroCatalogLimit")}</p>
         <ul aria-label={t("sinistroCatalog")} className="divide-y divide-slate-200 dark:divide-slate-800">
-          {rows.map(item => <li key={item.id} className="py-2 text-sm">
-            <strong className="break-words">{item.externalReference}</strong>
-            <p className="text-slate-600 dark:text-slate-300">
-              {t("sinistroOccurredOn")}: {item.occurredOn}
-              {item.reportedOn && <> · {t("sinistroReportedOn")}: {item.reportedOn}</>}
-            </p>
+          {rows.map(item => <li key={item.id} data-sinistro-id={item.id} className="py-2 text-sm">
+            {conflictedIds.has(item.id) ?
+              <p className="text-red-700 dark:text-red-400">{t("sinistroStale")}</p> :
+              <>
+                <strong className="break-words">{item.externalReference}</strong>
+                <p className="text-slate-600 dark:text-slate-300">
+                  {t("sinistroOccurredOn")}: {item.occurredOn}
+                  {item.reportedOn && <> · {t("sinistroReportedOn")}: {item.reportedOn}</>}
+                </p>
+              </>}
+            {canWrite && <SinistroEditor id={item.id} token={token}
+              onUnavailable={onUnavailable} onConfirmed={applyServerRecord}
+              onConflict={id => setConflictedIds(previous => new Set(previous).add(id))} />}
           </li>)}
         </ul>
       </>}
