@@ -203,8 +203,10 @@ public sealed class SinistroPersistenceTests
         var second = await repo.PageAsync(a, new SinistroPageBoundary(date, ids[1]), fetchLimit: 3);
         Assert.Equal(new[] {ids[2]}, second.Select(x => x.Id));
         Assert.All(first.Concat(second), x => Assert.Equal(a, x.TenantId));
-        Assert.Equal(5, (await repo.PageAsync(a, null, fetchLimit: 3))
-            .Concat(await repo.PageAsync(b, null, fetchLimit: 3)).Count() + 1);
+        Assert.Equal(new[] {entities[4].Id},
+            (await repo.PageAsync(b, null, fetchLimit: 3)).Select(x => x.Id));
+        Assert.Empty(await repo.PageAsync(a,
+            new SinistroPageBoundary(date.AddDays(-2), ids[2]), fetchLimit: 3));
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
             () => repo.PageAsync(a, null, fetchLimit: 52));
     }
