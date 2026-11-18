@@ -17,5 +17,6 @@
     <EmbeddedResource Include="../../../scripts/db/migrations/V004__perizie_sinistro_link.sql" />
     <EmbeddedResource Include="../../../scripts/db/migrations/V005__sinistri_audited_delete.sql" />
     <EmbeddedResource Include="../../../scripts/db/migrations/V006__perizie_link_revision_history.sql" />
+    <EmbeddedResource Include="../../../scripts/db/migrations/V007__perizie_link_audit_guards.sql" />
   </ItemGroup>
 </Project>

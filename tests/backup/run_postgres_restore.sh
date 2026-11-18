@@ -35,6 +35,7 @@ PERITIAL_MIGRATOR_POSTGRES="Host=127.0.0.1;Port=55432;Database=peritial;Username
 # Synthetic fixtures from two tenants: perizie, document, audit, completed
 # idempotency key, and an unrelated pending recovery intent.
 docker exec -i "$src" psql -X -U peritial -d peritial -v ON_ERROR_STOP=1 >/dev/null <<'SQL'
+BEGIN;
 INSERT INTO perizie(tenant_id,id,reference,status,created_at_utc) VALUES
  ('11111111-1111-1111-1111-111111111111','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','BACKUP-ONE',-1,now()),
  ('22222222-2222-2222-2222-222222222222','bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb','BACKUP-TWO',-1,now());
@@ -68,6 +69,9 @@ INSERT INTO upload_request_keys(tenant_id,subject_digest,key_digest,request_dige
  decode(repeat('cc',32),'hex'),'cccccccc-cccc-cccc-cccc-cccccccccccc','completed',now());
 INSERT INTO upload_intents(tenant_id,document_id,storage_key) VALUES
  ('22222222-2222-2222-2222-222222222222','ffffffff-ffff-ffff-ffff-ffffffffffff','22222222/pending.pdf');
+-- V007 checks provenance when the transaction commits, never at the
+-- intermediate UPDATE statement before audit/history are inserted.
+COMMIT;
 SQL
 
 # Execute scripts inside pinned PG17 CLI/server image; archive is copied
@@ -144,7 +148,7 @@ SELECT
       AND audit_id='a1a1a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1')=1
  AND (SELECT count(*) FROM upload_intents)=1
  AND (SELECT count(*) FROM upload_request_keys WHERE status='completed')=1
- AND (SELECT count(*) FROM schema_migrations)=6
+ AND (SELECT count(*) FROM schema_migrations)=7
  AND (SELECT count(*) FROM pg_class WHERE relname IN
     ('perizie','documents','security_audit','upload_intents','upload_request_keys',
      'sinistri','perizia_sinistro_history')
