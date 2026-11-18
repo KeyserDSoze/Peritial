@@ -180,6 +180,14 @@ public sealed class SinistroServiceTests
         public Dictionary<Guid, Sinistro> Saved { get; } = [];
         private static Sinistro Snapshot(Sinistro s) => Sinistro.Restore(
             s.Id, s.TenantId, s.ExternalReference, s.OccurredOn, s.ReportedOn, s.CreatedAtUtc, s.PersistedVersion);
+        public Task<IReadOnlyList<Sinistro>> PageAsync(TenantId tenant,
+            SinistroPageBoundary? after, int fetchLimit, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<Sinistro>>(Saved.Values
+                .Where(x => x.TenantId == tenant && (after is null ||
+                    x.OccurredOn < after.OccurredOn ||
+                    (x.OccurredOn == after.OccurredOn && x.Id.CompareTo(after.Id) > 0)))
+                .OrderByDescending(x => x.OccurredOn).ThenBy(x => x.Id)
+                .Take(fetchLimit).Select(Snapshot).ToArray());
         public Task<IReadOnlyList<Sinistro>> ListAsync(TenantId tenant, int limit = 50, CancellationToken ct = default) =>
             Task.FromResult<IReadOnlyList<Sinistro>>(Saved.Values.Where(x => x.TenantId == tenant)
                 .Take(limit).Select(Snapshot).ToArray());
