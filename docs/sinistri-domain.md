@@ -484,3 +484,34 @@ I limiti restano **massimo 50 per ricerca**, nessun cursor/full-text/fuzzy,
 ottimizzazione dell'indice a scala, filtri anagrafiche/polizze, DELETE,
 Entra reale o audit WCAG completo. V003/V004 richiedono sempre
 migrazioni esplicite. [ADR 0038](../adr/0038-pwa-sinistri-server-search.md).
+
+## Paginazione keyset catalogo Sinistri (#7/#12/#13, ADR 0039)
+
+Il catalogo completo dispone ora di `GET /api/sinistri/page?limit=50&cursor=...`
+e del tool MCP read-only `page_sinistri(cursor?,limit=50)`, entrambi delegati
+a `SinistroService.PageAsync` con scope `peritial.read|write`.
+La risposta REST è `{items:[...], nextCursor:string|null}` e non contiene
+`tenantId`, chiavi interne né informazioni di audit. Il cursore è base64url
+canonico, solo posizione `yyyy-MM-dd|UUID`, massimo 128 caratteri, non un
+token autorizzativo. Limite pagina 1–50: la query PostgreSQL sotto FORCE RLS
+usa `limit+1`, ordinamento `occurred_on DESC,id ASC` e seek su data/ID,
+sfruttando l'indice V003 esistente (nessuna nuova migrazione). Cursori malformati
+e limiti illegali producono 400; sessioni anonime 401 e scope insufficienti 403.
+
+La PWA continua a caricare il catalogo **solo su richiesta** e ora usa la
+prima pagina keyset, con «Carica altri sinistri» quando `nextCursor` non
+è nullo. La seconda GET aggiunge righe senza duplicare gli UUID già visti.
+La ricerca per prefisso/data resta separata con un massimo di 50 risultati
+(ADR 0038), **non** è ancora paginata. Reset/filtro/refresh/chiusura/offline/
+token rotation eliminano il cursore obsoleto. Dopo un POST confermato in
+modalità catalogo, il cursore precedente non viene riutilizzato; il nuovo
+record è visibile con ricevuta e l'utente può aggiornare la lista per
+riprendere la paginazione. Errori auth/rete seguono la policy fail-closed.
+
+La paginazione non è uno snapshot globale sotto aggiornamenti concorrenti:
+inserimenti recenti non spostano il boundary né duplicano righe, ma
+modifiche alla **data evento** possono riordinare record. Restano aperti
+cursor per la ricerca filtrata, delete e autorizzazioni conseguenti, filtri
+polizze/anagrafiche, full-text e benchmark sui grandi cataloghi.
+V003/V004 sono sempre migrazioni amministrative manuali.
+[Test e decisione ADR 0039](../adr/0039-sinistri-keyset-pagination.md).
