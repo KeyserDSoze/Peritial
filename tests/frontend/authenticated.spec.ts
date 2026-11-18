@@ -1207,6 +1207,13 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     expect(cancelled.status(),await cancelled.text()).toBe(200);
     await page.getByRole("button",{name:"Aggiorna elenco"}).click();
     await expect(row.getByText("Annullata",{exact:true})).toBeVisible();
+    // Re-open if refresh remounted the picker. Assert the linked target
+    // remains visibly loaded, so the absent button is not a vacuous pass
+    // caused by a closed/collapsed section.
+    const toggleLink = row.getByRole("button",{name:"Sinistro della perizia"});
+    if (await toggleLink.getAttribute("aria-expanded") !== "true")
+      await toggleLink.click();
+    await expect(row.getByText(targetRef,{exact:true})).toBeVisible();
     await expect(row.getByRole("button",{name:"Cambia sinistro collegato"})).toHaveCount(0);
     const terminalAttempt = await request.put(root + "/perizie/" + periziaId + "/sinistro",{
       headers,data:{expectedSinistroId:ids[1],newSinistroId:ids[0]}
