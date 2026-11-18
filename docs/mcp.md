@@ -18,7 +18,7 @@ Esporre le funzionalità tramite Model Context Protocol (SDK ufficiale .NET, HTT
 |---|---|---|
 | Perizie | list_perizie, get_perizia, create_perizia, assign_perizia, advance_perizia, cancel_perizia | lettura scoped e mutazioni REST/MCP con audit atomico e CAS (#9/#12) |
 | Documenti | list_documents, get_document (lettura metadata), ingest_file (base64 limitato); REST multipart | catalogo read-only tenant-scoped + ingestion; download/report ancora aperti (#11/#12) |
-| Sinistri e collegamenti perizie | list_sinistri, search_sinistri, get_sinistro, create_sinistro, update_sinistro, link_perizia_sinistro, list_perizie_for_sinistro, get_perizia_sinistro | list/search/read/create/update Sinistri; relazione opzionale FK tenant-scoped e audit atomico, senza reparent/delete/CRUD Sinistri UI completo (#7/#9/#12/#13) |
+| Sinistri e collegamenti perizie | list_sinistri, search_sinistri, get_sinistro, create_sinistro, update_sinistro, link_perizia_sinistro, list_perizie_for_sinistro, get_perizia_sinistro, unlink_perizia_sinistro | list/search/read/create/update Sinistri; link/unlink esplicito con FK tenant-scoped e audit atomico, senza reparent atomico/CRUD Sinistri UI completo (#7/#9/#12/#13) |
 | Anagrafiche, import XML, report, messaggi, contabilità, KPI | tool dedicati per ciascun use case | iterazioni successive |
 
 Per file grandi: non trasportare payload di gigabyte via JSON MCP; fornire un tool per ottenere URL di upload firmati/scoped e una procedura di completamento (da implementare). Una tool call MCP non equivale ad accesso indiscriminato al filesystem.
@@ -356,3 +356,22 @@ senza aprire l'endpoint di cancellazione. Non esiste ancora una
 modalità abilitabile in produzione: mancano la policy retention/legal
 hold, le approvazioni e i test legali dell'issue #22.
 [ADR 0042](../adr/0042-sinistri-delete-development-gate.md).
+
+## Unlink esplicito Perizia–Sinistro (#7/#9/#12/#21, ADR 0043)
+
+Il nuovo tool `unlink_perizia_sinistro(periziaId,expectedSinistroId)`
+condivide la Business API con `DELETE /api/perizie/{id}/sinistro?expectedSinistroId=UUID`.
+Richiede lo scope firmato `peritial.write`, mai un tenantId dal client.
+`expectedSinistroId` **non** è una password né il nuovo target:
+è il link corrente che l'utente ha letto in precedenza; in PostgreSQL
+si esegue `UPDATE perizie SET sinistro_id=NULL WHERE tenant_id=@tenant
+AND id=@perizia AND sinistro_id=@expected`, prima dell'audit
+`perizia.unlink-sinistro/succeeded` nello stesso commit.
+Assente/foreign → 404 indistinguibile; link nullo o cambiato → 409,
+nessun successo audit. Il tool ritorna
+`{periziaId,sinistroId:null}` quando il commit è riuscito;
+REST ritorna 204. Se è necessaria una nuova associazione,
+occorre una distinta chiamata esplicita `link_perizia_sinistro`;
+nessun reparent implicito o cambiamento di Sinistro/Perizia.
+Non modifica il gate V005 hard-delete (#22).
+[ADR 0043](../adr/0043-perizia-sinistro-explicit-unlink.md).

@@ -95,3 +95,11 @@ unlink/reparent, anagrafiche/polizze, import Classic,
 WCAG audit formale o provider Entra ID produttivo.
 Nessuna migrazione nuova: V004 resta esplicita.
 Le issue #7, #12 e #13 restano aperte.
+
+## Evoluzione successiva (18 novembre 2026)
+
+La limitazione storica «unlink non implementato» è stata superata
+dall'[ADR 0043](0043-perizia-sinistro-explicit-unlink.md): REST/MCP e
+PWA ora supportano **solo unlink esplicito con expectedSinistroId**,
+audit atomico e conferma utente. Rimane non implementato il reparent
+atomico, insieme agli altri punti fuori scope di questa decisione.

@@ -619,3 +619,36 @@ Test RED→GREEN in `SinistroServiceTests`, E2E PKCE Keycloak
 web normale negato, client esplicito consentito soltanto su CI
 Development, HTTP 403/204 e MCP denial/success.
 [ADR 0042](../adr/0042-sinistri-delete-development-gate.md).
+
+## Scollegamento esplicito e controllato Perizia–Sinistro (#7/#9, ADR 0043)
+
+Evoluzione additiva del link V004: `DELETE /api/perizie/{id}/sinistro?expectedSinistroId=UUID`
+e MCP `unlink_perizia_sinistro(periziaId,expectedSinistroId)`
+accettano soltanto il Sinistro letto dal client come expected value.
+Non è disponibile nessun reparent automatico.
+Con `peritial.write` e tenant JWT verificati, il repository applica
+un **unico UPDATE CAS** su `perizie(tenant_id,id,sinistro_id)`
+con FORCE RLS. Nel medesimo commit aggiunge audit
+`perizia.unlink-sinistro/succeeded`, privo di body e tenant ID DTO.
+Se l'audit fallisce, l'UPDATE viene rollbackato; se il link è
+cambiato o già nullo, 409 senza falso audit di successo; se la
+Perizia è foreign/missing, 404 equivalente. Il diniego di scope
+appende audit `denied` senza resource UUID.
+
+La PWA espone lo scollegamento **soltanto** dopo aver letto la relazione
+firmata: doppia conferma con testo esplicativo, richiesta unica senza
+retry automatico, GET fresh dopo HTTP 204, pulsante separato per
+annullare la conferma. Un 409 invalida il link mostrato e richiede
+«Ricarica collegamento» prima di ogni altro invio; rete offline o
+token scaduto chiudono la vista tenant. I label sono it/en e usabili
+via tastiera. Per ricollegare la Perizia si usa nuovamente la
+ricerca server-side e `POST` link standard con CAS:
+non c'è un'operazione atomica di sostituzione fra due Sinistri.
+Nessuna migrazione V006, modifica dei documenti, cancellazione
+della Perizia o del Sinistro. Il gate produttivo di hard-delete
+ADR 0042 / #22 resta **bloccato** e indipendente.
+
+Test RED→GREEN Business/PG17 least-privileged tenant, conflitti,
+link stranieri e audit rollback; Playwright REST/MCP con JWT Keycloak,
+PWA conferma/annulla/409/reload/204/GET e offline.
+[ADR 0043](../adr/0043-perizia-sinistro-explicit-unlink.md).

@@ -44,3 +44,17 @@ e disponibile soltanto quando scope e gate Development sono
 entrambi soddisfatti. L'assenza di una policy retention/legal hold
 mantiene il gate di produzione disabilitato.
 [ADR 0042](../adr/0042-sinistri-delete-development-gate.md).
+
+## Perizia.unlink-sinistro (#7/#9/#21, ADR 0043)
+
+Lo scollegamento esplicito registra `perizia.unlink-sinistro`
+come evento append-only `succeeded` con resource UUID della
+Perizia, tenant e soggetto firmati, **nel medesimo commit**
+dell'UPDATE CAS su `perizie.sinistro_id`. Conflitti e ID
+assenti/foreign non generano false righe di successo.
+Denial OAuth `peritial.write` è auditato con
+`outcome=denied` e `resource_id=NULL` prima di accedere
+ai dati. Si conserva la storia del link originario nell'audit
+`perizia.link-sinistro`; la rimozione dell'associazione non
+cancella audit, Sinistri, Perizie o documenti.
+[ADR 0043](../adr/0043-perizia-sinistro-explicit-unlink.md).

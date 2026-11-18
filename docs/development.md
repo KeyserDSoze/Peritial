@@ -1147,3 +1147,21 @@ Test RED→GREEN in `SinistroServiceTests`, E2E PKCE Keycloak
 web normale negato, client esplicito consentito soltanto su CI
 Development, HTTP 403/204 e MCP denial/success.
 [ADR 0042](../adr/0042-sinistri-delete-development-gate.md).
+
+## Perizie–Sinistri: scollegamento esplicito senza reparent implicito (#7/#9/#13, ADR 0043)
+
+Il `DELETE /api/perizie/{id}/sinistro?expectedSinistroId=UUID`
+esegue il CAS atomico sul link osservato e risponde 204 soltanto
+dopo l'audit; `unlink_perizia_sinistro` è il tool MCP equivalente.
+Il browser deve leggere il link firmato prima di mostrare
+«Scollega sinistro» e richiede «Conferma scollegamento»;
+«Annulla scollegamento» non chiama API. Dopo 204
+fa un GET per verificare la relazione corrente, senza successo
+ottimistico. Su 409 cancella l'associazione obsoleta e impone
+il pulsante «Ricarica collegamento»; su 401/403/network
+svuota la vista protetta, senza coda offline.
+`expectedSinistroId` è sempre derivato dalla risposta firmata,
+mai dal form o dal parametro tenant. Testano due flussi E2E:
+REST/MCP reale con conflitti e PWA con 409 mock, conferma e refetch.
+`sinistro.delete` resta bloccato in produzione dal gate #22.
+[ADR 0043](../adr/0043-perizia-sinistro-explicit-unlink.md).
