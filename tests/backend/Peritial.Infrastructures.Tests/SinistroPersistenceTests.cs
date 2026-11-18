@@ -442,6 +442,20 @@ public sealed class SinistroPersistenceTests
         Assert.Equal(source.Id, await links.FindSinistroIdForPeriziaAsync(a, perizia.Id));
         Assert.Equal(new[] {perizia.Id}, await links.ListPeriziaIdsAsync(a, source.Id));
 
+        // Terminal workflow is not editable: a billed, duplicated or
+        // cancelled perizia must never have its Sinistro silently replaced.
+        var cancelled = Perizia.Create(a, "REPAR-PG-CANCELLED-" + Guid.NewGuid().ToString("N"));
+        await perizie.AddAuditedAsync(cancelled, Event(a, cancelled.Id, "perizia.create"));
+        await links.LinkAuditedAsync(a, cancelled.Id, source.Id,
+            Event(a, cancelled.Id, "perizia.link-sinistro"));
+        cancelled.Cancel(a);
+        await perizie.UpdateAuditedAsync(cancelled,
+            Event(a, cancelled.Id, "perizia.cancel"));
+        await Assert.ThrowsAsync<PeriziaConcurrencyConflictException>(() =>
+            links.ReparentAuditedAsync(a, cancelled.Id, source.Id, target.Id,
+                Event(a, cancelled.Id, "perizia.reparent-sinistro")));
+        Assert.Equal(source.Id, await links.FindSinistroIdForPeriziaAsync(a, cancelled.Id));
+
         var duplicate = Event(a, perizia.Id, "perizia.reparent-sinistro");
         await new PgSecurityAuditTrail(db.App).AppendAsync(duplicate);
         var error = await Assert.ThrowsAsync<PostgresException>(() =>
