@@ -117,6 +117,16 @@ Un errore audit provoca rollback completo. Il Business
 audita `denied` per chi invoca senza scope; il blocco
 REST avviene prima tramite policy globale.
 
+**Nota serializzazione MCP:** il DTO in REST include sempre
+`sinistroId:null` se la perizia è visibile ma non collegata.
+Nel testo di risposta JSON-RPC del tool MCP, la serializzazione
+del valore nullable omette il campo `sinistroId` quando è
+`null`: il risultato senza quel campo e senza
+`isError:true` indica **perizia visibile non collegata**;
+ID assente/foreign continua a produrre un errore MCP.
+I client non devono interpretare l'omissione come
+una relazione sconosciuta, né inferire un tenant.
+
 Il nuovo read model della singola perizia distingue
 **perizia visibile ma non collegata** (`sinistroId:null`) da
 **perizia assente o estranea** (404 REST, errore MCP).
