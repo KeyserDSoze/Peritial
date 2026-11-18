@@ -1035,6 +1035,173 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     await expect(page.getByRole("button", {name: "Crea"})).toBeEnabled();
   });
 
+  test("Perizia–Sinistro reparent CAS replaces only signed expected link via REST and MCP", async ({page, request}) => {
+    test.setTimeout(120_000);
+    await page.goto("/");
+    await page.getByRole("button", {name:"Accedi"}).click();
+    await expect(page.locator("#username")).toBeVisible({timeout:30_000});
+    await page.locator("#username").fill("localuser");
+    await page.locator("#password").fill("local-only-user");
+    await page.locator("#kc-login").click();
+    await expect(page.getByRole("button", {name:"Esci"})).toBeVisible({timeout:30_000});
+    const token = await page.evaluate(() => {
+      const key = Object.keys(sessionStorage).find(x => x.startsWith("oidc.user:"));
+      return key ? (JSON.parse(sessionStorage.getItem(key) || "{}") as {access_token?:string}).access_token : undefined;
+    });
+    expect(token).toBeTruthy();
+    const headers = {Authorization:"Bearer " + token};
+    const root = "http://localhost:8080/api";
+    const stamp = Date.now() + "-" + Math.floor(Math.random()*100000);
+    const created = await request.post(root + "/perizie", {headers,
+      data:{reference:"CAS-REP-P-" + stamp}});
+    expect(created.status(), await created.text()).toBe(201);
+    const id = (await created.json() as {id:string}).id;
+    const sinistri: string[] = [];
+    for (const suffix of ["OLD","NEW"]) {
+      const item = await request.post(root + "/sinistri", {headers,
+        data:{externalReference:"CAS-REP-S-" + stamp + "-" + suffix,
+          occurredOn:"2026-11-18"}});
+      expect(item.status(), await item.text()).toBe(201);
+      sinistri.push((await item.json() as {id:string}).id);
+    }
+    const linked = await request.post(root + "/perizie/" + id + "/sinistro", {
+      headers, data:{sinistroId:sinistri[0]}});
+    expect(linked.status(), await linked.text()).toBe(201);
+
+    const url = root + "/perizie/" + id + "/sinistro";
+    const reparent = (expectedSinistroId:string, newSinistroId:string,
+      h?:Record<string,string>) => request.put(url, {
+        ...(h ? {headers:h} : {}), data:{expectedSinistroId,newSinistroId}
+      });
+    expect((await reparent(sinistri[0],sinistri[1])).status()).toBe(401);
+    const readGrant = await request.post(
+      "http://localhost:8081/realms/peritial/protocol/openid-connect/token", {
+        form:{grant_type:"password",client_id:"peritial-test-readonly",
+          username:"localuser",password:"local-only-user"}
+      });
+    expect(readGrant.status(),await readGrant.text()).toBe(200);
+    const readToken = (await readGrant.json() as {access_token:string}).access_token;
+    expect((await reparent(sinistri[0],sinistri[1],
+      {Authorization:"Bearer " + readToken})).status()).toBe(403);
+    expect((await reparent(sinistri[0],sinistri[0],headers)).status()).toBe(400);
+    expect((await reparent(sinistri[1],sinistri[0],headers)).status()).toBe(409);
+    expect((await reparent(sinistri[0],"00000000-0000-0000-0000-000000000099",headers)).status()).toBe(404);
+    const before = await request.get(url,{headers});
+    expect((await before.json() as {sinistroId:string}).sinistroId).toBe(sinistri[0]);
+
+    const moved = await reparent(sinistri[0],sinistri[1],headers);
+    expect(moved.status(),await moved.text()).toBe(200);
+    expect(await moved.json()).toEqual({periziaId:id,sinistroId:sinistri[1]});
+    expect((await request.get(url,{headers}).then(r=>r.json()) as {sinistroId:string}).sinistroId)
+      .toBe(sinistri[1]);
+    expect((await request.get(root + "/sinistri/" + sinistri[0],{headers})).status()).toBe(200);
+    expect((await request.get(root + "/sinistri/" + sinistri[1],{headers})).status()).toBe(200);
+    expect((await reparent(sinistri[0],sinistri[1],headers)).status()).toBe(409);
+
+    const mcp = await request.post("http://localhost:8080/mcp", {
+      headers:{...headers,Accept:"application/json,text/event-stream",
+        "Content-Type":"application/json"},
+      data:{jsonrpc:"2.0",id:944,method:"tools/call",params:{
+        name:"reparent_perizia_sinistro",arguments:{
+          periziaId:id, expectedSinistroId:sinistri[1],newSinistroId:sinistri[0]
+        }
+      }}
+    });
+    expect(mcp.ok(),await mcp.text()).toBeTruthy();
+    expect(await mcp.text()).not.toContain('"isError":true');
+    expect((await request.get(url,{headers}).then(r=>r.json()) as {sinistroId:string}).sinistroId)
+      .toBe(sinistri[0]);
+  });
+
+  test("PWA reparent requires two confirmations, rejects stale link and refetches committed target", async ({page, request}) => {
+    test.setTimeout(120_000);
+    await page.goto("/");
+    await page.getByRole("button", {name:"Accedi"}).click();
+    await expect(page.locator("#username")).toBeVisible({timeout:30_000});
+    await page.locator("#username").fill("localuser");
+    await page.locator("#password").fill("local-only-user");
+    await page.locator("#kc-login").click();
+    await expect(page.getByRole("button", {name:"Esci"})).toBeVisible({timeout:30_000});
+    const token = await page.evaluate(() => {
+      const key = Object.keys(sessionStorage).find(x => x.startsWith("oidc.user:"));
+      return key ? (JSON.parse(sessionStorage.getItem(key) || "{}") as {access_token?:string}).access_token : undefined;
+    });
+    expect(token).toBeTruthy();
+    const headers = {Authorization:"Bearer " + token};
+    const root = "http://localhost:8080/api";
+    const stamp = Date.now() + "-" + Math.floor(Math.random()*100000);
+    const sourceRef = "UI-REP-" + stamp + "-OLD";
+    const targetRef = "UI-REP-" + stamp + "-NEW";
+    const ids: string[] = [];
+    for (const externalReference of [sourceRef,targetRef]) {
+      const created = await request.post(root + "/sinistri", {headers,
+        data:{externalReference,occurredOn:"2026-11-18"}});
+      expect(created.status(),await created.text()).toBe(201);
+      ids.push((await created.json() as {id:string}).id);
+    }
+    const periziaRef = "UI-REP-P-" + stamp;
+    const p = await request.post(root + "/perizie", {headers,data:{reference:periziaRef}});
+    expect(p.status(),await p.text()).toBe(201);
+    const periziaId = (await p.json() as {id:string}).id;
+    const linked = await request.post(root + "/perizie/" + periziaId + "/sinistro",
+      {headers,data:{sinistroId:ids[0]}});
+    expect(linked.status(),await linked.text()).toBe(201);
+
+    await page.getByRole("button", {name:"Aggiorna elenco"}).click();
+    const row = page.getByRole("list", {name:/^(Perizie|Appraisals)$/}).locator("li")
+      .filter({hasText:periziaRef});
+    await expect(row).toBeVisible();
+    await row.getByRole("button", {name:"Sinistro della perizia"}).click();
+    await expect(row.getByText(sourceRef,{exact:true})).toBeVisible();
+    await row.getByRole("button", {name:"Cambia sinistro collegato"}).click();
+    await expect(row.getByRole("button",{name:"Annulla riassegnazione"})).toBeVisible();
+    await expect(row.getByText(sourceRef,{exact:true})).toBeVisible();
+    await row.getByRole("textbox",{name:"Cerca per riferimento sinistro"}).fill("UI-REP-" + stamp);
+    await row.getByRole("button",{name:"Cerca sinistri"}).click();
+    const choice = row.getByRole("combobox",{name:"Seleziona sinistro"});
+    await expect(choice).toContainText(targetRef);
+    await choice.selectOption(ids[1]);
+    await row.getByRole("button",{name:"Rivedi riassegnazione"}).click();
+    await expect(row.getByRole("button",{name:"Conferma riassegnazione"})).toBeVisible();
+    await row.getByRole("button",{name:"Annulla riassegnazione"}).click();
+    expect((await request.get(root + "/perizie/" + periziaId + "/sinistro",{headers})
+      .then(r=>r.json()) as {sinistroId:string}).sinistroId).toBe(ids[0]);
+
+    await row.getByRole("button",{name:"Cambia sinistro collegato"}).click();
+    await row.getByRole("textbox",{name:"Cerca per riferimento sinistro"}).fill("UI-REP-" + stamp);
+    await row.getByRole("button",{name:"Cerca sinistri"}).click();
+    await row.getByRole("combobox",{name:"Seleziona sinistro"}).selectOption(ids[1]);
+    await row.getByRole("button",{name:"Rivedi riassegnazione"}).click();
+    const reparentPattern = "**/api/perizie/*/sinistro";
+    await page.route(reparentPattern, async route => {
+      if (route.request().method() === "PUT")
+        await route.fulfill({status:409,contentType:"application/json",body:'{"error":"stale"}'});
+      else await route.continue();
+    });
+    await row.getByRole("button",{name:"Conferma riassegnazione"}).click();
+    await expect(row.getByRole("alert")).toContainText("Ricarica il collegamento");
+    await expect(row.getByRole("button",{name:"Conferma riassegnazione"})).toHaveCount(0);
+    await page.unroute(reparentPattern);
+    await row.getByRole("button",{name:"Ricarica collegamento"}).click();
+    await expect(row.getByText(sourceRef,{exact:true})).toBeVisible();
+
+    await row.getByRole("button",{name:"Cambia sinistro collegato"}).click();
+    await row.getByRole("textbox",{name:"Cerca per riferimento sinistro"}).fill("UI-REP-" + stamp);
+    await row.getByRole("button",{name:"Cerca sinistri"}).click();
+    await row.getByRole("combobox",{name:"Seleziona sinistro"}).selectOption(ids[1]);
+    await row.getByRole("button",{name:"Rivedi riassegnazione"}).click();
+    const response = page.waitForResponse(r =>
+      r.url().includes("/api/perizie/" + periziaId + "/sinistro") &&
+      r.request().method() === "PUT");
+    await row.getByRole("button",{name:"Conferma riassegnazione"}).click();
+    expect((await response).status()).toBe(200);
+    await expect(row.getByText(targetRef,{exact:true})).toBeVisible({timeout:30_000});
+    await expect(row.getByRole("status")).toContainText("Riassegnazione confermata");
+    expect((await request.get(root + "/perizie/" + periziaId + "/sinistro",{headers})
+      .then(r=>r.json()) as {sinistroId:string}).sinistroId).toBe(ids[1]);
+    expect((await request.get(root + "/sinistri/" + ids[0],{headers})).status()).toBe(200);
+  });
+
   test("Perizia–Sinistro unlink requires signed expected association and commits via REST/MCP", async ({page, request}) => {
     test.setTimeout(120_000);
     await page.goto("/");
