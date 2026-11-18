@@ -90,7 +90,7 @@ public sealed class McpTools(
         DateOnly? reportedOn = null, CancellationToken ct = default) =>
         sinistri.UpdateAsync(id, externalReference, occurredOn, reportedOn, expectedVersion, ct);
 
-    [McpServerTool(Name = "delete_sinistro"), Description("Deletes an unlinked Sinistro only with signed peritial.write and last-observed expectedVersion; linked perizie and stale versions conflict, deletion and audit are atomic.")]
+    [McpServerTool(Name = "delete_sinistro"), Description("Development-only when the hard-delete gate is explicitly enabled; requires signed peritial.write AND peritial.sinistri.delete. Without both scopes and the gate, deletion is denied and audited. Retention/legal hold and production approval are not implemented. Linked perizie and stale expectedVersion conflict; SQL deletion and audit are atomic.")]
     public async Task<bool> DeleteSinistro(Guid id, long expectedVersion, CancellationToken ct = default)
     {
         await sinistri.DeleteAsync(id, expectedVersion, ct);

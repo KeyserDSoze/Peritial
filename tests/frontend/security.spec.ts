@@ -108,6 +108,34 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
     expect(await tool.text()).toContain('"isError":true');
   });
 
+  test("ordinary signed writer cannot hard-delete Sinistri via REST or MCP", async ({request}) => {
+    const writer = await tokenFor(request, "peritial-test-write");
+    const claims = JSON.parse(Buffer.from(writer.split(".")[1], "base64url")
+      .toString("utf-8")) as {scope?:string};
+    expect(claims.scope).toContain("peritial.write");
+    expect(claims.scope).not.toContain("peritial.sinistri.delete");
+    const headers = {Authorization:"Bearer " + writer};
+    const created = await request.post(api + "/api/sinistri", {
+      headers,
+      data:{externalReference:"DENIED-DELETE-" + Date.now() + "-" +
+        Math.round(Math.random()*10000), occurredOn:"2026-11-18"}
+    });
+    expect(created.status(), await created.text()).toBe(201);
+    const id = (await created.json() as {id:string}).id;
+    const url = api + "/api/sinistri/" + id;
+    const denied = await request.delete(url + "?expectedVersion=1", {headers});
+    expect(denied.status(), await denied.text()).toBe(403);
+    expect(denied.headers()["cache-control"]).toContain("no-store");
+    const deniedMcp = await request.post(api + "/mcp", {
+      headers:mcpHeaders(writer),
+      data:{jsonrpc:"2.0", id:8098, method:"tools/call",
+        params:{name:"delete_sinistro", arguments:{id,expectedVersion:1}}}
+    });
+    expect(deniedMcp.ok(), await deniedMcp.text()).toBeTruthy();
+    expect(await deniedMcp.text()).toContain('"isError":true');
+    expect((await request.get(url, {headers})).status()).toBe(200);
+  });
+
   test("tokens without Peritial scope cannot enter REST or MCP", async ({request}) => {
     const none = await tokenFor(request, "peritial-test-no-scope");
     const list = await request.get(api + "/api/perizie", {

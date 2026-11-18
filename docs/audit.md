@@ -31,3 +31,16 @@ transazione PostgreSQL**; un audit fallito annulla la cancellazione.
 Un errore FK `fk_perizie_sinistro_same_tenant` impedisce la mutazione
 e non emette un falso successo. Un diniego di scope ha l'outcome
 `denied` senza resource ID. [ADR 0041](../adr/0041-sinistri-v005-audited-cas-delete.md).
+
+## ADR 0042 — audit per gate hard-delete Sinistri (#22)
+
+Le chiamate DELETE rifiutate da `peritial.write` mancante,
+`peritial.sinistri.delete` mancante o
+`SinistroDeletionGate` spento appendono
+`sinistro.delete/denied` con `resource_id = NULL`, senza
+consultare la riga, il riferimento esterno o i link alla Perizia.
+L'audit di successo resta **transazionale** con il DELETE
+e disponibile soltanto quando scope e gate Development sono
+entrambi soddisfatti. L'assenza di una policy retention/legal hold
+mantiene il gate di produzione disabilitato.
+[ADR 0042](../adr/0042-sinistri-delete-development-gate.md).

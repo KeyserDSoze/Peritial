@@ -60,3 +60,13 @@ Resta aperto: policy legal hold/retention, workflow di cancellazione
 con approvazioni, restore auditato in caso di errore operativo,
 soft delete/archiviazione se il dominio lo richiederà, perizie
 reparent/unlink, full-text, anagrafiche e deploy reali (#7/#6/#21).
+
+## Evoluzione successiva — ADR 0042
+
+La V005 qui definita non viene modificata. Il successivo
+[ADR 0042](0042-sinistri-delete-development-gate.md) impedisce
+di fatto la cancellazione REST/MCP in ogni ambiente produttivo
+finché non saranno codificati retention, legal hold, approvazioni
+e scope dedicato. `peritial.write` da solo non autorizza più
+`sinistro.delete` e persino il client dev con scope distruttivo
+richiede abilitazione separata del gate Development.

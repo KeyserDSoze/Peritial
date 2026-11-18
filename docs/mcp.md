@@ -322,8 +322,13 @@ e continua a restituire un elenco limitato (default 10, max 50).
 
 `delete_sinistro(id:UUID,expectedVersion:long)` è un'operazione
 mutativa che usa `SinistroService.DeleteAsync` in comune con
-`DELETE /api/sinistri/{id}?expectedVersion=N`. È obbligatorio
-`peritial.write`; il tool non riceve tenant ID né permessi nel payload.
+`DELETE /api/sinistri/{id}?expectedVersion=N`. Sono ora obbligatori
+**entrambi** gli scope firmati `peritial.write` e
+`peritial.sinistri.delete`, oltre al gate solo-Development
+`Sinistri:EnableDevelopmentDelete=true`. In produzione il tool
+è sempre disabilitato anche quando il flag è configurato: l'API
+fallisce l'avvio per evitare abilitazioni accidentali. Il tool non
+riceve tenant ID né permessi nel payload.
 Ritorna `true` soltanto dopo che la cancellazione del caso **senza**
 Perizie collegate e l'evento audit `sinistro.delete` sono stati
 committati insieme. Il SQL CAS nega versioni obsolete e la FK composta
@@ -334,3 +339,20 @@ privilegio DELETE solo attraverso migrazione V005 amministrativa;
 il ruolo recovery resta senza accesso. Restano da definire retention
 e legal hold prima di abilitare una UI di cancellazione.
 [ADR 0041](../adr/0041-sinistri-v005-audited-cas-delete.md).
+
+## Evoluzione ADR 0042 — gate fall-closed per DELETE Sinistri (#22)
+
+La modifica di #22 introduce un permesso OAuth **non assegnato**
+ai client web e ai writer normali: `peritial.sinistri.delete` è
+necessario **in aggiunta** a `peritial.write`. Il Business controlla
+gli scope firmati e il gate immutabile prima della lettura del Sinistro,
+indipendentemente dal trasporto REST o MCP. Mancanza di uno dei
+permessi o gate disabilitato restituisce diniego, con audit
+`sinistro.delete/denied` e `resource_id = NULL`.
+`Sinistri:EnableDevelopmentDelete` è falso per default; può essere
+abilitato soltanto in Development per la fixture E2E separata.
+La configurazione true in ambienti non-Development arresta l'API
+senza aprire l'endpoint di cancellazione. Non esiste ancora una
+modalità abilitabile in produzione: mancano la policy retention/legal
+hold, le approvazioni e i test legali dell'issue #22.
+[ADR 0042](../adr/0042-sinistri-delete-development-gate.md).

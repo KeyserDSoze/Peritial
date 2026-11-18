@@ -1113,3 +1113,37 @@ temporaneo, senza falsificare il journal dello storico Compose V001.
 Il migrator amministrativo applica V005 con account DDL su
 database versionati e backup verificato.
 [ADR 0041](../adr/0041-sinistri-v005-audited-cas-delete.md).
+
+## Sinistri: hard-delete disabilitata per default (#22, ADR 0042)
+
+La mutazione V005 di ADR 0041 è protetta da due gate indipendenti
+nel **Business** e vale per REST e MCP. Lo scope firmato
+`peritial.write` non è più sufficiente: occorre anche il nuovo
+`peritial.sinistri.delete`. Questo scope non compare tra i
+`defaultClientScopes` della PWA né dei client `peritial-test-write`.
+Il realm demo fornisce un *solo* client di test esplicito
+`peritial-test-delete` con password grant per test CI effimeri;
+**non è un modello di client produttivo**.
+
+Il gate `SinistroDeletionGate` è **spento per default**, anche in
+Development. Può essere acceso soltanto per test effimeri mediante
+`Sinistri__EnableDevelopmentDelete=true` mentre
+`ASPNETCORE_ENVIRONMENT=Development`. In altri ambienti,
+`true` fa fallire l'avvio; non esiste una configurazione per
+abilitare un hard-delete di produzione prima che policy retention,
+legal hold, autorizzazioni più restrittive e approvazioni siano
+codificate. Inoltre il Business non può cancellare senza il gate,
+anche se uno strato REST/MCP viene modificato.
+
+Un rifiuto di scope o gate viene auditato come
+`sinistro.delete/denied` **senza resource ID**, evitando
+qualunque lookup del record o rivelazione cross-tenant. Dopo
+il gate positivo restano il CAS `expectedVersion`, il controllo
+tenant FORCE RLS, la FK V004 RESTRICT e audit atomico V005.
+Questa tranche **non soddisfa ancora** i requisiti di conservazione
+di #22, non abilita il pulsante UI e non attesta cancellazioni legali.
+
+Test RED→GREEN in `SinistroServiceTests`, E2E PKCE Keycloak
+web normale negato, client esplicito consentito soltanto su CI
+Development, HTTP 403/204 e MCP denial/success.
+[ADR 0042](../adr/0042-sinistri-delete-development-gate.md).
