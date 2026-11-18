@@ -731,3 +731,90 @@ dopo applicazione esplicita della migrazione.
 Non è completato il modello legacy di polizze,
 anagrafiche, ricerca composita, UI, reparent o
 import Accertatore/Classic.
+
+
+## PWA: selezione Sinistro per singola Perizia (#7/#12/#13, ADR 0035)
+
+La PWA ora include `PeriziaSinistroPicker` sotto
+ogni `PeriziaWorkflow`. Il pannello è **chiuso per
+default** e consulta il server soltanto quando
+l'operatore lo apre: evita letture N+1 nella lista
+perizie. Al primo accesso usa
+`GET /api/perizie/{id}/sinistro` con il JWT
+firmato corrente. Il DTO `{periziaId,sinistroId:
+UUID|null}` distingue una perizia visibile
+e ancora scollegata (200/null) da una perizia
+mancante/di altro tenant (404). Il nuovo tool
+MCP `get_perizia_sinistro(periziaId)` condivide
+esattamente il servizio Business. Una perizia
+già collegata appare con il riferimento del
+sinistro verificato tramite
+`GET /api/sinistri/{id}`, senza pulsanti
+per ripetere il link.
+
+Per una perizia non collegata, l'utente ricerca
+esplicitamente per prefisso (2–100 caratteri)
+tramite `GET /api/sinistri/search?prefix=...&limit=20`.
+Il risultato viene filtrato **sul server**
+da tenant/FORCE RLS, wildcard letterali e
+limite applicato dopo i predicati; la PWA
+offre un select etichettato con riferimento
+e data evento, non accetta tenant dal form.
+`POST /api/perizie/{id}/sinistro` è
+inviato **una sola volta dopo selezione**
+e aggiorna il pannello soltanto dopo
+conferma 201. Lo scope `peritial.write`
+della sessione OIDC è un indizio di UI
+per nascondere controlli ai lettori;
+la decisione definitiva resta nel server.
+
+Un **409** (link concorrente o già presente)
+non trasforma il candidato in relazione:
+la UI invalida i risultati e chiede
+«Ricarica collegamento», rifacendo
+GET con il token corrente prima di
+mostrare il nuovo stato. Un 401/403,
+network error, timeout, 429 o 5xx
+cancella la lista protetta e blocca
+ogni scrittura, come le altre sezioni.
+Un 404 sul dettaglio della perizia,
+ormai non visibile, produce anch'esso
+fail-closed. Cambi di query, chiusura,
+token e unmount invalidano le risposte
+asincrone precedenti. Offline, le perizie
+sono nascoste e non esiste coda/replay
+di mutazioni. Messaggi e form in it/en.
+
+**TDD e prove**:
+- `PeriziaSinistroLinkServiceTests`: read model
+  linked/unlinked, scope reader/write, ID
+  foreign/missing e nessun audit in lettura.
+- `SinistroPersistenceTests`: PostgreSQL V004
+  reale con tenant A/B e FORCE RLS, lettura
+  perizia visibile non collegata, link
+  confermato e 404 cross-tenant.
+- `tests/frontend/authenticated.spec.ts`:
+  login PWA PKCE vero, sinistro creato via
+  REST, selezione UI, POST 201, ricarica
+  pagina con associazione persistita;
+  altro client collega una seconda perizia
+  prima del POST PWA e causa 409, dopo
+  cui il reload rivela il link corrente;
+  test offline senza dati né coda.
+- `tests/frontend/security.spec.ts`:
+  due JWT Keycloak firmati, perizia
+  linked/null per REST+MCP, ID foreign
+  indistinguibile da missing (404),
+  readonly, anonimo 401 e DTO senza
+  tenant ID.
+
+**Non comprende** creazione o edit
+Sinistri da PWA, ricerca senza click/
+debounce, filtri avanzati o cursor,
+unlink/reparent, import Classic,
+anagrafiche/polizze, IAM Entra reale
+o audit completo WCAG. La migrazione
+V004 resta manuale su database
+versionati: nel Compose test si applica
+solo come fixture effimera dopo V003,
+mai all'avvio API. [ADR 0035](../adr/0035-pwa-sinistro-link-authoritative-read.md).
