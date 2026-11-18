@@ -1,6 +1,6 @@
 import {useEffect, useRef, useState, type FormEvent} from "react";
 import {useTranslation} from "react-i18next";
-import {createSinistro, isApiUnavailable, pageSinistri, searchSinistri, type SinistroPage, type SinistroSummary} from "../api";
+import {createSinistro, isApiUnavailable, pageSinistri, pageSearchSinistri, type SinistroPage, type SinistroSummary} from "../api";
 import {Button} from "./ui/button";
 import {SinistroEditor} from "./SinistroEditor";
 
@@ -43,13 +43,12 @@ export function SinistroCatalog({token, canWrite, onUnavailable}: Props) {
   // network failure, offline), no late REST result can restore its rows.
   useEffect(() => () => {epoch.current += 1;}, [token]);
 
-  async function fetchCatalog(filter: CatalogFilter | null): Promise<SinistroPage> {
-    if (filter) {
-      const items = await searchSinistri(token, filter.prefix,
-        filter.from || undefined, filter.to || undefined, 50);
-      return {items, nextCursor: null}; // prefix-search paging is not available yet
-    }
-    return pageSinistri(token);
+  async function fetchCatalog(
+    filter: CatalogFilter | null, cursor?: string): Promise<SinistroPage> {
+    return filter
+      ? pageSearchSinistri(token, filter.prefix, filter.from || undefined,
+          filter.to || undefined, cursor)
+      : pageSinistri(token, cursor);
   }
 
   async function load(filter: CatalogFilter | null = activeFilter.current) {
@@ -76,12 +75,13 @@ export function SinistroCatalog({token, canWrite, onUnavailable}: Props) {
   }
 
   async function loadMore() {
-    if (busy || !expanded || activeFilter.current || !nextCursor) return;
+    if (busy || !expanded || !nextCursor) return;
+    const filter = activeFilter.current;
     const current = ++epoch.current;
     setBusy("more");
     setError(null);
     try {
-      const next = await pageSinistri(token, nextCursor);
+      const next = await fetchCatalog(filter, nextCursor);
       if (epoch.current !== current) return;
       setRows(previous => {
         const seen = new Set(previous.map(i => i.id));
@@ -197,7 +197,7 @@ export function SinistroCatalog({token, canWrite, onUnavailable}: Props) {
         const refreshed = await fetchCatalog(activeFilter.current);
         if (epoch.current !== current) return;
         setRows(refreshed.items);
-        setNextCursor(null);
+        setNextCursor(refreshed.nextCursor);
       } else {
         // After a create the previous keyset boundary must not be reused.
         // The separate receipt remains visible even if the case falls
@@ -320,7 +320,7 @@ export function SinistroCatalog({token, canWrite, onUnavailable}: Props) {
           </li>)}
         </ul>
       </>}
-      {nextCursor && !appliedPrefix && <Button type="button" variant="outline"
+      {nextCursor && <Button type="button" variant="outline"
         disabled={busy !== null} onClick={() => void loadMore()}>
         {t("sinistroCatalogMore")}
       </Button>}

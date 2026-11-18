@@ -86,6 +86,16 @@ export const searchSinistri = (token: string, prefix: string,
   if (occurredTo) params.set("occurredTo", occurredTo);
   return request<SinistroSummary[]>("/sinistri/search?" + params.toString(), token);
 };
+// Paged server-side literal-prefix search. The 20-result picker autocomplete
+// keeps the existing /sinistri/search API unchanged.
+export const pageSearchSinistri = (token: string, prefix: string,
+  occurredFrom?: string, occurredTo?: string, cursor?: string, limit = 50) => {
+  const params = new URLSearchParams({prefix: prefix.trim(), limit: String(limit)});
+  if (occurredFrom) params.set("occurredFrom", occurredFrom);
+  if (occurredTo) params.set("occurredTo", occurredTo);
+  if (cursor) params.set("cursor", cursor);
+  return request<SinistroPage>("/sinistri/search/page?" + params.toString(), token);
+};
 export const linkPeriziaSinistro = (token: string, periziaId: string, sinistroId: string) =>
   request<PeriziaSinistroLink>("/perizie/" + encodeURIComponent(periziaId) + "/sinistro",
     token, {method: "POST", headers: {"Content-Type": "application/json"},

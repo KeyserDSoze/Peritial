@@ -393,7 +393,7 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     await catalog.getByLabel("Data evento da").fill("1981-01-10");
     await catalog.getByLabel("Data evento a").fill("1981-12-31");
     const searched = page.waitForResponse(response =>
-      response.url().includes("/api/sinistri/search?") && response.status() === 200);
+      response.url().includes("/api/sinistri/search/page?") && response.status() === 200);
     await catalog.getByRole("button", {name: "Cerca nel catalogo"}).click();
     const response = await searched;
     const url = new URL(response.url());
@@ -417,7 +417,7 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
       response.url().endsWith("/api/sinistri") &&
       response.request().method() === "POST" && response.status() === 201);
     const refreshedMatches = page.waitForResponse(response =>
-      response.url().includes("/api/sinistri/search?") && response.status() === 200);
+      response.url().includes("/api/sinistri/search/page?") && response.status() === 200);
     await catalog.getByRole("button", {name:"Crea sinistro"}).click();
     await post;
     await refreshedMatches;
@@ -440,6 +440,131 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     await page.getByRole("button", {name: "Apri catalogo sinistri"}).click();
     await expect(page.getByRole("region", {name:"Catalogo sinistri"})
       .getByRole("textbox", {name:"Prefisso riferimento catalogo"})).toHaveValue("");
+  });
+
+  test("Filtered Sinistri pages REST and MCP honor literal prefix, inclusive dates and filter-bound cursors", async ({page, request}) => {
+    test.setTimeout(120_000);
+    await page.goto("/");
+    await page.getByRole("button", {name:"Accedi"}).click();
+    await expect(page.locator("#username")).toBeVisible({timeout:30_000});
+    await page.locator("#username").fill("localuser");
+    await page.locator("#password").fill("local-only-user");
+    await page.locator("#kc-login").click();
+    await expect(page.getByRole("button", {name:"Esci"})).toBeVisible({timeout:30_000});
+    const token = await page.evaluate(() => {
+      const key = Object.keys(sessionStorage).find(x => x.startsWith("oidc.user:"));
+      return key ? (JSON.parse(sessionStorage.getItem(key) || "{}") as {access_token?:string}).access_token : undefined;
+    });
+    expect(token).toBeTruthy();
+    const headers = {Authorization:"Bearer " + token};
+    const root = "http://localhost:8080/api/sinistri";
+    const prefix = "UI-FPAGE-" + Date.now() + "-" + Math.round(Math.random() * 100000) + "-%_";
+    const dates = ["1984-01-21", "1984-01-20", "1984-01-19"];
+    const ids: string[] = [];
+    for (const [i, date] of dates.entries()) {
+      const created = await request.post(root, {headers,
+        data:{externalReference:prefix + "-" + i, occurredOn:date}});
+      expect(created.status(), await created.text()).toBe(201);
+      ids.push((await created.json() as {id:string}).id);
+    }
+    for (const [ref, date] of [
+      [prefix.slice(0,-2) + "AB-DECOY", "1984-01-21"],
+      [prefix + "-OUTSIDE", "1985-01-21"]
+    ]) {
+      const created = await request.post(root, {headers,
+        data:{externalReference:ref, occurredOn:date}});
+      expect(created.status(), await created.text()).toBe(201);
+    }
+    const query = (cursor?:string, actualPrefix = prefix, to = "1984-01-31") =>
+      "/search/page?" + new URLSearchParams({
+        prefix:actualPrefix, occurredFrom:"1984-01-01", occurredTo:to,
+        limit:"2", ...(cursor === undefined ? {} : {cursor})
+      }).toString();
+    const first = await request.get(root + query(), {headers});
+    expect(first.status(), await first.text()).toBe(200);
+    expect(first.headers()["cache-control"]).toContain("no-store");
+    type Result = {items:Array<{id:string;externalReference:string}>;nextCursor:string|null};
+    const one = await first.json() as Result;
+    expect(one.items.map(x => x.id)).toEqual(ids.slice(0,2));
+    expect(one.nextCursor).toBeTruthy();
+    expect(await first.text()).not.toContain("tenantId");
+    expect((await request.get(root + query(one.nextCursor!, prefix + "-OTHER"), {headers})).status()).toBe(400);
+    expect((await request.get(root + query(one.nextCursor!, prefix, "1984-02-01"), {headers})).status()).toBe(400);
+    expect((await request.get(root + query(one.nextCursor! + "="), {headers})).status()).toBe(400);
+    expect((await request.get(root + query())).status()).toBe(401);
+
+    // A newer matching record must not shift this filtered keyset position.
+    const newer = await request.post(root, {headers,
+      data:{externalReference:prefix + "-LATE", occurredOn:"1984-01-22"}});
+    expect(newer.status(), await newer.text()).toBe(201);
+    const second = await request.get(root + query(one.nextCursor!), {headers});
+    expect(second.status(), await second.text()).toBe(200);
+    const two = await second.json() as Result;
+    expect(two.items.map(x => x.id)).toEqual([ids[2]]);
+    expect(two.nextCursor).toBeNull();
+    const legacy = await request.get(root + "/search?" + new URLSearchParams({
+      prefix, limit:"10"
+    }).toString(), {headers});
+    expect(legacy.status(), await legacy.text()).toBe(200);
+    expect(await legacy.text()).toContain(prefix);
+
+    const mcp = await request.post("http://localhost:8080/mcp", {
+      headers:{...headers, Accept:"application/json,text/event-stream", "Content-Type":"application/json"},
+      data:{jsonrpc:"2.0", id:995, method:"tools/call",
+        params:{name:"search_sinistri_page", arguments:{
+          prefix, occurredFrom:"1984-01-01", occurredTo:"1984-01-31", limit:2
+        }}}
+    });
+    expect(mcp.ok(), await mcp.text()).toBeTruthy();
+    expect(await mcp.text()).toContain(prefix);
+    expect(await mcp.text()).not.toContain("tenantId");
+  });
+
+  test("PWA loads filtered Sinistri pages and never reuses cursor after filter refresh", async ({page}) => {
+    await page.goto("/");
+    await page.getByRole("button", {name:"Accedi"}).click();
+    await expect(page.locator("#username")).toBeVisible({timeout:30_000});
+    await page.locator("#username").fill("localuser");
+    await page.locator("#password").fill("local-only-user");
+    await page.locator("#kc-login").click();
+    await expect(page.getByRole("button", {name:"Esci"})).toBeVisible({timeout:30_000});
+    const sample = (n:number) => ({
+      id:"00000000-0000-0000-0000-" + String(n).padStart(12,"0"),
+      externalReference:"FILTERED-MOCK-" + n, occurredOn:"1984-01-" + String(30-n),
+      reportedOn:null, createdAtUtc:"2026-11-18T09:00:00Z", version:1
+    });
+    const queries: Array<{prefix:string|null;from:string|null;to:string|null;cursor:string|null}> = [];
+    await page.route(/\/api\/sinistri\/search\/page\?/, async route => {
+      const url = new URL(route.request().url());
+      const cursor = url.searchParams.get("cursor");
+      queries.push({
+        prefix:url.searchParams.get("prefix"), from:url.searchParams.get("occurredFrom"),
+        to:url.searchParams.get("occurredTo"), cursor
+      });
+      await route.fulfill({status:200, contentType:"application/json", headers:{"Cache-Control":"no-store"},
+        body:JSON.stringify(cursor === null
+          ? {items:[sample(1),sample(2)],nextCursor:"FILTER-MOCK-CURSOR"}
+          : {items:[sample(2),sample(3)],nextCursor:null})});
+    });
+    await page.getByRole("button", {name:"Apri catalogo sinistri"}).click();
+    const catalog = page.getByRole("region", {name:"Catalogo sinistri"});
+    await catalog.getByRole("textbox", {name:"Prefisso riferimento catalogo"}).fill("FILTERED-%_");
+    await catalog.getByLabel("Data evento da").fill("1984-01-01");
+    await catalog.getByLabel("Data evento a").fill("1984-12-31");
+    await catalog.getByRole("button", {name:"Cerca nel catalogo"}).click();
+    await expect(catalog.getByText("FILTERED-MOCK-1", {exact:true})).toBeVisible();
+    await catalog.getByRole("button", {name:"Carica altri sinistri"}).click();
+    await expect(catalog.getByText("FILTERED-MOCK-3", {exact:true})).toBeVisible();
+    await expect(catalog.getByRole("list", {name:"Catalogo sinistri"}).locator("li")).toHaveCount(3);
+    await expect(catalog.getByRole("button", {name:"Carica altri sinistri"})).toHaveCount(0);
+    await catalog.getByRole("button", {name:"Aggiorna sinistri"}).click();
+    await expect(catalog.getByText("FILTERED-MOCK-3", {exact:true})).toHaveCount(0);
+    await expect(catalog.getByRole("button", {name:"Carica altri sinistri"})).toBeVisible();
+    expect(queries).toEqual([
+      {prefix:"FILTERED-%_",from:"1984-01-01",to:"1984-12-31",cursor:null},
+      {prefix:"FILTERED-%_",from:"1984-01-01",to:"1984-12-31",cursor:"FILTER-MOCK-CURSOR"},
+      {prefix:"FILTERED-%_",from:"1984-01-01",to:"1984-12-31",cursor:null},
+    ]);
   });
 
   test("Sinistri keyset REST and MCP read return stable nextCursor, reject invalid cursors and never expose tenant", async ({page, request}) => {
