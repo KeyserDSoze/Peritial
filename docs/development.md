@@ -1015,3 +1015,29 @@ Ancora aperti cursor/oltre 50, full-text/fuzzy, indice e benchmark
 su grandi cataloghi, filtri polizze/anagrafiche, DELETE e WCAG.
 V003/V004 sempre con migrazione amministrativa esplicita.
 [ADR 0038](../adr/0038-pwa-sinistri-server-search.md).
+
+## PWA Sinistri: pagine oltre 50 record (#7/#13, ADR 0039)
+
+Alla prima apertura on-demand il catalogo Sinistri chiama
+`GET /api/sinistri/page?limit=50` e usa il payload
+`{items,nextCursor}` per visualizzare «Carica altri sinistri» soltanto
+se esiste una pagina successiva. Ciascun click invia il cursore opaco
+con il JWT corrente; le righe vengono accodate senza duplicare ID.
+`GET /api/sinistri?limit=50` è mantenuto per compatibilità REST/MCP.
+La ricerca per prefisso e date resta max 50, non dispone di nextCursor
+e sospende il controllo «Carica altri». «Aggiorna sinistri» riparte
+dal server senza usare vecchi cursori. Anche chiusura, offline,
+rotazione JWT e risposte API rifiutate invalidano il cursore.
+Un POST riuscito durante la lista recente azzera il cursore
+finché la lista non viene aggiornata esplicitamente; niente replay.
+Il backend valida limit/cursor e autorizza tutte le GET tramite
+JWT+Business+PostgreSQL FORCE RLS, senza input tenant.
+
+Test Business, PG 17 reale e Playwright full-stack (endpoint REST e
+tool MCP oltre al controllo PWA) coprono ordinamento data/UUID,
+lookahead, inserimento concorrente più recente, 400/401, no tenant
+ID, deduplica e refresh. La paginazione non congela uno snapshot
+contro UPDATE concorrenti della data evento. Requisiti restanti:
+paginazione della **ricerca filtrata**, UX/virtualizzazione di liste
+molto grandi, indice a scala, CRUD completo e WCAG.
+[ADR 0039](../adr/0039-sinistri-keyset-pagination.md).
