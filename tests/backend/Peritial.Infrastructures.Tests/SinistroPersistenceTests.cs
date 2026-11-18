@@ -495,6 +495,15 @@ public sealed class SinistroPersistenceTests
         var perizie = new PgPeriziaRepository(db.App);
         var perizia = Perizia.Create(tenant, "V008-NO-DELETE-" + Guid.NewGuid().ToString("N"));
         await perizie.AddAuditedAsync(perizia, Event(tenant, perizia.Id, "perizia.create"));
+        // A linked Perizia with a V006 provenance row must survive an attempt
+        // to bypass the audited workflow via direct table DELETE.
+        var claim = Sinistro.Create(tenant, "V008-RETAIN-CLAIM",
+            new DateOnly(2026,11,18));
+        await new PgSinistroRepository(db.App).AddAuditedAsync(
+            claim, Event(tenant,claim.Id,"sinistro.create"));
+        var links = new PgPeriziaSinistroLinkRepository(db.App);
+        Assert.Equal(2, await links.LinkAuditedAsync(
+            tenant,perizia.Id,claim.Id,1,Event(tenant,perizia.Id,"perizia.link-sinistro")));
 
         await using (var grant = db.Admin.CreateCommand(
             "SELECT NOT has_table_privilege('peritial_app','perizie','DELETE') " +
@@ -521,6 +530,9 @@ public sealed class SinistroPersistenceTests
             Assert.Equal(PostgresErrorCodes.InsufficientPrivilege,ex.SqlState);
         }
         Assert.NotNull(await perizie.FindAsync(tenant,perizia.Id));
+        var unchanged = await links.ReadAssociationAsync(tenant,perizia.Id);
+        Assert.Equal(claim.Id,unchanged.SinistroId);
+        Assert.Equal(2,unchanged.LinkVersion);
     }
 
     [Fact]
