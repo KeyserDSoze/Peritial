@@ -1005,6 +1005,72 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     await expect(page.getByRole("button", {name: "Crea"})).toBeEnabled();
   });
 
+  test("Perizia–Sinistro unlink requires signed expected association and commits via REST/MCP", async ({page, request}) => {
+    test.setTimeout(120_000);
+    await page.goto("/");
+    await page.getByRole("button", {name:"Accedi"}).click();
+    await expect(page.locator("#username")).toBeVisible({timeout:30_000});
+    await page.locator("#username").fill("localuser");
+    await page.locator("#password").fill("local-only-user");
+    await page.locator("#kc-login").click();
+    await expect(page.getByRole("button", {name:"Esci"})).toBeVisible({timeout:30_000});
+    const token = await page.evaluate(() => {
+      const key = Object.keys(sessionStorage).find(x => x.startsWith("oidc.user:"));
+      return key ? (JSON.parse(sessionStorage.getItem(key) || "{}") as {access_token?:string}).access_token : undefined;
+    });
+    expect(token).toBeTruthy();
+    const headers = {Authorization:"Bearer " + token};
+    const root = "http://localhost:8080/api";
+    const stamp = Date.now() + "-" + Math.floor(Math.random() * 100000);
+    const perizia = await request.post(root + "/perizie", {headers,
+      data:{reference:"E2E-UNLINK-P-" + stamp}});
+    expect(perizia.status(), await perizia.text()).toBe(201);
+    const periziaId = (await perizia.json() as {id:string}).id;
+    const sinistri: string[] = [];
+    for(const suffix of ["ORIGINAL","NEW"]) {
+      const c = await request.post(root + "/sinistri", {headers,
+        data:{externalReference:"E2E-UNLINK-S-" + stamp + "-" + suffix,
+          occurredOn:"2026-11-18"}});
+      expect(c.status(), await c.text()).toBe(201);
+      sinistri.push((await c.json() as {id:string}).id);
+    }
+    const link = await request.post(root + "/perizie/" + periziaId + "/sinistro", {
+      headers, data:{sinistroId:sinistri[0]}
+    });
+    expect(link.status(), await link.text()).toBe(201);
+    const url = (expected:string) => root + "/perizie/" + periziaId +
+      "/sinistro?expectedSinistroId=" + expected;
+
+    expect((await request.delete(url(sinistri[0]))).status()).toBe(401);
+    expect((await request.delete(root + "/perizie/" + periziaId + "/sinistro", {headers})).status()).toBe(400);
+    expect((await request.delete(url(sinistri[1]), {headers})).status()).toBe(409);
+    const staleState = await request.get(root + "/perizie/" + periziaId + "/sinistro", {headers});
+    expect((await staleState.json() as {sinistroId:string}).sinistroId).toBe(sinistri[0]);
+
+    const ok = await request.delete(url(sinistri[0]), {headers});
+    expect(ok.status(), await ok.text()).toBe(204);
+    const unlinked = await request.get(root + "/perizie/" + periziaId + "/sinistro", {headers});
+    expect((await unlinked.json() as {periziaId:string;sinistroId:null}))
+      .toEqual({periziaId, sinistroId:null});
+    expect(await unlinked.text()).not.toContain("tenantId");
+    expect((await request.delete(url(sinistri[0]), {headers})).status()).toBe(409);
+    const relink = await request.post(root + "/perizie/" + periziaId + "/sinistro", {
+      headers, data:{sinistroId:sinistri[1]}
+    });
+    expect(relink.status(), await relink.text()).toBe(201);
+    const mcp = await request.post("http://localhost:8080/mcp", {
+      headers:{...headers,Accept:"application/json,text/event-stream",
+        "Content-Type":"application/json"},
+      data:{jsonrpc:"2.0",id:941,method:"tools/call",params:{
+        name:"unlink_perizia_sinistro",
+        arguments:{periziaId,expectedSinistroId:sinistri[1]}
+      }}
+    });
+    expect(mcp.ok(), await mcp.text()).toBeTruthy();
+    expect(await mcp.text()).not.toContain('"isError":true');
+    expect((await request.get(root + "/perizie/" + periziaId + "/sinistro", {headers}).then(r=>r.json()) as {sinistroId:null}).sinistroId).toBeNull();
+  });
+
   test("Sinistri V005 deletes only unlinked cases with signed CAS and MCP, rejects FK and stale versions", async ({page, request}) => {
     test.setTimeout(120_000);
     await page.goto("/");

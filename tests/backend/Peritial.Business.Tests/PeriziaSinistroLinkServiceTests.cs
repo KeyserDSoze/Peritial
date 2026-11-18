@@ -102,6 +102,62 @@ public sealed class PeriziaSinistroLinkServiceTests
         Assert.Empty(audit.Events);
     }
 
+    [Fact]
+    public async Task Unlink_requires_last_observed_sinistro_and_writer_scope_then_allows_explicit_relink()
+    {
+        var a = TenantId.From(Guid.NewGuid());
+        var b = TenantId.From(Guid.NewGuid());
+        var perizia = Guid.NewGuid();
+        var oldSinistro = Guid.NewGuid();
+        var nextSinistro = Guid.NewGuid();
+        var foreign = Guid.NewGuid();
+        var audit = new SpyAudit();
+        var repo = new FakeLinks(audit);
+        repo.OwnedPerizie[perizia] = a;
+        repo.OwnedSinistri[oldSinistro] = a;
+        repo.OwnedSinistri[nextSinistro] = a;
+        repo.OwnedSinistri[foreign] = b;
+        var writer = new PeriziaSinistroLinkService(new Actor(a, write: true), repo, audit);
+        var reader = new PeriziaSinistroLinkService(new Actor(a, read: true), repo, audit);
+        await writer.LinkAsync(perizia, oldSinistro);
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+            reader.UnlinkAsync(perizia, oldSinistro));
+        Assert.Equal("perizia.unlink-sinistro", audit.Events[^1].Action);
+        Assert.Equal("denied", audit.Events[^1].Outcome);
+        Assert.Null(audit.Events[^1].ResourceId);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => writer.UnlinkAsync(Guid.Empty, oldSinistro));
+        await Assert.ThrowsAsync<ArgumentException>(() => writer.UnlinkAsync(perizia, Guid.Empty));
+        await Assert.ThrowsAsync<PeriziaConcurrencyConflictException>(() =>
+            writer.UnlinkAsync(perizia, nextSinistro));
+        await Assert.ThrowsAsync<KeyNotFoundException>(() =>
+            writer.UnlinkAsync(Guid.NewGuid(), oldSinistro));
+        Assert.Equal(oldSinistro, (await reader.GetPeriziaAssociationAsync(perizia)).SinistroId);
+        Assert.Single(audit.Events.Where(e => e.Action == "perizia.link-sinistro"));
+
+        var removed = await writer.UnlinkAsync(perizia, oldSinistro);
+        Assert.Equal(new PeriziaSinistroAssociationDto(perizia, null), removed);
+        Assert.DoesNotContain("tenantId", System.Text.Json.JsonSerializer.Serialize(removed),
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Null((await reader.GetPeriziaAssociationAsync(perizia)).SinistroId);
+        Assert.Equal("perizia.unlink-sinistro", audit.Events[^1].Action);
+        Assert.Equal("succeeded", audit.Events[^1].Outcome);
+        Assert.Equal(perizia, audit.Events[^1].ResourceId);
+        Assert.Equal(a, audit.Events[^1].TenantId);
+        await Assert.ThrowsAsync<PeriziaConcurrencyConflictException>(() =>
+            writer.UnlinkAsync(perizia, oldSinistro));
+        await writer.LinkAsync(perizia, nextSinistro);
+        Assert.Equal(nextSinistro, (await writer.GetPeriziaAssociationAsync(perizia)).SinistroId);
+        Assert.Equal(1, audit.Events.Count(e =>
+            e.Action == "perizia.unlink-sinistro" && e.Outcome == "succeeded"));
+
+        var otherTenant = new PeriziaSinistroLinkService(new Actor(b, write: true), repo, audit);
+        await Assert.ThrowsAsync<KeyNotFoundException>(() =>
+            otherTenant.UnlinkAsync(perizia, nextSinistro));
+        Assert.Equal(nextSinistro, (await writer.GetPeriziaAssociationAsync(perizia)).SinistroId);
+    }
+
     private sealed class Actor(TenantId tenant, bool read = false, bool write = false) : ITenantContext
     {
         public TenantId TenantId => tenant;
@@ -125,6 +181,17 @@ public sealed class PeriziaSinistroLinkServiceTests
         public Dictionary<Guid,TenantId> OwnedPerizie { get; } = [];
         public Dictionary<Guid,TenantId> OwnedSinistri { get; } = [];
         public Dictionary<Guid,Guid> Linked { get; } = [];
+
+        public async Task UnlinkAuditedAsync(TenantId tenant, Guid periziaId,
+            Guid expectedSinistroId, SecurityAuditEvent entry, CancellationToken ct = default)
+        {
+            if (!OwnedPerizie.TryGetValue(periziaId, out var owner) || owner != tenant)
+                throw new KeyNotFoundException("Perizia not found.");
+            if (!Linked.TryGetValue(periziaId, out var actual) || actual != expectedSinistroId)
+                throw new PeriziaConcurrencyConflictException();
+            await audit.AppendAsync(entry, ct);
+            Linked.Remove(periziaId);
+        }
 
         public Task<Guid?> FindSinistroIdForPeriziaAsync(
             TenantId tenant, Guid periziaId, CancellationToken ct = default)

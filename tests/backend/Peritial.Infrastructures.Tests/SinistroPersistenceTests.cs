@@ -348,6 +348,62 @@ public sealed class SinistroPersistenceTests
     }
 
     [Fact]
+    public async Task Unlink_is_tenant_scoped_CAS_audited_and_rolls_back_on_duplicate_audit()
+    {
+        await using var db = await IsolatedDatabases.CreateAsync();
+        var tenant = TenantId.From(Guid.NewGuid());
+        var foreignTenant = TenantId.From(Guid.NewGuid());
+        var sinistri = new PgSinistroRepository(db.App);
+        var perizie = new PgPeriziaRepository(db.App);
+        var links = new PgPeriziaSinistroLinkRepository(db.App);
+        var sinistro = Sinistro.Create(tenant, "UNLINK-PG-OLD", new DateOnly(2026, 11, 18));
+        var second = Sinistro.Create(tenant, "UNLINK-PG-NEXT", new DateOnly(2026, 11, 17));
+        await sinistri.AddAuditedAsync(sinistro, Event(tenant, sinistro.Id, "sinistro.create"));
+        await sinistri.AddAuditedAsync(second, Event(tenant, second.Id, "sinistro.create"));
+        var caseA = Perizia.Create(tenant, "UNLINK-PG-" + Guid.NewGuid().ToString("N"));
+        var foreign = Perizia.Create(foreignTenant, "UNLINK-PG-FOREIGN-" + Guid.NewGuid().ToString("N"));
+        await perizie.AddAuditedAsync(caseA, Event(tenant, caseA.Id, "perizia.create"));
+        await perizie.AddAuditedAsync(foreign, Event(foreignTenant, foreign.Id, "perizia.create"));
+        await links.LinkAuditedAsync(tenant, caseA.Id, sinistro.Id,
+            Event(tenant, caseA.Id, "perizia.link-sinistro"));
+        await Assert.ThrowsAsync<KeyNotFoundException>(() =>
+            links.UnlinkAuditedAsync(foreignTenant, caseA.Id, sinistro.Id,
+                Event(foreignTenant, caseA.Id, "perizia.unlink-sinistro")));
+        await Assert.ThrowsAsync<KeyNotFoundException>(() =>
+            links.UnlinkAuditedAsync(tenant, foreign.Id, sinistro.Id,
+                Event(tenant, foreign.Id, "perizia.unlink-sinistro")));
+        await Assert.ThrowsAsync<PeriziaConcurrencyConflictException>(() =>
+            links.UnlinkAuditedAsync(tenant, caseA.Id, second.Id,
+                Event(tenant, caseA.Id, "perizia.unlink-sinistro")));
+        Assert.Equal(sinistro.Id, await links.FindSinistroIdForPeriziaAsync(tenant, caseA.Id));
+
+        var duplicate = Event(tenant, caseA.Id, "perizia.unlink-sinistro");
+        await new PgSecurityAuditTrail(db.App).AppendAsync(duplicate);
+        var conflict = await Assert.ThrowsAsync<PostgresException>(() =>
+            links.UnlinkAuditedAsync(tenant, caseA.Id, sinistro.Id, duplicate));
+        Assert.Equal(PostgresErrorCodes.UniqueViolation, conflict.SqlState);
+        Assert.Equal(sinistro.Id, await links.FindSinistroIdForPeriziaAsync(tenant, caseA.Id));
+
+        await links.UnlinkAuditedAsync(tenant, caseA.Id, sinistro.Id,
+            Event(tenant, caseA.Id, "perizia.unlink-sinistro"));
+        Assert.Null(await links.FindSinistroIdForPeriziaAsync(tenant, caseA.Id));
+        Assert.Empty(await links.ListPeriziaIdsAsync(tenant, sinistro.Id));
+        await Assert.ThrowsAsync<PeriziaConcurrencyConflictException>(() =>
+            links.UnlinkAuditedAsync(tenant, caseA.Id, sinistro.Id,
+                Event(tenant, caseA.Id, "perizia.unlink-sinistro")));
+        await links.LinkAuditedAsync(tenant, caseA.Id, second.Id,
+            Event(tenant, caseA.Id, "perizia.link-sinistro"));
+        Assert.Equal(second.Id, await links.FindSinistroIdForPeriziaAsync(tenant, caseA.Id));
+
+        await using var success = db.Admin.CreateCommand(
+            "SELECT count(*) FROM security_audit WHERE tenant_id=@tenant " +
+            "AND resource_id=@perizia AND action='perizia.unlink-sinistro' AND outcome='succeeded'");
+        success.Parameters.AddWithValue("tenant", tenant.Value);
+        success.Parameters.AddWithValue("perizia", caseA.Id);
+        Assert.Equal(2L, (long)(await success.ExecuteScalarAsync())!); // pre-inserted duplicate and committed unlink
+    }
+
+    [Fact]
     public async Task V004_association_read_returns_unlinked_or_linked_and_hides_foreign_perizia_as_missing()
     {
         await using var db = await IsolatedDatabases.CreateAsync();
