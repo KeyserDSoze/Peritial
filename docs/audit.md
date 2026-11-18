@@ -58,3 +58,18 @@ ai dati. Si conserva la storia del link originario nell'audit
 `perizia.link-sinistro`; la rimozione dell'associazione non
 cancella audit, Sinistri, Perizie o documenti.
 [ADR 0043](../adr/0043-perizia-sinistro-explicit-unlink.md).
+
+## Perizia.reparent-sinistro — audit transazionale CAS (#21/#9, ADR 0044)
+
+La singola mutazione da `expectedSinistroId` a
+`newSinistroId` registra `perizia.reparent-sinistro/succeeded`
+nel medesimo `TenantDbScope`. Se l'audit fallisce,
+l'UPDATE viene rollbackato; un CAS/tenant/stato terminale
+non soddisfatto non genera falsi successi. Il diniego scope
+viene auditato separatamente con `resource_id=NULL`.
+La riga audit è allowlisted (Perizia UUID, tenant/soggetto,
+azione, outcome, timestamp): **non contiene ancora i due UUID
+source/target né una revisione monotona della relazione**.
+Questi dati richiedono policy di disclosure e modello eventi
+dedicato, prima di definirla una traccia probatoria completa.
+[ADR 0044](../adr/0044-perizia-sinistro-atomic-reparent.md).

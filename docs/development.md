@@ -1165,3 +1165,28 @@ mai dal form o dal parametro tenant. Testano due flussi E2E:
 REST/MCP reale con conflitti e PWA con 409 mock, conferma e refetch.
 `sinistro.delete` resta bloccato in produzione dal gate #22.
 [ADR 0043](../adr/0043-perizia-sinistro-explicit-unlink.md).
+
+## Reparent atomico Perizia–Sinistro (#7/#9/#12/#13/#21, ADR 0044)
+
+Una Perizia collegata può essere spostata ad altro Sinistro tramite
+`PUT /api/perizie/{id}/sinistro`, corpo
+`{expectedSinistroId,newSinistroId}`, con scope `peritial.write`.
+Non concatenare `DELETE` e `POST`: il nuovo adapter fa un
+UPDATE CAS singolo del link e un audit atomico
+`perizia.reparent-sinistro`. Target same-tenant obbligatorio;
+Perizie `Billed`, `Duplicated`, `Cancelled` non riassegnabili
+(409) in modo concorrente-safe; nessuna migrazione schema V006.
+
+La PWA richiede un collegamento firmato, poi mostra
+«Cambia sinistro collegato». Dopo la ricerca on-demand
+di un riferimento differente richiede due azioni
+«Rivedi riassegnazione» e «Conferma riassegnazione»:
+non ottiene successo prima di HTTP 200 + GET fresco.
+«Annulla riassegnazione» non emette alcun PUT.
+Un `409` cancella il link obsoleto, vieta replay e chiede
+`Ricarica collegamento`. Su rete/offline/401/403
+chiude la vista dei dati tenant. Test xUnit Business/PG17
+e Playwright OAuth desktop/mobile includono target foreign,
+source stale, rifiuto di Perizia annullata, rollback audit,
+MCP e PWA. Non modificare il gate #22 di hard-delete.
+[ADR 0044](../adr/0044-perizia-sinistro-atomic-reparent.md).

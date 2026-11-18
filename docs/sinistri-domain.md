@@ -652,3 +652,45 @@ Test RED→GREEN Business/PG17 least-privileged tenant, conflitti,
 link stranieri e audit rollback; Playwright REST/MCP con JWT Keycloak,
 PWA conferma/annulla/409/reload/204/GET e offline.
 [ADR 0043](../adr/0043-perizia-sinistro-explicit-unlink.md).
+
+## Riassegnazione atomica della relazione Perizia–Sinistro (#7/#9, ADR 0044)
+
+La riassegnazione esplicita, distinta dal link/unlink V004, usa
+`PUT /api/perizie/{id}/sinistro` con JSON
+`{expectedSinistroId,newSinistroId}` e tool MCP
+`reparent_perizia_sinistro(periziaId,expectedSinistroId,newSinistroId)`.
+Richiede `peritial.write` firmato, due UUID Sinistro non vuoti e
+distinti, target esistente nello stesso tenant JWT. La porta PG
+`ReparentAuditedAsync` esegue **un solo UPDATE**
+`SET sinistro_id=@target WHERE tenant_id=@tenant AND id=@perizia
+AND sinistro_id=@expected AND status NOT IN (Billed,Duplicated,Cancelled)`
+sotto FORCE RLS, con i parametri dei tre stati presi dall'enum
+`PeriziaStatus`. Questa guardia SQL rende impossibile una
+riassegnazione anche se lo stato diventa terminale durante una
+richiesta concorrente. Il link non attraversa `NULL`, la Perizia
+non viene duplicata e nessun Sinistro viene cancellato.
+
+Mismatch di expected/source, Perizia già scollegata o stato terminale
+→ 409, con nessun audit di successo; Perizia o Sinistro target
+assenti/foreign → 404 indistinguibile; auth 401/403, validazione 400.
+L'UPDATE e `perizia.reparent-sinistro/succeeded` sono committati
+**nella stessa transazione** o rollbackati insieme.
+REST ritorna 200 e `{periziaId,sinistroId:newSinistroId}`;
+MCP ritorna lo stesso DTO, sempre senza tenant ID.
+
+La PWA offre l'azione `Cambia sinistro collegato` separata da
+`Scollega sinistro`: ricerca server-side del target, esclusione
+del Sinistro corrente dalla selezione, anteprima e conferma
+esplicita, richiesta unica e GET firmato dopo il commit.
+Un 409 invalida l'associazione locale e impone reload; offline
+o token non valido impediscono ogni replay. Sono supportati it/en.
+
+L'expected UUID protegge dal cambio di relazione, **non** è un
+token di versione univoco: un ciclo A→B→A non sarebbe distinto dal
+primo A (possibile problema ABA). Inoltre l'audit attuale conserva
+perizia UUID, azione, tenant/soggetto e timestamp, ma non lo storico
+completo source/target. Per ricostruzione probatoria e approval
+di riassegnazioni terminali occorre una decisione separata.
+Restano aperti i requisiti di accessibilità WCAG e gli altri
+collegamenti/filtri di #7/#9.
+[ADR 0044](../adr/0044-perizia-sinistro-atomic-reparent.md).

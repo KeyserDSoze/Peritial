@@ -69,3 +69,12 @@ Rimangono non implementati reparent atomico approvato, regole di
 correzione per fasi/fatturazione, ricostruzione eventi per
 audit legale, relazioni polizze/anagrafiche, import legacy e
 verifica WCAG produttiva. Issue #7/#9/#12/#13/#21 rimangono aperte.
+
+## Evoluzione successiva
+
+Il mancato reparent atomico qui elencato come limite storico
+è affrontato dal successivo
+[ADR 0044](0044-perizia-sinistro-atomic-reparent.md).
+Rimane invariato il contratto `unlink_perizia_sinistro`,
+che non riassegna né elimina alcun Sinistro. La riassegnazione
+richiede un nuovo PUT/tool esplicito con due UUID CAS distinti.

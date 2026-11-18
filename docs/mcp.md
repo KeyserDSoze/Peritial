@@ -375,3 +375,23 @@ occorre una distinta chiamata esplicita `link_perizia_sinistro`;
 nessun reparent implicito o cambiamento di Sinistro/Perizia.
 Non modifica il gate V005 hard-delete (#22).
 [ADR 0043](../adr/0043-perizia-sinistro-explicit-unlink.md).
+
+## MCP reparent_perizia_sinistro (#7/#9/#12, ADR 0044)
+
+`reparent_perizia_sinistro(periziaId,expectedSinistroId,newSinistroId)`
+è l'equivalente MCP del REST `PUT /api/perizie/{id}/sinistro`.
+Una Perizia attualmente linked viene **riposizionata con un
+singolo UPDATE CAS** (mai unlink+link) soltanto con scope
+OAuth `peritial.write`. Il nuovo Sinistro deve esistere nello
+stesso tenant firmato, differire dall'attuale e la Perizia
+non deve essere `Billed`, `Duplicated` o `Cancelled`.
+404 nasconde missing/foreign, 409 indica source cambiata,
+link nullo o stato terminale, 400 input non validi.
+La risposta di successo `PeriziaSinistroLinkDto` espone
+solo `periziaId,sinistroId`; l'audit
+`perizia.reparent-sinistro/succeeded` viene committato
+insieme alla mutazione. Un normale `peritial.write` è
+sufficiente per questo flusso **non distruttivo**;
+non conferisce mai scope `peritial.sinistri.delete`,
+che resta bloccato in produzione dalla #22.
+[ADR 0044](../adr/0044-perizia-sinistro-atomic-reparent.md).
