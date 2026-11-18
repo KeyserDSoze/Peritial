@@ -90,12 +90,19 @@ public sealed class PgPeriziaSinistroLinkRepository(NpgsqlDataSource source)
         }
         await using (var command = scope.Command(
             "UPDATE perizie SET sinistro_id=@target " +
-            "WHERE tenant_id=@tenant AND id=@perizia AND sinistro_id=@expected"))
+            "WHERE tenant_id=@tenant AND id=@perizia AND sinistro_id=@expected " +
+            "AND status NOT IN (@billed,@duplicated,@cancelled)"))
         {
             command.Parameters.AddWithValue("tenant", tenant.Value);
             command.Parameters.AddWithValue("perizia", periziaId);
             command.Parameters.AddWithValue("target", newSinistroId);
             command.Parameters.AddWithValue("expected", expectedSinistroId);
+            // Terminal statuses are never silently corrected after billing,
+            // duplication or cancellation. Row-locked status guard makes
+            // concurrent workflow changes conflict rather than disappear.
+            command.Parameters.AddWithValue("billed", (int)PeriziaStatus.Billed);
+            command.Parameters.AddWithValue("duplicated", (int)PeriziaStatus.Duplicated);
+            command.Parameters.AddWithValue("cancelled", (int)PeriziaStatus.Cancelled);
             int affected;
             try
             {
