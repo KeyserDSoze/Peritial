@@ -43,7 +43,8 @@ INSERT INTO sinistri(tenant_id,id,external_reference,occurred_on,reported_on,cre
  VALUES('11111111-1111-1111-1111-111111111111','12121212-1212-1212-1212-121212121212',
  'RESTORE-SINISTRO','2026-11-01','2026-11-03',now(),4);
 -- V004: the restored perizia must retain the SAME-tenant link.
-UPDATE perizie SET sinistro_id='12121212-1212-1212-1212-121212121212'
+UPDATE perizie SET sinistro_id='12121212-1212-1212-1212-121212121212',
+  sinistro_link_version=2
  WHERE tenant_id='11111111-1111-1111-1111-111111111111'
    AND id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 INSERT INTO documents(tenant_id,id,perizia_id,file_name,content_type,length_bytes,storage_key,created_at_utc)
@@ -52,7 +53,16 @@ INSERT INTO documents(tenant_id,id,perizia_id,file_name,content_type,length_byte
  '11111111/cccccccc.pdf',now());
 INSERT INTO security_audit(tenant_id,id,subject,action,outcome,resource_id,occurred_at_utc) VALUES
  ('11111111-1111-1111-1111-111111111111','dddddddd-dddd-dddd-dddd-dddddddddddd','test-actor','document.ingest','succeeded','cccccccc-cccc-cccc-cccc-cccccccccccc',now()),
- ('22222222-2222-2222-2222-222222222222','eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee','test-actor','perizia.create','denied',NULL,now());
+ ('22222222-2222-2222-2222-222222222222','eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee','test-actor','perizia.create','denied',NULL,now()),
+ ('11111111-1111-1111-1111-111111111111','a1a1a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1','test-actor','perizia.link-sinistro','succeeded','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',now());
+-- V006: a committed version-2 association history must survive the same
+-- backup/restore and retain a valid same-tenant append-only audit FK.
+INSERT INTO perizia_sinistro_history
+ (tenant_id,perizia_id,revision,previous_sinistro_id,new_sinistro_id,audit_id)
+ VALUES ('11111111-1111-1111-1111-111111111111',
+ 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',2,NULL,
+ '12121212-1212-1212-1212-121212121212',
+ 'a1a1a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1');
 INSERT INTO upload_request_keys(tenant_id,subject_digest,key_digest,request_digest,document_id,status,completed_at_utc) VALUES
  ('11111111-1111-1111-1111-111111111111',decode(repeat('aa',32),'hex'),decode(repeat('bb',32),'hex'),
  decode(repeat('cc',32),'hex'),'cccccccc-cccc-cccc-cccc-cccccccccccc','completed',now());
@@ -119,18 +129,32 @@ SELECT
  AND (SELECT count(*) FROM perizie
       WHERE tenant_id='11111111-1111-1111-1111-111111111111'
         AND id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
-        AND sinistro_id='12121212-1212-1212-1212-121212121212')=1
+        AND sinistro_id='12121212-1212-1212-1212-121212121212'
+        AND sinistro_link_version=2)=1
  AND (SELECT count(*) FROM perizie
       WHERE tenant_id='22222222-2222-2222-2222-222222222222'
         AND sinistro_id IS NULL)=1
- AND (SELECT count(*) FROM security_audit)=2
+ AND (SELECT count(*) FROM security_audit)=3
+ AND (SELECT count(*) FROM perizia_sinistro_history
+      WHERE tenant_id='11111111-1111-1111-1111-111111111111'
+      AND perizia_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+      AND revision=2
+      AND previous_sinistro_id IS NULL
+      AND new_sinistro_id='12121212-1212-1212-1212-121212121212'
+      AND audit_id='a1a1a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1')=1
  AND (SELECT count(*) FROM upload_intents)=1
  AND (SELECT count(*) FROM upload_request_keys WHERE status='completed')=1
  AND (SELECT count(*) FROM schema_migrations)=6
  AND (SELECT count(*) FROM pg_class WHERE relname IN
-    ('perizie','documents','security_audit','upload_intents','upload_request_keys','sinistri')
-    AND relrowsecurity AND relforcerowsecurity)=6
+    ('perizie','documents','security_audit','upload_intents','upload_request_keys',
+     'sinistri','perizia_sinistro_history')
+    AND relrowsecurity AND relforcerowsecurity)=7
  AND has_table_privilege('peritial_app','sinistri','DELETE')
+ AND has_table_privilege('peritial_app','perizia_sinistro_history','INSERT')
+ AND NOT has_table_privilege('peritial_app','perizia_sinistro_history','SELECT')
+ AND NOT has_table_privilege('peritial_app','perizia_sinistro_history','UPDATE')
+ AND NOT has_table_privilege('peritial_app','perizia_sinistro_history','DELETE')
+ AND NOT has_table_privilege('peritial_recovery','perizia_sinistro_history','SELECT')
  AND NOT has_table_privilege('peritial_recovery','sinistri','DELETE')
  AND NOT has_table_privilege('peritial_app','security_audit','SELECT')
  AND NOT has_column_privilege('peritial_recovery','upload_request_keys','subject_digest','SELECT');
