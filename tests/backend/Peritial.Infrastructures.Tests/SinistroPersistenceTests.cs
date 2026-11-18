@@ -335,10 +335,13 @@ public sealed class SinistroPersistenceTests
                 Event(tenantA, periziaA.Id, "perizia.link-sinistro")));
         Assert.Equal(1L, await CountLinkAuditAsync(db.Admin, tenantA, periziaA.Id));
 
-        // Direct elevated SQL must still respect the FK: A's perizia cannot
-        // refer to B's sinistro even if the application role is bypassed.
+        // Elevated SQL still cannot cross the V004 same-tenant composite FK.
+        // Bump the V007 revision correctly to isolate the FK check itself;
+        // an unversioned write is now independently rejected by V007.
         await using var sql = db.Admin.CreateCommand(
-            "UPDATE perizie SET sinistro_id=@sinistro WHERE tenant_id=@tenant AND id=@perizia");
+            "UPDATE perizie SET sinistro_id=@sinistro, " +
+            "sinistro_link_version=sinistro_link_version+1 " +
+            "WHERE tenant_id=@tenant AND id=@perizia");
         sql.Parameters.AddWithValue("sinistro", b.Id);
         sql.Parameters.AddWithValue("tenant", tenantA.Value);
         sql.Parameters.AddWithValue("perizia", periziaA.Id);
