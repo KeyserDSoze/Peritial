@@ -306,8 +306,8 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     const occurred = catalog.getByLabel("Data sinistro");
     const reported = catalog.getByLabel("Data denuncia");
     await referenceInput.fill(reference);
-    await occurred.fill("2026-11-17");
-    await reported.fill("2026-11-18");
+    await occurred.fill("2099-11-17");
+    await reported.fill("2099-11-18");
 
     // A failed create must never appear as a successful local tenant record.
     await page.route("**/api/sinistri", async route => {
@@ -328,8 +328,8 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     expect(result.headers()["cache-control"]).toContain("no-store");
     const sinistro = await result.json() as {id:string; externalReference:string; occurredOn:string; reportedOn:string; version:number};
     expect(sinistro.externalReference).toBe(reference);
-    expect(sinistro.occurredOn).toBe("2026-11-17");
-    expect(sinistro.reportedOn).toBe("2026-11-18");
+    expect(sinistro.occurredOn).toBe("2099-11-17");
+    expect(sinistro.reportedOn).toBe("2099-11-18");
     expect(sinistro.version).toBe(1);
     expect(await result.text()).not.toContain("tenantId");
     await expect(catalog.getByText(reference, {exact:true})).toBeVisible();
