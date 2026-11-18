@@ -116,6 +116,19 @@ public sealed class SinistroService(
         return SinistroDto.From(item);
     }
 
+    /// <summary>Delete only an unlinked case with a required version and atomic audit.</summary>
+    public async Task DeleteAsync(Guid id, long expectedVersion, CancellationToken ct = default)
+    {
+        await RequireWriteAsync("sinistro.delete", ct);
+        if (expectedVersion < 1)
+            throw new ArgumentOutOfRangeException(nameof(expectedVersion));
+        var item = await FindRequiredAsync(id, ct);
+        if (item.PersistedVersion != expectedVersion)
+            throw new SinistroConcurrencyConflictException();
+        await repository.DeleteAuditedAsync(context.TenantId, id, expectedVersion,
+            Event("sinistro.delete", "succeeded", id), ct);
+    }
+
     private async Task<Sinistro> FindRequiredAsync(Guid id, CancellationToken ct) =>
         await repository.FindAsync(context.TenantId, id, ct)
         ?? throw new KeyNotFoundException("Sinistro not found.");
@@ -142,6 +155,12 @@ public sealed class SinistroService(
 /// <summary>A stale optimistic version; map to HTTP 409, not a 404 or a 500.</summary>
 public sealed class SinistroConcurrencyConflictException()
     : Exception("Sinistro has changed since it was read.")
+{
+}
+
+/// <summary>Linked Perizie block deletion (HTTP 409) without cascade.</summary>
+public sealed class SinistroLinkedPerizieException()
+    : Exception("Sinistro has linked perizie and cannot be deleted.")
 {
 }
 

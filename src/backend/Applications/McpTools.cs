@@ -90,6 +90,13 @@ public sealed class McpTools(
         DateOnly? reportedOn = null, CancellationToken ct = default) =>
         sinistri.UpdateAsync(id, externalReference, occurredOn, reportedOn, expectedVersion, ct);
 
+    [McpServerTool(Name = "delete_sinistro"), Description("Deletes an unlinked Sinistro only with signed peritial.write and last-observed expectedVersion; linked perizie and stale versions conflict, deletion and audit are atomic.")]
+    public async Task<bool> DeleteSinistro(Guid id, long expectedVersion, CancellationToken ct = default)
+    {
+        await sinistri.DeleteAsync(id, expectedVersion, ct);
+        return true;
+    }
+
     [McpServerTool(Name = "list_documents"), Description("Lists up to 100 document metadata entries in the authenticated tenant (peritial.read or peritial.write); optional periziaId filter. Never exposes storage keys or file bytes.")]
     public Task<IReadOnlyList<DocumentSummaryDto>> ListDocuments(
         Guid? periziaId = null, int limit = 50, CancellationToken ct = default) =>

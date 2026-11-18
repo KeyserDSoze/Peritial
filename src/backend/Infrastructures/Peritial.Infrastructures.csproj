@@ -15,5 +15,6 @@
     <EmbeddedResource Include="../../../scripts/db/migrations/V002__security_audit_action_index.sql" />
     <EmbeddedResource Include="../../../scripts/db/migrations/V003__sinistri_rls.sql" />
     <EmbeddedResource Include="../../../scripts/db/migrations/V004__perizie_sinistro_link.sql" />
+    <EmbeddedResource Include="../../../scripts/db/migrations/V005__sinistri_audited_delete.sql" />
   </ItemGroup>
 </Project>

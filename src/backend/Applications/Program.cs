@@ -204,6 +204,7 @@ app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
         UploadIdempotencyConflictException => StatusCodes.Status409Conflict,
         PeriziaConcurrencyConflictException => StatusCodes.Status409Conflict,
         SinistroConcurrencyConflictException => StatusCodes.Status409Conflict,
+        SinistroLinkedPerizieException => StatusCodes.Status409Conflict,
         UploadLeaseExpiredException => StatusCodes.Status503ServiceUnavailable,
         MalwareScannerUnavailableException => StatusCodes.Status503ServiceUnavailable,
         InvalidDataException => StatusCodes.Status413PayloadTooLarge,
@@ -320,6 +321,13 @@ api.MapPost("/sinistri", async (CreateSinistroRequest input, SinistroService ser
 api.MapPut("/sinistri/{id:guid}", (Guid id, UpdateSinistroRequest input, SinistroService service, CancellationToken ct) =>
     service.UpdateAsync(id, input.ExternalReference, input.OccurredOn,
         input.ReportedOn, input.ExpectedVersion, ct)).RequireAuthorization("peritial.write");
+
+api.MapDelete("/sinistri/{id:guid}", async (Guid id, long expectedVersion,
+    SinistroService service, CancellationToken ct) =>
+{
+    await service.DeleteAsync(id, expectedVersion, ct);
+    return Results.NoContent();
+}).RequireAuthorization("peritial.write");
 
 // Read-only document catalog returns an allowlisted metadata projection:
  // never storage keys, scanned bytes, internal object URLs, or tenant IDs.

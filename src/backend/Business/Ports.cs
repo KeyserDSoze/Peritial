@@ -56,6 +56,8 @@ public interface ISinistroRepository
         SinistroSearchFilter filter, SinistroPageBoundary? after,
         int fetchLimit, CancellationToken ct = default);
 
+    Task DeleteAuditedAsync(TenantId tenant, Guid id, long expectedVersion,
+        SecurityAuditEvent audit, CancellationToken ct = default);
     Task AddAuditedAsync(Sinistro sinistro, SecurityAuditEvent audit, CancellationToken ct = default);
     Task UpdateAuditedAsync(Sinistro sinistro, SecurityAuditEvent audit, CancellationToken ct = default);
 }

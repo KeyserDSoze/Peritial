@@ -214,6 +214,58 @@ public sealed class PgSinistroRepository(NpgsqlDataSource dataSource) : ISinistr
         item.ConfirmPersistedUpdate();
     }
 
+    /// <summary>
+    /// SQL CAS delete + successful audit in a single PG transaction. V004
+    /// RESTRICT FK prevents concurrent Perizia links from being orphaned.
+    /// </summary>
+    public async Task DeleteAuditedAsync(
+        TenantId tenant, Guid id, long expectedVersion, SecurityAuditEvent audit,
+        CancellationToken ct = default)
+    {
+        if (id == Guid.Empty) throw new ArgumentException("Invalid sinistro ID.", nameof(id));
+        if (expectedVersion < 1)
+            throw new ArgumentOutOfRangeException(nameof(expectedVersion));
+        if (audit.TenantId != tenant)
+            throw new UnauthorizedAccessException("Cross-tenant sinistro audit denied.");
+        if (audit.ResourceId != id || audit.Action != "sinistro.delete" ||
+            audit.Outcome != "succeeded")
+            throw new ArgumentException("Audit must describe this successful delete.", nameof(audit));
+
+        await using var scope = await TenantDbScope.OpenAsync(dataSource, tenant, ct);
+        await using (var command = scope.Command(
+            "DELETE FROM sinistri WHERE tenant_id=@tenant AND id=@id AND version=@version"))
+        {
+            command.Parameters.AddWithValue("tenant", tenant.Value);
+            command.Parameters.AddWithValue("id", id);
+            command.Parameters.AddWithValue("version", expectedVersion);
+            int affected;
+            try
+            {
+                affected = await command.ExecuteNonQueryAsync(ct);
+            }
+            catch (PostgresException ex) when (
+                ex.SqlState == PostgresErrorCodes.ForeignKeyViolation &&
+                ex.ConstraintName == "fk_perizie_sinistro_same_tenant")
+            {
+                // The database's foreign key, not a racy SELECT count,
+                // is the authoritative protection against linked deletion.
+                throw new SinistroLinkedPerizieException();
+            }
+            if (affected != 1)
+            {
+                await using var check = scope.Command(
+                    "SELECT 1 FROM sinistri WHERE tenant_id=@tenant AND id=@id");
+                check.Parameters.AddWithValue("tenant", tenant.Value);
+                check.Parameters.AddWithValue("id", id);
+                if (await check.ExecuteScalarAsync(ct) is null)
+                    throw new KeyNotFoundException("Sinistro not found.");
+                throw new SinistroConcurrencyConflictException();
+            }
+        }
+        await PgSecurityAuditTrail.AppendWithinScopeAsync(scope, audit, ct);
+        await scope.CommitAsync(ct);
+    }
+
     private static void ValidateAudit(Sinistro item, SecurityAuditEvent audit, string action)
     {
         if (item.TenantId != audit.TenantId)
