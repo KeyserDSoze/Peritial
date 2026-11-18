@@ -488,6 +488,42 @@ public sealed class SinistroPersistenceTests
     }
 
     [Fact]
+    public async Task V008_perizia_delete_is_not_granted_to_app_role_and_cannot_erase_legacy_association()
+    {
+        await using var db = await IsolatedDatabases.CreateAsync();
+        var tenant = TenantId.From(Guid.NewGuid());
+        var perizie = new PgPeriziaRepository(db.App);
+        var perizia = Perizia.Create(tenant, "V008-NO-DELETE-" + Guid.NewGuid().ToString("N"));
+        await perizie.AddAuditedAsync(perizia, Event(tenant, perizia.Id, "perizia.create"));
+
+        await using (var grant = db.Admin.CreateCommand(
+            "SELECT NOT has_table_privilege('peritial_app','perizie','DELETE') " +
+            "AND NOT has_table_privilege('peritial_recovery','perizie','DELETE') " +
+            "AND has_table_privilege('peritial_app','perizie','SELECT') " +
+            "AND has_table_privilege('peritial_app','perizie','UPDATE')"))
+            Assert.True((bool)(await grant.ExecuteScalarAsync())!);
+
+        await using (var conn = await db.App.OpenConnectionAsync())
+        await using (var tx = await conn.BeginTransactionAsync())
+        {
+            await using (var set = new NpgsqlCommand(
+                "SELECT set_config('peritial.tenant_id',@tenant,true)",conn,tx))
+            {
+                set.Parameters.AddWithValue("tenant",tenant.Value.ToString("D"));
+                await set.ExecuteNonQueryAsync();
+            }
+            await using var deletion = new NpgsqlCommand(
+                "DELETE FROM perizie WHERE tenant_id=@tenant AND id=@id",conn,tx);
+            deletion.Parameters.AddWithValue("tenant",tenant.Value);
+            deletion.Parameters.AddWithValue("id",perizia.Id);
+            var ex = await Assert.ThrowsAsync<PostgresException>(() =>
+                deletion.ExecuteNonQueryAsync());
+            Assert.Equal(PostgresErrorCodes.InsufficientPrivilege,ex.SqlState);
+        }
+        Assert.NotNull(await perizie.FindAsync(tenant,perizia.Id));
+    }
+
+    [Fact]
     public async Task V007_database_guards_block_unversioned_and_unaudited_direct_link_writes()
     {
         await using var db = await IsolatedDatabases.CreateAsync();
