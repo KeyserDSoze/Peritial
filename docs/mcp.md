@@ -18,7 +18,7 @@ Esporre le funzionalità tramite Model Context Protocol (SDK ufficiale .NET, HTT
 |---|---|---|
 | Perizie | list_perizie, get_perizia, create_perizia, assign_perizia, advance_perizia, cancel_perizia | lettura scoped e mutazioni REST/MCP con audit atomico e CAS (#9/#12) |
 | Documenti | list_documents, get_document (lettura metadata), ingest_file (base64 limitato); REST multipart | catalogo read-only tenant-scoped + ingestion; download/report ancora aperti (#11/#12) |
-| Sinistri e collegamenti perizie | list_sinistri, search_sinistri, get_sinistro, create_sinistro, update_sinistro, link_perizia_sinistro, list_perizie_for_sinistro | list/search/read/create/update Sinistri; relazione opzionale FK tenant-scoped e audit atomico, senza reparent/delete/UI (#7/#9/#12) |
+| Sinistri e collegamenti perizie | list_sinistri, search_sinistri, get_sinistro, create_sinistro, update_sinistro, link_perizia_sinistro, list_perizie_for_sinistro, get_perizia_sinistro | list/search/read/create/update Sinistri; relazione opzionale FK tenant-scoped e audit atomico, senza reparent/delete/UI (#7/#9/#12) |
 | Anagrafiche, import XML, report, messaggi, contabilità, KPI | tool dedicati per ciascun use case | iterazioni successive |
 
 Per file grandi: non trasportare payload di gigabyte via JSON MCP; fornire un tool per ottenere URL di upload firmati/scoped e una procedura di completamento (da implementare). Una tool call MCP non equivale ad accesso indiscriminato al filesystem.
@@ -101,6 +101,7 @@ o riassegnazione automatica.
 |---|---|---|---|
 | Collegare una perizia già esistente | `POST /api/perizie/{id}/sinistro` con `{"sinistroId":"UUID"}` → 201 | `link_perizia_sinistro(periziaId,sinistroId)` | `peritial.write` |
 | Elencare gli ID perizia di un sinistro | `GET /api/sinistri/{id}/perizie` → UUID[] | `list_perizie_for_sinistro(sinistroId)` | `peritial.read` o `peritial.write` |
+| Consultare il link di una perizia | `GET /api/perizie/{id}/sinistro` → `{periziaId,sinistroId:UUID|null}` | `get_perizia_sinistro(periziaId)` | `peritial.read` o `peritial.write` |
 
 Entrambe le superfici usano **lo stesso** `PeriziaSinistroLinkService`.
 Il tenant e il subject arrivano solo dal JWT firmato.
@@ -115,6 +116,16 @@ Business. ID esterno/inesistente: **404 REST**; link già presente:
 Un errore audit provoca rollback completo. Il Business
 audita `denied` per chi invoca senza scope; il blocco
 REST avviene prima tramite policy globale.
+
+Il nuovo read model della singola perizia distingue
+**perizia visibile ma non collegata** (`sinistroId:null`) da
+**perizia assente o estranea** (404 REST, errore MCP).
+Usa lo stesso servizio Business e un SELECT PostgreSQL
+sotto FORCE RLS; non scrive audit di successo. La PWA
+ne fa richiesta **solo quando l'utente apre il pannello**
+e non assume che una perizia sia scollegata solo perché
+la lista delle perizie non mostra un ID sinistro.
+[ADR 0035](../adr/0035-pwa-sinistro-link-authoritative-read.md).
 
 La lista espone **solo UUID**, non dati personali di
 perizie/sinistri di altri tenant, token, tenant ID o audit.
