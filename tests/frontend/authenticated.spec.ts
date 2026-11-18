@@ -866,6 +866,36 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     await expect(restored.getByText(sinRef)).toBeVisible({timeout: 30_000});
     await expect(restored.getByRole("button", {name: "Collega sinistro"})).toHaveCount(0);
 
+    // Explicit unlink never triggers from the initial button alone.
+    // A simulated CAS conflict must invalidate stale relation UI instead of
+    // pretending a success or silently removing a concurrent replacement.
+    await restored.getByRole("button", {name:"Scollega sinistro"}).click();
+    await expect(restored.getByRole("button", {name:"Conferma scollegamento"})).toBeVisible();
+    await restored.getByRole("button", {name:"Annulla scollegamento"}).click();
+    await expect(restored.getByText(sinRef)).toBeVisible();
+    await restored.getByRole("button", {name:"Scollega sinistro"}).click();
+    const unlinkPattern = "**/api/perizie/*/sinistro?expectedSinistroId=*";
+    await page.route(unlinkPattern, async route =>
+      route.fulfill({status:409,contentType:"application/json",body:'{"error":"stale"}'}));
+    await restored.getByRole("button", {name:"Conferma scollegamento"}).click();
+    await expect(restored.getByRole("alert")).toContainText("Ricarica il collegamento");
+    await expect(restored.getByRole("button", {name:"Conferma scollegamento"})).toHaveCount(0);
+    await page.unroute(unlinkPattern);
+    await restored.getByRole("button", {name:"Ricarica collegamento"}).click();
+    await expect(restored.getByText(sinRef)).toBeVisible();
+
+    await restored.getByRole("button", {name:"Scollega sinistro"}).click();
+    const unlinkDone = page.waitForResponse(response =>
+      response.url().includes("/api/perizie/" + periziaId + "/sinistro?") &&
+      response.request().method() === "DELETE");
+    await restored.getByRole("button", {name:"Conferma scollegamento"}).click();
+    expect((await unlinkDone).status()).toBe(204);
+    await expect(restored.getByText("Perizia senza sinistro")).toBeVisible();
+    await expect(restored.getByRole("status")).toContainText("Collegamento rimosso");
+    const persistedUnlink = await request.get(
+      "http://localhost:8080/api/perizie/" + periziaId + "/sinistro", {headers});
+    expect((await persistedUnlink.json() as {sinistroId:null}).sinistroId).toBeNull();
+
     // A concurrent link from a different client must become 409, never a
     // false optimistic UI success nor an automatic duplicate submission.
     const raceRef = "UI-PERIZIA-RACE-" + unique;

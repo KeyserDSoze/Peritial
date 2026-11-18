@@ -96,6 +96,18 @@ export const pageSearchSinistri = (token: string, prefix: string,
   if (cursor) params.set("cursor", cursor);
   return request<SinistroPage>("/sinistri/search/page?" + params.toString(), token);
 };
+// DELETE returns no JSON body: never call request<T> which expects JSON.
+// Only the last observed link can be unlinked; no optimistic mutation.
+export async function unlinkPeriziaSinistro(
+  token: string, periziaId: string, expectedSinistroId: string): Promise<void> {
+  const query = new URLSearchParams({expectedSinistroId});
+  const response = await fetch(base + "/perizie/" + encodeURIComponent(periziaId) +
+    "/sinistro?" + query.toString(), {
+      method:"DELETE", headers:{Authorization:"Bearer " + token}
+    });
+  if (response.status !== 204)
+    throw new Error("HTTP " + response.status);
+}
 export const linkPeriziaSinistro = (token: string, periziaId: string, sinistroId: string) =>
   request<PeriziaSinistroLink>("/perizie/" + encodeURIComponent(periziaId) + "/sinistro",
     token, {method: "POST", headers: {"Content-Type": "application/json"},

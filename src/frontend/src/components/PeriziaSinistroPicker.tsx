@@ -1,7 +1,7 @@
 import {useEffect, useRef, useState, type FormEvent} from "react";
 import {useTranslation} from "react-i18next";
 import {getPeriziaSinistro, getSinistro, isApiUnavailable,
-  linkPeriziaSinistro, searchSinistri,
+  linkPeriziaSinistro, unlinkPeriziaSinistro, searchSinistri,
   type PeriziaSinistroAssociation, type SinistroSummary} from "../api";
 import {Button} from "./ui/button";
 
@@ -20,13 +20,15 @@ type Props = {
 export function PeriziaSinistroPicker({periziaId, token, canWrite, onUnavailable}: Props) {
   const {t} = useTranslation();
   const [expanded, setExpanded] = useState(false);
-  const [busy, setBusy] = useState<"read" | "search" | "link" | null>(null);
+  const [busy, setBusy] = useState<"read" | "search" | "link" | "unlink" | null>(null);
   const [association, setAssociation] = useState<PeriziaSinistroAssociation | null>(null);
   const [linkedReference, setLinkedReference] = useState("");
   const [prefix, setPrefix] = useState("");
   const [results, setResults] = useState<SinistroSummary[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [searched, setSearched] = useState(false);
+  const [confirmUnlink, setConfirmUnlink] = useState(false);
+  const [unlinkedSuccess, setUnlinkedSuccess] = useState(false);
   const [error, setError] = useState<"conflict" | "error" | null>(null);
   const sequence = useRef(0);
 
@@ -45,6 +47,8 @@ export function PeriziaSinistroPicker({periziaId, token, canWrite, onUnavailable
     const requestId = ++sequence.current;
     setBusy("read");
     setError(null);
+    setConfirmUnlink(false);
+    setUnlinkedSuccess(false);
     setAssociation(null);
     setLinkedReference("");
     resetSelection();
@@ -78,6 +82,8 @@ export function PeriziaSinistroPicker({periziaId, token, canWrite, onUnavailable
       setAssociation(null);
       setLinkedReference("");
       setError(null);
+      setConfirmUnlink(false);
+      setUnlinkedSuccess(false);
       resetSelection();
     } else {
       setExpanded(true);
@@ -123,6 +129,8 @@ export function PeriziaSinistroPicker({periziaId, token, canWrite, onUnavailable
       if (sequence.current !== requestId) return;
       setAssociation({periziaId: confirmed.periziaId, sinistroId: confirmed.sinistroId});
       setLinkedReference(selected.externalReference);
+      setConfirmUnlink(false);
+      setUnlinkedSuccess(false);
       setSelectedId("");
       setResults([]);
       setSearched(false);
@@ -143,6 +151,48 @@ export function PeriziaSinistroPicker({periziaId, token, canWrite, onUnavailable
     }
   }
 
+  async function unlink() {
+    // Do not auto-unlink or use a hidden/possibly stale association.
+    if (busy || !canWrite || !confirmUnlink || !association?.sinistroId) return;
+    const observed = association.sinistroId;
+    const requestId = ++sequence.current;
+    setBusy("unlink");
+    setError(null);
+    try {
+      await unlinkPeriziaSinistro(token, periziaId, observed);
+      // The 204 proves commit, but verify current state again to account for
+      // a new link added by another writer immediately after the unlink.
+      const current = await getPeriziaSinistro(token, periziaId);
+      const linked = current.sinistroId
+        ? await getSinistro(token, current.sinistroId) : null;
+      if (sequence.current !== requestId) return;
+      setAssociation(current);
+      setLinkedReference(linked?.externalReference || "");
+      setConfirmUnlink(false);
+      setUnlinkedSuccess(current.sinistroId === null);
+      resetSelection();
+    } catch (cause) {
+      if (sequence.current !== requestId) return;
+      setConfirmUnlink(false);
+      setUnlinkedSuccess(false);
+      if (isApiUnavailable(cause) ||
+          (cause instanceof Error && cause.message === "HTTP 404")) {
+        onUnavailable();
+      } else if (cause instanceof Error && cause.message === "HTTP 409") {
+        // Never keep a stale association after a CAS conflict. Require a
+        // fresh tenant-scoped GET; do not retry or delete the new link.
+        setAssociation(null);
+        setLinkedReference("");
+        resetSelection();
+        setError("conflict");
+      } else {
+        setError("error");
+      }
+    } finally {
+      if (sequence.current === requestId) setBusy(null);
+    }
+  }
+
   return <div className="mt-3 border-t border-slate-200 pt-3 dark:border-slate-800">
     <Button type="button" variant="outline" aria-expanded={expanded}
       disabled={busy !== null} onClick={toggle}>{t("sinistroLinkSection")}</Button>
@@ -154,9 +204,23 @@ export function PeriziaSinistroPicker({periziaId, token, canWrite, onUnavailable
           onClick={() => void reloadAssociation()}>{t("reloadSinistroLink")}</Button>
       </>}
       {error === "error" && <p role="alert" className="text-sm text-red-700 dark:text-red-400">{t("sinistroLinkError")}</p>}
+      {unlinkedSuccess && <p role="status" className="text-sm">{t("sinistroUnlinkSucceeded")}</p>}
       {association?.sinistroId && <>
         <p className="text-sm font-medium">{t("sinistroLinked")}</p>
         <p className="break-words text-sm">{linkedReference || association.sinistroId}</p>
+        {canWrite && !confirmUnlink && <Button type="button" variant="outline"
+          disabled={busy !== null} onClick={() => setConfirmUnlink(true)}>
+          {t("unlinkSinistro")}
+        </Button>}
+        {canWrite && confirmUnlink && <div className="space-y-2">
+          <p className="text-sm" role="status">{t("sinistroUnlinkWarning")}</p>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" disabled={busy !== null}
+              onClick={() => void unlink()}>{t("confirmUnlinkSinistro")}</Button>
+            <Button type="button" variant="outline" disabled={busy !== null}
+              onClick={() => setConfirmUnlink(false)}>{t("cancelUnlinkSinistro")}</Button>
+          </div>
+        </div>}
       </>}
       {association && !association.sinistroId && <>
         <p className="text-sm text-slate-600 dark:text-slate-300">{t("sinistroUnlinked")}</p>
