@@ -75,3 +75,14 @@ test OAuth/Playwright REST/MCP e PWA esistenti.
 least-privileged; non sostituisce controlli esterni
 su ruoli DDL, backup, legal hold o immutabilità WORM.
 Le issue non si chiudono senza quei criteri.
+
+## Evoluzione V008
+
+La V007 impedisce UPDATE diretti e privi di storia
+ma non disciplina DELETE dell'intera Perizia. La
+successiva [ADR 0047](0047-v008-revoke-perizia-delete.md)
+revoca al ruolo `peritial_app` il privilegio
+DELETE originariamente concesso nella V001:
+non essendoci un workflow di cancellazione Perizia,
+nessuna ragione applicativa ne richiede il mantenimento.
+Le versioni e checksum precedenti non vengono riscritti.

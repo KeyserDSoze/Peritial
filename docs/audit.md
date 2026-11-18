@@ -128,3 +128,32 @@ per la baseline V006. Questo è un **controllo di integrità tecnica**,
 non una garanzia WORM/compliance contro gli amministratori DDL
 o un sostituto delle policy retention/approvazioni (#23).
 [ADR 0046](../adr/0046-v007-database-enforced-link-provenance.md).
+
+## V008 — revoca DELETE Perizie al ruolo applicativo (#6/#4/#23)
+
+La V008 `V008__perizie_revoke_app_delete.sql` è una migrazione
+**forward-only, senza DML**: revoca il privilegio `DELETE` su
+`perizie` a `peritial_app` e `PUBLIC`. Le Perizie esistenti,
+i Sinistri collegati, l'audit e la storia V006 restano invariati.
+Il codice REST/MCP non espone una cancellazione Perizie:
+il privilegio legacy V001 non è più necessario e avrebbe
+permesso di eliminare una Perizia senza passare attraverso
+la revisione V007, soprattutto per link creati prima
+della baseline V006 privi di righe storiche.
+`peritial_app` conserva i privilegi `SELECT,INSERT,UPDATE`
+necessari al workflow; `peritial_recovery` continua
+a non avere `DELETE`. Il test PostgreSQL con ruolo app
+verifica un `DELETE` rifiutato con `42501` e la
+persistenza della Perizia. Nessun automatismo di
+cancellazione sostitutivo viene introdotto.
+
+Il journal amministrativo ora arriva alla **V008 (8 versioni)**.
+La CI applica fixture additive V003–V008 solamente al
+database effimero; i database reali devono seguire il
+migrator DDL con backup verificato e maintenance. In futuro
+qualsiasi proposta di cancellazione/anonimizzazione Perizie
+richiederà policy di retention, scope dedicato, audit,
+approvazione e prove di ripristino specifiche; nessun
+permesso di cancellazione va riattivato per aggirare
+questi controlli.
+[ADR 0047](../adr/0047-v008-revoke-perizia-delete.md).

@@ -74,3 +74,15 @@ della V006. Il release richiede migrazione amministrativa
 esplicita e backup verificato; Compose CI predispone
 V003–V007 soltanto su DB temporaneo.
 [ADR 0046](adr/0046-v007-database-enforced-link-provenance.md).
+
+## Perizie: privilegio DELETE rimosso (V008, #6/#4)
+
+Il ruolo applicativo non ha più il privilegio SQL
+`DELETE` su `perizie`: nessun dato viene cancellato
+dalla migrazione. Restano intatti link, workflow,
+audit e storia. La modifica chiude una via diretta
+per bypassare i controlli V007, mentre qualsiasi
+cancellazione Perizia futura necessita di un proprio
+workflow governato. La nuova release schema richiede
+la **V008** e la CI effimera applica V003–V008.
+[ADR 0047](adr/0047-v008-revoke-perizia-delete.md).
