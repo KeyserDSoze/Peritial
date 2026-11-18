@@ -18,7 +18,7 @@ Esporre le funzionalità tramite Model Context Protocol (SDK ufficiale .NET, HTT
 |---|---|---|
 | Perizie | list_perizie, get_perizia, create_perizia, assign_perizia, advance_perizia, cancel_perizia | lettura scoped e mutazioni REST/MCP con audit atomico e CAS (#9/#12) |
 | Documenti | list_documents, get_document (lettura metadata), ingest_file (base64 limitato); REST multipart | catalogo read-only tenant-scoped + ingestion; download/report ancora aperti (#11/#12) |
-| Sinistri e collegamenti perizie | list_sinistri, search_sinistri, get_sinistro, create_sinistro, update_sinistro, link_perizia_sinistro, list_perizie_for_sinistro, get_perizia_sinistro | list/search/read/create/update Sinistri; relazione opzionale FK tenant-scoped e audit atomico, senza reparent/delete/UI (#7/#9/#12) |
+| Sinistri e collegamenti perizie | list_sinistri, search_sinistri, get_sinistro, create_sinistro, update_sinistro, link_perizia_sinistro, list_perizie_for_sinistro, get_perizia_sinistro | list/search/read/create/update Sinistri; relazione opzionale FK tenant-scoped e audit atomico, senza reparent/delete/CRUD Sinistri UI completo (#7/#9/#12/#13) |
 | Anagrafiche, import XML, report, messaggi, contabilità, KPI | tool dedicati per ciascun use case | iterazioni successive |
 
 Per file grandi: non trasportare payload di gigabyte via JSON MCP; fornire un tool per ottenere URL di upload firmati/scoped e una procedura di completamento (da implementare). Una tool call MCP non equivale ad accesso indiscriminato al filesystem.
@@ -85,8 +85,8 @@ Per database versionati usare il migrator con identità DDL
 e backup verificato come da [runbook](database-migrations.md).
 
 **Limitazioni:** nessun DELETE, filtri full-text/fuzzy, indice specifico per ILIKE a scala produttiva,
-cursor, relazioni polizze/anagrafiche/perizie, UI PWA o import
-Classic/Accertatore. Non è un CRUD completo. [ADR 0032](../adr/0032-sinistri-rest-mcp-oauth-cas.md).
+cursor, relazioni polizze/anagrafiche, CRUD Sinistri PWA completo o import
+Classic/Accertatore. Il primo selettore di collegamento PWA è già disponibile. Non è un CRUD completo. [ADR 0032](../adr/0032-sinistri-rest-mcp-oauth-cas.md).
 
 ## Collegamento Perizie–Sinistri, V004 (#7/#9/#12)
 
@@ -147,8 +147,9 @@ journal. La CI usa **esclusivamente sulla Compose
 effimera** le fixture SQL V003 e poi V004, senza
 alterare il bootstrap storico V001 né simulare il journal.
 Non sono implementati reparent, unlink, eliminazione
-sinistri/perizie in cascata, UI per selezionare il sinistro
-o il mapping degli ID legacy. Verifiche via due JWT
+sinistri/perizie in cascata, CRUD Sinistri completo in PWA
+o il mapping degli ID legacy. Il selettore di associazione PWA
+è invece disponibile secondo [ADR 0035](../adr/0035-pwa-sinistro-link-authoritative-read.md). Verifiche via due JWT
 Keycloak di test, non Entra ID produttivo. [ADR 0034](../adr/0034-perizie-sinistri-v004-tenant-fk.md).
 
 ## Catalogo metadati documenti REST/MCP (#11/#12)
