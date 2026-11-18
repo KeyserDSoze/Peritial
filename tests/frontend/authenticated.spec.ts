@@ -470,25 +470,48 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     const first = await request.get(path + "/page?limit=2", {headers});
     expect(first.status(), await first.text()).toBe(200);
     expect(first.headers()["cache-control"]).toContain("no-store");
-    type Page = {items: Array<{id:string;externalReference:string}>; nextCursor:string|null};
+    type Row = {id:string;externalReference:string;occurredOn:string};
+    type Page = {items: Row[]; nextCursor:string|null};
     const page1 = await first.json() as Page;
     expect(page1.items.length).toBe(2);
     expect(page1.nextCursor).toBeTruthy();
-    expect(page1.items.map(x => x.id)).toEqual([...ids].sort().slice(0, 2));
     expect(await first.text()).not.toContain("tenantId");
 
-    // Adding a newer Sinistro cannot shift the existing keyset boundary.
+    // Desktop and mobile E2E run concurrently against the SAME signed tenant.
+    // Other workers may insert newer rows, so never assume our three rows
+    // occupy exactly the first two pages. Assert the real cursor invariant
+    // and seek until all our pre-existing IDs have been visited.
+    const boundary = page1.items[1];
     const concurrent = await request.post(path, {headers, data: {
-      externalReference:"PAGE-LATE-" + Date.now(), occurredOn:"9999-01-01"
+      externalReference:"PAGE-LATE-" + Date.now(), occurredOn:"9999-12-31"
     }});
     expect(concurrent.status(), await concurrent.text()).toBe(201);
-    const second = await request.get(path + "/page?limit=2&cursor=" +
-      encodeURIComponent(page1.nextCursor!), {headers});
-    expect(second.status(), await second.text()).toBe(200);
-    const page2 = await second.json() as Page;
-    expect(page2.items.map(x => x.id)).toEqual([...ids].sort().slice(2));
-    expect(page2.nextCursor).toBeNull();
-    expect(new Set([...page1.items, ...page2.items].map(x => x.id)).size).toBe(3);
+    const lateId = (await concurrent.json() as {id:string}).id;
+    const seen = new Set<string>(page1.items.map(x => x.id));
+    let previous = boundary;
+    let cursor = page1.nextCursor;
+    let visitedPages = 0;
+    while (cursor && !ids.every(id => seen.has(id)) && visitedPages < 30) {
+      const response = await request.get(path + "/page?limit=2&cursor=" +
+        encodeURIComponent(cursor), {headers});
+      expect(response.status(), await response.text()).toBe(200);
+      const next = await response.json() as Page;
+      expect(next.items.length).toBeLessThanOrEqual(2);
+      for (const item of next.items) {
+        expect(seen.has(item.id), "keyset must not repeat a prior row").toBe(false);
+        expect(item.occurredOn < previous.occurredOn ||
+          (item.occurredOn === previous.occurredOn &&
+            item.id.localeCompare(previous.id) > 0)).toBe(true);
+        seen.add(item.id);
+        previous = item;
+      }
+      cursor = next.nextCursor;
+      visitedPages++;
+    }
+    expect(visitedPages).toBeGreaterThan(0);
+    expect(ids.every(id => seen.has(id)), "all seeded rows remain reachable").toBe(true);
+    if (boundary.occurredOn < "9999-12-31")
+      expect(seen.has(lateId), "newer insertion must not shift an existing cursor").toBe(false);
 
     expect((await request.get(path + "/page?limit=0", {headers})).status()).toBe(400);
     expect((await request.get(path + "/page?limit=51", {headers})).status()).toBe(400);
