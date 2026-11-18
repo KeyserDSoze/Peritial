@@ -4,8 +4,8 @@ export type SinistroSummary = {
   reportedOn: string | null; createdAtUtc: string; version: number;
 };
 // No tenant ID is accepted or returned from the link endpoints.
-export type PeriziaSinistroAssociation = {periziaId: string; sinistroId: string | null};
-export type PeriziaSinistroLink = {periziaId: string; sinistroId: string};
+export type PeriziaSinistroAssociation = {periziaId: string; sinistroId: string | null; linkVersion: number};
+export type PeriziaSinistroLink = {periziaId: string; sinistroId: string; linkVersion: number};
 export type DocumentRecord = { id:string; periziaId:string|null; fileName:string; contentType:string; length:number };
 // Safe read-only metadata projection: no tenant ID, internal storage key,
 // object URL, file bytes or scanner details.
@@ -99,8 +99,9 @@ export const pageSearchSinistri = (token: string, prefix: string,
 // DELETE returns no JSON body: never call request<T> which expects JSON.
 // Only the last observed link can be unlinked; no optimistic mutation.
 export async function unlinkPeriziaSinistro(
-  token: string, periziaId: string, expectedSinistroId: string): Promise<void> {
-  const query = new URLSearchParams({expectedSinistroId});
+  token: string, periziaId: string, expectedSinistroId: string,
+  expectedLinkVersion: number): Promise<void> {
+  const query = new URLSearchParams({expectedSinistroId, expectedLinkVersion:String(expectedLinkVersion)});
   const response = await fetch(base + "/perizie/" + encodeURIComponent(periziaId) +
     "/sinistro?" + query.toString(), {
       method:"DELETE", headers:{Authorization:"Bearer " + token}
@@ -112,16 +113,17 @@ export async function unlinkPeriziaSinistro(
 // or tenant-selected mutation. PUT returns an allowlisted link projection.
 export const reparentPeriziaSinistro = (
   token: string, periziaId: string, expectedSinistroId: string,
-  newSinistroId: string) =>
+  newSinistroId: string, expectedLinkVersion: number) =>
   request<PeriziaSinistroLink>("/perizie/" + encodeURIComponent(periziaId) +
     "/sinistro", token, {
       method:"PUT", headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({expectedSinistroId, newSinistroId})
+      body:JSON.stringify({expectedSinistroId, newSinistroId, expectedLinkVersion})
     });
-export const linkPeriziaSinistro = (token: string, periziaId: string, sinistroId: string) =>
+export const linkPeriziaSinistro = (token: string, periziaId: string,
+  sinistroId: string, expectedLinkVersion: number) =>
   request<PeriziaSinistroLink>("/perizie/" + encodeURIComponent(periziaId) + "/sinistro",
     token, {method: "POST", headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({sinistroId})});
+      body: JSON.stringify({sinistroId, expectedLinkVersion})});
 
 export async function uploadDocument(token:string, file:File, periziaId?:string):Promise<DocumentRecord> {
   const body = new FormData(); body.append("file",file); if(periziaId) body.append("periziaId",periziaId);

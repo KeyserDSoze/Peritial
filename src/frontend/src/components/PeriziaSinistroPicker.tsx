@@ -23,6 +23,9 @@ export function PeriziaSinistroPicker({periziaId, periziaStatus, token, canWrite
   const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState<"read" | "search" | "link" | "unlink" | "reparent" | null>(null);
   const [association, setAssociation] = useState<PeriziaSinistroAssociation | null>(null);
+  // A revision, not just a UUID, is needed to detect A -> B -> A.
+  const hasRevision = (value: PeriziaSinistroAssociation | null) =>
+    value !== null && Number.isSafeInteger(value.linkVersion) && value.linkVersion >= 1;
   const [linkedReference, setLinkedReference] = useState("");
   const [prefix, setPrefix] = useState("");
   const [results, setResults] = useState<SinistroSummary[]>([]);
@@ -144,7 +147,8 @@ export function PeriziaSinistroPicker({periziaId, periziaStatus, token, canWrite
   }
 
   async function link() {
-    if (busy || !canWrite || association === null || association.sinistroId ||
+    if (busy || !canWrite || !hasRevision(association) ||
+        association === null || association.sinistroId ||
         !selectedId || !results.some(item => item.id === selectedId)) return;
     const requestId = ++sequence.current;
     const selected = results.find(item => item.id === selectedId)!;
@@ -153,9 +157,11 @@ export function PeriziaSinistroPicker({periziaId, periziaStatus, token, canWrite
     try {
       // No optimistic state update, retry loop, background queue or IdP tenant
       // parameter: only a confirmed 201 authorizes the displayed new relation.
-      const confirmed = await linkPeriziaSinistro(token, periziaId, selectedId);
+      const confirmed = await linkPeriziaSinistro(token, periziaId,
+        selectedId, association.linkVersion);
       if (sequence.current !== requestId) return;
-      setAssociation({periziaId: confirmed.periziaId, sinistroId: confirmed.sinistroId});
+      setAssociation({periziaId: confirmed.periziaId, sinistroId: confirmed.sinistroId,
+        linkVersion:confirmed.linkVersion});
       setLinkedReference(selected.externalReference);
       setConfirmUnlink(false);
       setUnlinkedSuccess(false);
@@ -184,13 +190,14 @@ export function PeriziaSinistroPicker({periziaId, periziaStatus, token, canWrite
 
   async function unlink() {
     // Do not auto-unlink or use a hidden/possibly stale association.
-    if (busy || !canWrite || !confirmUnlink || !association?.sinistroId) return;
+    if (busy || !canWrite || !confirmUnlink || !hasRevision(association) ||
+        !association?.sinistroId) return;
     const observed = association.sinistroId;
     const requestId = ++sequence.current;
     setBusy("unlink");
     setError(null);
     try {
-      await unlinkPeriziaSinistro(token, periziaId, observed);
+      await unlinkPeriziaSinistro(token, periziaId, observed, association.linkVersion);
       // The 204 proves commit, but verify current state again to account for
       // a new link added by another writer immediately after the unlink.
       const current = await getPeriziaSinistro(token, periziaId);
@@ -228,7 +235,7 @@ export function PeriziaSinistroPicker({periziaId, periziaStatus, token, canWrite
   }
 
   function beginReparent() {
-    if (busy || !canReparent || !association?.sinistroId) return;
+    if (busy || !canReparent || !hasRevision(association) || !association?.sinistroId) return;
     sequence.current += 1;
     setReparenting(true);
     setConfirmUnlink(false);
@@ -249,7 +256,7 @@ export function PeriziaSinistroPicker({periziaId, periziaStatus, token, canWrite
 
   async function reparent() {
     if (busy || !canReparent || !confirmReparent || !reparenting ||
-        !association?.sinistroId || !selectedId ||
+        !hasRevision(association) || !association?.sinistroId || !selectedId ||
         selectedId === association.sinistroId ||
         !results.some(item => item.id === selectedId)) return;
     const expected = association.sinistroId;
@@ -259,7 +266,8 @@ export function PeriziaSinistroPicker({periziaId, periziaStatus, token, canWrite
     setError(null);
     setReparentedSuccess(false);
     try {
-      await reparentPeriziaSinistro(token, periziaId, expected, target);
+      await reparentPeriziaSinistro(token, periziaId, expected, target,
+        association.linkVersion);
       // The PUT committed one CAS update; the GET is authoritative in case
       // another writer has modified the association again since commit.
       const current = await getPeriziaSinistro(token, periziaId);
@@ -309,14 +317,18 @@ export function PeriziaSinistroPicker({periziaId, periziaStatus, token, canWrite
       {error === "error" && <p role="alert" className="text-sm text-red-700 dark:text-red-400">{t("sinistroLinkError")}</p>}
       {unlinkedSuccess && <p role="status" className="text-sm">{t("sinistroUnlinkSucceeded")}</p>}
       {reparentedSuccess && <p role="status" className="text-sm">{t("sinistroReparentSucceeded")}</p>}
+      {association && hasRevision(association) &&
+        <p className="text-sm text-slate-600 dark:text-slate-300" role="status">
+          {t("sinistroLinkVersion")} {association.linkVersion}
+        </p>}
       {association?.sinistroId && <>
         <p className="text-sm font-medium">{t("sinistroLinked")}</p>
         <p className="break-words text-sm">{linkedReference || association.sinistroId}</p>
-        {canWrite && !confirmUnlink && !reparenting && <Button type="button" variant="outline"
+        {canWrite && hasRevision(association) && !confirmUnlink && !reparenting && <Button type="button" variant="outline"
           disabled={busy !== null} onClick={() => setConfirmUnlink(true)}>
           {t("unlinkSinistro")}
         </Button>}
-        {canReparent && !confirmUnlink && !reparenting && <Button type="button" variant="outline"
+        {canReparent && hasRevision(association) && !confirmUnlink && !reparenting && <Button type="button" variant="outline"
           disabled={busy !== null} onClick={beginReparent}>{t("reparentSinistro")}</Button>}
         {canWrite && confirmUnlink && <div className="space-y-2">
           <p className="text-sm" role="status">{t("sinistroUnlinkWarning")}</p>
@@ -328,7 +340,7 @@ export function PeriziaSinistroPicker({periziaId, periziaStatus, token, canWrite
           </div>
         </div>}
       </>}
-      {association && (!association.sinistroId || reparenting) && <>
+      {association && hasRevision(association) && (!association.sinistroId || reparenting) && <>
         {!association.sinistroId && <p className="text-sm text-slate-600 dark:text-slate-300">{t("sinistroUnlinked")}</p>}
         {reparenting && <p className="text-sm text-slate-600 dark:text-slate-300">{t("sinistroReparentHint")}</p>}
         <form onSubmit={event => void search(event)} className="flex flex-wrap items-end gap-2">
@@ -371,7 +383,7 @@ export function PeriziaSinistroPicker({periziaId, periziaStatus, token, canWrite
               {item.externalReference} · {item.occurredOn}
             </option>)}
           </select>
-          {canWrite && !reparenting &&
+          {canWrite && hasRevision(association) && !reparenting &&
             <Button type="button" disabled={busy !== null || !selectedId}
               onClick={() => void link()}>{t("linkSinistro")}</Button>}
           {!canWrite && <p className="text-sm text-slate-600 dark:text-slate-300">{t("sinistroReadOnly")}</p>}
