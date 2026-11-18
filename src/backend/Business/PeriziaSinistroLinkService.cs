@@ -4,6 +4,8 @@ namespace Peritial.Business;
 
 /// <summary>Allowlisted link response: never exposes tenant, subject or audit metadata.</summary>
 public sealed record PeriziaSinistroLinkDto(Guid PeriziaId, Guid SinistroId);
+/// <summary>Tenant-safe read projection; a visible unlinked perizia returns null.</summary>
+public sealed record PeriziaSinistroAssociationDto(Guid PeriziaId, Guid? SinistroId);
 
 /// <summary>
 /// First conservative relation slice: a perizia can be linked exactly once,
@@ -25,6 +27,17 @@ public sealed class PeriziaSinistroLinkService(
         var success = Event("perizia.link-sinistro", "succeeded", periziaId);
         await links.LinkAuditedAsync(context.TenantId, periziaId, sinistroId, success, ct);
         return new PeriziaSinistroLinkDto(periziaId, sinistroId);
+    }
+
+    public async Task<PeriziaSinistroAssociationDto> GetPeriziaAssociationAsync(
+        Guid periziaId, CancellationToken ct = default)
+    {
+        RequireRead();
+        if (periziaId == Guid.Empty)
+            throw new ArgumentException("Perizia id required.", nameof(periziaId));
+        var sinistroId = await links.FindSinistroIdForPeriziaAsync(
+            context.TenantId, periziaId, ct);
+        return new PeriziaSinistroAssociationDto(periziaId, sinistroId);
     }
 
     public Task<IReadOnlyList<Guid>> ListPeriziaIdsAsync(
