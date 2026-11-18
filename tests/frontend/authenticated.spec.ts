@@ -358,6 +358,69 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
       .getByText(reference, {exact:true})).toBeVisible({timeout:30_000});
   });
 
+  test("PWA searches complete tenant Sinistri catalog by literal prefix and inclusive incident dates", async ({page, request, context}) => {
+    test.setTimeout(120_000);
+    await page.goto("/");
+    await page.getByRole("button", {name: "Accedi"}).click();
+    await expect(page.locator("#username")).toBeVisible({timeout: 30_000});
+    await page.locator("#username").fill("localuser");
+    await page.locator("#password").fill("local-only-user");
+    await page.locator("#kc-login").click();
+    await expect(page.getByRole("button", {name: "Esci"})).toBeVisible({timeout: 30_000});
+
+    const token = await page.evaluate(() => {
+      const key = Object.keys(sessionStorage).find(x => x.startsWith("oidc.user:"));
+      return key ? (JSON.parse(sessionStorage.getItem(key) || "{}") as {access_token?:string}).access_token : undefined;
+    });
+    expect(token).toBeTruthy();
+    const prefix = "UI-SIN-SEARCH-" + Date.now() + "-%_";
+    const included = prefix + "-IN";
+    const otherDate = prefix + "-OTHER-DATE";
+    const wildcardDecoy = prefix.slice(0, -2) + "AB-DECOY";
+    const headers = {Authorization: "Bearer " + token};
+    for (const [ref, date] of [[included, "1981-01-10"], [otherDate, "1982-02-10"], [wildcardDecoy, "1981-01-10"]]) {
+      const response = await request.post("http://localhost:8080/api/sinistri", {
+        headers, data: {externalReference:ref, occurredOn:date}
+      });
+      expect(response.status(), await response.text()).toBe(201);
+    }
+
+    await page.getByRole("button", {name: "Apri catalogo sinistri"}).click();
+    const catalog = page.getByRole("region", {name: "Catalogo sinistri"});
+    // Old incident dates lie outside the recent-50 window. Search MUST
+    // query PostgreSQL, not filter the currently loaded browser rows.
+    await expect(catalog.getByText(included, {exact:true})).toHaveCount(0);
+    await catalog.getByRole("textbox", {name: "Prefisso riferimento catalogo"}).fill(prefix);
+    await catalog.getByLabel("Data evento da").fill("1981-01-10");
+    await catalog.getByLabel("Data evento a").fill("1981-12-31");
+    const searched = page.waitForResponse(response =>
+      response.url().includes("/api/sinistri/search?") && response.status() === 200);
+    await catalog.getByRole("button", {name: "Cerca nel catalogo"}).click();
+    const response = await searched;
+    const url = new URL(response.url());
+    expect(url.searchParams.get("prefix")).toBe(prefix);
+    expect(url.searchParams.get("occurredFrom")).toBe("1981-01-10");
+    expect(url.searchParams.get("occurredTo")).toBe("1981-12-31");
+    expect(url.searchParams.get("limit")).toBe("50");
+    expect(response.headers()["cache-control"]).toContain("no-store");
+    await expect(catalog.getByText(included, {exact:true})).toBeVisible();
+    await expect(catalog.getByText(otherDate, {exact:true})).toHaveCount(0);
+    await expect(catalog.getByText(wildcardDecoy, {exact:true})).toHaveCount(0);
+    await catalog.getByRole("button", {name: "Aggiorna sinistri"}).click();
+    await expect(catalog.getByText(included, {exact:true})).toBeVisible();
+
+    await catalog.getByRole("button", {name: "Cancella filtri sinistri"}).click();
+    await expect(catalog.getByText(included, {exact:true})).toHaveCount(0);
+    await expect(catalog.getByRole("textbox", {name: "Prefisso riferimento catalogo"})).toHaveValue("");
+    await context.setOffline(true);
+    await expect(page.getByRole("region", {name: "Catalogo sinistri"})).toHaveCount(0);
+    await context.setOffline(false);
+    await expect(page.getByRole("button", {name: "Apri catalogo sinistri"})).toBeVisible({timeout:30_000});
+    await page.getByRole("button", {name: "Apri catalogo sinistri"}).click();
+    await expect(page.getByRole("region", {name:"Catalogo sinistri"})
+      .getByRole("textbox", {name:"Prefisso riferimento catalogo"})).toHaveValue("");
+  });
+
   test("PWA edits Sinistri with authoritative expectedVersion, invalid input and external CAS conflict", async ({page, request}) => {
     test.setTimeout(120_000);
     await page.goto("/");
