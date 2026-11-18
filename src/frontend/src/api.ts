@@ -108,6 +108,16 @@ export async function unlinkPeriziaSinistro(
   if (response.status !== 204)
     throw new Error("HTTP " + response.status);
 }
+// One authenticated CAS write: no unlink-then-link, optimistic success,
+// or tenant-selected mutation. PUT returns an allowlisted link projection.
+export const reparentPeriziaSinistro = (
+  token: string, periziaId: string, expectedSinistroId: string,
+  newSinistroId: string) =>
+  request<PeriziaSinistroLink>("/perizie/" + encodeURIComponent(periziaId) +
+    "/sinistro", token, {
+      method:"PUT", headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({expectedSinistroId, newSinistroId})
+    });
 export const linkPeriziaSinistro = (token: string, periziaId: string, sinistroId: string) =>
   request<PeriziaSinistroLink>("/perizie/" + encodeURIComponent(periziaId) + "/sinistro",
     token, {method: "POST", headers: {"Content-Type": "application/json"},

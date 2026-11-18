@@ -1,7 +1,7 @@
 import {useEffect, useRef, useState, type FormEvent} from "react";
 import {useTranslation} from "react-i18next";
 import {getPeriziaSinistro, getSinistro, isApiUnavailable,
-  linkPeriziaSinistro, unlinkPeriziaSinistro, searchSinistri,
+  linkPeriziaSinistro, unlinkPeriziaSinistro, reparentPeriziaSinistro, searchSinistri,
   type PeriziaSinistroAssociation, type SinistroSummary} from "../api";
 import {Button} from "./ui/button";
 
@@ -20,7 +20,7 @@ type Props = {
 export function PeriziaSinistroPicker({periziaId, token, canWrite, onUnavailable}: Props) {
   const {t} = useTranslation();
   const [expanded, setExpanded] = useState(false);
-  const [busy, setBusy] = useState<"read" | "search" | "link" | "unlink" | null>(null);
+  const [busy, setBusy] = useState<"read" | "search" | "link" | "unlink" | "reparent" | null>(null);
   const [association, setAssociation] = useState<PeriziaSinistroAssociation | null>(null);
   const [linkedReference, setLinkedReference] = useState("");
   const [prefix, setPrefix] = useState("");
@@ -29,6 +29,9 @@ export function PeriziaSinistroPicker({periziaId, token, canWrite, onUnavailable
   const [searched, setSearched] = useState(false);
   const [confirmUnlink, setConfirmUnlink] = useState(false);
   const [unlinkedSuccess, setUnlinkedSuccess] = useState(false);
+  const [reparenting, setReparenting] = useState(false);
+  const [confirmReparent, setConfirmReparent] = useState(false);
+  const [reparentedSuccess, setReparentedSuccess] = useState(false);
   const [error, setError] = useState<"conflict" | "error" | null>(null);
   const sequence = useRef(0);
 
@@ -49,6 +52,9 @@ export function PeriziaSinistroPicker({periziaId, token, canWrite, onUnavailable
     setError(null);
     setConfirmUnlink(false);
     setUnlinkedSuccess(false);
+    setReparenting(false);
+    setConfirmReparent(false);
+    setReparentedSuccess(false);
     setAssociation(null);
     setLinkedReference("");
     resetSelection();
@@ -84,6 +90,9 @@ export function PeriziaSinistroPicker({periziaId, token, canWrite, onUnavailable
       setError(null);
       setConfirmUnlink(false);
       setUnlinkedSuccess(false);
+      setReparenting(false);
+      setConfirmReparent(false);
+      setReparentedSuccess(false);
       resetSelection();
     } else {
       setExpanded(true);
@@ -93,7 +102,8 @@ export function PeriziaSinistroPicker({periziaId, token, canWrite, onUnavailable
 
   async function search(event: FormEvent) {
     event.preventDefault();
-    if (busy || association === null || association.sinistroId ||
+    if (busy || association === null ||
+        (association.sinistroId && !reparenting) ||
         prefix.trim().length < 2 || prefix.trim().length > 100) return;
     const requestId = ++sequence.current;
     setBusy("search");
@@ -131,6 +141,9 @@ export function PeriziaSinistroPicker({periziaId, token, canWrite, onUnavailable
       setLinkedReference(selected.externalReference);
       setConfirmUnlink(false);
       setUnlinkedSuccess(false);
+      setReparenting(false);
+      setConfirmReparent(false);
+      setReparentedSuccess(false);
       setSelectedId("");
       setResults([]);
       setSearched(false);
@@ -170,6 +183,9 @@ export function PeriziaSinistroPicker({periziaId, token, canWrite, onUnavailable
       setLinkedReference(linked?.externalReference || "");
       setConfirmUnlink(false);
       setUnlinkedSuccess(current.sinistroId === null);
+      setReparenting(false);
+      setConfirmReparent(false);
+      setReparentedSuccess(false);
       resetSelection();
     } catch (cause) {
       if (sequence.current !== requestId) return;
@@ -193,6 +209,75 @@ export function PeriziaSinistroPicker({periziaId, token, canWrite, onUnavailable
     }
   }
 
+  function beginReparent() {
+    if (busy || !canWrite || !association?.sinistroId) return;
+    sequence.current += 1;
+    setReparenting(true);
+    setConfirmUnlink(false);
+    setConfirmReparent(false);
+    setUnlinkedSuccess(false);
+    setReparentedSuccess(false);
+    setError(null);
+    resetSelection();
+  }
+
+  function cancelReparent() {
+    sequence.current += 1;
+    setReparenting(false);
+    setConfirmReparent(false);
+    setError(null);
+    resetSelection();
+  }
+
+  async function reparent() {
+    if (busy || !canWrite || !confirmReparent || !reparenting ||
+        !association?.sinistroId || !selectedId ||
+        selectedId === association.sinistroId ||
+        !results.some(item => item.id === selectedId)) return;
+    const expected = association.sinistroId;
+    const target = selectedId;
+    const requestId = ++sequence.current;
+    setBusy("reparent");
+    setError(null);
+    setReparentedSuccess(false);
+    try {
+      await reparentPeriziaSinistro(token, periziaId, expected, target);
+      // The PUT committed one CAS update; the GET is authoritative in case
+      // another writer has modified the association again since commit.
+      const current = await getPeriziaSinistro(token, periziaId);
+      const linked = current.sinistroId
+        ? await getSinistro(token, current.sinistroId) : null;
+      if (sequence.current !== requestId) return;
+      setAssociation(current);
+      setLinkedReference(linked?.externalReference || "");
+      setReparentedSuccess(current.sinistroId === target);
+      setReparenting(false);
+      setConfirmReparent(false);
+      setConfirmUnlink(false);
+      resetSelection();
+    } catch (cause) {
+      if (sequence.current !== requestId) return;
+      setReparentedSuccess(false);
+      setConfirmReparent(false);
+      if (isApiUnavailable(cause) ||
+          (cause instanceof Error && cause.message === "HTTP 404")) {
+        onUnavailable();
+      } else if (cause instanceof Error && cause.message === "HTTP 409") {
+        // The last observed association is no longer reliable. Do not retry
+        // with a fresh expected value without the operator's choice.
+        setAssociation(null);
+        setLinkedReference("");
+        setReparenting(false);
+        resetSelection();
+        setError("conflict");
+      } else {
+        setError("error");
+      }
+    } finally {
+      if (sequence.current === requestId) setBusy(null);
+    }
+  }
+
   return <div className="mt-3 border-t border-slate-200 pt-3 dark:border-slate-800">
     <Button type="button" variant="outline" aria-expanded={expanded}
       disabled={busy !== null} onClick={toggle}>{t("sinistroLinkSection")}</Button>
@@ -205,13 +290,16 @@ export function PeriziaSinistroPicker({periziaId, token, canWrite, onUnavailable
       </>}
       {error === "error" && <p role="alert" className="text-sm text-red-700 dark:text-red-400">{t("sinistroLinkError")}</p>}
       {unlinkedSuccess && <p role="status" className="text-sm">{t("sinistroUnlinkSucceeded")}</p>}
+      {reparentedSuccess && <p role="status" className="text-sm">{t("sinistroReparentSucceeded")}</p>}
       {association?.sinistroId && <>
         <p className="text-sm font-medium">{t("sinistroLinked")}</p>
         <p className="break-words text-sm">{linkedReference || association.sinistroId}</p>
-        {canWrite && !confirmUnlink && <Button type="button" variant="outline"
+        {canWrite && !confirmUnlink && !reparenting && <Button type="button" variant="outline"
           disabled={busy !== null} onClick={() => setConfirmUnlink(true)}>
           {t("unlinkSinistro")}
         </Button>}
+        {canWrite && !confirmUnlink && !reparenting && <Button type="button" variant="outline"
+          disabled={busy !== null} onClick={beginReparent}>{t("reparentSinistro")}</Button>}
         {canWrite && confirmUnlink && <div className="space-y-2">
           <p className="text-sm" role="status">{t("sinistroUnlinkWarning")}</p>
           <div className="flex flex-wrap gap-2">
@@ -222,8 +310,9 @@ export function PeriziaSinistroPicker({periziaId, token, canWrite, onUnavailable
           </div>
         </div>}
       </>}
-      {association && !association.sinistroId && <>
-        <p className="text-sm text-slate-600 dark:text-slate-300">{t("sinistroUnlinked")}</p>
+      {association && (!association.sinistroId || reparenting) && <>
+        {!association.sinistroId && <p className="text-sm text-slate-600 dark:text-slate-300">{t("sinistroUnlinked")}</p>}
+        {reparenting && <p className="text-sm text-slate-600 dark:text-slate-300">{t("sinistroReparentHint")}</p>}
         <form onSubmit={event => void search(event)} className="flex flex-wrap items-end gap-2">
           <div className="min-w-0 flex-1">
             <label htmlFor={"sinistro-prefix-" + periziaId}
@@ -237,6 +326,7 @@ export function PeriziaSinistroPicker({periziaId, token, canWrite, onUnavailable
                 setSelectedId("");
                 setResults([]);
                 setSearched(false);
+                setConfirmReparent(false);
                 setError(null);
               }}
               className="w-full rounded-md border border-slate-300 bg-transparent px-3 py-2 dark:border-slate-700" />
@@ -252,18 +342,33 @@ export function PeriziaSinistroPicker({periziaId, token, canWrite, onUnavailable
             className="block text-sm">{t("chooseSinistro")}</label>
           <select id={"sinistro-choice-" + periziaId} value={selectedId}
             disabled={busy !== null}
-            onChange={event => setSelectedId(event.target.value)}
+            onChange={event => {
+              setSelectedId(event.target.value);
+              setConfirmReparent(false);
+            }}
             className="block w-full rounded-md border border-slate-300 bg-transparent px-3 py-2 dark:border-slate-700">
             <option value="">{t("chooseSinistro")}</option>
-            {results.map(item => <option key={item.id} value={item.id}>
+            {results.map(item => <option key={item.id} value={item.id}
+              disabled={reparenting && item.id === association.sinistroId}>
               {item.externalReference} · {item.occurredOn}
             </option>)}
           </select>
-          {canWrite ?
+          {canWrite && !reparenting &&
             <Button type="button" disabled={busy !== null || !selectedId}
-              onClick={() => void link()}>{t("linkSinistro")}</Button> :
-            <p className="text-sm text-slate-600 dark:text-slate-300">{t("sinistroReadOnly")}</p>}
+              onClick={() => void link()}>{t("linkSinistro")}</Button>}
+          {!canWrite && <p className="text-sm text-slate-600 dark:text-slate-300">{t("sinistroReadOnly")}</p>}
+          {canWrite && reparenting && selectedId !== association.sinistroId && !confirmReparent &&
+            <Button type="button" variant="outline" disabled={busy !== null || !selectedId}
+              onClick={() => setConfirmReparent(true)}>{t("prepareReparentSinistro")}</Button>}
+          {canWrite && reparenting && confirmReparent &&
+            <div className="space-y-2">
+              <p role="status" className="text-sm">{t("sinistroReparentWarning")}</p>
+              <Button type="button" disabled={busy !== null}
+                onClick={() => void reparent()}>{t("confirmReparentSinistro")}</Button>
+            </div>}
         </>}
+        {reparenting && canWrite && <Button type="button" variant="outline"
+          disabled={busy !== null} onClick={cancelReparent}>{t("cancelReparentSinistro")}</Button>}
       </>}
     </div>}
   </div>;
