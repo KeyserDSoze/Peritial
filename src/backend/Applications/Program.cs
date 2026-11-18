@@ -286,6 +286,9 @@ api.MapPost("/perizie/{id:guid}/cancel", (Guid id, PeriziaService service, Cance
 api.MapGet("/sinistri/{id:guid}/perizie",
     (Guid id, PeriziaSinistroLinkService links, CancellationToken ct) =>
         links.ListPeriziaIdsAsync(id, ct)).RequireAuthorization("peritial.read");
+api.MapGet("/perizie/{id:guid}/sinistro",
+    (Guid id, PeriziaSinistroLinkService links, CancellationToken ct) =>
+        links.GetPeriziaAssociationAsync(id, ct)).RequireAuthorization("peritial.read");
 api.MapPost("/perizie/{id:guid}/sinistro",
     async (Guid id, LinkPeriziaSinistroRequest input,
         PeriziaSinistroLinkService links, CancellationToken ct) =>
