@@ -78,3 +78,11 @@ Il mancato reparent atomico qui elencato come limite storico
 Rimane invariato il contratto `unlink_perizia_sinistro`,
 che non riassegna né elimina alcun Sinistro. La riassegnazione
 richiede un nuovo PUT/tool esplicito con due UUID CAS distinti.
+
+## Evoluzione V006
+
+L'[ADR 0045](0045-perizia-sinistro-v006-aba-revision-provenance.md)
+aggiunge `expectedLinkVersion` obbligatorio anche all'unlink:
+il solo `expectedSinistroId` descritto storicamente qui
+non basta per rilevare un ciclo ABA. Il comportamento
+fail-closed e l'audit restano invariati.

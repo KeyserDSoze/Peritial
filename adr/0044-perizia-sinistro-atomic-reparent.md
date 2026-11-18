@@ -90,3 +90,12 @@ nell'UPDATE CAS PostgreSQL: nascondere un pulsante non è una
 misura di sicurezza sufficiente. Playwright verifica che, dopo
 l'annullamento della Perizia, l'azione scompaia e il REST PUT
 rifiuti comunque la mutazione con 409.
+
+## Evoluzione V006
+
+L'[ADR 0045](0045-perizia-sinistro-v006-aba-revision-provenance.md)
+introduce una revisione monotona obbligatoria nei contratti
+reparent/link/unlink e conserva tecnicamente source/target
+con audit correlato. Il limite ABA qui documentato è
+stato superato nei write path V006; restano governance
+privacy/retention e test upgrade/staging.

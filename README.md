@@ -42,3 +42,23 @@ Il **sesto job CI `worm-recovery`** verifica ora S3 Object Lock COMPLIANCE con u
 È disponibile anche `pull-historic` per il **recupero esplicito dell'intero bundle cifrato da VersionId S3 COMPLIANCE selezionati** in caso di delete marker, senza rimuoverli o pubblicare dati parziali (ADR 0027). Richiede conferma separata e inventario di versioni completo; non seleziona versioni automaticamente né sostituisce KMS/offsite di produzione.
 
 La CI WORM usa ora **due identità S3 distinte e limitate al prefisso cifrato**: uploader senza alcun GET (le letture sono affidate al reader separato), e reader corrente/storico senza PUT/DELETE. Il provider SILO può mostrare i VersionId al writer sotto `ListBucket`; IAM gestito AWS ancora da verificare. Modelli IAM riproducibili in `scripts/recovery/render_worm_iam.py` e [runbook](docs/sealed-multiservice-recovery.md) (ADR 0028); restano da completare IAM role/STS, KMS e verifiche AWS in produzione.
+
+## Perizia–Sinistro V006: conflitti ABA e provenienza append-only (#23)
+
+La [migrazione V006](scripts/db/migrations/V006__perizie_link_revision_history.sql)
+aggiunge `perizie.sinistro_link_version` (baseline `1` sul preesistente)
+e `perizia_sinistro_history` append-only con revisione, Sinistro
+precedente/successivo e riferimento all'audit atomico. GET associazione
+restituisce `linkVersion`; **POST link, PUT reparent e DELETE unlink
+richiedono `expectedLinkVersion` positivo** in aggiunta agli ID
+precedentemente richiesti. Ogni successo incrementa la revisione e la
+restituisce; le chiamate vecchie senza versione ricevono **400**
+(fail-closed), una versione obsoleta **409**, incluso un ciclo ABA
+A→B→A. La PWA invia sempre la revisione firmata dal server e richiede
+reload dopo conflitti; lo stato di workflow terminale continua a vietare
+la riassegnazione. Schema versionato da migrare esplicitamente, Compose
+demo V001 resta storico, CI effimera applica fixture V003–V006.
+Per la provenienza precedente all'upgrade esiste solo una baseline
+(cannot retroactively reconstruct earlier changes); policy privacy,
+retention e approvazioni finali ancora aperte in #23.
+[ADR 0045](adr/0045-perizia-sinistro-v006-aba-revision-provenance.md).

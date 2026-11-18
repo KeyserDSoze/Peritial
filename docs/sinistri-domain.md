@@ -694,3 +694,44 @@ di riassegnazioni terminali occorre una decisione separata.
 Restano aperti i requisiti di accessibilità WCAG e gli altri
 collegamenti/filtri di #7/#9.
 [ADR 0044](../adr/0044-perizia-sinistro-atomic-reparent.md).
+
+## V006 — revisione monotona e audit storico delle associazioni (#23)
+
+Perizia–Sinistro usa ora `sinistro_link_version` **bigint >=1**
+per distinguere un link osservato da un altro che ha lo stesso UUID
+dopo un ciclo `A→B→A`. Tutti i mutatori REST e MCP richiedono
+`expectedLinkVersion` (positivo, letto da
+`GET /api/perizie/{id}/sinistro`) oltre agli UUID.
+La condizione SQL su `tenant_id,id,sinistro_id,version`
+è nello stesso `UPDATE ... RETURNING sinistro_link_version` che
+incrementa la versione. Per il primo link si richiede
+`sinistro_id IS NULL AND sinistro_link_version=@expected`.
+La modifica include un audit `succeeded` e un evento storico
+`perizia_sinistro_history` con `revision`,
+`previous_sinistro_id`, `new_sinistro_id`, `audit_id`
+tutti nello stesso commit. Una collisione audit/DB fa rollback
+di **tutte e tre** le scritture; 409 non registra un successo.
+Il ruolo applicativo dispone solo di INSERT sulla storia
+con FORCE RLS; niente lettura, update o delete nemmeno per
+il ruolo recovery. Niente PII/JSON body/token, solo UUID correlati
+all'audit già firmato.
+
+DTO `{periziaId,sinistroId,linkVersion}`, senza tenantId.
+POST `{sinistroId,expectedLinkVersion}` → 201 con revisione
+aggiornata; PUT `{expectedSinistroId,newSinistroId,expectedLinkVersion}`
+→ 200 con revisione aggiornata; DELETE query
+`expectedSinistroId=...&expectedLinkVersion=...` → 204,
+poi GET rivela la nuova revisione. I tool MCP accettano gli stessi
+argomenti. Omettere la versione ⇒ errore 400/invalid arguments,
+non operazione legacy. Il PWA picker conserva la revisione del
+GET e la usa per l'unica mutazione esplicita; dopo 409 deve
+ricaricare, mai usare una revisione recuperata automaticamente
+per ripetere una scrittura.
+
+La V006 usa baseline `1` anche per associazioni già collegate
+sotto V004–V005: **non inventa eventi pregressi**.
+Le approvazioni per cambiamenti sensibili e i requisiti
+di retention/accesso per gli audit storici richiedono
+ancora revisione di dominio/compliance, quindi #23 resta aperta.
+Non modifica il gate di hard-delete produttivo #22.
+[ADR 0045](../adr/0045-perizia-sinistro-v006-aba-revision-provenance.md).

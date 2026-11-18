@@ -395,3 +395,22 @@ sufficiente per questo flusso **non distruttivo**;
 non conferisce mai scope `peritial.sinistri.delete`,
 che resta bloccato in produzione dalla #22.
 [ADR 0044](../adr/0044-perizia-sinistro-atomic-reparent.md).
+
+## Aggiornamento V006 del catalogo associazioni (#23)
+
+I tool `link_perizia_sinistro`,
+`unlink_perizia_sinistro` e
+`reparent_perizia_sinistro` **non accettano più chiamate
+prive di `expectedLinkVersion`**. Il tool di lettura
+`get_perizia_sinistro` restituisce
+`{periziaId,sinistroId,linkVersion}`; i successi di
+link/reparent tornano con la nuova revisione e la
+risposta unlink con `sinistroId:null,linkVersion`.
+Usare esclusivamente la revisione effettivamente
+osservata; una revisione vecchia dà conflitto anche se
+il Sinistro corrente ha di nuovo lo stesso UUID.
+Il client con argomenti obsoleti riceve errore MCP
+invece di un replay silenzioso. Ogni successo è
+tracciato da audit+history atomici con source/target,
+ma non espone il contenuto della tabella di provenienza.
+[ADR 0045](../adr/0045-perizia-sinistro-v006-aba-revision-provenance.md).

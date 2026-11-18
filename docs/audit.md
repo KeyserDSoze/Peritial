@@ -73,3 +73,26 @@ source/target né una revisione monotona della relazione**.
 Questi dati richiedono policy di disclosure e modello eventi
 dedicato, prima di definirla una traccia probatoria completa.
 [ADR 0044](../adr/0044-perizia-sinistro-atomic-reparent.md).
+
+## V006: storia minima di link e audit correlato (#23/#21)
+
+Le scritture `perizia.link-sinistro`,
+`perizia.unlink-sinistro` e
+`perizia.reparent-sinistro` ora incrementano la revisione
+monotona con CAS, appendono una riga `security_audit`
+e una riga `perizia_sinistro_history` **nella stessa
+transazione**. Ogni riga storica contiene solo
+`tenant_id,perizia_id,revision,previous_sinistro_id,
+new_sinistro_id,audit_id`; la FK
+`(tenant_id,audit_id)` la collega al successo append-only
+con soggetto e timestamp già presenti in `security_audit`.
+Il ruolo app ha solo INSERT con FORCE RLS sulla storia;
+né l'app né recovery possono SELECT/UPDATE/DELETE.
+Per conflitti/denials non esiste evento storico di
+successo. La storia è tecnica **dal momento della V006**,
+non un backfill fittizio di attività preesistente.
+Prima di definirla legalmente probatoria sono richieste
+policy retention, autorizzazione letture amministrative,
+archivio WORM, verifiche owner e drill di ripristino;
+#23 rimane aperta.
+[ADR 0045](../adr/0045-perizia-sinistro-v006-aba-revision-provenance.md).

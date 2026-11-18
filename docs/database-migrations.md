@@ -158,3 +158,35 @@ regressioni REST/MCP dimostrano il percorso. La semantica business di
 cancellazione di record senza Perizie è nell'[ADR 0041](../adr/0041-sinistri-v005-audited-cas-delete.md);
 retention e legal hold applicativi ancora aperti. Non promuovere questa
 nuova mutazione senza le procedure operative richieste.
+
+## V006 — revisione monotona associazioni e provenienza (#6/#23)
+
+La migrazione forward-only
+`scripts/db/migrations/V006__perizie_link_revision_history.sql`
+aggiunge `perizie.sinistro_link_version bigint NOT NULL DEFAULT 1`
+con check positivo. Non cambia valori di `sinistro_id` o lo
+stato workflow, non modifica V001–V005 e non ricostruisce
+la storia impossibile da conoscere delle associazioni
+precedenti. La nuova tabella append-only
+`perizia_sinistro_history` possiede PK
+`(tenant_id,perizia_id,revision)`, FK same-tenant verso
+Perizie e audit, e politica INSERT-only FORCE RLS.
+`peritial_app` ha solo INSERT, `peritial_recovery`
+non riceve accesso; non si concedono SELECT a client web/MCP.
+
+**Upgrade operativo:** backup coerente già verificato,
+fermare writer vecchi, applicare V006 con CLI DDL
+`apply`, verificare journal V001–V006 e permessi,
+quindi distribuire API e PWA che inviano sempre
+`expectedLinkVersion`. Durante la transizione gli
+operatori vecchi senza versione riceveranno 400 e
+non potranno mutare la relazione; non aggiungere
+fallback permissivi. Compose V001 demo non viene
+migrato automaticamente; soltanto Compose **CI
+disposable** applica V003, V004, V005 e V006
+in ordine. I drill PG restore e adozioni legacy
+verificano ora 6 versioni e la baseline di revisione.
+Per testare l'upgrade reale V005→V006 in staging
+con dati, permessi e approvazioni di compliance è
+ancora necessaria la checklist di #23 e #6.
+[ADR 0045](../adr/0045-perizia-sinistro-v006-aba-revision-provenance.md).

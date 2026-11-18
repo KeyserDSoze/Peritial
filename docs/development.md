@@ -1190,3 +1190,28 @@ e Playwright OAuth desktop/mobile includono target foreign,
 source stale, rifiuto di Perizia annullata, rollback audit,
 MCP e PWA. Non modificare il gate #22 di hard-delete.
 [ADR 0044](../adr/0044-perizia-sinistro-atomic-reparent.md).
+
+## Migrazione V006 e contract test versione link (#23)
+
+Prima di distribuire la nuova API/PWA bisogna applicare **V006**
+su un database versionato V005 con backup verificato e writer
+fermi. Non eseguire `ALTER perizie` da API startup o client
+con ruolo `peritial_app`, e non modificare il branch storico
+`death`. Il CLI privilegiato `apply` mantiene checksum e
+journal di V001–V006; la CI Compose usa solo fixture additive
+V003→V004→V005→V006 in un database effimero.
+La colonna `sinistro_link_version` è `bigint NOT NULL DEFAULT 1`;
+`1` è la baseline dei record preesistenti, non una prova
+di assenza di modifiche precedenti.
+
+La suite esegue test xUnit Business e PostgreSQL 17 per
+GET revision, link/unlink/reparent con expected positivo,
+CAS e ABA, due scrittori concorrenti, RLS e least privilege
+history, FK audit, rollback della storia su audit failure.
+Playwright Keycloak desktop/mobile verifica che il vecchio
+contratto senza versione venga rifiutato, versione obsoleta
+→409, PWA revision firmata e no auto retry.
+Il frontend non deve inviare mutation se
+`linkVersion` è assente/non-safe/non positivo. I dati
+della storia non sono una query REST/MCP pubblica.
+[ADR 0045](../adr/0045-perizia-sinistro-v006-aba-revision-provenance.md).
