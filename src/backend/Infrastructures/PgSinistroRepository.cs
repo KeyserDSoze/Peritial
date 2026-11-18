@@ -103,6 +103,50 @@ public sealed class PgSinistroRepository(NpgsqlDataSource dataSource) : ISinistr
         return items;
     }
 
+    /// <summary>
+    /// Filtered keyset seek; literal ILIKE, inclusive dates and the cursor
+    /// predicate are all evaluated server-side before ORDER/LIMIT.
+    /// </summary>
+    public async Task<IReadOnlyList<Sinistro>> SearchPageAsync(
+        TenantId tenant, SinistroSearchFilter filter, SinistroPageBoundary? after,
+        int fetchLimit, CancellationToken ct = default)
+    {
+        if (fetchLimit is < 1 or > 51)
+            throw new ArgumentOutOfRangeException(nameof(fetchLimit));
+        var validated = SinistroSearchFilter.Create(
+            filter.Prefix, filter.OccurredFrom, filter.OccurredTo, filter.Limit);
+        var literalPrefix = validated.Prefix.Replace("!", "!!")
+            .Replace("%", "!%").Replace("_", "!_") + "%";
+        await using var scope = await TenantDbScope.OpenAsync(dataSource, tenant, ct);
+        var items = new List<Sinistro>();
+        await using (var command = scope.Command(
+            "SELECT id, tenant_id, external_reference, occurred_on, reported_on, " +
+            "created_at_utc, version FROM sinistri " +
+            "WHERE tenant_id=@tenant AND external_reference ILIKE @pattern ESCAPE '!' " +
+            "AND (@dateFrom IS NULL OR occurred_on >= @dateFrom) " +
+            "AND (@dateTo IS NULL OR occurred_on <= @dateTo) " +
+            "AND (@afterDate IS NULL OR occurred_on < @afterDate " +
+            "OR (occurred_on = @afterDate AND id > @afterId)) " +
+            "ORDER BY occurred_on DESC, id ASC LIMIT @limit"))
+        {
+            command.Parameters.AddWithValue("tenant", tenant.Value);
+            command.Parameters.AddWithValue("pattern", literalPrefix);
+            command.Parameters.Add("dateFrom", NpgsqlDbType.Date).Value =
+                (object?)validated.OccurredFrom ?? DBNull.Value;
+            command.Parameters.Add("dateTo", NpgsqlDbType.Date).Value =
+                (object?)validated.OccurredTo ?? DBNull.Value;
+            command.Parameters.Add("afterDate", NpgsqlDbType.Date).Value =
+                (object?)after?.OccurredOn ?? DBNull.Value;
+            command.Parameters.Add("afterId", NpgsqlDbType.Uuid).Value =
+                (object?)after?.Id ?? DBNull.Value;
+            command.Parameters.AddWithValue("limit", fetchLimit);
+            await using var reader = await command.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct)) items.Add(Read(reader));
+        }
+        await scope.CommitAsync(ct);
+        return items;
+    }
+
     public async Task<Sinistro?> FindAsync(TenantId tenant, Guid id, CancellationToken ct = default)
     {
         await using var scope = await TenantDbScope.OpenAsync(dataSource, tenant, ct);

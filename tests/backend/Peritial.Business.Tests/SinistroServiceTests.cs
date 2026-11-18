@@ -201,6 +201,18 @@ public sealed class SinistroServiceTests
                     (!occurredTo.HasValue || x.OccurredOn <= occurredTo.Value))
                 .OrderByDescending(x => x.OccurredOn).ThenBy(x => x.Id)
                 .Take(limit).Select(Snapshot).ToArray());
+        public Task<IReadOnlyList<Sinistro>> SearchPageAsync(
+            TenantId tenant, SinistroSearchFilter filter, SinistroPageBoundary? after,
+            int fetchLimit, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<Sinistro>>(Saved.Values
+                .Where(x => x.TenantId == tenant &&
+                    x.ExternalReference.StartsWith(filter.Prefix, StringComparison.OrdinalIgnoreCase) &&
+                    (!filter.OccurredFrom.HasValue || x.OccurredOn >= filter.OccurredFrom.Value) &&
+                    (!filter.OccurredTo.HasValue || x.OccurredOn <= filter.OccurredTo.Value) &&
+                    (after is null || x.OccurredOn < after.OccurredOn ||
+                        (x.OccurredOn == after.OccurredOn && x.Id.CompareTo(after.Id) > 0)))
+                .OrderByDescending(x => x.OccurredOn).ThenBy(x => x.Id)
+                .Take(fetchLimit).Select(Snapshot).ToArray());
         public Task<Sinistro?> FindAsync(TenantId tenant, Guid id, CancellationToken ct = default) =>
             Task.FromResult(Saved.TryGetValue(id, out var s) && s.TenantId == tenant ? Snapshot(s) : null);
         public async Task AddAuditedAsync(Sinistro item, SecurityAuditEvent entry, CancellationToken ct = default)

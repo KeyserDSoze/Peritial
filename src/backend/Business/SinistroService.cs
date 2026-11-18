@@ -59,6 +59,27 @@ public sealed class SinistroService(
         return results.Select(SinistroDto.From).ToArray();
     }
 
+    /// <summary>
+    /// Paginated literal-prefix search. The next cursor is bound to the
+    /// canonical filter (prefix + date bounds) to reject accidental reuse.
+    /// Every request still enforces the signed tenant and OAuth scope.
+    /// </summary>
+    public async Task<SinistroPageDto> SearchPageAsync(
+        string prefix, DateOnly? occurredFrom = null, DateOnly? occurredTo = null,
+        int limit = 50, string? cursor = null, CancellationToken ct = default)
+    {
+        RequireRead();
+        var filter = SinistroSearchFilter.Create(prefix, occurredFrom, occurredTo, limit);
+        var after = cursor is null ? null : SinistroSearchPageCursor.Decode(cursor, filter);
+        var records = await repository.SearchPageAsync(context.TenantId, filter, after, limit + 1, ct);
+        var items = records.Take(limit).ToArray();
+        var next = records.Count > limit && items.Length > 0
+            ? SinistroSearchPageCursor.Encode(filter,
+                new SinistroPageBoundary(items[^1].OccurredOn, items[^1].Id))
+            : null;
+        return new SinistroPageDto(items.Select(SinistroDto.From).ToArray(), next);
+    }
+
     public async Task<SinistroDto> GetAsync(Guid id, CancellationToken ct = default)
     {
         RequireRead();

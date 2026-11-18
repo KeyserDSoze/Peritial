@@ -50,6 +50,12 @@ public interface ISinistroRepository
         DateOnly? occurredFrom = null, DateOnly? occurredTo = null, int limit = 10,
         CancellationToken ct = default);
 
+    // Search filters and the keyset boundary are evaluated in PostgreSQL
+    // before LIMIT. fetchLimit includes exactly one lookahead row.
+    Task<IReadOnlyList<Sinistro>> SearchPageAsync(TenantId tenant,
+        SinistroSearchFilter filter, SinistroPageBoundary? after,
+        int fetchLimit, CancellationToken ct = default);
+
     Task AddAuditedAsync(Sinistro sinistro, SecurityAuditEvent audit, CancellationToken ct = default);
     Task UpdateAuditedAsync(Sinistro sinistro, SecurityAuditEvent audit, CancellationToken ct = default);
 }

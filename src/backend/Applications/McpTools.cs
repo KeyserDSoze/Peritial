@@ -68,6 +68,12 @@ public sealed class McpTools(
         int limit = 10, CancellationToken ct = default) =>
         sinistri.SearchAsync(prefix, occurredFrom, occurredTo, limit, ct);
 
+    [McpServerTool(Name = "search_sinistri_page"), Description("Keyset-pages a tenant-scoped literal-reference prefix search, with optional inclusive occurredFrom/occurredTo and limit 1..50. The opaque cursor is bound to those filters, never an authorization credential. Requires peritial.read or peritial.write.")]
+    public Task<SinistroPageDto> SearchSinistriPage(
+        string prefix, DateOnly? occurredFrom = null, DateOnly? occurredTo = null,
+        int limit = 50, string? cursor = null, CancellationToken ct = default) =>
+        sinistri.SearchPageAsync(prefix, occurredFrom, occurredTo, limit, cursor, ct);
+
     [McpServerTool(Name = "get_sinistro"), Description("Gets a sinistro belonging to the signed tenant; missing/foreign IDs are indistinguishable (peritial.read).")]
     public Task<SinistroDto> GetSinistro(Guid id, CancellationToken ct = default) =>
         sinistri.GetAsync(id, ct);

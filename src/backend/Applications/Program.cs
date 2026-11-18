@@ -301,6 +301,11 @@ api.MapGet("/sinistri", (int? limit, SinistroService service, CancellationToken 
     service.ListAsync(limit ?? 50, ct)).RequireAuthorization("peritial.read");
 api.MapGet("/sinistri/page", (int? limit, string? cursor, SinistroService service, CancellationToken ct) =>
     service.PageAsync(limit ?? 50, cursor, ct)).RequireAuthorization("peritial.read");
+api.MapGet("/sinistri/search/page", (string prefix, DateOnly? occurredFrom,
+    DateOnly? occurredTo, int? limit, string? cursor,
+    SinistroService service, CancellationToken ct) =>
+    service.SearchPageAsync(prefix, occurredFrom, occurredTo, limit ?? 50, cursor, ct))
+    .RequireAuthorization("peritial.read");
 api.MapGet("/sinistri/search", (string prefix, DateOnly? occurredFrom, DateOnly? occurredTo,
     int? limit, SinistroService service, CancellationToken ct) =>
     service.SearchAsync(prefix, occurredFrom, occurredTo, limit ?? 10, ct))
