@@ -126,6 +126,15 @@ public sealed class PeriziaSinistroLinkServiceTests
         public Dictionary<Guid,TenantId> OwnedSinistri { get; } = [];
         public Dictionary<Guid,Guid> Linked { get; } = [];
 
+        public Task<Guid?> FindSinistroIdForPeriziaAsync(
+            TenantId tenant, Guid periziaId, CancellationToken ct = default)
+        {
+            if (!OwnedPerizie.TryGetValue(periziaId, out var owner) || owner != tenant)
+                throw new KeyNotFoundException("Perizia not found.");
+            return Task.FromResult(Linked.TryGetValue(periziaId, out var link)
+                ? (Guid?)link : null);
+        }
+
         public async Task LinkAuditedAsync(TenantId tenant, Guid periziaId, Guid sinistroId,
             SecurityAuditEvent entry, CancellationToken ct = default)
         {
