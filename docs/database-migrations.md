@@ -133,3 +133,28 @@ immutate. Vedere [ADR 0034](../adr/0034-perizie-sinistri-v004-tenant-fk.md).
 ## Ambienti Compose demo
 
 Il Compose corrente usa gli script `docker-entrypoint-initdb.d` per una **demo** e può montare volumi esistenti. I percorsi **manuali** V001 esatta e pre-lease riconosciuto sono documentati sopra; non eseguirlo a stack attivo né su database con drift non risolto. I due meccanismi non sono intercambiabili. La sostituzione del bootstrap Compose con un servizio migrator e il percorso di upgrade completo di volumi persistenti sono attività residue della #6/#18.
+
+## V005 — privilegio DELETE minimo per Sinistri (#6/#7/#21)
+
+`scripts/db/migrations/V005__sinistri_audited_delete.sql` è una
+migrazione **solo additiva nei privilegi**: concede `DELETE` su
+`sinistri` unicamente al ruolo `peritial_app`, senza alterare
+righe, PK, FORCED RLS o la FK V004 `ON DELETE RESTRICT`.
+Non concede alcun privilegio a `peritial_recovery` o `PUBLIC`.
+`SchemaMigrator` ne registra filename e SHA-256 in versione **5**
+in transazione insieme alle versioni pendenti. Le migrazioni
+V001–V004 **non sono state ritoccate**; versioni storiche e
+checksum rimangono vincolanti. Sul DB V004 esistente con backup
+verificato usare **solo il CLI privilegiato** `apply` fermando i
+writer come da runbook: il database demo V001 Compose non si migra
+automaticamente. Per adozione esatta V001 o prelease, il percorso
+esplicito `adopt`/ `adopt-prelease` ora registra V001–V005,
+preservando tutti i dati preesistenti.
+
+La CI Compose applica le fixture additive V003, poi V004, poi V005
+nel solo database effimero, senza scrivere un journal fittizio.
+Test migrator, adozione con restore, PostgreSQL least privilege e
+regressioni REST/MCP dimostrano il percorso. La semantica business di
+cancellazione di record senza Perizie è nell'[ADR 0041](../adr/0041-sinistri-v005-audited-cas-delete.md);
+retention e legal hold applicativi ancora aperti. Non promuovere questa
+nuova mutazione senza le procedure operative richieste.

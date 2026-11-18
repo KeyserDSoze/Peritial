@@ -1071,3 +1071,45 @@ Non è uno snapshot tra UPDATE concorrenti della data evento;
 restano da caratterizzare grandi volumi, indici specifici ILIKE,
 full-text/fuzzy, UX virtualizzata e WCAG di produzione.
 [ADR 0040](../adr/0040-sinistri-filtered-keyset-search.md).
+
+## Sviluppo e test cancellazione Sinistri V005 (#7/#6/#12/#21, ADR 0041)
+
+La migrazione forward-only `V005__sinistri_audited_delete.sql` concede
+solo `DELETE ON sinistri` a `peritial_app`; **non cancella dati** e
+non modifica la relazione V004. La FK composta same-tenant
+`fk_perizie_sinistro_same_tenant` con `ON DELETE RESTRICT` impedisce
+sempre di eliminare Sinistri collegati a qualsiasi Perizia,
+anche se la relazione viene creata durante una cancellazione concorrente.
+Il ruolo di recovery non ottiene accesso.
+
+Il Business `SinistroService.DeleteAsync(id, expectedVersion)` richiede
+lo scope firmato `peritial.write`. `expectedVersion` (intero positivo)
+è obbligatorio: senza versione oppure con versione obsoleta il servizio
+rifiuta la cancellazione. Il repository `PgSinistroRepository.DeleteAuditedAsync`
+usa un solo `DELETE WHERE tenant_id=@tenant AND id=@id AND version=@version`,
+`TenantDbScope` e FORCE RLS; l'evento append-only
+`sinistro.delete / succeeded` è scritto **nella stessa transazione**.
+Un errore audit comporta rollback del DELETE. Se la FK V004 blocca
+l'operazione il client riceve 409; versione vecchia 409, ID
+assente/foreign 404, input non valido 400, anonimo 401, scope read-only
+403 (con audit del diniego). Non c'è cascata o cancellazione
+silenziosa di Perizie, documenti o audit.
+
+Contratti equivalenti:
+- REST `DELETE /api/sinistri/{id}?expectedVersion=N` -> HTTP 204 solo
+  dopo commit; nessuna risposta con record o tenant ID.
+- MCP `delete_sinistro(id, expectedVersion)` -> `true` dopo commit.
+- La PWA **non** offre ancora il tasto di eliminazione: prima vanno
+  concordati retention, legal hold, autorizzazioni operative rafforzate
+  e conferma accessibile dell'azione irreversibile. Non promuovere la
+  cancellazione ad uso legale/produttivo senza questi gate.
+
+Test-first: Business scope/tenant/CAS e audit; PG 17 reale con
+utente `peritial_app`, perizia collegata e FK RESTRICT, record foreign,
+stale version, rollback audit e cancellazione riuscita; Playwright
+OAuth Keycloak REST/MCP desktop/mobile con 204/400/401/404/409.
+CI effimera applica V003, V004 e V005 **solo** nel database
+temporaneo, senza falsificare il journal dello storico Compose V001.
+Il migrator amministrativo applica V005 con account DDL su
+database versionati e backup verificato.
+[ADR 0041](../adr/0041-sinistri-v005-audited-cas-delete.md).

@@ -317,3 +317,20 @@ genera errore, ma non è una firma né un'autorizzazione.
 Il tool `search_sinistri` resta invariato per l'autocomplete del picker
 e continua a restituire un elenco limitato (default 10, max 50).
 [ADR 0040](../adr/0040-sinistri-filtered-keyset-search.md).
+
+## MCP delete_sinistro: V005 cancellazione autorizzata (#7/#12/#21)
+
+`delete_sinistro(id:UUID,expectedVersion:long)` è un'operazione
+mutativa che usa `SinistroService.DeleteAsync` in comune con
+`DELETE /api/sinistri/{id}?expectedVersion=N`. È obbligatorio
+`peritial.write`; il tool non riceve tenant ID né permessi nel payload.
+Ritorna `true` soltanto dopo che la cancellazione del caso **senza**
+Perizie collegate e l'evento audit `sinistro.delete` sono stati
+committati insieme. Il SQL CAS nega versioni obsolete e la FK composta
+V004 `ON DELETE RESTRICT` nega casi con Perizie associate, senza
+cascata. Record estranei sono indistinguibili da mancanti. Denied scope
+viene auditato senza il corpo della richiesta. Il ruolo app riceve il
+privilegio DELETE solo attraverso migrazione V005 amministrativa;
+il ruolo recovery resta senza accesso. Restano da definire retention
+e legal hold prima di abilitare una UI di cancellazione.
+[ADR 0041](../adr/0041-sinistri-v005-audited-cas-delete.md).

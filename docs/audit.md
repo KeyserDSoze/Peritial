@@ -20,3 +20,14 @@ Mancano inoltre retention con immutabilità esterna, audit di ogni futuro use ca
 Dopo il PUT i metadata e l'audit vengono confermati nella medesima transazione che consuma `upload_intents`. Se il commit fallisce o perde l'ACK, il sistema **non elimina subito il blob**: il worker PostgreSQL dedicato verifica la referenza prima di pulire i record scaduti. Un lock sul record d'intento impedisce che il worker elimini un blob e un commit successivo lo referenzi. Il worker usa ruolo ristretto `peritial_recovery`, con accesso solo alle chiavi pendenti e a tenant/storage_key documentali; non può leggere nomi, contenuti o audit. Un errore di cancellazione conserva il record per retry. Rischi: richieste non idempotenti, upload troppo lenti rispetto al grace period, gestione operativa del worker e migrazioni di produzione (ADR 0011, #21/#6).
 
 Il completamento delle richieste idempotenti viene registrato su `upload_request_keys` nello stesso commit di `documents` e `security_audit`. Un replay completato non crea un secondo audit. Il ruolo recovery può leggere solo identificativi documento/tenant e stato, non i digest della richiesta, del soggetto o della chiave. Le chiavi completate richiedono retention controllata (#19).
+
+## V005 Sinistri: commit audit/DELETE atomico (#7/#21)
+
+`sinistro.delete` produce un audit append-only con tenant e subject
+firmati, azione, outcome e UUID della risorsa, **mai** il contenuto,
+numero di sinistro o body HTTP/MCP. L'operazione DELETE condizionata
+alla `version` e l'inserimento dell'audit sono nella **stessa
+transazione PostgreSQL**; un audit fallito annulla la cancellazione.
+Un errore FK `fk_perizie_sinistro_same_tenant` impedisce la mutazione
+e non emette un falso successo. Un diniego di scope ha l'outcome
+`denied` senza resource ID. [ADR 0041](../adr/0041-sinistri-v005-audited-cas-delete.md).
