@@ -1,4 +1,11 @@
 export type Perizia = { id:string; reference:string; status:string; assignedTo:string|null; createdAtUtc:string };
+export type SinistroSummary = {
+  id: string; externalReference: string; occurredOn: string;
+  reportedOn: string | null; createdAtUtc: string; version: number;
+};
+// No tenant ID is accepted or returned from the link endpoints.
+export type PeriziaSinistroAssociation = {periziaId: string; sinistroId: string | null};
+export type PeriziaSinistroLink = {periziaId: string; sinistroId: string};
 export type DocumentRecord = { id:string; periziaId:string|null; fileName:string; contentType:string; length:number };
 // Safe read-only metadata projection: no tenant ID, internal storage key,
 // object URL, file bytes or scanner details.
@@ -41,6 +48,18 @@ export const cancelPerizia = (token: string, id: string) =>
   request<Perizia>("/perizie/" + encodeURIComponent(id) + "/cancel", token, {method: "POST"});
 export const getPerizia = (token: string, id: string) =>
   request<Perizia>("/perizie/" + encodeURIComponent(id), token);
+
+export const getPeriziaSinistro = (token: string, periziaId: string) =>
+  request<PeriziaSinistroAssociation>("/perizie/" + encodeURIComponent(periziaId) + "/sinistro", token);
+export const getSinistro = (token: string, sinistroId: string) =>
+  request<SinistroSummary>("/sinistri/" + encodeURIComponent(sinistroId), token);
+export const searchSinistri = (token: string, prefix: string) =>
+  request<SinistroSummary[]>("/sinistri/search?prefix=" +
+    encodeURIComponent(prefix.trim()) + "&limit=20", token);
+export const linkPeriziaSinistro = (token: string, periziaId: string, sinistroId: string) =>
+  request<PeriziaSinistroLink>("/perizie/" + encodeURIComponent(periziaId) + "/sinistro",
+    token, {method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({sinistroId})});
 
 export async function uploadDocument(token:string, file:File, periziaId?:string):Promise<DocumentRecord> {
   const body = new FormData(); body.append("file",file); if(periziaId) body.append("periziaId",periziaId);
