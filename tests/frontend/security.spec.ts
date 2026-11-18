@@ -705,6 +705,47 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
     expect(mcpB).toContain(bPerizia.id);
     expect(mcpB).not.toContain(aPerizia.id);
 
+    // The PWA's reverse read model must distinguish a visible unlinked
+    // perizia (sinistroId:null) from foreign/missing IDs (same HTTP 404).
+    const linkedA = await request.get(api + "/api/perizie/" + aPerizia.id + "/sinistro", {
+      headers: auth(reader)
+    });
+    expect(linkedA.status(), await linkedA.text()).toBe(200);
+    expect(linkedA.headers()["cache-control"]).toContain("no-store");
+    expect(await linkedA.json()).toEqual({periziaId: aPerizia.id, sinistroId: aSinistro.id});
+    expect(await linkedA.text()).not.toContain("tenantId");
+
+    const unlinkedA = await request.get(api + "/api/perizie/" + aUnlinked.id + "/sinistro", {
+      headers: auth(reader)
+    });
+    expect(unlinkedA.status(), await unlinkedA.text()).toBe(200);
+    expect(await unlinkedA.json()).toEqual({periziaId: aUnlinked.id, sinistroId: null});
+
+    const linkedB = await mcp(b, "get_perizia_sinistro", {periziaId: bPerizia.id}, 1210);
+    expect(linkedB).toContain(bSinistro.id);
+    expect(linkedB).not.toContain('"isError":true');
+    const unlinkedMcp = await mcp(reader, "get_perizia_sinistro", {
+      periziaId: aUnlinked.id
+    }, 1211);
+    expect(unlinkedMcp).toContain('"sinistroId":null');
+    expect(unlinkedMcp).not.toContain('"isError":true');
+
+    const missingReverse = await request.get(api +
+      "/api/perizie/00000000-0000-4000-8000-000000000004/sinistro", {headers: auth(b)});
+    const foreignReverse = await request.get(api +
+      "/api/perizie/" + aPerizia.id + "/sinistro", {headers: auth(b)});
+    expect(missingReverse.status()).toBe(404);
+    expect(foreignReverse.status()).toBe(404);
+    expect(await foreignReverse.text()).toBe(await missingReverse.text());
+    const foreignMcp = await mcp(b, "get_perizia_sinistro", {
+      periziaId: aPerizia.id
+    }, 1212);
+    expect(foreignMcp).toContain('"isError":true');
+    expect(foreignMcp).not.toContain(aSinistro.id);
+    const anonymousReverse = await request.get(api +
+      "/api/perizie/" + aPerizia.id + "/sinistro");
+    expect(anonymousReverse.status()).toBe(401);
+
     const listA = await request.get(api + "/api/sinistri/" + aSinistro.id + "/perizie", {
       headers: auth(reader)
     });
