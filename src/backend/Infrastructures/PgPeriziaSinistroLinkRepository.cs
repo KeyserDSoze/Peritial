@@ -61,6 +61,27 @@ public sealed class PgPeriziaSinistroLinkRepository(NpgsqlDataSource source)
         await scope.CommitAsync(ct);
     }
 
+    public async Task<Guid?> FindSinistroIdForPeriziaAsync(
+        TenantId tenant, Guid periziaId, CancellationToken ct = default)
+    {
+        if (periziaId == Guid.Empty)
+            throw new ArgumentException("Perizia id required.", nameof(periziaId));
+        await using var scope = await TenantDbScope.OpenAsync(source, tenant, ct);
+        Guid? sinistroId = null;
+        await using (var command = scope.Command(
+            "SELECT sinistro_id FROM perizie WHERE tenant_id=@tenant AND id=@perizia"))
+        {
+            command.Parameters.AddWithValue("tenant", tenant.Value);
+            command.Parameters.AddWithValue("perizia", periziaId);
+            await using var reader = await command.ExecuteReaderAsync(ct);
+            if (!await reader.ReadAsync(ct))
+                throw new KeyNotFoundException("Perizia not found.");
+            if (!reader.IsDBNull(0)) sinistroId = reader.GetGuid(0);
+        }
+        await scope.CommitAsync(ct);
+        return sinistroId;
+    }
+
     public async Task<IReadOnlyList<Guid>> ListPeriziaIdsAsync(
         TenantId tenant, Guid sinistroId, CancellationToken ct = default)
     {
