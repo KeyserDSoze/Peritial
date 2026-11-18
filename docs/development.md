@@ -879,3 +879,109 @@ relazioni anagrafiche/polizze e
 import legacy. V003/V004 restano
 migrazioni amministrative manuali.
 [ADR 0036](../adr/0036-pwa-sinistri-catalog-create.md).
+
+
+## PWA: modifica Sinistri con optimistic concurrency CAS (#7/#13, ADR 0037)
+
+`SinistroEditor` è integrato in
+`SinistroCatalog` per ogni riga,
+solo se il token OIDC corrente contiene
+lo scope `peritial.write`. L'autorizzazione
+è comunque sempre imposta dal backend.
+L'apertura del form esegue
+`GET /api/sinistri/{id}` con il JWT
+corrente, per non trattare il
+`version` dell'elenco come snapshot
+aggiornata. Le tre proprietà editabili
+sono `externalReference`,
+`occurredOn` e `reportedOn`
+(facoltativa); la versione del record
+verificato viene mostrata nel form.
+
+Al submit esplicito viene inviato
+`PUT /api/sinistri/{id}` includendo
+**`expectedVersion` uguale alla
+versione del GET/PUT confermato**,
+mai ottenuta da una nuova lettura
+invisibile per aggirare la concorrenza.
+Solo risposta **200** aggiorna
+editor/catalogo, con l'ordinamento
+`occurredOn DESC,id` e il cap 50.
+Il repository PostgreSQL usa già
+CAS con audit `sinistro.update`
+atomico nella stessa transazione,
+sotto FORCE RLS. Il browser
+non trasmette `tenantId`.
+
+In presenza di **400** la riga
+rimane invariata, il modulo e
+`expectedVersion` sono conservati
+per correggere la richiesta.
+Su **409** il browser considera
+obsoleti sia l'editor sia la
+riga della lista: cancella
+la snapshot e i campi, oscura
+riferimento/date non verificabili,
+disabilita ogni altro PUT e
+richiede il click «Ricarica
+sinistro» per un nuovo GET
+firmato. Dopo un GET riuscito,
+l'operatore deve esplicitamente
+riesaminare e salvare la versione
+vincente. **Nessun auto-merge
+o retry di scritture concorrenti.**
+Un 404 sul GET/PUT, 401/403,
+5xx e errori di rete causano
+fail-closed della vista PWA.
+Su offline non vengono conservati
+dati tenant in cache API, né
+accodati PUT, e i risultati
+asincroni tardivi sono ignorati
+dopo unmount, chiusura o cambio
+del JWT. Messaggi it/en e input
+con label e `role=alert`.
+
+**E2E `authenticated.spec.ts`**:
+- login Keycloak PWA con PKCE,
+  creazione caso di test su PG V003;
+- caricamento form con versione 1;
+- simulazione **400** senza
+  modificare valori/verifiche server;
+- PUT v1→v2 con verifica del
+  payload `expectedVersion=1`
+  e GET server di conferma;
+- altro client aggiorna v2→v3,
+  mentre l'editor ha v2;
+- PUT stale produce **409**,
+  campo precedente non più
+  visibile, salvataggio disabilitato,
+  niente replay;
+- click «Ricarica sinistro»
+  recupera v3; nuovo PUT usa
+  `expectedVersion=3`,
+  aggiorna v4 e sopravvive al
+  refresh del browser.
+
+Durante il TDD è emerso anche
+un test E2E **fragile** del vecchio
+`list_sinistri(limit=10)`:
+con nuovi record futuri in parallelo
+non è corretto pretendere che
+un caso con `occurredOn=2026`
+sia nei primi 10. Il test ora
+controlla il cap della lista e
+verifica la reperibilità del caso
+con la ricerca server-side per
+prefisso sia via REST sia MCP,
+senza alterare la semantica del
+repository per favorire i test.
+
+**Limiti:** non sono ancora
+disponibili DELETE, paginazione
+cursor, filtri polizze/anagrafiche,
+import Classic/Accertatore o
+parità del gestionale legacy.
+L'upgrade V003/V004 continua
+a richiedere il migrator esplicito
+e backup per volumi persistenti.
+[ADR 0037](../adr/0037-pwa-sinistri-cas-editor.md).
