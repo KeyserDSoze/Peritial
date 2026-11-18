@@ -246,6 +246,60 @@ public sealed class SinistroPersistenceTests
     }
 
     [Fact]
+    public async Task V005_delete_is_tenant_scoped_cas_audited_and_rejects_linked_perizie()
+    {
+        await using var db = await IsolatedDatabases.CreateAsync();
+        var repo = new PgSinistroRepository(db.App);
+        var a = TenantId.From(Guid.NewGuid());
+        var b = TenantId.From(Guid.NewGuid());
+        var linked = Sinistro.Create(a, "DELETE-LINKED", new DateOnly(2026, 11, 18));
+        var free = Sinistro.Create(a, "DELETE-FREE", new DateOnly(2026, 11, 17));
+        var foreign = Sinistro.Create(b, "DELETE-FOREIGN", new DateOnly(2026, 11, 16));
+        foreach (var item in new[] {linked, free, foreign})
+            await repo.AddAuditedAsync(item, Event(item.TenantId, item.Id, "sinistro.create"));
+        var perizia = Perizia.Create(a, "DELETE-LINK-CASE-" + Guid.NewGuid().ToString("N"));
+        await new PgPeriziaRepository(db.App).AddAuditedAsync(perizia,
+            Event(a, perizia.Id, "perizia.create"));
+        await new PgPeriziaSinistroLinkRepository(db.App).LinkAuditedAsync(
+            a, perizia.Id, linked.Id, Event(a, perizia.Id, "perizia.link-sinistro"));
+
+        await Assert.ThrowsAsync<SinistroLinkedPerizieException>(() =>
+            repo.DeleteAuditedAsync(a, linked.Id, 1, Event(a, linked.Id, "sinistro.delete")));
+        await Assert.ThrowsAsync<KeyNotFoundException>(() =>
+            repo.DeleteAuditedAsync(a, foreign.Id, 1, Event(a, foreign.Id, "sinistro.delete")));
+        await Assert.ThrowsAsync<SinistroConcurrencyConflictException>(() =>
+            repo.DeleteAuditedAsync(a, free.Id, 2, Event(a, free.Id, "sinistro.delete")));
+        Assert.NotNull(await repo.FindAsync(a, linked.Id));
+        Assert.NotNull(await repo.FindAsync(a, free.Id));
+        Assert.NotNull(await repo.FindAsync(b, foreign.Id));
+
+        // An audit failure must roll back the SQL DELETE in the same transaction.
+        var duplicate = Event(a, free.Id, "sinistro.delete");
+        await new PgSecurityAuditTrail(db.App).AppendAsync(duplicate);
+        var exception = await Assert.ThrowsAsync<PostgresException>(() =>
+            repo.DeleteAuditedAsync(a, free.Id, 1, duplicate));
+        Assert.Equal(PostgresErrorCodes.UniqueViolation, exception.SqlState);
+        Assert.NotNull(await repo.FindAsync(a, free.Id));
+        await repo.DeleteAuditedAsync(a, free.Id, 1, Event(a, free.Id, "sinistro.delete"));
+        Assert.Null(await repo.FindAsync(a, free.Id));
+        Assert.Equal(linked.Id, (await repo.ListAsync(a)).Single().Id);
+        Assert.Equal(foreign.Id, (await repo.ListAsync(b)).Single().Id);
+
+        await using var count = db.Admin.CreateCommand(
+            "SELECT count(*) FROM security_audit WHERE tenant_id=@tenant " +
+            "AND resource_id=@id AND action='sinistro.delete' AND outcome='succeeded'");
+        count.Parameters.AddWithValue("tenant", a.Value);
+        count.Parameters.AddWithValue("id", free.Id);
+        Assert.Equal(2L, (long)(await count.ExecuteScalarAsync())!);
+        await using var linkedAudit = db.Admin.CreateCommand(
+            "SELECT count(*) FROM security_audit WHERE tenant_id=@tenant " +
+            "AND resource_id=@id AND action='sinistro.delete'");
+        linkedAudit.Parameters.AddWithValue("tenant", a.Value);
+        linkedAudit.Parameters.AddWithValue("id", linked.Id);
+        Assert.Equal(0L, (long)(await linkedAudit.ExecuteScalarAsync())!);
+    }
+
+    [Fact]
     public async Task V004_links_perizie_to_own_sinistro_with_tenant_composite_FK_and_atomic_audit()
     {
         await using var db = await IsolatedDatabases.CreateAsync();

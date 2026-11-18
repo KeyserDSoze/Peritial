@@ -105,6 +105,59 @@ public sealed class SinistroServiceTests
     }
 
     [Fact]
+    public async Task Delete_requires_signed_write_and_expected_version_and_preserves_audit()
+    {
+        var actor = new ActingTenant(write: true);
+        var audit = new SpyAudit();
+        var repo = new InMemorySinistri(audit);
+        var service = new SinistroService(actor, repo, audit);
+        var created = await service.CreateAsync("DELETE-CASE", new DateOnly(2026, 11, 18));
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            service.DeleteAsync(created.Id, 0));
+        await Assert.ThrowsAsync<SinistroConcurrencyConflictException>(() =>
+            service.DeleteAsync(created.Id, created.Version + 1));
+        Assert.Equal("DELETE-CASE", (await service.GetAsync(created.Id)).ExternalReference);
+        await service.DeleteAsync(created.Id, created.Version);
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => service.GetAsync(created.Id));
+        Assert.Equal(new[] {"sinistro.create", "sinistro.delete"}, audit.Events.Select(e => e.Action));
+        Assert.All(audit.Events, e => Assert.Equal("succeeded", e.Outcome));
+
+        await Assert.ThrowsAsync<KeyNotFoundException>(() =>
+            service.DeleteAsync(Guid.NewGuid(), 1));
+        var foreign = Sinistro.Create(TenantId.From(Guid.NewGuid()),
+            "FOREIGN-DELETE", new DateOnly(2026, 11, 18));
+        repo.Saved[foreign.Id] = foreign;
+        await Assert.ThrowsAsync<KeyNotFoundException>(() =>
+            service.DeleteAsync(foreign.Id, 1));
+        Assert.Empty(audit.Events.Where(e => e.ResourceId == foreign.Id));
+
+        var readonlyActor = new ActingTenant(read: true);
+        var denied = new SinistroService(readonlyActor, repo, audit);
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+            denied.DeleteAsync(foreign.Id, 1));
+        Assert.Equal("sinistro.delete", audit.Events[^1].Action);
+        Assert.Equal("denied", audit.Events[^1].Outcome);
+        Assert.Null(audit.Events[^1].ResourceId);
+        Assert.Contains(foreign.Id, repo.Saved.Keys);
+    }
+
+    [Fact]
+    public async Task Delete_linked_case_never_creates_success_audit_or_removes_case()
+    {
+        var actor = new ActingTenant(write: true);
+        var audit = new SpyAudit();
+        var repo = new InMemorySinistri(audit);
+        var service = new SinistroService(actor, repo, audit);
+        var created = await service.CreateAsync("LINKED-DELETE", new DateOnly(2026, 11, 18));
+        repo.LinkedIds.Add(created.Id);
+        await Assert.ThrowsAsync<SinistroLinkedPerizieException>(() =>
+            service.DeleteAsync(created.Id, created.Version));
+        Assert.Equal(created.Id, (await service.GetAsync(created.Id)).Id);
+        Assert.DoesNotContain(audit.Events, e => e.Action == "sinistro.delete" &&
+            e.Outcome == "succeeded");
+    }
+
+    [Fact]
     public async Task Search_rejects_invalid_filters_before_repository_and_does_not_audit_a_read()
     {
         var actor = new ActingTenant(read: true);
