@@ -1,6 +1,6 @@
 import {useEffect, useRef, useState, type FormEvent} from "react";
 import {useTranslation} from "react-i18next";
-import {createSinistro, isApiUnavailable, listSinistri, searchSinistri, type SinistroSummary} from "../api";
+import {createSinistro, isApiUnavailable, pageSinistri, searchSinistri, type SinistroPage, type SinistroSummary} from "../api";
 import {Button} from "./ui/button";
 import {SinistroEditor} from "./SinistroEditor";
 
@@ -25,7 +25,7 @@ export function SinistroCatalog({token, canWrite, onUnavailable}: Props) {
   const [expanded, setExpanded] = useState(false);
   const [rows, setRows] = useState<SinistroSummary[]>([]);
   const [conflictedIds, setConflictedIds] = useState<Set<string>>(() => new Set());
-  const [busy, setBusy] = useState<"load" | "create" | null>(null);
+  const [busy, setBusy] = useState<"load" | "more" | "create" | null>(null);
   const [error, setError] = useState<"load" | "create" | null>(null);
   const [reference, setReference] = useState("");
   const [occurredOn, setOccurredOn] = useState("");
@@ -35,6 +35,7 @@ export function SinistroCatalog({token, canWrite, onUnavailable}: Props) {
   const [searchFrom, setSearchFrom] = useState("");
   const [searchTo, setSearchTo] = useState("");
   const [appliedPrefix, setAppliedPrefix] = useState<string | null>(null);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const activeFilter = useRef<CatalogFilter | null>(null);
   const epoch = useRef(0);
 
@@ -42,10 +43,13 @@ export function SinistroCatalog({token, canWrite, onUnavailable}: Props) {
   // network failure, offline), no late REST result can restore its rows.
   useEffect(() => () => {epoch.current += 1;}, [token]);
 
-  function fetchCatalog(filter: CatalogFilter | null) {
-    return filter
-      ? searchSinistri(token, filter.prefix, filter.from || undefined, filter.to || undefined, 50)
-      : listSinistri(token);
+  async function fetchCatalog(filter: CatalogFilter | null): Promise<SinistroPage> {
+    if (filter) {
+      const items = await searchSinistri(token, filter.prefix,
+        filter.from || undefined, filter.to || undefined, 50);
+      return {items, nextCursor: null}; // prefix-search paging is not available yet
+    }
+    return pageSinistri(token);
   }
 
   async function load(filter: CatalogFilter | null = activeFilter.current) {
@@ -55,13 +59,39 @@ export function SinistroCatalog({token, canWrite, onUnavailable}: Props) {
     setError(null);
     setCreatedReference(null);
     setRows([]);
+    setNextCursor(null);
     setConflictedIds(new Set());
     try {
       const results = await fetchCatalog(filter);
       if (epoch.current !== current) return;
-      setRows(results);
+      setRows(results.items);
+      setNextCursor(results.nextCursor);
     } catch (cause) {
       if (epoch.current !== current) return;
+      if (isApiUnavailable(cause)) onUnavailable();
+      else setError("load");
+    } finally {
+      if (epoch.current === current) setBusy(null);
+    }
+  }
+
+  async function loadMore() {
+    if (busy || !expanded || activeFilter.current || !nextCursor) return;
+    const current = ++epoch.current;
+    setBusy("more");
+    setError(null);
+    try {
+      const next = await pageSinistri(token, nextCursor);
+      if (epoch.current !== current) return;
+      setRows(previous => {
+        const seen = new Set(previous.map(i => i.id));
+        return [...previous, ...next.items.filter(i => !seen.has(i.id))];
+      });
+      setNextCursor(next.nextCursor);
+    } catch (cause) {
+      if (epoch.current !== current) return;
+      setRows([]);
+      setNextCursor(null);
       if (isApiUnavailable(cause)) onUnavailable();
       else setError("load");
     } finally {
@@ -75,6 +105,7 @@ export function SinistroCatalog({token, canWrite, onUnavailable}: Props) {
       epoch.current += 1;
       setExpanded(false);
       setRows([]);
+      setNextCursor(null);
       setConflictedIds(new Set());
       setError(null);
       setCreatedReference(null);
@@ -129,7 +160,7 @@ export function SinistroCatalog({token, canWrite, onUnavailable}: Props) {
       return [...remaining, confirmed]
         .sort((a, b) => b.occurredOn.localeCompare(a.occurredOn) ||
           a.id.localeCompare(b.id))
-        .slice(0, 50);
+        .slice(0, Math.max(50, previous.length));
     });
     setConflictedIds(previous => {
       const next = new Set(previous);
@@ -165,8 +196,13 @@ export function SinistroCatalog({token, canWrite, onUnavailable}: Props) {
         setBusy("load");
         const refreshed = await fetchCatalog(activeFilter.current);
         if (epoch.current !== current) return;
-        setRows(refreshed);
+        setRows(refreshed.items);
+        setNextCursor(null);
       } else {
+        // After a create the previous keyset boundary must not be reused.
+        // The separate receipt remains visible even if the case falls
+        // outside the recent-50 window; explicit refresh reopens paging.
+        setNextCursor(null);
         applyServerRecord(confirmed);
       }
     } catch (cause) {
@@ -284,6 +320,11 @@ export function SinistroCatalog({token, canWrite, onUnavailable}: Props) {
           </li>)}
         </ul>
       </>}
+      {nextCursor && !appliedPrefix && <Button type="button" variant="outline"
+        disabled={busy !== null} onClick={() => void loadMore()}>
+        {t("sinistroCatalogMore")}
+      </Button>}
+      {busy === "more" && <p role="status">{t("loading")}</p>}
     </section>}
   </div>;
 }
