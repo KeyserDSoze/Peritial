@@ -41,6 +41,7 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
     expect(value.authorization_servers).toContain(issuer);
     expect(value.scopes_supported).toContain("peritial.read");
     expect(value.scopes_supported).toContain("peritial.write");
+    expect(value.scopes_supported).toContain("peritial.sinistri.delete");
 
     const denied = await request.post(api + "/mcp", {
       headers: {"Accept": "application/json,text/event-stream", "Content-Type": "application/json"},

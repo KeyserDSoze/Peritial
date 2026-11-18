@@ -1020,6 +1020,19 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     });
     expect(token).toBeTruthy();
     const headers = {Authorization: "Bearer " + token};
+    // A normal web PKCE token carries peritial.write but NEVER the
+    // destructive peritial.sinistri.delete scope. Only the explicit,
+    // development-only test client receives it.
+    const privileged = await request.post(
+      "http://localhost:8081/realms/peritial/protocol/openid-connect/token", {
+        form:{grant_type:"password", client_id:"peritial-test-delete",
+          username:"localuser", password:"local-only-user"}
+      });
+    expect(privileged.status(), await privileged.text()).toBe(200);
+    const scoped = await privileged.json() as {access_token:string};
+    const privilegedHeaders = {Authorization:"Bearer " + scoped.access_token};
+    expect(JSON.parse(Buffer.from(scoped.access_token.split(".")[1], "base64url")
+      .toString("utf-8")).scope).toContain("peritial.sinistri.delete");
     const base = "http://localhost:8080/api";
     const stamp = Date.now() + "-" + Math.round(Math.random() * 100000);
     async function createSinistro(suffix: string) {
@@ -1044,20 +1057,21 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     const url = (id:string, version?:number) => base + "/sinistri/" + id +
       (version === undefined ? "" : "?expectedVersion=" + version);
     expect((await request.delete(url(free.id, 1))).status()).toBe(401);
-    expect((await request.delete(url(free.id), {headers})).status()).toBe(400);
-    expect((await request.delete(url(free.id, 0), {headers})).status()).toBe(400);
-    expect((await request.delete(url(free.id, 2), {headers})).status()).toBe(409);
-    expect((await request.delete(url(linked.id, linked.version), {headers})).status()).toBe(409);
+    expect((await request.delete(url(free.id, 1), {headers})).status()).toBe(403);
+    expect((await request.delete(url(free.id), {headers:privilegedHeaders})).status()).toBe(400);
+    expect((await request.delete(url(free.id, 0), {headers:privilegedHeaders})).status()).toBe(400);
+    expect((await request.delete(url(free.id, 2), {headers:privilegedHeaders})).status()).toBe(409);
+    expect((await request.delete(url(linked.id, linked.version), {headers:privilegedHeaders})).status()).toBe(409);
     expect((await request.get(url(linked.id), {headers})).status()).toBe(200);
     expect((await request.get(base + "/perizie/" + periziaId + "/sinistro", {headers})).status()).toBe(200);
 
-    const deleted = await request.delete(url(free.id, free.version), {headers});
+    const deleted = await request.delete(url(free.id, free.version), {headers:privilegedHeaders});
     expect(deleted.status(), await deleted.text()).toBe(204);
     expect((await request.get(url(free.id), {headers})).status()).toBe(404);
-    expect((await request.delete(url(free.id, 1), {headers})).status()).toBe(404);
+    expect((await request.delete(url(free.id, 1), {headers:privilegedHeaders})).status()).toBe(404);
 
     const tool = await request.post("http://localhost:8080/mcp", {
-      headers:{...headers, Accept:"application/json,text/event-stream",
+      headers:{...privilegedHeaders, Accept:"application/json,text/event-stream",
         "Content-Type":"application/json"},
       data:{jsonrpc:"2.0", id:809, method:"tools/call",
         params:{name:"delete_sinistro", arguments:{id:forMcp.id,expectedVersion:1}}}
@@ -1065,6 +1079,14 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     expect(tool.ok(), await tool.text()).toBeTruthy();
     expect(await tool.text()).not.toContain('"isError":true');
     expect((await request.get(url(forMcp.id), {headers})).status()).toBe(404);
+    const deniedMcp = await request.post("http://localhost:8080/mcp", {
+      headers:{...headers, Accept:"application/json,text/event-stream",
+        "Content-Type":"application/json"},
+      data:{jsonrpc:"2.0", id:810, method:"tools/call",
+        params:{name:"delete_sinistro", arguments:{id:linked.id,expectedVersion:1}}}
+    });
+    expect(deniedMcp.ok(), await deniedMcp.text()).toBeTruthy();
+    expect(await deniedMcp.text()).toContain('"isError":true');
     expect((await request.get(url(linked.id), {headers})).status()).toBe(200);
   });
 

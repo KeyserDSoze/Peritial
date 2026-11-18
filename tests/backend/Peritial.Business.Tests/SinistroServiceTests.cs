@@ -105,12 +105,54 @@ public sealed class SinistroServiceTests
     }
 
     [Fact]
-    public async Task Delete_requires_signed_write_and_expected_version_and_preserves_audit()
+    public void Hard_delete_gate_is_denied_by_default_and_can_never_be_enabled_outside_development()
     {
-        var actor = new ActingTenant(write: true);
+        Assert.False(SinistroDeletionGate.Disabled.Enabled);
+        Assert.False(SinistroDeletionGate.ForEnvironment(isDevelopment: true, enabled: false).Enabled);
+        Assert.False(SinistroDeletionGate.ForEnvironment(isDevelopment: false, enabled: false).Enabled);
+        Assert.True(SinistroDeletionGate.ForEnvironment(isDevelopment: true, enabled: true).Enabled);
+        Assert.Throws<InvalidOperationException>(() =>
+            SinistroDeletionGate.ForEnvironment(isDevelopment: false, enabled: true));
+    }
+
+    [Fact]
+    public async Task Delete_denies_plain_writer_and_disabled_gate_with_safe_audit_before_repository_access()
+    {
+        var writer = new ActingTenant(write: true);
         var audit = new SpyAudit();
         var repo = new InMemorySinistri(audit);
-        var service = new SinistroService(actor, repo, audit);
+        var writeService = new SinistroService(writer, repo, audit,
+            SinistroDeletionGate.ForEnvironment(true, true));
+        var item = await writeService.CreateAsync("DENY-WRITER", new DateOnly(2026, 11, 18));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+            writeService.DeleteAsync(item.Id, item.Version));
+
+        var admin = new ActingTenant(write: true, delete: true);
+        var adminService = new SinistroService(admin, repo, audit);
+        var adminItem = await adminService.CreateAsync("DENY-BY-DEFAULT", new DateOnly(2026, 11, 18));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+            adminService.DeleteAsync(adminItem.Id, adminItem.Version));
+
+        var disabled = new SinistroService(admin, repo, audit,
+            SinistroDeletionGate.ForEnvironment(true, false));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+            disabled.DeleteAsync(adminItem.Id, adminItem.Version));
+
+        Assert.Equal(item.Id, (await writeService.GetAsync(item.Id)).Id);
+        Assert.Equal(adminItem.Id, (await adminService.GetAsync(adminItem.Id)).Id);
+        Assert.Equal(3, audit.Events.Count(e =>
+            e.Action == "sinistro.delete" && e.Outcome == "denied" && e.ResourceId is null));
+        Assert.DoesNotContain(audit.Events, e =>
+            e.Action == "sinistro.delete" && e.Outcome == "succeeded");
+    }
+
+    [Fact]
+    public async Task Delete_requires_signed_write_and_expected_version_and_preserves_audit()
+    {
+        var actor = new ActingTenant(write: true, delete: true);
+        var audit = new SpyAudit();
+        var repo = new InMemorySinistri(audit);
+        var service = new SinistroService(actor, repo, audit, SinistroDeletionGate.ForEnvironment(true, true));
         var created = await service.CreateAsync("DELETE-CASE", new DateOnly(2026, 11, 18));
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
             service.DeleteAsync(created.Id, 0));
@@ -144,10 +186,10 @@ public sealed class SinistroServiceTests
     [Fact]
     public async Task Delete_linked_case_never_creates_success_audit_or_removes_case()
     {
-        var actor = new ActingTenant(write: true);
+        var actor = new ActingTenant(write: true, delete: true);
         var audit = new SpyAudit();
         var repo = new InMemorySinistri(audit);
-        var service = new SinistroService(actor, repo, audit);
+        var service = new SinistroService(actor, repo, audit, SinistroDeletionGate.ForEnvironment(true, true));
         var created = await service.CreateAsync("LINKED-DELETE", new DateOnly(2026, 11, 18));
         repo.LinkedIds.Add(created.Id);
         await Assert.ThrowsAsync<SinistroLinkedPerizieException>(() =>
@@ -210,12 +252,14 @@ public sealed class SinistroServiceTests
         Assert.Empty(audit.Events);
     }
 
-    private sealed class ActingTenant(bool write = false, bool read = false) : ITenantContext
+    private sealed class ActingTenant(bool write = false, bool read = false, bool delete = false) : ITenantContext
     {
         public TenantId TenantId { get; } = TenantId.From(Guid.NewGuid());
         public string Subject => "signed-subject";
         public bool HasScope(string scope) =>
-            (write && scope == "peritial.write") || (read && scope == "peritial.read");
+            (write && scope == "peritial.write") ||
+            (read && scope == "peritial.read") ||
+            (delete && scope == "peritial.sinistri.delete");
     }
 
     private sealed class SpyAudit : ISecurityAuditTrail
