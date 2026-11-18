@@ -287,3 +287,16 @@ Tool MCP e API REST condividono eventi audit RLS append-only, per ogni mutazione
 ## Retry con chiave idempotente
 
 Il tool `ingest_file` accetta `idempotencyKey` opzionale (16–128 ASCII consentiti). Ripetere lo stesso file, MIME, nome e periziaId con la stessa chiave e la stessa identità tenant/subject restituisce lo stesso UUID e non crea un audit duplicato; chiave pendente o dati diversi producono errore MCP. Per REST usare `Idempotency-Key`. Le richieste senza chiave rimangono non idempotenti e i tool mutativi non documentali non sono ancora coperti.
+
+## Paginazione Sinistri MCP (#7/#12, ADR 0039)
+
+`page_sinistri(cursor?:string, limit=50)` è un tool **sola lettura**
+equivalente a `GET /api/sinistri/page`; richiede lo scope firmato
+`peritial.read` o `peritial.write` e usa sempre il tenant JWT.
+Restituisce `items` e `nextCursor` (null all'ultima pagina), max
+50 elementi per chiamata. Il cursore è opaco/canonico e contiene soltanto
+la chiave posizionale data evento+UUID: **non è un token di accesso**.
+Cursori invalidi o limiti fuori 1–50 sono rifiutati. `list_sinistri`
+e `search_sinistri` restano compatibili; la ricerca per prefisso non
+dispone ancora di cursore. Non esiste audit mutativo per questa lettura.
+[ADR 0039](../adr/0039-sinistri-keyset-pagination.md).
