@@ -178,6 +178,38 @@ public sealed class SinistroPersistenceTests
     }
 
     [Fact]
+    public async Task Keyset_page_uses_tenant_RLS_and_date_id_boundary_in_postgres_not_offset()
+    {
+        await using var db = await IsolatedDatabases.CreateAsync();
+        var repo = new PgSinistroRepository(db.App);
+        var a = TenantId.From(Guid.NewGuid());
+        var b = TenantId.From(Guid.NewGuid());
+        var date = new DateOnly(2026, 11, 18);
+        var ids = Enumerable.Range(1, 4).Select(i =>
+            Guid.Parse($"00000000-0000-0000-0000-{i:000000000000}")).ToArray();
+        var entities = new[]
+        {
+            Sinistro.Restore(ids[1], a, "A-SECOND", date, null, DateTime.UtcNow),
+            Sinistro.Restore(ids[0], a, "A-FIRST", date, null, DateTime.UtcNow),
+            Sinistro.Restore(ids[2], a, "A-OLD", date.AddDays(-1), null, DateTime.UtcNow),
+            Sinistro.Restore(ids[3], a, "A-NEW", date.AddDays(1), null, DateTime.UtcNow),
+            Sinistro.Create(b, "B-PRIVATE", date.AddDays(3))
+        };
+        foreach (var item in entities)
+            await repo.AddAuditedAsync(item, Event(item.TenantId, item.Id, "sinistro.create"));
+
+        var first = await repo.PageAsync(a, null, fetchLimit: 3);
+        Assert.Equal(new[] {ids[3], ids[0], ids[1]}, first.Select(x => x.Id));
+        var second = await repo.PageAsync(a, new SinistroPageBoundary(date, ids[1]), fetchLimit: 3);
+        Assert.Equal(new[] {ids[2]}, second.Select(x => x.Id));
+        Assert.All(first.Concat(second), x => Assert.Equal(a, x.TenantId));
+        Assert.Equal(5, (await repo.PageAsync(a, null, fetchLimit: 3))
+            .Concat(await repo.PageAsync(b, null, fetchLimit: 3)).Count() + 1);
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            () => repo.PageAsync(a, null, fetchLimit: 52));
+    }
+
+    [Fact]
     public async Task V004_links_perizie_to_own_sinistro_with_tenant_composite_FK_and_atomic_audit()
     {
         await using var db = await IsolatedDatabases.CreateAsync();
