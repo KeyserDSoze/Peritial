@@ -818,3 +818,63 @@ V004 resta manuale su database
 versionati: nel Compose test si applica
 solo come fixture effimera dopo V003,
 mai all'avvio API. [ADR 0035](../adr/0035-pwa-sinistro-link-authoritative-read.md).
+
+
+## PWA: catalogo e creazione Sinistri con JWT (#7/#13, ADR 0036)
+
+Il componente `SinistroCatalog` è visibile nella PWA
+protetta solo con un token verificato e connessione online.
+È **collassato per default**; al click «Apri catalogo
+sinistri» carica soltanto i 50 Sinistri più recenti per
+data evento dal backend usando
+`GET /api/sinistri?limit=50` e il JWT corrente.
+Non filtra la prima pagina per cercare altri record:
+la ricerca per prefisso resta sul server tramite il
+selettore Perizia–Sinistro o gli endpoint REST/MCP.
+Il catalogo non viene caricato automaticamente a
+ogni lista perizie perché la Compose demo inizia
+dal V001 storico senza le fixture V003/V004.
+
+Il form di creazione è mostrato solo ai titolari
+di scope OIDC `peritial.write` (controllo UX,
+la sicurezza viene imposta dal backend).
+Accetta riferimento esterno, data sinistro
+obbligatoria e data denuncia opzionale.
+`POST /api/sinistri` viene inviato solo
+su conferma esplicita, con data ISO e senza
+`tenantId`. **Solo HTTP 201** autorizza
+l'inserimento nella lista, mantenendo
+`occurredOn DESC,id` e il limite dei 50;
+la ricevuta confermata è visibile anche
+quando la pratica è più vecchia del limite.
+Un 400 visualizza un errore e non crea
+nuovi record client-side. 401/403,
+5xx o rete indisponibile svuotano
+completamente la vista protetta, senza
+ripetizione/coda dei POST incerti.
+Offline tutti i dati tenant del catalogo
+sono rimossi; il successivo accesso
+richiede una nuova lettura autenticata.
+
+**E2E Playwright desktop/mobile** nel file
+`tests/frontend/authenticated.spec.ts`:
+login Keycloak Authorization Code + PKCE,
+pannello inizialmente chiuso, form con
+date valide, richiesta 400 simulata
+senza creazione locale, POST reale 201
+e JSON privo di tenant ID, GET reale
+di persistenza, refresh e recupero della
+pratica, offline senza dati né pulsanti
+e nuova lettura alla riconnessione.
+La suite Security/Business/PG verifica
+già policy OAuth, audit e RLS della
+creazione Sinistri.
+
+**Limiti:** non è il CRUD Sinistri
+completo in PWA. Mancano la modifica
+con `expectedVersion`, delete,
+filtri/cursor e ricerca avanzata,
+relazioni anagrafiche/polizze e
+import legacy. V003/V004 restano
+migrazioni amministrative manuali.
+[ADR 0036](../adr/0036-pwa-sinistri-catalog-create.md).
