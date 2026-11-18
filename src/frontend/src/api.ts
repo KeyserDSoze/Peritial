@@ -53,6 +53,15 @@ export const getPeriziaSinistro = (token: string, periziaId: string) =>
   request<PeriziaSinistroAssociation>("/perizie/" + encodeURIComponent(periziaId) + "/sinistro", token);
 export const getSinistro = (token: string, sinistroId: string) =>
   request<SinistroSummary>("/sinistri/" + encodeURIComponent(sinistroId), token);
+// Catalog is always server-side, signed-tenant scoped and bounded.
+export const listSinistri = (token: string) =>
+  request<SinistroSummary[]>("/sinistri?limit=50", token);
+export const createSinistro = (token: string, externalReference: string,
+  occurredOn: string, reportedOn: string | null) =>
+  request<SinistroSummary>("/sinistri", token, {
+    method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({externalReference, occurredOn, reportedOn})
+  });
 export const searchSinistri = (token: string, prefix: string) =>
   request<SinistroSummary[]>("/sinistri/search?prefix=" +
     encodeURIComponent(prefix.trim()) + "&limit=20", token);
