@@ -318,7 +318,7 @@ export function PeriziaSinistroPicker({periziaId, periziaStatus, token, canWrite
       {unlinkedSuccess && <p role="status" className="text-sm">{t("sinistroUnlinkSucceeded")}</p>}
       {reparentedSuccess && <p role="status" className="text-sm">{t("sinistroReparentSucceeded")}</p>}
       {association && hasRevision(association) &&
-        <p className="text-sm text-slate-600 dark:text-slate-300" role="status">
+        <p className="text-sm text-slate-600 dark:text-slate-300">
           {t("sinistroLinkVersion")} {association.linkVersion}
         </p>}
       {association?.sinistroId && <>
