@@ -34,6 +34,38 @@ public sealed class PgSinistroRepository(NpgsqlDataSource dataSource) : ISinistr
     }
 
     /// <summary>
+    /// Seek after (date DESC, UUID ASC), with an extra row for has-more.
+    /// Explicit tenant and transaction-local FORCE RLS apply to every page.
+    /// </summary>
+    public async Task<IReadOnlyList<Sinistro>> PageAsync(
+        TenantId tenant, SinistroPageBoundary? after, int fetchLimit,
+        CancellationToken ct = default)
+    {
+        if (fetchLimit is < 1 or > 51)
+            throw new ArgumentOutOfRangeException(nameof(fetchLimit));
+        await using var scope = await TenantDbScope.OpenAsync(dataSource, tenant, ct);
+        var items = new List<Sinistro>();
+        await using (var command = scope.Command(
+            "SELECT id, tenant_id, external_reference, occurred_on, reported_on, " +
+            "created_at_utc, version FROM sinistri WHERE tenant_id=@tenant " +
+            "AND (@afterDate IS NULL OR occurred_on < @afterDate " +
+            "OR (occurred_on = @afterDate AND id > @afterId)) " +
+            "ORDER BY occurred_on DESC, id ASC LIMIT @limit"))
+        {
+            command.Parameters.AddWithValue("tenant", tenant.Value);
+            command.Parameters.Add("afterDate", NpgsqlDbType.Date).Value =
+                (object?)after?.OccurredOn ?? DBNull.Value;
+            command.Parameters.Add("afterId", NpgsqlDbType.Uuid).Value =
+                (object?)after?.Id ?? DBNull.Value;
+            command.Parameters.AddWithValue("limit", fetchLimit);
+            await using var reader = await command.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct)) items.Add(Read(reader));
+        }
+        await scope.CommitAsync(ct);
+        return items;
+    }
+
+    /// <summary>
     /// Prefix matching happens in PostgreSQL before ORDER/LIMIT; the pattern
     /// treats user-supplied percent, underscore and ! as literal characters.
     /// A separate explicit tenant predicate complements FORCE RLS.
