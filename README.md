@@ -62,3 +62,15 @@ Per la provenienza precedente all'upgrade esiste solo una baseline
 (cannot retroactively reconstruct earlier changes); policy privacy,
 retention e approvazioni finali ancora aperte in #23.
 [ADR 0045](adr/0045-perizia-sinistro-v006-aba-revision-provenance.md).
+
+## Integrità database dei collegamenti (V007, #23)
+
+Un nuovo controllo PostgreSQL **rifiuta modifiche dirette**
+alle associazioni Perizia–Sinistro senza revisione monotona,
+audit di successo e storia source/target coerente al commit.
+La V007 aggiunge trigger di verifica differita e nessuna
+nuova API pubblica, preservando la semantica REST/MCP/PWA
+della V006. Il release richiede migrazione amministrativa
+esplicita e backup verificato; Compose CI predispone
+V003–V007 soltanto su DB temporaneo.
+[ADR 0046](adr/0046-v007-database-enforced-link-provenance.md).

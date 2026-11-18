@@ -91,3 +91,12 @@ REST/MCP e PWA, idempotenza migrazioni e restore
 devono passare su `main` prima di chiudere la parte
 tecnica; #23 rimane aperta per policy/compliance
 e staging upgrade con dati pregressi.
+
+## Evoluzione V007 (18 novembre 2026)
+
+L'[ADR 0046](0046-v007-database-enforced-link-provenance.md)
+introduce trigger PostgreSQL che vietano aggiornamenti
+diretti di associazione senza incrementare esattamente la
+revisione e vietano il commit senza un evento di storia
+correlato ad audit con action/outcome esatti. La V006 resta
+invariata e rimane l'origine dell'anti-ABA e della storia.

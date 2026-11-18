@@ -96,3 +96,35 @@ policy retention, autorizzazione letture amministrative,
 archivio WORM, verifiche owner e drill di ripristino;
 #23 rimane aperta.
 [ADR 0045](../adr/0045-perizia-sinistro-v006-aba-revision-provenance.md).
+
+## V007 — guardia PostgreSQL per collegamenti non auditati (#23/#21)
+
+La migrazione `V007__perizie_link_audit_guards.sql`, **forward-only**
+e senza toccare V001–V006, aggiunge due controlli complementari al
+CAS del servizio. Un trigger BEFORE INSERT/UPDATE impedisce la
+creazione diretta di Perizie già collegate e qualsiasi cambio
+`sinistro_id` che non incrementi `sinistro_link_version`
+**esattamente di uno**; una revisione non può cambiare da sola.
+Un constraint trigger AFTER UPDATE **DEFERRABLE INITIALLY DEFERRED**
+verifica al commit che esistano la riga history con tenant, Perizia,
+revisione e source/target esatti e l'evento `security_audit`
+con resource ID, azione `perizia.link-sinistro`,
+`perizia.unlink-sinistro` o `perizia.reparent-sinistro`
+e outcome `succeeded`. Non basta un evento `denied` o
+di un'altra azione. Il check differito permette la sequenza
+legittima UPDATE → audit INSERT → history INSERT nella
+**medesima transazione**; se manca uno degli elementi, PostgreSQL
+annulla l'intero commit e non cambia né il collegamento né
+la revisione.
+
+Il verificatore usa un helper SECURITY DEFINER con
+`search_path=pg_catalog`: consulta solamente le tabelle dello
+schema effettivo del trigger, referenziandole con identificatori
+quotati, perché `peritial_app` ha **solo INSERT** sugli eventi
+storici e sull'audit. L'esecuzione diretta delle funzioni non
+è concessa a PUBLIC. Non sono autorizzati nuovi endpoint REST/MCP
+di lettura della storia e non vengono inseriti eventi inventati
+per la baseline V006. Questo è un **controllo di integrità tecnica**,
+non una garanzia WORM/compliance contro gli amministratori DDL
+o un sostituto delle policy retention/approvazioni (#23).
+[ADR 0046](../adr/0046-v007-database-enforced-link-provenance.md).
