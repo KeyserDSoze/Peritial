@@ -254,7 +254,7 @@ Il restore PG su server indipendente verifica anche
 il `sinistro_id` collegato dopo dump/ripristino.
 
 **Non ancora implementato:** spostamento/scollegamento,
-UI PWA per selezionare il sinistro, validazioni su
+CRUD completo dei Sinistri nella PWA, validazioni su
 polizze/anagrafiche, import Classic/Accertatore e
 autorizzazioni Entra ID di produzione.
 Il bootstrap demo V001 resta non journaled:
@@ -262,3 +262,62 @@ solo la CI effimera applica V003 **poi** V004;
 i database reali usano un migrator DDL separato con
 backup e journal V001–V004.
 Decisione: [ADR 0034](../adr/0034-perizie-sinistri-v004-tenant-fk.md).
+
+
+## Primo selettore Sinistri nella PWA (#7/#13)
+
+La PWA `App.tsx` ora incorpora `PeriziaSinistroPicker`
+**a richiesta**, sotto ciascuna perizia autenticata. Il
+pannello parte chiuso e non effettua N+1 letture quando
+viene caricata la lista delle perizie. Aprendolo, esegue
+`GET /api/perizie/{id}/sinistro` con JWT corrente: il
+nuovo DTO `{periziaId,sinistroId:UUID|null}` distingue
+una perizia scollegata (200, `null`) da una non
+visibile (404), senza dati del tenant. Se collegata,
+legge `GET /api/sinistri/{id}` per mostrare il
+riferimento effettivamente salvato; non propone
+altre scritture.
+
+Per perizie libere, l'operatore può cercare **su
+richiesta** un riferimento esterno (almeno due
+caratteri) tramite
+`GET /api/sinistri/search?prefix=...&limit=20`
+e scegliere un risultato con riferimento e data evento.
+Il browser non filtra soltanto gli elementi già caricati
+e non interpreta il prefisso come SQL pattern. Il
+`POST /api/perizie/{id}/sinistro` viene inviato
+**una sola volta dopo selezione**: solo il 201
+confermato aggiorna la vista. Lo scope OAuth
+`peritial.write` è usato per nascondere
+i controlli di modifica ai lettori; **il server**
+resta l'autorità finale su scope, tenant, audit
+e CAS V004.
+
+Se il POST incontra 409, la PWA elimina i candidati
+obsoleti e mostra «Ricarica collegamento»: soltanto
+un successivo GET firmato può rendere visibile la
+relazione corrente. Con token non valido/insufficiente
+o API non disponibile, la vista protetta viene
+svuotata; nessuna mutazione entra in una coda
+offline o viene ritentata automaticamente.
+Le risposte in ritardo vengono ignorate dopo
+chiusura pannello, cambio ricerca, cambio JWT
+o unmount; il PWA service worker non conserva
+JSON API/MCP. Il testo è localizzato **it/en**.
+
+**Test**: `PeriziaSinistroLinkServiceTests` e
+`SinistroPersistenceTests` controllano il read model
+linked/unlinked, 404 cross-tenant e nessun audit
+sulle letture. `authenticated.spec.ts` su browser
+desktop/mobile e Keycloak reale verifica creazione
+perizia, ricerca Sinistro, link 201, refresh,
+conflitto 409 da un secondo client, reload
+e comportamento offline senza dati residui.
+
+**Residui:** questo pannello non crea/modifica sinistri
+dalla PWA, non offre ricerca fuzzy, debounce,
+paginazione oltre i 20 suggerimenti, riassegnazione,
+scollegamento, import legacy, collegamenti polizze/
+anagrafiche o certificazione WCAG/Entra ID.
+V004 resta una migrazione amministrativa esplicita.
+Vedere [ADR 0035](../adr/0035-pwa-sinistro-link-authoritative-read.md).
