@@ -871,8 +871,9 @@ già policy OAuth, audit e RLS della
 creazione Sinistri.
 
 **Limiti:** non è il CRUD Sinistri
-completo in PWA. Mancano la modifica
-con `expectedVersion`, delete,
+completo in PWA. La modifica
+con `expectedVersion` è arrivata nel successivo
+[ADR 0037](../adr/0037-pwa-sinistri-cas-editor.md); mancano delete,
 filtri/cursor e ricerca avanzata,
 relazioni anagrafiche/polizze e
 import legacy. V003/V004 restano
