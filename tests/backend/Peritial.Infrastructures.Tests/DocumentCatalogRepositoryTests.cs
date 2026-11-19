@@ -39,16 +39,30 @@ public sealed class DocumentCatalogRepositoryTests
         await perizie.AddAsync(parentB);
         var aDoc = Record(tenantA, parentA.Id, DateTime.UtcNow.AddSeconds(-2));
         var latest = Record(tenantA, parentA.Id, DateTime.UtcNow);
+        var tied = Record(tenantA, parentA.Id, latest.CreatedAtUtc);
         var other = Record(tenantA, parentC.Id, DateTime.UtcNow.AddSeconds(-1));
         var foreign = Record(tenantB, parentA.Id, DateTime.UtcNow.AddSeconds(1));
         // The catalog is the read-only projection, not the ingestion seam.
         // Seeding with admin bypasses the upload-intent workflow in test only.
-        foreach (var item in new[] {aDoc, latest, other, foreign})
+        foreach (var item in new[] {aDoc, latest, tied, other, foreign})
             await writer.AddAsync(item);
 
         var scoped = await repo.ListAsync(tenantA, parentA.Id, 100);
-        Assert.Equal(new[] {latest.Id, aDoc.Id}, scoped.Select(x => x.Id));
-        Assert.Equal(latest.Id, (await repo.ListAsync(tenantA, null, 1)).Single().Id);
+        var expected = new[] {latest, tied}.OrderByDescending(x => x.Id)
+            .Select(x => x.Id).Append(aDoc.Id).ToArray();
+        Assert.Equal(expected, scoped.Select(x => x.Id));
+        Assert.Equal(expected[0], (await repo.ListAsync(tenantA, null, 1)).Single().Id);
+
+        // Real PostgreSQL seek: tie-break on UUID DESC and filter before LIMIT.
+        var first = await repo.PageAsync(tenantA, parentA.Id, null, 2);
+        Assert.Equal(expected[..2], first.Select(x => x.Id));
+        var more = await repo.PageAsync(tenantA, parentA.Id,
+            new DocumentPageBoundary(first[^1].CreatedAtUtc, first[^1].Id), 2);
+        Assert.Equal(expected[2..], more.Select(x => x.Id));
+        var onlyForeign = await repo.PageAsync(tenantB, parentA.Id, null, 4);
+        Assert.Equal(foreign.Id, Assert.Single(onlyForeign).Id);
+        var empty = await repo.PageAsync(tenantA, parentB.Id, null, 4);
+        Assert.Empty(empty);
         Assert.Equal(foreign.Id, (await repo.ListAsync(tenantB, null, 100)).Single().Id);
         Assert.Null(await repo.FindAsync(tenantA, foreign.Id));
         Assert.Null(await repo.FindAsync(tenantB, latest.Id));
