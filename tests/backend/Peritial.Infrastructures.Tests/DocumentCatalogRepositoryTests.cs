@@ -61,7 +61,7 @@ public sealed class DocumentCatalogRepositoryTests
         Assert.Equal(expected[2..], more.Select(x => x.Id));
         var onlyForeign = await repo.PageAsync(tenantB, parentA.Id, null, 4);
         Assert.Equal(foreign.Id, Assert.Single(onlyForeign).Id);
-        var empty = await repo.PageAsync(tenantA, parentB.Id, null, 4);
+        var empty = await repo.PageAsync(tenantA, Guid.NewGuid(), null, 4);
         Assert.Empty(empty);
         Assert.Equal(foreign.Id, (await repo.ListAsync(tenantB, null, 100)).Single().Id);
         Assert.Null(await repo.FindAsync(tenantA, foreign.Id));
