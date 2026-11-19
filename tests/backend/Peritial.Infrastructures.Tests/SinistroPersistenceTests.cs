@@ -32,7 +32,7 @@ public sealed class SinistroPersistenceTests
             Assert.True((bool)(await role.ExecuteScalarAsync())!);
         await using (var versions = new NpgsqlCommand(
             "SELECT array_agg(version ORDER BY version) FROM schema_migrations", conn))
-            Assert.Equal(new[] {1, 2, 3, 4, 5, 6, 7, 8}, (int[])(await versions.ExecuteScalarAsync())!);
+            Assert.Equal(new[] {1, 2, 3, 4, 5, 6, 7, 8, 9}, (int[])(await versions.ExecuteScalarAsync())!);
     }
 
     [Fact]
@@ -883,7 +883,7 @@ public sealed class SinistroPersistenceTests
                     await command.ExecuteNonQueryAsync();
                 admin = NpgsqlDataSource.Create(new NpgsqlConnectionStringBuilder(cs)
                 { SearchPath = schema }.ConnectionString);
-                Assert.Equal(8, await SchemaMigrator.ApplyAsync(admin));
+                Assert.Equal(9, await SchemaMigrator.ApplyAsync(admin));
                 await TestDbRoleProvisioner.ConfigureAsync(admin);
                 await using (var conn = await root.OpenConnectionAsync())
                 await using (var grant = new NpgsqlCommand(

@@ -37,7 +37,7 @@ public sealed class LegacySchemaAdoptionTests
 
             await using var verify = await db.OpenConnectionAsync();
             await using var cmd = new NpgsqlCommand(
-                "SELECT (SELECT count(*) FROM schema_migrations)=8 " +
+                "SELECT (SELECT count(*) FROM schema_migrations)=9 " +
                 "AND (SELECT count(*) FROM perizie WHERE tenant_id=@tenant AND id=@id AND reference='LEGACY-TEST')=1 " +
                 "AND to_regclass('ix_security_audit_tenant_action_time') IS NOT NULL " +
                 "AND (SELECT count(*) FROM pg_class WHERE relname IN ('perizie','documents','security_audit'," +
@@ -121,7 +121,7 @@ public sealed class LegacySchemaAdoptionTests
 
             await using var conn2 = await db.OpenConnectionAsync();
             await using var check = new NpgsqlCommand(
-                "SELECT (SELECT count(*) FROM schema_migrations)=8 " +
+                "SELECT (SELECT count(*) FROM schema_migrations)=9 " +
                 "AND to_regclass('ix_upload_intents_lease') IS NOT NULL " +
                 "AND (SELECT count(*) FROM upload_intents WHERE tenant_id=@tenant " +
                 "  AND document_id=@doc AND storage_key='legacy/key.pdf' " +
@@ -232,7 +232,7 @@ public sealed class LegacySchemaAdoptionTests
             Assert.Equal(7, await SchemaMigrator.AdoptPreLeaseLegacyAsync(db));
             await using var verify = await db.OpenConnectionAsync();
             await using var check = new NpgsqlCommand(
-                "SELECT (SELECT count(*) FROM schema_migrations)=8 " +
+                "SELECT (SELECT count(*) FROM schema_migrations)=9 " +
                 "AND (SELECT count(*) FROM upload_intents WHERE tenant_id=@tenant " +
                 " AND document_id=@id AND lease_expires_at_utc > created_at_utc)=1 " +
                 "AND (SELECT attnum FROM pg_attribute " +

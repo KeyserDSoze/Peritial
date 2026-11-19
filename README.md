@@ -86,3 +86,17 @@ cancellazione Perizia futura necessita di un proprio
 workflow governato. La nuova release schema richiede
 la **V008** e la CI effimera applica V003–V008.
 [ADR 0047](adr/0047-v008-revoke-perizia-delete.md).
+
+## Documenti: metadati immutabili per l'app (V009, #5/#6/#11)
+
+La [migrazione V009](scripts/db/migrations/V009__documents_revoke_app_mutations.sql)
+rimuove `UPDATE` e `DELETE` diretti su `documents`
+dal ruolo `peritial_app` e da `PUBLIC`, senza toccare
+record o oggetti. Ingestione e catalogo mantengono rispettivamente
+`INSERT` e `SELECT` tenant-scoped. PostgreSQL ne verifica i
+privilegi e nega SQL non auditato; la CI Compose effimera
+applica V003→V009, mentre le installazioni reali richiedono
+il migrator amministrativo esplicito e backup verificato.
+Restano aperti ciclo vita metadata, retention, download
+controllato, quarantena e recovery in produzione.
+[ADR 0048](adr/0048-v009-immutable-document-metadata-privileges.md).

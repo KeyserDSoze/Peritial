@@ -260,3 +260,25 @@ approvazione e prove di ripristino specifiche; nessun
 permesso di cancellazione va riattivato per aggirare
 questi controlli.
 [ADR 0047](../adr/0047-v008-revoke-perizia-delete.md).
+
+## V009 — revoca UPDATE/DELETE metadati documentali (#5/#6/#11/#21)
+
+La migrazione
+`V009__documents_revoke_app_mutations.sql` riduce il
+privilegio su `documents` a `SELECT`/`INSERT` per
+`peritial_app`, revocando `UPDATE` e `DELETE`
+anche a `PUBLIC`. Nessuna riga o byte nello storage
+è modificato. L'account `peritial_recovery` mantiene
+la sola lettura ristretta necessaria alla reconciliation.
+La V009 non modifica V001–V008 e il journal contiene
+**nove versioni**, con checksum e replay idempotente.
+
+L'upgrade richiede backup e punto di recovery verificati,
+fermo dei writer e `apply` eseguito dal ruolo DDL; in staging
+verificare i privilegi mediante
+`has_table_privilege('peritial_app','documents','UPDATE')`
+e `DELETE`, entrambi falsi, e un test di upload/catalogo.
+Solo la CI Compose effimera applica le fixture V003→V009
+al database demo V001 non versionato. Questo cambiamento
+blocca DML non autorizzato ma non implementa un protocollo
+di rimozione/retention, legal hold o WORM. [ADR 0048](../adr/0048-v009-immutable-document-metadata-privileges.md).

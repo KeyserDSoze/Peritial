@@ -157,3 +157,22 @@ approvazione e prove di ripristino specifiche; nessun
 permesso di cancellazione va riattivato per aggirare
 questi controlli.
 [ADR 0047](../adr/0047-v008-revoke-perizia-delete.md).
+
+## V009 — metadati documentali non modificabili dal ruolo app (#5/#6/#11)
+
+La migrazione `V009__documents_revoke_app_mutations.sql`
+revoca `UPDATE` e `DELETE` su `documents` da `peritial_app`
+e `PUBLIC` senza modificare righe o blob. Il ruolo app continua
+a poter `INSERT` per l'ingestione tenant-scoped e a `SELECT`
+per il catalogo. Il worker di recovery mantiene soltanto
+i permessi di lettura minimi già necessari; non può cancellare
+o alterare metadati documentali.
+
+Un test su PostgreSQL reale con il ruolo app controlla il
+rifiuto SQLSTATE `42501` per aggiornamenti di `storage_key`,
+`file_name` e cancellazione diretta, preservando il documento.
+Il journal raggiunge V009 (nove versioni). Questo non è WORM:
+l'owner DDL può intervenire, non sono ancora definite rettifiche,
+retention, legal hold o purge approvati. Nuovi use case documentali
+richiederanno una specifica migrazione autorizzata, audit atomico
+e recovery DB/blob. [ADR 0048](../adr/0048-v009-immutable-document-metadata-privileges.md).
