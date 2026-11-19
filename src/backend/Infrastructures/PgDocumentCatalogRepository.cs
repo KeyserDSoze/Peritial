@@ -1,5 +1,6 @@
 using Peritial.Business;
 using Peritial.Domains;
+using NpgsqlTypes;
 
 namespace Peritial.Infrastructures;
 
@@ -31,6 +32,37 @@ public sealed class PgDocumentCatalogRepository(Npgsql.NpgsqlDataSource dataSour
         }
         await scope.CommitAsync(ct);
         return result;
+    }
+
+    public async Task<IReadOnlyList<DocumentSummaryDto>> PageAsync(
+        TenantId tenant, Guid? periziaId, DocumentPageBoundary? after,
+        int fetchLimit, CancellationToken ct = default)
+    {
+        if (fetchLimit is < 1 or > 51)
+            throw new ArgumentOutOfRangeException(nameof(fetchLimit));
+        await using var scope = await TenantDbScope.OpenAsync(dataSource, tenant, ct);
+        const string columns =
+            "id, perizia_id, file_name, content_type, length_bytes, created_at_utc";
+        var filter = periziaId.HasValue ? " AND perizia_id=@perizia" : "";
+        var query = $"SELECT {columns} FROM documents WHERE tenant_id=@tenant" + filter +
+            " AND (@afterTime IS NULL OR created_at_utc < @afterTime " +
+            "OR (created_at_utc = @afterTime AND id < @afterId)) " +
+            "ORDER BY created_at_utc DESC, id DESC LIMIT @limit";
+        var items = new List<DocumentSummaryDto>();
+        await using (var cmd = scope.Command(query))
+        {
+            cmd.Parameters.AddWithValue("tenant", tenant.Value);
+            if (periziaId.HasValue) cmd.Parameters.AddWithValue("perizia", periziaId.Value);
+            cmd.Parameters.Add("afterTime", NpgsqlDbType.TimestampTz).Value =
+                (object?)after?.CreatedAtUtc ?? DBNull.Value;
+            cmd.Parameters.Add("afterId", NpgsqlDbType.Uuid).Value =
+                (object?)after?.Id ?? DBNull.Value;
+            cmd.Parameters.AddWithValue("limit", fetchLimit);
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct)) items.Add(Read(reader));
+        }
+        await scope.CommitAsync(ct);
+        return items;
     }
 
     public async Task<DocumentSummaryDto?> FindAsync(

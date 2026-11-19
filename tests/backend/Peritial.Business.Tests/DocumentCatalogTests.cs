@@ -29,6 +29,19 @@ public sealed class DocumentCatalogTests
                 .Take(limit).ToArray());
         }
 
+        public Task<IReadOnlyList<DocumentSummaryDto>> PageAsync(
+            TenantId tenant, Guid? periziaId, DocumentPageBoundary? after,
+            int fetchLimit, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<DocumentSummaryDto>>(Items.Values
+                .Where(x => x.Tenant == tenant && (!periziaId.HasValue ||
+                    x.Document.PeriziaId == periziaId) && (after is null ||
+                    x.Document.CreatedAtUtc < after.CreatedAtUtc ||
+                    (x.Document.CreatedAtUtc == after.CreatedAtUtc &&
+                        x.Document.Id.CompareTo(after.Id) < 0)))
+                .Select(x => x.Document)
+                .OrderByDescending(x => x.CreatedAtUtc).ThenByDescending(x => x.Id)
+                .Take(fetchLimit).ToArray());
+
         public Task<DocumentSummaryDto?> FindAsync(TenantId tenant, Guid id, CancellationToken ct = default) =>
             Task.FromResult(Items.GetValueOrDefault(id) is var row && row.Tenant == tenant
                 ? row.Document : null);
