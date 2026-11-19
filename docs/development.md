@@ -109,7 +109,7 @@ notifiche o parità con le regole del legacy. #9 e #21 restano aperte.
 ## Lista documenti in PWA — solo metadati, niente download (#11/#13)
 
 La PWA in `App.tsx` ora mostra nel riquadro upload
-gli **ultimi 50 documenti del tenant** (`GET /api/files?limit=50`)
+i **primi 50 documenti del tenant** (`GET /api/files/page?limit=50`), con successive pagine richiedibili manualmente
 con nome del file, tipo MIME, dimensione in byte e data.
 I contenuti sono renderizzati come testo React: non vengono
 inseriti link a storage, presigned URL, pulsanti download o
@@ -131,9 +131,9 @@ non è più presente nella successiva lista autenticata. Non esistono
 upload in coda né nuovi permessi client-side.
 
 La consultazione metadata ora ha anche un filtro opzionale per perizia:
-`GET /api/files?limit=50&periziaId=<uuid>` eseguito **sul server**
+`GET /api/files/page?limit=50&periziaId=<uuid>` eseguito **sul server**
 con il JWT corrente, non un filtro locale sui soli 50 elementi
-già ottenuti. L'opzione "tutte" usa `GET /api/files?limit=50`;
+già ottenuti. L'opzione "tutte" usa `GET /api/files/page?limit=50`;
 i documenti non associati a una perizia sono visibili nell'elenco
 globale. Il filtro cambia i dati soltanto dopo una nuova GET autenticata:
 all'interazione azzera immediatamente i metadati visualizzati,
@@ -144,11 +144,16 @@ un elenco precedente o una cache offline. Il filtro viene cancellato
 al cambio identità/offline/failure o quando la perizia non compare più
 nell'elenco autorizzato. Nessuna scelta UI equivale ad autorizzazione:
 restano obbligatori scope, tenant e FORCE RLS lato API/DB.
-Il cap 50 resta **per query**; paginazione dell'intero storico non è
-ancora implementata. Test Playwright Keycloak/ClamAV/SeaweedFS esercita
-due perizie e due upload reali, commutando filtro e lingua it/en.
+Il cap 50 resta **per pagina**; `nextCursor` consente di
+attraversare lo storico senza OFFSET. «Carica altri documenti»
+aggiunge soltanto dati ricevuti da GET e deduplica gli ID.
+Cambio JWT, filtro, refresh e offline invalidano pagine in volo e
+cursore. Un errore del cursore cancella lo storico parziale e
+richiede una nuova lettura autenticata. Playwright usa upload
+Keycloak/ClamAV/SeaweedFS reali e, separatamente, un mock di
+sole risposte pagina per provare il pulsante e il fail-closed UI.
 
-`App.tsx` recupera `listPerizie` e `listDocuments`
+`App.tsx` recupera `listPerizie` e `pageDocuments`
 insieme tramite `Promise.all` usando il JWT corrente
 **prima** di rendere nuovamente interattivi i form. Se
 una delle due GET fallisce, `loading/ready/unavailable`
@@ -167,8 +172,8 @@ Keycloak, ClamAV e SeaweedFS reali: carica un PDF
 ammesso tramite il form, richiede la visualizzazione
 del solo nome/dimensione e l'assenza di link o
 pulsanti di download, quindi prova il refresh
-della lista. Mancano ancora la paginazione di
-tutto lo storico, la ricerca, il download autorizzato,
+della lista. Mancano ancora indici e benchmark del seek a
+grande scala, la ricerca avanzata, il download autorizzato,
 cartelle e versioning documentale (issue #11)
 e le altre sezioni PWA (issue #13).
 
@@ -188,7 +193,8 @@ succeeded su una semplice query.
 `DocumentCatalogService` richiede `peritial.read`
 oppure `peritial.write`, prima di interrogare il repository.
 Offre `ListAsync(periziaId?, limit=50)`, con limite hard cap
-1..100, e `GetAsync(id)`. In REST:
+1..100, `PageAsync(periziaId?,limit=50,cursor?)` (1..50)
+e `GetAsync(id)`. In REST:
 `GET /api/files?periziaId=<uuid>&limit=50` e
 `GET /api/files/{id}`; in MCP:
 `list_documents(periziaId?,limit?)` e `get_document(id)`.
@@ -196,9 +202,11 @@ ID non visibili di tenant diversi e sconosciuti
 non sono distinguibili. Un filtro `periziaId`
 sconosciuto restituisce elenco vuoto; nessuna query
 permette di specificare il tenant. Nessun download
-consentito tramite questi endpoint; per il listing
-completo con storico maggiore di 100 record
-manca ancora paginazione keyset/cursor.
+consentito tramite questi endpoint. Lo storico oltre
+100 record è percorribile con `GET /api/files/page` o
+`page_documents`, cursore opaco vincolato al filtro,
+seek server-side `created_at_utc DESC,id DESC` e
+verifica OAuth/RLS per ogni pagina.
 
 **Test TDD:**
 - `DocumentCatalogTests` (Business): token read-only e writer,

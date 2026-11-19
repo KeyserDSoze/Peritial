@@ -154,8 +154,8 @@ Keycloak di test, non Entra ID produttivo. [ADR 0034](../adr/0034-perizie-sinist
 
 ## Catalogo metadati documenti REST/MCP (#11/#12)
 
-Le route `GET /api/files`, `GET /api/files/{id}` e i tool
-MCP `list_documents(periziaId?, limit?)`, `get_document(id)`
+Le route `GET /api/files`, `GET /api/files/page`, `GET /api/files/{id}`
+e i tool MCP `list_documents`, `page_documents`, `get_document`
 usano lo stesso `DocumentCatalogService` di sola lettura.
 Richiedono un JWT firmato con tenant/subject e scope
 `peritial.read` **oppure** `peritial.write`.
@@ -166,8 +166,16 @@ query passa per `TenantDbScope` con FORCE RLS PostgreSQL.
   più recenti per il tenant, eventualmente filtrati per perizia;
   limite obbligatoriamente compreso fra **1 e 100** (default 50).
   Il risultato è ordinato per `createdAtUtc DESC, id DESC`.
-  Fino all'introduzione del cursor non è disponibile la lettura
-  dell'intero storico oltre il limite massimo.
+  Questo contratto resta disponibile per i client precedenti.
+- `GET /api/files/page?limit=50&periziaId=<UUID>&cursor=<opaque>`
+  e MCP `page_documents(periziaId?,limit?,cursor?)` restituiscono
+  `{items,nextCursor}` con **1..50** voci per pagina.
+  PostgreSQL applica tenant, filtro e seek `created_at_utc DESC,id DESC`
+  prima del cap, con una riga extra per determinare `nextCursor`.
+  Un cursore `d1` canonico e limitato è legato al filtro Perizia
+  da fingerprint SHA-256: input non valido o filtro diverso → 400 REST
+  / errore MCP. Non è firmato né costituisce credenziale o
+  snapshot multi-richiesta; JWT e FORCE RLS sono sempre obbligatori.
 - `GET /api/files/{id}` e `get_document(id)`: restituiscono
   metadata di un documento; ID inesistenti e di altri tenant
   sono indistinguibili (404 REST, errore MCP).
@@ -179,7 +187,7 @@ query passa per `TenantDbScope` con FORCE RLS PostgreSQL.
 - Nessuna lettura genera un audit di *mutazione riuscita*.
   La lettura non concede il download dei byte: endpoint di download
   autorizzato, politiche di retention/delete, versioni, cartelle,
-  paginazione cursor e report rimangono aperti nella issue #11.
+  indici/benchmark su archivi grandi e report rimangono aperti nella issue #11.
 
 I test Business coprono read-only e write-only, filtro, cap,
 not-found e scope negato; PostgreSQL reale verifica tenant diversi,

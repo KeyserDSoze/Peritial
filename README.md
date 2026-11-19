@@ -100,3 +100,16 @@ il migrator amministrativo esplicito e backup verificato.
 Restano aperti ciclo vita metadata, retention, download
 controllato, quarantena e recovery in produzione.
 [ADR 0048](adr/0048-v009-immutable-document-metadata-privileges.md).
+
+## Catalogo documenti paginato (ADR 0049, #11/#12/#13)
+
+`GET /api/files/page` e il tool MCP `page_documents`
+consentono di percorrere tutto lo storico con pagine da 1–50
+metadati, filtro `periziaId` e `nextCursor` opaco vincolato
+al filtro. PostgreSQL usa seek ordinato per data creazione
+e UUID decrescenti con tenant FORCE RLS. La PWA carica altre
+pagine soltanto su richiesta e svuota i dati su cambio JWT,
+filtro, offline o errore. `GET /api/files`/`list_documents`
+restano retrocompatibili. Il cursore non è un token di accesso
+né uno snapshot; non sono stati introdotti download/delete.
+[ADR 0049](adr/0049-document-catalog-keyset-pages.md).
