@@ -148,7 +148,7 @@ SELECT
       AND audit_id='a1a1a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1')=1
  AND (SELECT count(*) FROM upload_intents)=1
  AND (SELECT count(*) FROM upload_request_keys WHERE status='completed')=1
- AND (SELECT count(*) FROM schema_migrations)=9
+ AND (SELECT count(*) FROM schema_migrations)=10
  AND (SELECT count(*) FROM pg_class WHERE relname IN
     ('perizie','documents','security_audit','upload_intents','upload_request_keys',
      'sinistri','perizia_sinistro_history')
