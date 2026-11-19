@@ -31,7 +31,7 @@ public sealed class LegacySchemaAdoptionTests
             // Ordinary 'apply' must continue rejecting unjournaled schemas.
             await Assert.ThrowsAsync<InvalidOperationException>(() => SchemaMigrator.ApplyAsync(db));
 
-            Assert.Equal(7, await SchemaMigrator.AdoptLegacyAsync(db));
+            Assert.Equal(8, await SchemaMigrator.AdoptLegacyAsync(db));
             Assert.Equal(0, await SchemaMigrator.ApplyAsync(db));
             await Assert.ThrowsAsync<InvalidOperationException>(() => SchemaMigrator.AdoptLegacyAsync(db));
 
@@ -115,7 +115,7 @@ public sealed class LegacySchemaAdoptionTests
             await Assert.ThrowsAsync<InvalidOperationException>(() => SchemaMigrator.AdoptLegacyAsync(db));
             await Assert.ThrowsAsync<InvalidOperationException>(() => SchemaMigrator.ApplyAsync(db));
 
-            Assert.Equal(7, await SchemaMigrator.AdoptPreLeaseLegacyAsync(db));
+            Assert.Equal(8, await SchemaMigrator.AdoptPreLeaseLegacyAsync(db));
             Assert.Equal(0, await SchemaMigrator.ApplyAsync(db));
             await Assert.ThrowsAsync<InvalidOperationException>(() => SchemaMigrator.AdoptPreLeaseLegacyAsync(db));
 
@@ -229,7 +229,7 @@ public sealed class LegacySchemaAdoptionTests
                 insert.Parameters.AddWithValue("id", doc);
                 await insert.ExecuteNonQueryAsync();
             }
-            Assert.Equal(7, await SchemaMigrator.AdoptPreLeaseLegacyAsync(db));
+            Assert.Equal(8, await SchemaMigrator.AdoptPreLeaseLegacyAsync(db));
             await using var verify = await db.OpenConnectionAsync();
             await using var check = new NpgsqlCommand(
                 "SELECT (SELECT count(*) FROM schema_migrations)=9 " +
