@@ -103,6 +103,8 @@ result="$(docker exec "$name" psql -X -qAt -v ON_ERROR_STOP=1 -U peritial -d per
         AND lease_expires_at_utc > created_at_utc)=1
    AND to_regclass('ix_upload_intents_lease') IS NOT NULL
    AND (SELECT count(*) FROM schema_migrations)=10
+   AND to_regclass('ix_documents_tenant_created_id') IS NOT NULL
+   AND to_regclass('ix_documents_tenant_perizia_created_id') IS NOT NULL
    AND (SELECT count(*) FROM pg_class
      WHERE relname IN ('perizie','documents','security_audit','upload_intents','upload_request_keys','sinistri')
        AND relrowsecurity AND relforcerowsecurity)=6

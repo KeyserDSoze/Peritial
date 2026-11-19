@@ -69,3 +69,10 @@ restano in #11/#13 indici/benchmark per cataloghi
 grandi, ricerca, versioni, report, download
 autorizzato, accessibilità e staging reale.
 Non cambia l'hardening V009 sui privilegi metadata.
+
+## Successiva ottimizzazione V010
+
+L'implementazione originaria di questa ADR non introduceva
+una migrazione. La successiva [ADR 0050](0050-v010-document-keyset-indexes.md)
+aggiunge gli indici tenant/globali e tenant/Perizia a supporto
+del seek. Non modifica il contratto o le garanzie qui descritte.

@@ -282,3 +282,44 @@ Solo la CI Compose effimera applica le fixture V003→V009
 al database demo V001 non versionato. Questo cambiamento
 blocca DML non autorizzato ma non implementa un protocollo
 di rimozione/retention, legal hold o WORM. [ADR 0048](../adr/0048-v009-immutable-document-metadata-privileges.md).
+
+## V010 — indici ordinati del catalogo documenti (#11/#6)
+
+La migrazione forward-only
+`V010__documents_catalog_keyset_indexes.sql` aggiunge
+due indici PostgreSQL B-tree senza cambiare righe, FK,
+tenant RLS, privilegi applicativi, audit o storage:
+
+- `ix_documents_tenant_created_id`:
+  `(tenant_id, created_at_utc DESC, id DESC)` per le pagine globali;
+- `ix_documents_tenant_perizia_created_id`:
+  `(tenant_id, perizia_id, created_at_utc DESC, id DESC)` per
+  le pagine filtrate per Perizia.
+
+La query `PgDocumentCatalogRepository.PageAsync` usa un
+predicato di seek con confronto tuple
+`(created_at_utc,id) < (@afterTime,@afterId)` quando
+c'è un cursore, invece del precedente `OR` con parametri nulli.
+Il predicato sfrutta l'ordine discendente dell'indice e
+rimane sotto `TenantDbScope` e FORCE RLS; i servizi REST/MCP
+e i vecchi endpoint di lista non cambiano contratto.
+
+**Avvertenza di release:** il migrator DDL applica
+`CREATE INDEX` normale nella transazione del journal V010.
+Non è un build `CONCURRENTLY`; su tabelle grandi può attendere
+lock e **bloccare le scritture**. Pianificare finestra offline,
+fermo dei writer e backup PostgreSQL più bucket verificati,
+test di restore e spazio disco adeguato prima di applicare
+`apply` come owner dello schema. Non lanciare lo script
+direttamente come ruolo `peritial_app`, non introdurre
+`IF NOT EXISTS` che mascheri oggetti in drift e non
+toccare V001–V009. La CI Compose usa V003→V010
+**solo su database effimero**.
+
+Il test PostgreSQL verifica entrambe le definizioni di indice,
+stato `indisvalid/indisready` e un `EXPLAIN` controllato
+con scan alternativi disabilitati. Questo prova la forma
+del piano, **non** latenze o regressioni a scala reale; 
+si devono ancora misurare cardinalità tenant reali,
+dimensione indici, latenza p95/p99, budget I/O e costo
+degli upload in staging. [ADR 0050](../adr/0050-v010-document-keyset-indexes.md).

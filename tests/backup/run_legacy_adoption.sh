@@ -87,6 +87,8 @@ result="$(docker exec "$name" psql -X -qAt -v ON_ERROR_STOP=1 -U peritial -d per
    AND (SELECT count(*) FROM documents WHERE file_name='legacy.pdf')=1
    AND (SELECT count(*) FROM security_audit WHERE action='document.ingest')=1
    AND (SELECT count(*) FROM schema_migrations)=10
+   AND to_regclass('ix_documents_tenant_created_id') IS NOT NULL
+   AND to_regclass('ix_documents_tenant_perizia_created_id') IS NOT NULL
    AND (SELECT count(*) FROM pg_class
      WHERE relname IN ('perizie','documents','security_audit','upload_intents','upload_request_keys','sinistri')
        AND relrowsecurity AND relforcerowsecurity)=6

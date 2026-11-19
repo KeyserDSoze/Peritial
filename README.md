@@ -113,3 +113,15 @@ filtro, offline o errore. `GET /api/files`/`list_documents`
 restano retrocompatibili. Il cursore non è un token di accesso
 né uno snapshot; non sono stati introdotti download/delete.
 [ADR 0049](adr/0049-document-catalog-keyset-pages.md).
+
+## V010: indici ordinati per il catalogo documenti (#11/#6)
+
+La [V010](scripts/db/migrations/V010__documents_catalog_keyset_indexes.sql)
+introduce due B-tree per seek tenant e tenant+Perizia ordinati per
+`created_at_utc DESC,id DESC`. Il repository usa
+un confronto tuple quando `nextCursor` è presente, senza
+cambiare API REST/MCP o dati. L'upgrade segue il migrator
+versionato con backup e maintenance: `CREATE INDEX`
+non-concurrente può bloccare le scritture. Non sono
+ancora attestati benchmark reali e piani a scala produttiva.
+[ADR 0050](adr/0050-v010-document-keyset-indexes.md).

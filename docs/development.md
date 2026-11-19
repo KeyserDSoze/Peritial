@@ -1293,3 +1293,26 @@ approvazione e prove di ripristino specifiche; nessun
 permesso di cancellazione va riattivato per aggirare
 questi controlli.
 [ADR 0047](../adr/0047-v008-revoke-perizia-delete.md).
+
+## Indici PostgreSQL catalogo metadati (V010, #11/#6)
+
+Con V010 le pagine `/api/files/page` e
+`page_documents` dispongono di due B-tree dedicati:
+`tenant_id,created_at_utc DESC,id DESC` e
+`tenant_id,perizia_id,created_at_utc DESC,id DESC`.
+Il repository condiziona il predicato tuple
+`(created_at_utc,id) < (@afterTime,@afterId)`
+alla presenza di un cursore, evitando un `OR`
+parametrico che ostacola l'uso efficiente del seek.
+Il caso senza cursore mantiene l'ordinamento deterministico
+e il limite server-side; filtro e RLS restano nel DB.
+
+I test PostgreSQL versionati provano definizione B-tree,
+idoneità all'ordine tramite `EXPLAIN` controllato,
+replay del journal e piani senza sort forzato.
+La CI restore e le adozioni legacy controllano la
+presenza degli indici dopo V010, senza cambiare dati.
+Non è un benchmark su volumi rappresentativi:
+occorrono misure/EXPLAIN ANALYZE su dati realistici
+e una finestra manutenzione offline per `CREATE INDEX`
+non-concurrente. [ADR 0050](../adr/0050-v010-document-keyset-indexes.md).
