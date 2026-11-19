@@ -350,6 +350,11 @@ api.MapDelete("/sinistri/{id:guid}", async (Guid id, long expectedVersion,
 
 // Read-only document catalog returns an allowlisted metadata projection:
  // never storage keys, scanned bytes, internal object URLs, or tenant IDs.
+api.MapGet("/files/page",
+    (Guid? periziaId, int? limit, string? cursor,
+        DocumentCatalogService service, CancellationToken ct) =>
+        service.PageAsync(periziaId, limit ?? 50, cursor, ct))
+    .RequireAuthorization("peritial.read");
 api.MapGet("/files", (Guid? periziaId, int? limit, DocumentCatalogService service, CancellationToken ct) =>
     service.ListAsync(periziaId, limit ?? 50, ct)).RequireAuthorization("peritial.read");
 api.MapGet("/files/{id:guid}", (Guid id, DocumentCatalogService service, CancellationToken ct) =>

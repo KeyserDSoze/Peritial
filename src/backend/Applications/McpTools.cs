@@ -116,6 +116,12 @@ public sealed class McpTools(
         Guid? periziaId = null, int limit = 50, CancellationToken ct = default) =>
         documents.ListAsync(periziaId, limit, ct);
 
+    [McpServerTool(Name = "page_documents"), Description("Keyset-pages 1..50 safe tenant document metadata entries, optional periziaId filter, with opaque filter-bound nextCursor. Requires peritial.read or peritial.write. Never exposes storage keys or file bytes.")]
+    public Task<DocumentPageDto> PageDocuments(
+        Guid? periziaId = null, int limit = 50, string? cursor = null,
+        CancellationToken ct = default) =>
+        documents.PageAsync(periziaId, limit, cursor, ct);
+
     [McpServerTool(Name = "get_document"), Description("Gets safe metadata for one document in the signed tenant (peritial.read or peritial.write); foreign and missing IDs are indistinguishable.")]
     public Task<DocumentSummaryDto> GetDocument(Guid id, CancellationToken ct = default) =>
         documents.GetAsync(id, ct);
