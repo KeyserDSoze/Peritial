@@ -3,7 +3,7 @@ import { useAuth } from "react-oidc-context";
 import { useTranslation } from "react-i18next";
 import { FileUp, Moon, Sun, ShieldCheck } from "lucide-react";
 import { Button } from "./components/ui/button";
-import { createPerizia, isApiUnavailable, listDocuments, listPerizie, uploadDocument, type DocumentSummary, type Perizia } from "./api";
+import { createPerizia, isApiUnavailable, pageDocuments, listPerizie, uploadDocument, type DocumentSummary, type Perizia } from "./api";
 import { PeriziaWorkflow } from "./components/PeriziaWorkflow";
 import {PeriziaSinistroPicker} from "./components/PeriziaSinistroPicker";
 import {SinistroCatalog} from "./components/SinistroCatalog";
@@ -17,6 +17,8 @@ export default function App() {
   const [dark, setDark] = useState(() => preferredTheme() === "dark");
   const [items, setItems] = useState<Perizia[]>([]);
   const [documents, setDocuments] = useState<DocumentSummary[]>([]);
+  const [documentsNextCursor, setDocumentsNextCursor] = useState<string | null>(null);
+  const [documentsLoadingMore, setDocumentsLoadingMore] = useState(false);
   // Each confirmed mutation increments a local revision. A GET started before
   // it must not overwrite that result; a later GET may refresh it normally.
   const mutations = useRef<Map<string, number>>(new Map());
@@ -43,6 +45,8 @@ export default function App() {
     mutations.current.clear();
     setItems([]);
     setDocuments([]);
+    setDocumentsNextCursor(null);
+    setDocumentsLoadingMore(false);
     setUploadPeriziaId("");
     setDocumentsPeriziaId("");
     setDataStatus("unavailable");
@@ -50,6 +54,9 @@ export default function App() {
   }
   function refreshPerizie() {
     if (!online || !token) return;
+    requestEpoch.current += 1;
+    setDocumentsNextCursor(null);
+    setDocumentsLoadingMore(false);
     setDataStatus("loading");
     setRefreshIndex(value => value + 1);
   }
@@ -58,6 +65,8 @@ export default function App() {
     // if the previous GET resolves just before React runs effect cleanup.
     requestEpoch.current += 1;
     setDocuments([]);
+    setDocumentsNextCursor(null);
+    setDocumentsLoadingMore(false);
     setDataStatus("loading");
     setDocumentsPeriziaId(periziaId);
   }
@@ -84,6 +93,8 @@ export default function App() {
       mutations.current.clear();
       setItems([]);
       setDocuments([]);
+      setDocumentsNextCursor(null);
+      setDocumentsLoadingMore(false);
       setUploadPeriziaId("");
       setDocumentsPeriziaId("");
       setVerifiedToken(null);
@@ -94,6 +105,8 @@ export default function App() {
       requestEpoch.current += 1;
       setItems([]);
       setDocuments([]);
+      setDocumentsNextCursor(null);
+      setDocumentsLoadingMore(false);
       mutations.current.clear();
       setError("");
       setReference("");
@@ -107,11 +120,12 @@ export default function App() {
     if (!token || !online) return;
     let active = true;
     setDataStatus("loading");
+    setDocumentsNextCursor(null);
     const epochAtStart = requestEpoch.current;
     const revisionsAtStart = new Map(mutations.current);
     // Fetch both scoped projections before making any write controls
     // available. A failure of either one fails closed.
-    Promise.all([listPerizie(token), listDocuments(token, documentsPeriziaId || undefined)]).then(([data, latestDocuments]) => {
+    Promise.all([listPerizie(token), pageDocuments(token, documentsPeriziaId || undefined)]).then(([data, latestDocuments]) => {
       if (!active || requestEpoch.current !== epochAtStart) return;
       setItems(current => {
         const changedAfterFetch = new Set([...mutations.current].filter(
@@ -123,7 +137,8 @@ export default function App() {
           ...data.filter(item => !changedAfterFetch.has(item.id))
         ];
       });
-      setDocuments(latestDocuments);
+      setDocuments(latestDocuments.items);
+      setDocumentsNextCursor(latestDocuments.nextCursor);
       // A case removed from the authenticated projection must not remain selectable.
       setUploadPeriziaId(value => value && !data.some(item => item.id === value) ? "" : value);
       setDocumentsPeriziaId(value => value && !data.some(item => item.id === value) ? "" : value);
@@ -135,6 +150,36 @@ export default function App() {
     });
     return () => { active = false; };
   }, [token, t, online, refreshIndex, documentsPeriziaId]);
+  async function loadMoreDocuments() {
+    if (!token || !online || dataStatus !== "ready" || verifiedToken !== token ||
+        busy || documentsLoadingMore || !documentsNextCursor) return;
+    const epochAtStart = requestEpoch.current;
+    const filter = documentsPeriziaId;
+    const cursor = documentsNextCursor;
+    setDocumentsLoadingMore(true);
+    setError("");
+    try {
+      const result = await pageDocuments(token, filter || undefined, cursor);
+      if (requestEpoch.current !== epochAtStart || activeToken.current !== token) return;
+      setDocuments(previous => {
+        const known = new Set(previous.map(item => item.id));
+        return [...previous, ...result.items.filter(item => !known.has(item.id))];
+      });
+      setDocumentsNextCursor(result.nextCursor);
+    } catch (cause) {
+      if (requestEpoch.current !== epochAtStart || activeToken.current !== token) return;
+      if (isApiUnavailable(cause)) lockProtectedUi();
+      else {
+        // A stale or invalid cursor cannot be trusted. Require a fresh
+        // authenticated read rather than showing a partial old result.
+        setDocuments([]);
+        setDocumentsNextCursor(null);
+        setError(t("documentPageError"));
+      }
+    } finally {
+      if (requestEpoch.current === epochAtStart) setDocumentsLoadingMore(false);
+    }
+  }
   async function create(event:FormEvent) {
     event.preventDefault(); if(!token || !online || dataStatus !== "ready" || !reference.trim()) return;
     setBusy(true); setError("");
@@ -254,6 +299,11 @@ export default function App() {
                     </p>
                   </li>)}
                 </ul>}
+               {documentsNextCursor && <Button type="button" variant="outline"
+                 disabled={busy || documentsLoadingMore || !online}
+                 onClick={() => void loadMoreDocuments()}>
+                   {documentsLoadingMore ? t("loading") : t("documentCatalogMore")}
+               </Button>
             </div>
           </section>
         </div>}
