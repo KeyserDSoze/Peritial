@@ -1,6 +1,5 @@
 using Peritial.Business;
 using Peritial.Domains;
-using NpgsqlTypes;
 
 namespace Peritial.Infrastructures;
 
@@ -44,19 +43,22 @@ public sealed class PgDocumentCatalogRepository(Npgsql.NpgsqlDataSource dataSour
         const string columns =
             "id, perizia_id, file_name, content_type, length_bytes, created_at_utc";
         var filter = periziaId.HasValue ? " AND perizia_id=@perizia" : "";
-        var query = $"SELECT {columns} FROM documents WHERE tenant_id=@tenant" + filter +
-            " AND (@afterTime IS NULL OR created_at_utc < @afterTime " +
-            "OR (created_at_utc = @afterTime AND id < @afterId)) " +
-            "ORDER BY created_at_utc DESC, id DESC LIMIT @limit";
+        // Avoid nullable-parameter OR predicates: the tuple seek is directly
+        // usable as an ordered B-tree range on (created_at_utc DESC, id DESC).
+        var seek = after is null ? "" :
+            " AND (created_at_utc, id) < (@afterTime, @afterId)";
+        var query = $"SELECT {columns} FROM documents WHERE tenant_id=@tenant" +
+            filter + seek + " ORDER BY created_at_utc DESC, id DESC LIMIT @limit";
         var items = new List<DocumentSummaryDto>();
         await using (var cmd = scope.Command(query))
         {
             cmd.Parameters.AddWithValue("tenant", tenant.Value);
             if (periziaId.HasValue) cmd.Parameters.AddWithValue("perizia", periziaId.Value);
-            cmd.Parameters.Add("afterTime", NpgsqlDbType.TimestampTz).Value =
-                (object?)after?.CreatedAtUtc ?? DBNull.Value;
-            cmd.Parameters.Add("afterId", NpgsqlDbType.Uuid).Value =
-                (object?)after?.Id ?? DBNull.Value;
+            if (after is not null)
+            {
+                cmd.Parameters.AddWithValue("afterTime", after.CreatedAtUtc);
+                cmd.Parameters.AddWithValue("afterId", after.Id);
+            }
             cmd.Parameters.AddWithValue("limit", fetchLimit);
             await using var reader = await cmd.ExecuteReaderAsync(ct);
             while (await reader.ReadAsync(ct)) items.Add(Read(reader));
