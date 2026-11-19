@@ -488,6 +488,73 @@ public sealed class SinistroPersistenceTests
     }
 
     [Fact]
+    public async Task V009_document_metadata_cannot_be_rewritten_or_deleted_by_app_sql()
+    {
+        await using var db = await IsolatedDatabases.CreateAsync();
+        var tenant = TenantId.From(Guid.NewGuid());
+        var perizia = Perizia.Create(tenant, "V009-DOC-" + Guid.NewGuid().ToString("N"));
+        await new PgPeriziaRepository(db.App).AddAuditedAsync(
+            perizia, Event(tenant, perizia.Id, "perizia.create"));
+        var documentId = Guid.NewGuid();
+        var originalKey = $"{tenant.Value:N}/{documentId:N}.pdf";
+        var documents = new PgDocumentRepository(db.App);
+        // Test-only insertion seam: production ingestion uses AddAuditedAsync.
+        await documents.AddAsync(new DocumentRecord(
+            documentId, tenant, perizia.Id, "original.pdf", "application/pdf",
+            8, originalKey, DateTime.UtcNow));
+
+        await using (var grants = db.Admin.CreateCommand(
+            "SELECT has_table_privilege('peritial_app','documents','SELECT') " +
+            "AND has_table_privilege('peritial_app','documents','INSERT') " +
+            "AND NOT has_table_privilege('peritial_app','documents','UPDATE') " +
+            "AND NOT has_table_privilege('peritial_app','documents','DELETE') " +
+            "AND NOT has_table_privilege('peritial_recovery','documents','UPDATE') " +
+            "AND NOT has_table_privilege('peritial_recovery','documents','DELETE')"))
+            Assert.True((bool)(await grants.ExecuteScalarAsync())!);
+
+        await using (var connection = await db.App.OpenConnectionAsync())
+        {
+            foreach (var mutation in new[] {
+                "UPDATE documents SET storage_key='forged.pdf' WHERE tenant_id=@tenant AND id=@id",
+                "UPDATE documents SET file_name='forged.pdf' WHERE tenant_id=@tenant AND id=@id",
+                "DELETE FROM documents WHERE tenant_id=@tenant AND id=@id"
+            })
+            {
+                await using var tx = await connection.BeginTransactionAsync();
+                await using (var context = new NpgsqlCommand(
+                    "SELECT set_config('peritial.tenant_id', @tenant, true)", connection, tx))
+                {
+                    context.Parameters.AddWithValue("tenant", tenant.Value.ToString("D"));
+                    await context.ExecuteNonQueryAsync();
+                }
+                await using var command = new NpgsqlCommand(mutation, connection, tx);
+                command.Parameters.AddWithValue("tenant", tenant.Value);
+                command.Parameters.AddWithValue("id", documentId);
+                var denied = await Assert.ThrowsAsync<PostgresException>(
+                    () => command.ExecuteNonQueryAsync());
+                Assert.Equal(PostgresErrorCodes.InsufficientPrivilege, denied.SqlState);
+                await tx.RollbackAsync();
+            }
+        }
+
+        await using (var unchanged = db.Admin.CreateCommand(
+            "SELECT file_name, storage_key FROM documents WHERE tenant_id=@tenant AND id=@id"))
+        {
+            unchanged.Parameters.AddWithValue("tenant", tenant.Value);
+            unchanged.Parameters.AddWithValue("id", documentId);
+            await using var reader = await unchanged.ExecuteReaderAsync();
+            Assert.True(await reader.ReadAsync());
+            Assert.Equal("original.pdf", reader.GetString(0));
+            Assert.Equal(originalKey, reader.GetString(1));
+        }
+
+        var visible = await new PgDocumentCatalogRepository(db.App)
+            .FindAsync(tenant, documentId);
+        Assert.NotNull(visible);
+        Assert.Equal("original.pdf", visible.FileName);
+    }
+
+    [Fact]
     public async Task V008_perizia_delete_is_not_granted_to_app_role_and_cannot_erase_legacy_association()
     {
         await using var db = await IsolatedDatabases.CreateAsync();
