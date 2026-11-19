@@ -303,7 +303,7 @@ export default function App() {
                  disabled={busy || documentsLoadingMore || !online}
                  onClick={() => void loadMoreDocuments()}>
                    {documentsLoadingMore ? t("loading") : t("documentCatalogMore")}
-               </Button>
+               </Button>}
             </div>
           </section>
         </div>}
