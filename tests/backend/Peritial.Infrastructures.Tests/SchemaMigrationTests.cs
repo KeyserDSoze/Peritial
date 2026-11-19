@@ -111,6 +111,70 @@ public sealed class SchemaMigrationTests
     }
 
     [Fact]
+    public async Task V010_document_keyset_indexes_support_global_and_perizia_scoped_seek()
+    {
+        await WithIsolatedSchemaAsync(async db =>
+        {
+            Assert.Equal(10, await SchemaMigrator.ApplyAsync(db));
+            Assert.Equal(0, await SchemaMigrator.ApplyAsync(db));
+
+            await using var conn = await db.OpenConnectionAsync();
+            foreach (var (name, columns) in new[] {
+                ("ix_documents_tenant_created_id",
+                    "(tenant_id, created_at_utc DESC, id DESC)"),
+                ("ix_documents_tenant_perizia_created_id",
+                    "(tenant_id, perizia_id, created_at_utc DESC, id DESC)")
+            })
+            {
+                await using var index = new NpgsqlCommand(
+                    "SELECT pg_get_indexdef(i.indexrelid) FROM pg_index i " +
+                    "WHERE i.indexrelid=to_regclass(@index) " +
+                    "AND i.indisvalid AND i.indisready AND i.indisunique=false", conn);
+                index.Parameters.AddWithValue("index", name);
+                var definition = (string?)await index.ExecuteScalarAsync();
+                Assert.NotNull(definition);
+                Assert.Contains("USING btree " + columns, definition);
+            }
+
+            // A controlled EXPLAIN, not a claimed production benchmark:
+            // disable sequential and bitmap scans so the index ordering
+            // must be able to satisfy a genuine keyset seek without Sort.
+            await using var tx = await conn.BeginTransactionAsync();
+            await using (var setup = new NpgsqlCommand(
+                "SET LOCAL enable_seqscan=off; " +
+                "SET LOCAL enable_bitmapscan=off; " +
+                "SET LOCAL enable_sort=off", conn, tx))
+                await setup.ExecuteNonQueryAsync();
+
+            foreach (var (filtered, expectedIndex) in new[] {
+                (false, "ix_documents_tenant_created_id"),
+                (true, "ix_documents_tenant_perizia_created_id")
+            })
+            {
+                var sql = "EXPLAIN (COSTS OFF) SELECT id, perizia_id, file_name, " +
+                    "content_type, length_bytes, created_at_utc FROM documents " +
+                    "WHERE tenant_id=@tenant " +
+                    (filtered ? "AND perizia_id=@perizia " : "") +
+                    "AND (created_at_utc,id)<(@time,@id) " +
+                    "ORDER BY created_at_utc DESC,id DESC LIMIT 50";
+                await using var explain = new NpgsqlCommand(sql, conn, tx);
+                explain.Parameters.AddWithValue("tenant", Guid.NewGuid());
+                if (filtered) explain.Parameters.AddWithValue("perizia", Guid.NewGuid());
+                explain.Parameters.AddWithValue("time",
+                    new DateTime(2026, 11, 19, 20, 0, 0, DateTimeKind.Utc));
+                explain.Parameters.AddWithValue("id", Guid.NewGuid());
+                var plan = new List<string>();
+                await using (var reader = await explain.ExecuteReaderAsync())
+                    while (await reader.ReadAsync()) plan.Add(reader.GetString(0));
+                var text = string.Join("\n", plan);
+                Assert.Contains(expectedIndex, text);
+                Assert.DoesNotContain("Sort", text);
+            }
+            await tx.RollbackAsync();
+        });
+    }
+
+    [Fact]
     public async Task Untracked_legacy_schema_is_rejected_without_creating_a_journal()
     {
         await WithIsolatedSchemaAsync(async db =>
