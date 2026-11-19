@@ -255,7 +255,7 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     const filter = page.getByRole("combobox", {name: "Filtra documenti per perizia"});
     const firstGet = page.waitForResponse(response =>
       response.request().method() === "GET" &&
-      new URL(response.url()).pathname === "/api/files" &&
+      new URL(response.url()).pathname === "/api/files/page" &&
       new URL(response.url()).searchParams.get("periziaId") === firstId);
     await filter.selectOption(firstId);
     expect((await firstGet).status()).toBe(200);
@@ -264,7 +264,7 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
 
     const secondGet = page.waitForResponse(response =>
       response.request().method() === "GET" &&
-      new URL(response.url()).pathname === "/api/files" &&
+      new URL(response.url()).pathname === "/api/files/page" &&
       new URL(response.url()).searchParams.get("periziaId") === secondId);
     await filter.selectOption(secondId);
     expect((await secondGet).status()).toBe(200);
@@ -279,6 +279,55 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     await filter.selectOption("");
     await expect(list.getByText(firstName, {exact: true})).toBeVisible();
     await expect(list.getByText(secondName, {exact: true})).toBeVisible();
+  });
+
+  test("PWA progressively loads document metadata and rejects stale continuation", async ({page}) => {
+    const firstId = "00000000-0000-4000-8000-000000000101";
+    const secondId = "00000000-0000-4000-8000-000000000102";
+    let rejectContinuation = false;
+    await page.route("**/api/files/page?**", async route => {
+      const cursor = new URL(route.request().url()).searchParams.get("cursor");
+      if (cursor && rejectContinuation) {
+        await route.fulfill({status: 400, contentType: "application/json",
+          body: '{"error":"stale filter"}'});
+        return;
+      }
+      const record = (id: string, name: string) => ({
+        id, periziaId: null, fileName: name, contentType: "application/pdf",
+        length: 21, createdAtUtc: "2026-11-19T20:00:00Z"
+      });
+      await route.fulfill({status: 200, contentType: "application/json",
+        body: JSON.stringify(cursor
+          ? {items: [record(secondId, "page-two.pdf")], nextCursor: null}
+          : {items: [record(firstId, "page-one.pdf")], nextCursor: "opaque-test-cursor"})});
+    });
+    await page.goto("/");
+    await page.getByRole("button", {name: "Accedi"}).click();
+    await expect(page.locator("#username")).toBeVisible({timeout: 30_000});
+    await page.locator("#username").fill("localuser");
+    await page.locator("#password").fill("local-only-user");
+    await page.locator("#kc-login").click();
+    await expect(page.getByRole("button", {name: "Esci"})).toBeVisible({timeout: 30_000});
+
+    const docs = page.getByRole("list", {name: "Documenti caricati"});
+    await expect(docs.getByText("page-one.pdf")).toBeVisible();
+    const more = page.getByRole("button", {name: "Carica altri documenti"});
+    await expect(more).toBeVisible();
+    await more.click();
+    await expect(docs.getByText("page-two.pdf")).toBeVisible();
+    await expect(docs.getByText("page-one.pdf")).toBeVisible();
+    await expect(more).toHaveCount(0);
+    await expect(docs.locator("a,button")).toHaveCount(0);
+
+    // Refresh invalidates old pages and returns to page one.
+    await page.getByRole("button", {name: "Aggiorna elenco"}).click();
+    await expect(docs.getByText("page-one.pdf")).toBeVisible();
+    await expect(docs.getByText("page-two.pdf")).toHaveCount(0);
+    rejectContinuation = true;
+    await more.click();
+    await expect(page.getByRole("alert")).toContainText("Impossibile continuare");
+    await expect(docs.getByText("page-one.pdf")).toHaveCount(0);
+    await expect(more).toHaveCount(0);
   });
 
   test("PWA creates and lists tenant Sinistri with signed JWT, persisted refresh and no offline writes", async ({page, request, context}) => {

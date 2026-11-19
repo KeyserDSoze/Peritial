@@ -207,6 +207,14 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
     });
     expect(uploaded.status(), await uploaded.text()).toBe(201);
     const documentId = (await uploaded.json() as {id: string}).id;
+    const secondName = "catalog-second-" + Date.now() + ".pdf";
+    const secondUpload = await request.post(api + "/api/files", {
+      headers,
+      multipart: {file: {name: secondName, mimeType: "application/pdf", buffer: pdf},
+        periziaId}
+    });
+    expect(secondUpload.status(), await secondUpload.text()).toBe(201);
+    const secondId = (await secondUpload.json() as {id: string}).id;
 
     const list = await request.get(api + "/api/files?limit=50&periziaId=" + periziaId, {
       headers: {Authorization: "Bearer " + reader}
@@ -224,6 +232,47 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
     expect(row?.createdAtUtc).toBeTruthy();
     expect(row?.storageKey).toBeUndefined();
     expect(await list.text()).not.toContain("storageKey");
+
+    // Real PostgreSQL keyset, 1 item per page, with signed read-only OAuth.
+    // This newly created Perizia has only these two documents.
+    const readHeaders = {Authorization: "Bearer " + reader};
+    const root = api + "/api/files/page?periziaId=" + periziaId + "&limit=1";
+    const page1 = await request.get(root, {headers: readHeaders});
+    expect(page1.status(), await page1.text()).toBe(200);
+    expect(page1.headers()["cache-control"]).toContain("no-store");
+    type Page = {items: {id: string; fileName: string; storageKey?: string}[];
+      nextCursor: string | null};
+    const firstPage = await page1.json() as Page;
+    expect(firstPage.items).toHaveLength(1);
+    expect(firstPage.nextCursor).toBeTruthy();
+    expect(await page1.text()).not.toContain("storageKey");
+    expect(await page1.text()).not.toContain("tenantId");
+
+    const page2 = await request.get(root + "&cursor=" +
+      encodeURIComponent(firstPage.nextCursor!), {headers: readHeaders});
+    expect(page2.status(), await page2.text()).toBe(200);
+    const secondPage = await page2.json() as Page;
+    expect(secondPage.items).toHaveLength(1);
+    expect(secondPage.nextCursor).toBeNull();
+    expect(new Set([...firstPage.items, ...secondPage.items].map(x => x.id)))
+      .toEqual(new Set([documentId, secondId]));
+    expect(secondPage.items[0]?.storageKey).toBeUndefined();
+
+    const staleFilter = await request.get(
+      api + "/api/files/page?limit=1&periziaId=00000000-0000-4000-8000-000000000002&cursor=" +
+      encodeURIComponent(firstPage.nextCursor!), {headers: readHeaders});
+    expect(staleFilter.status(), await staleFilter.text()).toBe(400);
+    const badCursor = await request.get(root + "&cursor=bad!", {headers: readHeaders});
+    expect(badCursor.status(), await badCursor.text()).toBe(400);
+    for (const badLimit of ["0", "51"]) {
+      const result = await request.get(api + "/api/files/page?limit=" + badLimit,
+        {headers: readHeaders});
+      expect(result.status(), await result.text()).toBe(400);
+    }
+    expect((await request.get(root, {
+      headers: {Authorization: "Bearer " + noScope}
+    })).status()).toBe(403);
+    expect((await request.get(root)).status()).toBe(401);
 
     const detail = await request.get(api + "/api/files/" + documentId, {
       headers: {Authorization: "Bearer " + reader}
@@ -260,6 +309,7 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
     });
     expect(listTools.ok(), await listTools.text()).toBeTruthy();
     expect(await listTools.text()).toContain("list_documents");
+    expect(await listTools.text()).toContain("page_documents");
     expect(await listTools.text()).toContain("get_document");
 
     const listTool = await request.post(api + "/mcp", {
@@ -272,6 +322,42 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
     expect(await listTool.text()).toContain(documentId);
     expect(await listTool.text()).not.toContain("storageKey");
     expect(await listTool.text()).not.toContain('"isError":true');
+
+    const firstToolPage = await request.post(api + "/mcp", {
+      headers: mcpHeaders(reader),
+      data: {jsonrpc: "2.0", id: 706, method: "tools/call", params: {
+        name: "page_documents", arguments: {periziaId, limit: 1}
+      }}
+    });
+    expect(firstToolPage.ok(), await firstToolPage.text()).toBeTruthy();
+    expect(await firstToolPage.text()).toContain(firstPage.items[0].id);
+    expect(await firstToolPage.text()).toContain("nextCursor");
+    expect(await firstToolPage.text()).not.toContain("storageKey");
+    expect(await firstToolPage.text()).not.toContain('"isError":true');
+
+    const secondToolPage = await request.post(api + "/mcp", {
+      headers: mcpHeaders(reader),
+      data: {jsonrpc: "2.0", id: 707, method: "tools/call", params: {
+        name: "page_documents", arguments: {
+          periziaId, limit: 1, cursor: firstPage.nextCursor
+        }
+      }}
+    });
+    expect(secondToolPage.ok(), await secondToolPage.text()).toBeTruthy();
+    expect(await secondToolPage.text()).toContain(secondPage.items[0].id);
+    expect(await secondToolPage.text()).not.toContain('"isError":true');
+
+    const rejectedTool = await request.post(api + "/mcp", {
+      headers: mcpHeaders(reader),
+      data: {jsonrpc: "2.0", id: 708, method: "tools/call", params: {
+        name: "page_documents", arguments: {
+          periziaId: "00000000-0000-4000-8000-000000000002",
+          limit: 1, cursor: firstPage.nextCursor
+        }
+      }}
+    });
+    expect(rejectedTool.ok(), await rejectedTool.text()).toBeTruthy();
+    expect(await rejectedTool.text()).toContain('"isError":true');
 
     const getTool = await request.post(api + "/mcp", {
       headers: mcpHeaders(reader),
