@@ -149,3 +149,28 @@ L'anteprima **non crea Sinistri/Perizie**, non esegue
 upsert di anagrafiche e **non equivale a un malware scan**.
 Importazione effettiva, idempotenza e allegati sicuri
 restano nella issue #10. [ADR 0051](adr/0051-legacy-xml-safe-preview.md).
+
+## Piano di riconciliazione XML Classic/Accertatore (#10)
+
+Oltre alla preview, `POST /api/imports/xml/plan` e MCP
+`plan_legacy_xml(xml)` eseguono un **dry-run** con
+`peritial.write` e RLS del tenant firmato. Dopo la
+validazione XML, PostgreSQL cerca **per uguaglianza esatta**
+di `NumeroSinistro`, con `LIMIT 2` e senza scegliere
+un duplicato arbitrario. Il risultato è
+`{preview,status,existingSinistroId}`:
+
+- `new`: nessun riferimento presente;
+- `existing`: un solo Sinistro e data evento compatibile
+  (data denuncia verificata solo se inclusa nell'XML);
+- `conflict`: un solo riferimento ma date incompatibili;
+- `ambiguous`: più di un Sinistro con lo stesso riferimento.
+
+Solo `existing` può riportare `existingSinistroId`;
+gli altri esiti non identificano alcun record. Il piano
+**non inserisce né modifica Sinistri/Perizie**, allegati,
+audit di mutazione o dati assicurativi; `new` non
+è un permesso di creazione. Lo schema non ha ancora
+l'unicità del riferimento e un futuro import
+richiederà riserva/idempotenza/approvazione governate
+in transazione. [ADR 0052](adr/0052-xml-legacy-reconciliation-dryrun.md).

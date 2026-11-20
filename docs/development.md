@@ -1362,3 +1362,44 @@ duplicati, contenuti personali esclusi e budget.
 Keycloak reali per REST/MCP, 401/403, 400/415,
 assenza di dati personali e verifica che preview non
 crei alcun Sinistro. [ADR 0051](../adr/0051-legacy-xml-safe-preview.md).
+
+## #10 — pianificazione XML tenant-scoped senza scritture
+
+`LegacyXmlImportPlanService` riusa il preflight sicuro
+`LegacyXmlPreviewService` e, solo dopo autorizzazione
+`peritial.write` e parse riuscito, usa
+`ILegacyImportReferenceLookup.FindExactAsync`.
+L'implementazione `PgLegacyImportReferenceLookup` esegue
+`SELECT id,occurred_on,reported_on FROM sinistri WHERE
+tenant_id=@tenant AND external_reference=@reference
+ORDER BY id LIMIT 2` all'interno di `TenantDbScope`
+con FORCE RLS: no SELECT *, no wildcard/ILIKE, no
+candidati di altri tenant, no accesso a PII o audit.
+
+Il contratto REST è `POST /api/imports/xml/plan`
+con Content-Type application/xml/text/xml, 1 MiB
+inclusi stream chunked, OAuth `peritial.write`;
+MCP `plan_legacy_xml(xml)` usa lo stesso servizio.
+`LegacyXmlImportPlanDto` include `Preview`, `Status`
+e `ExistingSinistroId`; l'ultimo viene popolato
+solo se un unico match ha data evento uguale e data
+denuncia uguale *se disponibile nell'XML*.
+Stati: `new`, `existing`, `conflict`, `ambiguous`.
+In caso di conflitto/duplicato non viene esposto
+alcun ID. In tutti i casi i dati restano immutati
+e non vengono generate attestazioni di import
+riuscito. Le API non creano Sinistri, Perizie o
+allegati e non effettuano upsert senza idempotenza.
+
+Test Business: compatibilità date, riferimento esatto,
+scope negato, XML non valido prima della query,
+duplicati e assenza match stranieri. PostgreSQL
+reale: due tenant con riferimento uguale, due
+Sinistri nello stesso tenant, suffissi, wildcard
+letterali, pool senza contesto residuo. Playwright
+Keycloak: `new/existing/conflict/ambiguous`, 401,
+403, 400, 415, parità REST/MCP e assenza di update.
+Dati cross-tenant e concorrenti **non sono mai**
+risolti automaticamente; l'importazione finale e
+i gate di unicità/approval restano aperti.
+[ADR 0052](../adr/0052-xml-legacy-reconciliation-dryrun.md).

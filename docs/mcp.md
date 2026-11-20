@@ -444,3 +444,22 @@ un controllo antivirus e non abilita l'importazione
 effettiva. Per fare ingestion servono separati workflow
 tenant-scoped, idempotenza, audit atomico e scanner.
 [ADR 0051](../adr/0051-legacy-xml-safe-preview.md).
+
+## Piano di import XML senza commit (#10)
+
+MCP `plan_legacy_xml(xml)` condivide
+`LegacyXmlImportPlanService` con
+`POST /api/imports/xml/plan`. JWT firmato
+con `peritial.write`, massimo 1 MiB di XML
+validato via preview; ricerca PostgreSQL di soli
+ID/date nel **tenant dell'attore** per riferimento
+**esattamente uguale** e `LIMIT 2`.
+Restituisce `{preview,status,existingSinistroId}`.
+Gli stati possibili sono `new`, `existing`,
+`conflict`, `ambiguous`. Solo `existing`
+include l'UUID del Sinistro univoco compatibile;
+nessun ID per gli altri stati. Non è un token,
+una riserva, né un comando d'importazione:
+non crea, aggiorna, collega o elimina record
+e non tocca documenti, storage, audit di successo.
+[ADR 0052](../adr/0052-xml-legacy-reconciliation-dryrun.md).
