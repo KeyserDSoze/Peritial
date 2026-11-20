@@ -325,6 +325,17 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
       preview:{hasUnmappedBusinessData:true}
     });
     expect(JSON.stringify(review)).not.toContain(id);
+
+    const reviewMcp = await request.post(api + "/mcp", {
+      headers: mcpHeaders(writer), data: {jsonrpc:"2.0", id:1399, method:"tools/call",
+        params:{name:"plan_legacy_xml",arguments:{xml}}}
+    });
+    expect(reviewMcp.ok(), await reviewMcp.text()).toBeTruthy();
+    expect(await reviewMcp.text()).toContain("review-required");
+    expect(await reviewMcp.text()).not.toContain("PRIVATE-INSURED");
+    expect(await reviewMcp.text()).not.toContain(id);
+    expect(await reviewMcp.text()).not.toContain('"isError":true');
+
     const minimalXml = `<it.autosoftws.IncaricoAccertatoreRecord>
       <NumeroSinistro>${ref}</NumeroSinistro>
       <DataOraSinistro>2026-11-17</DataOraSinistro>
