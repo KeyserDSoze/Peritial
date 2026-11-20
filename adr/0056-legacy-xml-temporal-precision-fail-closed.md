@@ -105,3 +105,14 @@ polizza, anagrafica, Perizia o allegato.
 L'issue #25 è **aperta** fino alla vera
 persistenza senza perdita, e #10/#24 non
 sono completate.
+
+## Estensione con ADR 0057 — perdita lessicale dei campi base
+
+La distinzione fra dato letto per preview e dato
+fedelemente importabile riguarda anche spazi
+normalizzati e presenza del nodo opzionale vuoto:
+`DataIncarico` vuoto non è automaticamente
+equivalente ad assente. Il segnale booleano
+viene riutilizzato senza aggiungere contenuti
+dell'XML al DTO; il commit V011 li rifiuta.
+Vedi [ADR 0057](0057-xml-source-scalar-normalization-review.md).

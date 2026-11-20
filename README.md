@@ -262,3 +262,18 @@ richiederà uno schema e una politica timezone
 validati su sorgenti reali; non assumere UTC o
 l'anno solare. [ADR 0056](adr/0056-legacy-xml-temporal-precision-fail-closed.md),
 [issue #25](https://github.com/KeyserDSoze/Peritial/issues/25).
+
+### Variazioni lessicali dei campi XML (#25)
+
+Per evitare associazioni e importazioni apparentemente valide
+ma con normalizzazioni silenziose, la preview rileva anche
+spazi iniziali/finali nei valori scalari di `NumeroSinistro`,
+`DataOraSinistro` e `DataIncarico`, e un `DataIncarico`
+esplicitamente vuoto (`<DataIncarico/>` oppure solo spazi).
+L'anteprima continua a mostrare il riferimento/data
+normalizzati, ma indica `hasUnmappedBusinessData=true`:
+con un singolo candidato compatibile il piano torna
+`review-required`, senza UUID. Il commit interno V011
+li rifiuta **prima** di creare Sinistro, ledger o audit.
+La formattazione XML tra elementi resta innocua. 
+[ADR 0057](adr/0057-xml-source-scalar-normalization-review.md).

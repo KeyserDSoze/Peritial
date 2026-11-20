@@ -1560,3 +1560,28 @@ La conservazione integrale delle DateTime è
 lavoro ancora aperto nella [#25]
 (https://github.com/KeyserDSoze/Peritial/issues/25).
 [ADR 0056](../adr/0056-legacy-xml-temporal-precision-fail-closed.md).
+
+## #25 — normalizzazione degli scalari senza perdita silenziosa
+
+Il `LegacyXmlPreviewService` usa `.Trim()` per
+restituire riferimenti e date adatti alla preview;
+**non** deve interpretare questo passo come autorizzazione
+a perdere il contenuto sorgente durante l'import.
+Il rilevamento `normalizedSourceScalar` guarda
+i tre scalari diretti permessi e segnala il flag
+`hasUnmappedBusinessData` se `e.Value != e.Value.Trim()`.
+Un `DataIncarico` presente ma vuoto è distinto
+dall'assenza del nodo, anche se entrambi diventano
+`reportedOn=null` nella preview.
+
+La presenza di spazi fra tag (indentazione XML)
+**non** crea warning. Invece lo spazio nei valori
+di riferimento/date provoca `review-required`
+per un unico match e rigetto del commit case-only
+interno prima di invocare lo store. I test Business
+verificano assenza di write, campo vuoto, tab,
+spazi in reference/date e normali `existing`
+date-only canonici. Playwright con Keycloak prova
+il comportamento REST/MCP e la mancata divulgazione
+dell'UUID. Non cambia V011/V012, RLS o il DTO pubblico.
+[ADR 0057](../adr/0057-xml-source-scalar-normalization-review.md).

@@ -493,3 +493,18 @@ stesso comportamento. Gli import XML effettivi
 restano non disponibili fino a schema,
 convenzioni timezone e provenance verificati.
 [ADR 0056](../adr/0056-legacy-xml-temporal-precision-fail-closed.md).
+
+## Riferimenti normalizzati e campi XML vuoti (#25)
+
+Nei tool `preview_legacy_xml` e `plan_legacy_xml`,
+un `NumeroSinistro` con spazi interni ai delimitatori
+XML (ma esterni al valore canonico), una data delimitata
+da spazi o un `DataIncarico` presente ma vuoto producono
+`preview.hasUnmappedBusinessData=true`. Il planner
+non divulga l'ID di un candidato unico con quei
+valori: risponde `review-required`, esattamente
+come REST. L'indentazione **tra** tag non altera
+lo stato di un documento altrimenti minimale.
+La preview può rendere il numero/data normalizzati,
+ma il commit interno dell'import è fail-closed.
+[ADR 0057](../adr/0057-xml-source-scalar-normalization-review.md).
