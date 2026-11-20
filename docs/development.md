@@ -1316,3 +1316,49 @@ Non è un benchmark su volumi rappresentativi:
 occorrono misure/EXPLAIN ANALYZE su dati realistici
 e una finestra manutenzione offline per `CREATE INDEX`
 non-concurrente. [ADR 0050](../adr/0050-v010-document-keyset-indexes.md).
+
+## Tranche #10: XML legacy Classic e Accertatore, preview safe-only
+
+Il parser `LegacyXmlPreviewService` in Business
+riconosce tre root XML prive di namespace (Classic
+`it.autosoftws.ReIncaricoRecord` e
+`it.autosoftws.ReIncaricoBaseRecord`, Accertatore
+`it.autosoftws.IncaricoAccertatoreRecord`).
+Il tracciato originale è consultato in sola lettura
+da `death`; il nuovo parser non usa le vecchie
+entità, DbContext o `ImportManager`.
+
+L'endpoint REST `POST /api/imports/xml/preview`
+riceve byte XML `application/xml`/`text/xml` e
+MCP espone `preview_legacy_xml(xml)`.
+Ambedue condividono il servizio Business,
+che richiede `peritial.write` dal JWT autenticato.
+L'ingresso REST impone il massimo Kestrel e un
+limite aggiuntivo nello stream, anche con richiesta
+chunked; per MCP il limite è misurato in byte UTF-8.
+Il parser usa `XmlReader` con `DtdProcessing.Prohibit`,
+`XmlResolver=null`, limiti ai caratteri e controllo
+della struttura XML. Le date ammesse sono esattamente
+`yyyy-MM-dd` e `yyyy-MM-dd HH:mm:ss`,
+convertite in `DateOnly` senza inferire timezone.
+Numero del Sinistro obbligatorio, massimo 100 caratteri.
+Elementi duplicati, campi obbligatori assenti, dati
+malformati e namespace non previsti vengono rifiutati.
+
+Nessun allegato è letto o decodificato come file,
+né inviato allo storage/AV; il numero restituito
+è soltanto il conteggio (massimo 128) di nodi
+`it.autosoftws.AllegatoRecord` dentro `allegati`.
+La risposta non contiene dati personali, XML,
+storage key o file bytes. Il preflight non modifica
+DB, security_audit, object store o idempotency ledger.
+Non deve essere presentato come import completato
+né come valida attestazione antivirus.
+
+I test `LegacyXmlPreviewTests` provano le tre radici,
+autorizzazione, XML malformed/DOCTYPE/XXE, date,
+duplicati, contenuti personali esclusi e budget.
+`tests/frontend/security.spec.ts` usa token
+Keycloak reali per REST/MCP, 401/403, 400/415,
+assenza di dati personali e verifica che preview non
+crei alcun Sinistro. [ADR 0051](../adr/0051-legacy-xml-safe-preview.md).

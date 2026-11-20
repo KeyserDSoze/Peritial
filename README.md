@@ -125,3 +125,27 @@ versionato con backup e maintenance: `CREATE INDEX`
 non-concurrente può bloccare le scritture. Non sono
 ancora attestati benchmark reali e piani a scala produttiva.
 [ADR 0050](adr/0050-v010-document-keyset-indexes.md).
+
+## Preview XML Classic/Accertatore senza importazione (#10)
+
+La prima tranche del porting degli importatori legacy è
+un preflight **read-only** e senza side effect:
+`POST /api/imports/xml/preview` (`Content-Type: application/xml`
+o `text/xml`) e MCP `preview_legacy_xml(xml)`.
+Serve un JWT firmato con `peritial.write`, anche per MCP.
+
+Sono riconosciute le radici esatte Classic,
+Classic Base e Accertatore; il parser valida
+`NumeroSinistro` e `DataOraSinistro`, riconosce
+`DataIncarico` facoltativa e conta al massimo
+128 allegati senza estrarre o decodificare alcun file.
+Il payload XML è limitato a **1 MiB**, DTD/XXE sono
+rifiutati e la risposta contiene solo
+`format`, `externalReference`, `occurredOn`,
+`reportedOn`, `attachmentCount`.
+Nessun XML completo, persona, allegato, documento o
+chiave di storage viene restituito, scritto o loggato.
+L'anteprima **non crea Sinistri/Perizie**, non esegue
+upsert di anagrafiche e **non equivale a un malware scan**.
+Importazione effettiva, idempotenza e allegati sicuri
+restano nella issue #10. [ADR 0051](adr/0051-legacy-xml-safe-preview.md).

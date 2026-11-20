@@ -422,3 +422,25 @@ invece di un replay silenzioso. Ogni successo è
 tracciato da audit+history atomici con source/target,
 ma non espone il contenuto della tabella di provenienza.
 [ADR 0045](../adr/0045-perizia-sinistro-v006-aba-revision-provenance.md).
+
+## Tool preview legacy XML (#10)
+
+`preview_legacy_xml(xml: string)` usa
+`LegacyXmlPreviewService`, lo stesso servizio di
+`POST /api/imports/xml/preview`. Richiede JWT firmato
+con `peritial.write`, indipendentemente dall'accesso
+MCP generico. I byte UTF-8 non possono superare 1 MiB.
+Riconosce Classic, Classic Base e Accertatore,
+rifiutando XML malformato, namespace non previsti,
+DTD/XXE, duplicati, riferimenti/date mancanti e
+date non canoniche.
+
+Il tool **non importa** e non tocca DB, S3 o audit.
+La risposta è solo `format`, `externalReference`,
+`occurredOn`, `reportedOn` e `attachmentCount`:
+non sono restituiti allegati, nomi, altri dati personali,
+chiavi di storage o file bytes. La preview **non esegue**
+un controllo antivirus e non abilita l'importazione
+effettiva. Per fare ingestion servono separati workflow
+tenant-scoped, idempotenza, audit atomico e scanner.
+[ADR 0051](../adr/0051-legacy-xml-safe-preview.md).
