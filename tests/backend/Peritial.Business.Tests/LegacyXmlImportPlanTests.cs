@@ -156,7 +156,6 @@ public sealed class LegacyXmlImportPlanTests
     }
 
     [Fact]
-    public async Task Unauthorized_and_invalid_xml_stop_before_database_access()    [Fact]
     public async Task Unauthorized_and_invalid_xml_stop_before_database_access()
     {
         var noScope = new Actor(false);

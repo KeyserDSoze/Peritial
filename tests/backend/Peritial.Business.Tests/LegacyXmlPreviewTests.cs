@@ -124,7 +124,6 @@ public sealed class LegacyXmlPreviewTests
     }
 
     [Theory]
-    [InlineData("<unknown>    [Theory]
     [InlineData("<unknown><NumeroSinistro>X</NumeroSinistro><DataOraSinistro>2026-11-18</DataOraSinistro></unknown>")]
     [InlineData("<it.autosoftws.ReIncaricoRecord xmlns='urn:other'><NumeroSinistro>X</NumeroSinistro><DataOraSinistro>2026-11-18</DataOraSinistro></it.autosoftws.ReIncaricoRecord>")]
     [InlineData("<it.autosoftws.ReIncaricoRecord><NumeroSinistro>X</NumeroSinistro><DataOraSinistro>2026-11-18</DataOraSinistro>")]

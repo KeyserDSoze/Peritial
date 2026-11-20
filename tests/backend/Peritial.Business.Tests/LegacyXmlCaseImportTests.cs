@@ -97,7 +97,6 @@ public sealed class LegacyXmlCaseImportTests
     }
 
     [Fact]
-    public async Task No_scope_invalid_key_and_unsafe_xml_stop_before_write()    [Fact]
     public async Task No_scope_invalid_key_and_unsafe_xml_stop_before_write()
     {
         var deniedActor = new Actor(false);
