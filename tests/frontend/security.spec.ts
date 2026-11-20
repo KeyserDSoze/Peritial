@@ -391,6 +391,15 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
       preview:{externalReference:ref,hasUnmappedBusinessData:true}
     });
     expect(JSON.stringify(normalized)).not.toContain(id);
+    const normalizedMcp = await request.post(api + "/mcp", {
+      headers:mcpHeaders(writer),
+      data:{jsonrpc:"2.0",id:1397,method:"tools/call",
+        params:{name:"plan_legacy_xml",arguments:{xml:paddedReferenceXml}}}
+    });
+    expect(normalizedMcp.ok(), await normalizedMcp.text()).toBeTruthy();
+    expect(await normalizedMcp.text()).toContain("review-required");
+    expect(await normalizedMcp.text()).not.toContain(id);
+    expect(await normalizedMcp.text()).not.toContain('"isError":true');
 
     // An explicit empty field is NOT identical to missing XML metadata.
     const emptyDateXml = minimalXml.replace(
