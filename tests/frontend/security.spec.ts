@@ -380,6 +380,28 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
     expect(JSON.stringify(metadataPlan)).not.toContain("PRIVATE-ROUTING-COMMENT");
     expect(JSON.stringify(metadataPlan)).not.toContain(id);
 
+    // V003 and the XML parser normalize scalar whitespace for display,
+    // but a source reference that needed trimming is not a verified match.
+    const paddedReferenceXml = minimalXml.replace(
+      `<NumeroSinistro>${ref}</NumeroSinistro>`,
+      `<NumeroSinistro> ${ref} </NumeroSinistro>`);
+    const normalized = await plan(paddedReferenceXml);
+    expect(normalized).toMatchObject({
+      status:"review-required", existingSinistroId:null,
+      preview:{externalReference:ref,hasUnmappedBusinessData:true}
+    });
+    expect(JSON.stringify(normalized)).not.toContain(id);
+
+    // An explicit empty field is NOT identical to missing XML metadata.
+    const emptyDateXml = minimalXml.replace(
+      "<DataIncarico>2026-11-18</DataIncarico>", "<DataIncarico/>");
+    const emptyReport = await plan(emptyDateXml);
+    expect(emptyReport).toMatchObject({
+      status:"review-required", existingSinistroId:null,
+      preview:{reportedOn:null,hasUnmappedBusinessData:true}
+    });
+    expect(JSON.stringify(emptyReport)).not.toContain(id);
+
     const conflict = await plan(xml.replace("2026-11-17", "2026-11-16"));
     expect(conflict.status).toBe("conflict");
     expect(conflict.existingSinistroId).toBeNull();
