@@ -146,6 +146,14 @@ jobs:
             psql -X -U peritial -d peritial -v ON_ERROR_STOP=1 \
             --single-transaction -f /dev/stdin \
             < scripts/db/migrations/V012__imported_sinistri_global_reference_guard.sql
+      - name: Seed isolated V012 imported-reference fixture for signed REST/MCP E2E
+        run: |
+          # Test-only fixture: it is NOT a migration, not used in deployments,
+          # never inserted into real tenant data or the versioned DDL journal.
+          docker compose -f docker/compose.yml exec -T postgres \
+            psql -X -U peritial -d peritial -v ON_ERROR_STOP=1 \
+            --single-transaction -f /dev/stdin \
+            < tests/frontend/fixtures/v012_imported_reference.sql
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: "22.23.4"
