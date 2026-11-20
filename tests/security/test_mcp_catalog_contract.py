@@ -149,6 +149,36 @@ class McpCatalogContractTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "parameter"):
             validate_catalog(manifest, changed)
 
+    def test_default_literal_is_explicit_and_distinguishes_null_from_missing(self):
+        manifest = self._manifest()
+        page = next(item for item in manifest["tools"]
+                    if item["name"] == "page_sinistri")
+        self.assertEqual("50", page["parameters"]["limit"]["defaultLiteral"])
+        self.assertEqual("null", page["parameters"]["cursor"]["defaultLiteral"])
+        update = next(item for item in manifest["tools"]
+                      if item["name"] == "update_sinistro")
+        self.assertIsNone(update["parameters"]["expectedVersion"]["defaultLiteral"])
+
+    def test_changing_optional_default_without_changing_required_is_blocked(self):
+        manifest = self._manifest()
+        changed = copy.deepcopy(manifest)
+        page = next(item for item in changed["tools"]
+                    if item["name"] == "page_sinistri")
+        page["parameters"]["limit"]["defaultLiteral"] = "100"
+        with self.assertRaisesRegex(ValueError, "parameter"):
+            validate_catalog(changed, self.source)
+
+        # Changing the C# numeric default must trigger the same gate, even
+        # though all parameter names/types/required flags remain identical.
+        changed_source = self.source.replace(
+            "string? cursor = null, int limit = 50, CancellationToken ct = default",
+            "string? cursor = null, int limit = 100, CancellationToken ct = default",
+            1,
+        )
+        self.assertNotEqual(changed_source, self.source)
+        with self.assertRaisesRegex(ValueError, "parameter"):
+            validate_catalog(manifest, changed_source)
+
     @staticmethod
     def _manifest():
         return json.loads(CATALOG.read_text(encoding="utf-8"))
