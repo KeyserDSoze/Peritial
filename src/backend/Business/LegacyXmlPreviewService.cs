@@ -61,8 +61,11 @@ public sealed class LegacyXmlPreviewService(ITenantContext context)
                 MaxCharactersFromEntities = 0,
                 CheckCharacters = true,
                 ConformanceLevel = ConformanceLevel.Document,
-                IgnoreComments = true,
-                IgnoreProcessingInstructions = true
+                // Preserve syntactically valid comments/PIs for classification:
+                // ignoring them would silently discard legacy source metadata.
+                // Their contents are never returned in a preview response.
+                IgnoreComments = false,
+                IgnoreProcessingInstructions = false
             });
             document = XDocument.Load(reader, LoadOptions.None);
         }
@@ -96,18 +99,30 @@ public sealed class LegacyXmlPreviewService(ITenantContext context)
         };
         var unmapped = root.DescendantsAndSelf().Any(e => e.HasAttributes) ||
             root.Elements().Any(e => !allowed.Contains(e.Name) || e.HasElements) ||
-            root.Nodes().OfType<XText>().Any(t => !string.IsNullOrWhiteSpace(t.Value));
-        if (caseOnly && unmapped)
-            throw new ArgumentException(
-                "Case-only XML import rejects other fields and attachments.", nameof(xml));
+            root.Nodes().OfType<XText>().Any(t => !string.IsNullOrWhiteSpace(t.Value)) ||
+            document.DescendantNodes().Any(n => n is XComment or XProcessingInstruction);
 
         var number = ReadDirectScalar(root, "NumeroSinistro", required: true)!;
         if (number.Length > 100)
             throw new ArgumentException("Legacy claim reference is too long.", nameof(xml));
 
-        var occurred = ParseDate(ReadDirectScalar(root, "DataOraSinistro", required: true)!);
+        var occurredValue = ReadDirectScalar(root, "DataOraSinistro", required: true)!;
+        var occurred = ParseDate(occurredValue);
         var reportedValue = ReadDirectScalar(root, "DataIncarico", required: false);
         var reported = reportedValue is null ? (DateOnly?)null : ParseDate(reportedValue);
+
+        // The legacy TableAccident stores DateTime, but the current Sinistro
+        // stores DateOnly. Accept timestamps for read-only preview while
+        // classifying their lost time precision as unmapped; the internal
+        // case-only writer must reject even a midnight timestamp.
+        // Both accepted formats are exact: yyyy-MM-dd (10 characters) and
+        // yyyy-MM-dd HH:mm:ss (19 characters).
+        unmapped |= occurredValue.Length != 10 ||
+            (reportedValue is not null && reportedValue.Length != 10);
+        if (caseOnly && unmapped)
+            throw new ArgumentException(
+                "Case-only XML import cannot discard timestamp precision or other fields.",
+                nameof(xml));
 
         var attachments = root.Elements().Where(e => e.Name == "allegati").ToArray();
         if (attachments.Length > 1 ||
