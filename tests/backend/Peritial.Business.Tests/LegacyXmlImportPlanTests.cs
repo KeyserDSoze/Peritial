@@ -83,6 +83,53 @@ public sealed class LegacyXmlImportPlanTests
     }
 
     [Fact]
+    public async Task Rich_legacy_identity_is_never_claimed_to_match_on_number_and_date_alone()
+    {
+        var actor = new Actor(true);
+        var lookup = new SpyLookup();
+        var id = Guid.NewGuid();
+        lookup.Add(actor.TenantId, "SAME-REF", id,
+            new DateOnly(2026, 11, 17), new DateOnly(2026, 11, 18));
+        var svc = new LegacyXmlImportPlanService(actor,
+            new LegacyXmlPreviewService(actor), lookup);
+
+        // Actual Classic/Accertatore imports can carry a company, policy,
+        // contractor and files; V003 has none of these identity fields.
+        // An exact reference and matching date CANNOT establish identity.
+        var rich = Encoding.UTF8.GetBytes(
+            "<it.autosoftws.IncaricoAccertatoreRecord>" +
+            "<NumeroSinistro>SAME-REF</NumeroSinistro>" +
+            "<DataOraSinistro>2026-11-17</DataOraSinistro>" +
+            "<DataIncarico>2026-11-18</DataIncarico>" +
+            "<Compagnia><NomeCompagnia>SECRET-INSURER</NomeCompagnia></Compagnia>" +
+            "<Polizza><Numero>SECRET-POLICY</Numero></Polizza>" +
+            "<Contraente><Nome>SECRET-PERSON</Nome></Contraente>" +
+            "</it.autosoftws.IncaricoAccertatoreRecord>");
+        var plan = await svc.PlanAsync(rich);
+        Assert.True(plan.Preview.HasUnmappedBusinessData);
+        Assert.Equal("review-required", plan.Status);
+        Assert.Null(plan.ExistingSinistroId);
+        var serialized = System.Text.Json.JsonSerializer.Serialize(plan);
+        Assert.DoesNotContain(id.ToString(), serialized);
+        Assert.DoesNotContain("SECRET", serialized);
+        Assert.Equal(1, lookup.Calls);
+
+        // Minimal XML still has the previous reference/date-only advisory
+        // behavior, but it is NOT a license to import rich data.
+        var simple = await svc.PlanAsync(Sample);
+        Assert.False(simple.Preview.HasUnmappedBusinessData);
+        Assert.Equal("existing", simple.Status);
+        Assert.Equal(id, simple.ExistingSinistroId);
+
+        lookup.Clear();
+        // No candidate remains "new", still with a conspicuous warning flag.
+        var noMatch = await svc.PlanAsync(rich);
+        Assert.Equal("new", noMatch.Status);
+        Assert.True(noMatch.Preview.HasUnmappedBusinessData);
+        Assert.Null(noMatch.ExistingSinistroId);
+    }
+
+    [Fact]
     public async Task Unauthorized_and_invalid_xml_stop_before_database_access()
     {
         var noScope = new Actor(false);

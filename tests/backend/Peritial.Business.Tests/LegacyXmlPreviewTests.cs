@@ -60,6 +60,32 @@ public sealed class LegacyXmlPreviewTests
         Assert.DoesNotContain("SECRET", JsonSerializer.Serialize(result));
     }
 
+    [Fact]
+    public void Preview_exposes_only_boolean_unmapped_data_signal_never_business_values()
+    {
+        const string minimal =
+            "<it.autosoftws.ReIncaricoRecord>" +
+            "<NumeroSinistro>SIN-001</NumeroSinistro>" +
+            "<DataOraSinistro>2026-11-19</DataOraSinistro>" +
+            "</it.autosoftws.ReIncaricoRecord>";
+        Assert.False(Service.Preview(Encoding.UTF8.GetBytes(minimal))
+            .HasUnmappedBusinessData);
+
+        const string rich =
+            "<it.autosoftws.ReIncaricoRecord custom='PRIVATE-ATTRIBUTE'>" +
+            "<NumeroSinistro>SIN-001</NumeroSinistro>" +
+            "<DataOraSinistro>2026-11-19</DataOraSinistro>" +
+            "<Assicurato><Compagnia><NomeCompagnia>PRIVATE-INSURER</NomeCompagnia>" +
+            "</Compagnia></Assicurato>" +
+            "</it.autosoftws.ReIncaricoRecord>";
+        var preview = Service.Preview(Encoding.UTF8.GetBytes(rich));
+        Assert.True(preview.HasUnmappedBusinessData);
+        var serialized = JsonSerializer.Serialize(preview);
+        Assert.DoesNotContain("PRIVATE-ATTRIBUTE", serialized);
+        Assert.DoesNotContain("PRIVATE-INSURER", serialized);
+        Assert.DoesNotContain("Assicurato", serialized);
+    }
+
     [Theory]
     [InlineData("<unknown><NumeroSinistro>X</NumeroSinistro><DataOraSinistro>2026-11-18</DataOraSinistro></unknown>")]
     [InlineData("<it.autosoftws.ReIncaricoRecord xmlns='urn:other'><NumeroSinistro>X</NumeroSinistro><DataOraSinistro>2026-11-18</DataOraSinistro></it.autosoftws.ReIncaricoRecord>")]
