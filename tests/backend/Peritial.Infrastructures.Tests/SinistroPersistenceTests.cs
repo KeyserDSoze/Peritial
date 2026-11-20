@@ -84,6 +84,41 @@ public sealed class SinistroPersistenceTests
     }
 
     [Fact]
+    public async Task Import_reconciliation_reference_lookup_is_exact_bounded_and_forced_tenant_scoped()
+    {
+        await using var db = await IsolatedDatabases.CreateAsync();
+        var writer = new PgSinistroRepository(db.App);
+        var lookup = new PgLegacyImportReferenceLookup(db.App);
+        var tenantA = TenantId.From(Guid.NewGuid());
+        var tenantB = TenantId.From(Guid.NewGuid());
+        var sameA = Sinistro.Create(tenantA, "XML-REF", new DateOnly(2026, 11, 17));
+        var sameB = Sinistro.Create(tenantA, "XML-REF", new DateOnly(2026, 11, 18));
+        var foreign = Sinistro.Create(tenantB, "XML-REF", new DateOnly(2026, 11, 19));
+        var similar = Sinistro.Create(tenantA, "XML-REF-SUFFIX", new DateOnly(2026, 11, 20));
+        foreach (var s in new[] {sameA, sameB, foreign, similar})
+            await writer.AddAuditedAsync(s, Event(s.TenantId, s.Id, "sinistro.create"));
+
+        var matches = await lookup.FindExactAsync(tenantA, "XML-REF", 2);
+        Assert.Equal(2, matches.Count);
+        Assert.Equal(new HashSet<Guid> { sameA.Id, sameB.Id },
+            matches.Select(x => x.Id).ToHashSet());
+        Assert.Equal(foreign.Id, Assert.Single(
+            await lookup.FindExactAsync(tenantB, "XML-REF", 2)).Id);
+        Assert.Empty(await lookup.FindExactAsync(tenantA, "xml-ref", 2));
+        Assert.Empty(await lookup.FindExactAsync(tenantA, "XML-REF%", 2));
+        Assert.Empty(await lookup.FindExactAsync(tenantA, "UNKNOWN", 2));
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            lookup.FindExactAsync(tenantA, "XML-REF", 3));
+
+        // The pooled application connection must never retain the last
+        // tenant's session-local RLS setting after this read-only query.
+        await using var conn = await db.App.OpenConnectionAsync();
+        await using var noTenant = new NpgsqlCommand(
+            "SELECT count(*) FROM sinistri WHERE external_reference='XML-REF'", conn);
+        Assert.Equal(0L, (long)(await noTenant.ExecuteScalarAsync())!);
+    }
+
+    [Fact]
     public async Task Stale_update_cannot_overwrite_newer_sinistro_or_append_success_audit()
     {
         await using var db = await IsolatedDatabases.CreateAsync();
