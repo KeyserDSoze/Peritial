@@ -323,3 +323,38 @@ del piano, **non** latenze o regressioni a scala reale;
 si devono ancora misurare cardinalità tenant reali,
 dimensione indici, latenza p95/p99, budget I/O e costo
 degli upload in staging. [ADR 0050](../adr/0050-v010-document-keyset-indexes.md).
+
+## V011 — ledger idempotenza import XML interno (#10/#6/#21)
+
+La migrazione forward-only
+`V011__legacy_xml_import_idempotency.sql`
+aggiunge una nuova tabella senza modificare
+righe preesistenti, V001–V010, ruoli o grant
+delle tabelle storiche. Il journal versionato
+arriva a **11 versioni** con SHA-256 e replay
+idempotente.
+
+`legacy_xml_import_keys` ha PK su
+`(tenant_id,subject_digest,key_digest)`,
+SHA-256 per request e una FK differibile
+a `(tenant_id,sinistro_id)`. Non contiene
+XML, PII, chiavi originali né contenuti
+binari. `peritial_app` ha solamente
+SELECT/INSERT con FORCE RLS su tenant;
+`PUBLIC` e il ruolo di recovery non hanno
+accesso. Non è consentita una rimozione
+silenziosa della prova d'idempotenza.
+La FK impedisce la cancellazione di un
+Sinistro importato, richiedendo una futura
+policy approvata di retention/erasure.
+
+Upgrade con migrator DDL e backup/recovery
+verificati, mantenendo i writer fermi:
+`CREATE TABLE` e la FK possono richiedere
+lock temporanei su `sinistri`. La CI
+Compose applica fixture **V003→V011**
+solo sul database demo effimero V001
+non versionato. Il REST/MCP di import
+effettivo NON viene attivato nella V011;
+gli unici endpoint XML restano preview
+e piano read-only. [ADR 0053](../adr/0053-v011-xml-case-only-atomic-idempotency.md).

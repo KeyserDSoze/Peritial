@@ -1403,3 +1403,66 @@ Dati cross-tenant e concorrenti **non sono mai**
 risolti automaticamente; l'importazione finale e
 i gate di unicità/approval restano aperti.
 [ADR 0052](../adr/0052-xml-legacy-reconciliation-dryrun.md).
+
+## V011 — implementazione solo interna del commit XML case-only
+
+La tranche successiva al piano XML [ADR 0052]
+introduce in Business `LegacyXmlCaseImportService`
+e `ILegacyXmlCaseImportStore` e in Infrastructures
+`PgLegacyXmlCaseImportStore`, con un ledger in
+V011. **Non collegare** ancora il commit a una route
+REST, a un tool MCP o alla DI del processo API.
+Non è importazione completa, non deve essere
+annunciata come funzionalità per operatori.
+
+Il parser `PreviewCaseOnly` riusa il decoder XML
+con DTD proibite, 1 MiB massimo e JWT `peritial.write`,
+ma applica in aggiunta una allowlist esatta
+dei soli figli diretti `NumeroSinistro`,
+`DataOraSinistro` e opzionale `DataIncarico`.
+Qualsiasi altro nodo (anagrafiche, compagnie,
+polizze, allegati inclusi) o attributo è rifiutato;
+non decodifica né salva file. La chiave idempotente
+deve contenere 16..128 caratteri ASCII ammessi.
+Il digest SHA-256 ricopre gli esatti byte originali
+XML, non una normalizzazione lossy.
+
+Il repo apre `TenantDbScope` con FORCE RLS,
+acquisisce `pg_advisory_xact_lock` su hash
+tenant+riferimento per coordinare gli **importatori**
+concorrenti, inserisce la prova di idempotenza
+in `legacy_xml_import_keys` con
+`ON CONFLICT DO NOTHING` sulla chiave attore+tenant,
+poi verifica esistenza esatta del riferimento.
+Se assente, crea soltanto un Sinistro
+con data e numero e appende `sinistro.import-xml`
+all'audit nello stesso commit; se già presente,
+fa rollback senza alterare dati. Una richiesta
+ripetuta con chiave/digest identici restituisce
+il Sinistro precedentemente creato; stesso token
+con altri byte -> conflitto. Il ledger non espone
+XML, attore o chiave in chiaro: solo digest
+SHA-256 e UUID di risorsa tenant-scoped.
+
+La FK `DEFERRABLE INITIALLY DEFERRED` verifica
+il Sinistro al COMMIT e rende possibile inserire
+la prova prima della riga senza finestre di
+parziale persistenza. Il ledger è SELECT/INSERT
+soltanto per `peritial_app`, nessun UPDATE/DELETE
+o permesso recovery; RLS `ENABLE` + `FORCE`.
+Il replay non riappende un audit riuscito.
+Test PostgreSQL verificano concorrenza tra importatori,
+cross-tenant, diffuso stesso-key con digest
+differente, permessi e rollback integrale dopo
+un audit fallito.
+
+**Limite fondamentale:** gli altri writer
+`create_sinistro` REST/MCP non acquisiscono
+ancora la stessa serratura per riferimento.
+In assenza di un vincolo di unicità ben
+definito per compagnia/anno, l'importazione
+non può essere resa disponibile da API.
+Serve disegnare un enforcement valido per
+tutti i writer e completare la mappatura
+anagrafiche e documenti con antivirus.
+[ADR 0053](../adr/0053-v011-xml-case-only-atomic-idempotency.md).

@@ -174,3 +174,32 @@ audit di mutazione o dati assicurativi; `new` non
 l'unicità del riferimento e un futuro import
 richiederà riserva/idempotenza/approvazione governate
 in transazione. [ADR 0052](adr/0052-xml-legacy-reconciliation-dryrun.md).
+
+## V011 — nucleo interno d'import XML idempotente e atomico (#10/#6/#21)
+
+`LegacyXmlCaseImportService` e `PgLegacyXmlCaseImportStore`
+sono ora disponibili **solo nel codice backend**: non sono
+registrati in DI e non esiste alcuna API REST/MCP di commit.
+La [V011](scripts/db/migrations/V011__legacy_xml_import_idempotency.sql)
+aggiunge il ledger tenant-RLS `legacy_xml_import_keys`,
+con checksum immutabili di attore/chiave/richiesta e FK
+differibile alla riga Sinistro. Un singolo commit PostgreSQL
+inserisce ledger + Sinistro + audit `sinistro.import-xml`;
+un replay con la stessa chiave e identici byte XML restituisce
+lo stesso ID senza creare record/audit aggiuntivi.
+Una chiave riutilizzata con XML differente o un riferimento
+già esistente causano conflitto e rollback.
+
+Questa tranche accetta **solo XML minimale** con
+`NumeroSinistro`, `DataOraSinistro` ed eventualmente
+`DataIncarico`; rifiuta **qualsiasi altro campo** (inclusi
+persone, polizze e allegati) per evitare import parziali
+silenziosi. È un'infrastruttura **non attivata in produzione**:
+`POST /api/sinistri` non condivide ancora il lock del
+commit XML; va introdotto un gate di concorrenza valido
+per tutti i writer, oltre a idempotenza più completa,
+consensi e trattamento antivirus degli allegati, prima
+di abilitare un endpoint d'import. I Sinistri importati
+internamente hanno una FK ledger che impedisce hard
+delete senza una nuova policy esplicita.
+[ADR 0053](adr/0053-v011-xml-case-only-atomic-idempotency.md).
