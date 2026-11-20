@@ -310,7 +310,11 @@ public sealed class SinistroPersistenceTests
     public async Task V012_import_and_regular_case_create_from_independent_pools_serialize_without_duplicate()
     {
         await using var db = await IsolatedDatabases.CreateAsync();
-        await using var otherPool = NpgsqlDataSource.Create(db.App.ConnectionString);
+        // NpgsqlDataSource.ConnectionString intentionally omits passwords; use
+        // the fixture's scoped app-role test credential for the second pool.
+        await using var otherPool = NpgsqlDataSource.Create(
+            new NpgsqlConnectionStringBuilder(db.App.ConnectionString)
+            { Password = "local-only-app" }.ConnectionString);
         var tenant = TenantId.From(Guid.NewGuid());
         var reference = "RACE-" + Guid.NewGuid().ToString("N");
         var preview = new LegacyXmlPreviewDto("classic", reference,
