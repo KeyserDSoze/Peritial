@@ -182,6 +182,8 @@ builder.Services.AddSingleton(sp => new PgUploadReconciler(
 builder.Services.AddHostedService<UploadRecoveryWorker>();
 builder.Services.AddScoped<FileIngestionService>();
 builder.Services.AddScoped<LegacyXmlPreviewService>();
+builder.Services.AddScoped<ILegacyImportReferenceLookup, PgLegacyImportReferenceLookup>();
+builder.Services.AddScoped<LegacyXmlImportPlanService>();
 if (string.Equals(builder.Configuration["Storage:Provider"], "Azure", StringComparison.OrdinalIgnoreCase))
     builder.Services.AddSingleton<IObjectStore, AzureBlobObjectStore>();
 else
@@ -243,7 +245,8 @@ app.Use(async (context, next) =>
             return Task.CompletedTask;
         });
     }
-    if (context.Request.Path.Equals("/api/imports/xml/preview", StringComparison.OrdinalIgnoreCase))
+    if (context.Request.Path.Equals("/api/imports/xml/preview", StringComparison.OrdinalIgnoreCase) ||
+        context.Request.Path.Equals("/api/imports/xml/plan", StringComparison.OrdinalIgnoreCase))
     {
         var xmlBody = context.Features.Get<IHttpMaxRequestBodySizeFeature>();
         if (xmlBody is { IsReadOnly: false })
@@ -302,6 +305,30 @@ api.MapPost("/imports/xml/preview", async (
         await body.WriteAsync(chunk.AsMemory(0, bytesRead), ct);
     }
     return Results.Ok(preview.Preview(body.ToArray()));
+}).RequireAuthorization("peritial.write");
+
+// Reconciliation plan is a dry-run: no case creation/updates, no imports,
+// no uploads, no success audit. Never guess an ID on ambiguous references.
+api.MapPost("/imports/xml/plan", async (
+    HttpRequest request, LegacyXmlImportPlanService planner, CancellationToken ct) =>
+{
+    var mediaType = request.ContentType?.Split(';', 2)[0].Trim();
+    if (!string.Equals(mediaType, "application/xml", StringComparison.OrdinalIgnoreCase) &&
+        !string.Equals(mediaType, "text/xml", StringComparison.OrdinalIgnoreCase))
+        return Results.StatusCode(StatusCodes.Status415UnsupportedMediaType);
+    if (request.ContentLength is > LegacyXmlPreviewService.MaxXmlBytes)
+        return Results.StatusCode(StatusCodes.Status413PayloadTooLarge);
+
+    using var body = new MemoryStream();
+    var chunk = new byte[16 * 1024];
+    int bytesRead;
+    while ((bytesRead = await request.Body.ReadAsync(chunk, ct)) > 0)
+    {
+        if (body.Length + bytesRead > LegacyXmlPreviewService.MaxXmlBytes)
+            return Results.StatusCode(StatusCodes.Status413PayloadTooLarge);
+        await body.WriteAsync(chunk.AsMemory(0, bytesRead), ct);
+    }
+    return Results.Ok(await planner.PlanAsync(body.ToArray(), ct));
 }).RequireAuthorization("peritial.write");
 
 api.MapGet("/perizie", (PeriziaService service, CancellationToken ct) => service.ListAsync(ct))

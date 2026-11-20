@@ -10,7 +10,7 @@ namespace Peritial.Applications;
 public sealed class McpTools(
     PeriziaService perizie, FileIngestionService ingestion, DocumentCatalogService documents,
     SinistroService sinistri, PeriziaSinistroLinkService periziaSinistroLinks,
-    LegacyXmlPreviewService xmlPreview)
+    LegacyXmlPreviewService xmlPreview, LegacyXmlImportPlanService xmlPlan)
 {
     [McpServerTool(Name = "list_perizie"), Description("Lists perizie visible to the authenticated tenant (peritial.read).")]
     public Task<IReadOnlyList<PeriziaDto>> ListPerizie(CancellationToken ct = default) => perizie.ListAsync(ct);
@@ -130,6 +130,11 @@ public sealed class McpTools(
     [McpServerTool(Name = "preview_legacy_xml"), Description("Validates and previews XML Classic / Classic Base / Accertatore without persisting, importing or decoding attachments. Requires signed peritial.write, max 1 MiB; returns only format, case reference, dates and attachment count.")]
     public LegacyXmlPreviewDto PreviewLegacyXml(string xml) =>
         xmlPreview.PreviewUtf8(xml);
+
+    [McpServerTool(Name = "plan_legacy_xml"), Description("Read-only Classic/Accertatore import reconciliation: compares exact reference and dates within the signed tenant. Returns new/existing/conflict/ambiguous without writes. Requires peritial.write; max 1 MiB UTF-8. Not authorization to import.")]
+    public Task<LegacyXmlImportPlanDto> PlanLegacyXml(
+        string xml, CancellationToken ct = default) =>
+        xmlPlan.PlanUtf8Async(xml, ct);
 
     [McpServerTool(Name = "ingest_file"), Description("Uploads a PDF, XML, JPEG, PNG or DOCX document (base64, max 4 MiB, peritial.write).")]
     public Task<DocumentDto> IngestFile(

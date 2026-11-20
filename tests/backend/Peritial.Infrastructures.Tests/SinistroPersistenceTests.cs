@@ -100,8 +100,8 @@ public sealed class SinistroPersistenceTests
 
         var matches = await lookup.FindExactAsync(tenantA, "XML-REF", 2);
         Assert.Equal(2, matches.Count);
-        Assert.Equal(new HashSet<Guid> { sameA.Id, sameB.Id },
-            matches.Select(x => x.Id).ToHashSet());
+        Assert.True(new HashSet<Guid> { sameA.Id, sameB.Id }
+            .SetEquals(matches.Select(x => x.Id)));
         Assert.Equal(foreign.Id, Assert.Single(
             await lookup.FindExactAsync(tenantB, "XML-REF", 2)).Id);
         Assert.Empty(await lookup.FindExactAsync(tenantA, "xml-ref", 2));

@@ -283,6 +283,101 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
       .some(item => item.externalReference === ref)).toBe(false);
   });
 
+  test("legacy XML reconciliation never picks an ambiguous duplicate or mutates a case", async ({request}) => {
+    const writer = await tokenFor(request, "peritial-test-write");
+    const reader = await tokenFor(request, "peritial-test-readonly");
+    const ref = "XML-PLAN-" + Date.now() + "-" + Math.floor(Math.random() * 100000);
+    const xml = `<it.autosoftws.IncaricoAccertatoreRecord>
+      <NumeroSinistro>${ref}</NumeroSinistro>
+      <DataOraSinistro>2026-11-17</DataOraSinistro>
+      <DataIncarico>2026-11-18</DataIncarico>
+      <Contraente><Nome>PRIVATE-INSURED</Nome></Contraente>
+    </it.autosoftws.IncaricoAccertatoreRecord>`;
+    const endpoint = api + "/api/imports/xml/plan";
+    const headers = {Authorization: "Bearer " + writer, "Content-Type": "application/xml"};
+    type Plan = {status:string; existingSinistroId:string|null;
+      preview:{format:string; externalReference:string; attachmentCount:number}};
+    async function plan(payload = xml) {
+      const response = await request.post(endpoint, {headers, data: payload});
+      expect(response.status(), await response.text()).toBe(200);
+      expect(response.headers()["cache-control"]).toContain("no-store");
+      expect(await response.text()).not.toContain("PRIVATE-INSURED");
+      expect(await response.text()).not.toContain("tenantId");
+      return await response.json() as Plan;
+    }
+    const first = await plan();
+    expect(first.status).toBe("new");
+    expect(first.existingSinistroId).toBeNull();
+    expect(first.preview.externalReference).toBe(ref);
+    const created = await request.post(api + "/api/sinistri", {
+      headers: {Authorization: "Bearer " + writer},
+      data: {externalReference:ref, occurredOn:"2026-11-17", reportedOn:"2026-11-18"}
+    });
+    expect(created.status(), await created.text()).toBe(201);
+    const id = (await created.json() as {id:string}).id;
+    expect(await plan()).toMatchObject({status:"existing", existingSinistroId:id});
+    const conflict = await plan(xml.replace("2026-11-17", "2026-11-16"));
+    expect(conflict.status).toBe("conflict");
+    expect(conflict.existingSinistroId).toBeNull();
+
+    // V003 intentionally does not guarantee unique external references.
+    const duplicate = await request.post(api + "/api/sinistri", {
+      headers: {Authorization: "Bearer " + writer},
+      data: {externalReference:ref, occurredOn:"2026-11-17", reportedOn:"2026-11-18"}
+    });
+    expect(duplicate.status(), await duplicate.text()).toBe(201);
+    const dupId = (await duplicate.json() as {id:string}).id;
+    const ambiguous = await plan();
+    expect(ambiguous.status).toBe("ambiguous");
+    expect(ambiguous.existingSinistroId).toBeNull();
+    expect(JSON.stringify(ambiguous)).not.toContain(id);
+    expect(JSON.stringify(ambiguous)).not.toContain(dupId);
+
+    for (const invalid of ["<unknown/>",
+      "<!DOCTYPE it.autosoftws.ReIncaricoRecord SYSTEM 'file:///etc/passwd'><it.autosoftws.ReIncaricoRecord/>"]) {
+      const response = await request.post(endpoint, {headers, data: invalid});
+      expect(response.status(), await response.text()).toBe(400);
+    }
+    expect((await request.post(endpoint, {
+      headers: {Authorization:"Bearer " + reader, "Content-Type":"application/xml"}, data:xml
+    })).status()).toBe(403);
+    expect((await request.post(endpoint, {
+      headers: {"Content-Type":"application/xml"}, data:xml
+    })).status()).toBe(401);
+    expect((await request.post(endpoint, {
+      headers: {Authorization:"Bearer " + writer, "Content-Type":"application/json"}, data:{xml}
+    })).status()).toBe(415);
+
+    const mcp = await request.post(api + "/mcp", {
+      headers: mcpHeaders(writer), data: {jsonrpc:"2.0", id:1400, method:"tools/call",
+        params: {name:"plan_legacy_xml", arguments:{xml}}}
+    });
+    expect(mcp.ok(), await mcp.text()).toBeTruthy();
+    expect(await mcp.text()).toContain("ambiguous");
+    expect(await mcp.text()).not.toContain("PRIVATE-INSURED");
+    expect(await mcp.text()).not.toContain(id);
+    expect(await mcp.text()).not.toContain('"isError":true');
+
+    const deniedMcp = await request.post(api + "/mcp", {
+      headers: mcpHeaders(reader), data: {jsonrpc:"2.0", id:1401, method:"tools/call",
+        params: {name:"plan_legacy_xml", arguments:{xml}}}
+    });
+    expect(deniedMcp.ok(), await deniedMcp.text()).toBeTruthy();
+    expect(await deniedMcp.text()).toContain('"isError":true');
+
+    // Dry-run must not change persisted versions or add further cases.
+    const existing = await request.get(api + "/api/sinistri/" + id,
+      {headers:{Authorization:"Bearer " + writer}});
+    expect(existing.status(), await existing.text()).toBe(200);
+    expect((await existing.json() as {version:number}).version).toBe(1);
+    const search = await request.get(api + "/api/sinistri/search?" +
+      new URLSearchParams({prefix:ref, limit:"10"}), {
+      headers: {Authorization:"Bearer " + writer}
+    });
+    expect(search.status(), await search.text()).toBe(200);
+    expect((await search.json() as {id:string}[])).toHaveLength(2);
+  });
+
   test("document metadata catalog is scoped, bounded and identical in REST and MCP", async ({request}) => {
     const writer = await tokenFor(request, "peritial-test-write");
     const reader = await tokenFor(request, "peritial-test-readonly");
