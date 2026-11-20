@@ -753,6 +753,97 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
     expect(noScopeMcp.status(), await noScopeMcp.text()).toBe(403);
   });
 
+  test("V012 imported reference is protected across signed REST/MCP writers and tenant isolation", async ({request}) => {
+    // Only the disposable Compose E2E schema has this synthetic imported case.
+    // It is seeded as a genuine ledger-backed Sinistro by the CI fixture.
+    const importedId = "a12b0000-0000-4000-8000-000000000012";
+    const importedReference = "E2E-V012-IMPORTED-GUARD";
+    const writerA = await tokenFor(request, "peritial-test-write");
+    const writerB = await tokenFor(
+      request, "peritial-test-write-tenant-b", "otheruser", "local-only-other-user");
+    const identityA = {Authorization:"Bearer " + writerA};
+    const identityB = {Authorization:"Bearer " + writerB};
+    const base = api + "/api/sinistri";
+
+    const imported = await request.get(base + "/" + importedId, {headers:identityA});
+    expect(imported.status(), await imported.text()).toBe(200);
+    const baseline = await imported.json() as {
+      id:string; externalReference:string; occurredOn:string; version:number
+    };
+    expect(baseline).toMatchObject({
+      id: importedId, externalReference: importedReference, version:1
+    });
+    const createBody = {externalReference:importedReference,
+      occurredOn:"2026-11-20", reportedOn:null};
+
+    // Competing REST clients must not bypass the provenance guard, even if
+    // they have valid write tokens; the failed writes emit no successful audit.
+    const attempts = await Promise.all([1,2].map(() => request.post(base, {
+      headers:identityA, data:createBody
+    })));
+    for (const response of attempts) {
+      expect(response.status(), await response.text()).toBe(409);
+      expect(await response.text()).not.toContain(importedId);
+      expect(await response.text()).not.toContain("tenantId");
+    }
+    const viaMcp = await request.post(api + "/mcp", {
+      headers:mcpHeaders(writerA),
+      data:{jsonrpc:"2.0", id:2411, method:"tools/call",
+        params:{name:"create_sinistro", arguments:createBody}}
+    });
+    expect(viaMcp.ok(), await viaMcp.text()).toBeTruthy();
+    expect(await viaMcp.text()).toContain('"isError":true');
+    expect(await viaMcp.text()).not.toContain(importedId);
+
+    const ordinaryReference = "E2E-GUARD-ORDINARY-" + Date.now() + "-" +
+      Math.floor(Math.random()*100000);
+    const ordinary = await request.post(base, {
+      headers:identityA,
+      data:{externalReference:ordinaryReference, occurredOn:"2026-11-19", reportedOn:null}
+    });
+    expect(ordinary.status(), await ordinary.text()).toBe(201);
+    const ordinaryRecord = await ordinary.json() as {id:string;version:number};
+    expect(ordinaryRecord.version).toBe(1);
+    const retarget = await request.put(base + "/" + ordinaryRecord.id, {
+      headers:identityA, data:{...createBody,expectedVersion:1}
+    });
+    expect(retarget.status(), await retarget.text()).toBe(409);
+
+    const tamperImported = await request.put(base + "/" + importedId, {
+      headers:identityA, data:{
+        ...createBody,occurredOn:"2026-11-18",expectedVersion:baseline.version
+      }
+    });
+    expect(tamperImported.status(), await tamperImported.text()).toBe(409);
+
+    const unchanged = await request.get(base + "/" + ordinaryRecord.id, {headers:identityA});
+    expect(unchanged.status(), await unchanged.text()).toBe(200);
+    expect(await unchanged.json()).toMatchObject({
+      externalReference:ordinaryReference,version:1
+    });
+    const original = await request.get(base + "/" + importedId, {headers:identityA});
+    expect(original.status(), await original.text()).toBe(200);
+    expect(await original.json()).toMatchObject(baseline);
+
+    // Same external reference in another signed tenant is NOT a collision.
+    const foreign = await request.get(base + "/" + importedId, {headers:identityB});
+    expect(foreign.status(), await foreign.text()).toBe(404);
+    const otherTenantCreated = await request.post(base, {
+      headers:identityB,data:createBody
+    });
+    expect(otherTenantCreated.status(), await otherTenantCreated.text()).toBe(201);
+    const otherId = (await otherTenantCreated.json() as {id:string}).id;
+    expect(otherId).not.toBe(importedId);
+
+    const search = await request.get(base + "/search?" +
+      new URLSearchParams({prefix:importedReference,limit:"10"}), {headers:identityA});
+    expect(search.status(), await search.text()).toBe(200);
+    const rows = await search.json() as {id:string; externalReference:string}[];
+    expect(rows.filter(x=>x.externalReference===importedReference)
+      .map(x=>x.id)).toEqual([importedId]);
+    expect(rows.some(x=>x.id===otherId)).toBe(false);
+  });
+
   test("two distinct signed tenant identities cannot read, update or enumerate each other's sinistri through REST or MCP", async ({request}) => {
     test.setTimeout(90_000);
     const writerA = await tokenFor(request, "peritial-test-write");
