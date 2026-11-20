@@ -411,6 +411,41 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
     });
     expect(JSON.stringify(emptyReport)).not.toContain(id);
 
+    // LINQ-to-XML decodes CDATA and character references; the original
+    // source syntax is not represented by the current Sinistro aggregate.
+    // No automatic association on the decoded reference/date alone.
+    const encodedReferenceXml = minimalXml.replace(
+      `<NumeroSinistro>${ref}</NumeroSinistro>`,
+      `<NumeroSinistro>${ref.replace("-", "&#45;")}</NumeroSinistro>`);
+    const encodedPlan = await plan(encodedReferenceXml);
+    expect(encodedPlan).toMatchObject({
+      status:"review-required",existingSinistroId:null,
+      preview:{externalReference:ref,hasUnmappedBusinessData:true}
+    });
+    expect(JSON.stringify(encodedPlan)).not.toContain(id);
+    expect(JSON.stringify(encodedPlan)).not.toContain("&#45;");
+
+    const cdataReferenceXml = minimalXml.replace(
+      `<NumeroSinistro>${ref}</NumeroSinistro>`,
+      `<NumeroSinistro><![CDATA[${ref}]]></NumeroSinistro>`);
+    const cdataPlan = await plan(cdataReferenceXml);
+    expect(cdataPlan).toMatchObject({
+      status:"review-required",existingSinistroId:null,
+      preview:{externalReference:ref,hasUnmappedBusinessData:true}
+    });
+    expect(JSON.stringify(cdataPlan)).not.toContain(id);
+    expect(JSON.stringify(cdataPlan)).not.toContain("CDATA");
+
+    const encodedMcp = await request.post(api + "/mcp", {
+      headers:mcpHeaders(writer),data:{jsonrpc:"2.0",id:1396,method:"tools/call",
+        params:{name:"plan_legacy_xml",arguments:{xml:encodedReferenceXml}}}
+    });
+    expect(encodedMcp.ok(), await encodedMcp.text()).toBeTruthy();
+    expect(await encodedMcp.text()).toContain("review-required");
+    expect(await encodedMcp.text()).not.toContain(id);
+    expect(await encodedMcp.text()).not.toContain("&#45;");
+    expect(await encodedMcp.text()).not.toContain('"isError":true');
+
     const conflict = await plan(xml.replace("2026-11-17", "2026-11-16"));
     expect(conflict.status).toBe("conflict");
     expect(conflict.existingSinistroId).toBeNull();
