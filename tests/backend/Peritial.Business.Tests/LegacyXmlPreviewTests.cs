@@ -101,7 +101,12 @@ public sealed class LegacyXmlPreviewTests
         var parsed = Service.Preview(Encoding.UTF8.GetBytes(xml));
         Assert.Equal(new DateOnly(2026, 11, 19), parsed.OccurredOn);
         Assert.True(parsed.HasUnmappedBusinessData);
-        Assert.DoesNotContain(occurred, JsonSerializer.Serialize(parsed));
+        var serialized = JsonSerializer.Serialize(parsed);
+        // The calendar date itself is an intentional preview field. Only
+        // the original clock component is withheld from the DTO.
+        if (occurred.Length > 10) Assert.DoesNotContain(occurred, serialized);
+        if (reported is { Length: > 10 })
+            Assert.DoesNotContain(reported, serialized);
     }
 
     [Theory]
