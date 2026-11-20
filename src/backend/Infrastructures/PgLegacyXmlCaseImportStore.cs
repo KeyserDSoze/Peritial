@@ -1,4 +1,3 @@
-using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
 using Npgsql;
@@ -10,9 +9,9 @@ namespace Peritial.Infrastructures;
 
 /// <summary>
 /// INTERNAL ONLY: one PG transaction for idempotency ledger, case insert and
-/// successful audit. Reference mutex coordinates concurrent *importers*,
-/// NOT the existing unrestricted REST/MCP create_sinistro writers.
-/// Therefore never expose this seam publicly without the cross-writer gate.
+/// successful audit. V012 shares the SQL reference mutex with *all* Sinistro
+/// INSERT/UPDATE triggers and prevents collisions on imported references.
+/// The import API remains disabled until broader XML data is characterized.
 /// </summary>
 public sealed class PgLegacyXmlCaseImportStore(NpgsqlDataSource dataSource)
     : ILegacyXmlCaseImportStore
@@ -41,17 +40,14 @@ public sealed class PgLegacyXmlCaseImportStore(NpgsqlDataSource dataSource)
 
         byte[] subjectDigest = SHA256.HashData(Encoding.UTF8.GetBytes(subject));
         byte[] keyDigest = SHA256.HashData(Encoding.UTF8.GetBytes(key));
-        // Hash-based mutex may collide and serialize unrelated references;
-        // this is safe. It does not assume reference uniqueness in V003.
-        var lockInput = Encoding.UTF8.GetBytes(
-            tenant.Value.ToString("D") + "\n" + sinistro.ExternalReference);
-        long mutex = BinaryPrimitives.ReadInt64BigEndian(
-            SHA256.HashData(lockInput).AsSpan(0, 8));
-
+        // Use the EXACT database-side lock expression from the V012 trigger.
+        // Separate SHA and hashtextextended mutexes would not coordinate.
+        var lockInput = tenant.Value.ToString("D") + "\n" + sinistro.ExternalReference;
         await using var scope = await TenantDbScope.OpenAsync(dataSource, tenant, ct);
-        await using (var guard = scope.Command("SELECT pg_advisory_xact_lock(@mutex)"))
+        await using (var guard = scope.Command(
+            "SELECT pg_advisory_xact_lock(hashtextextended(@lock_input, 0))"))
         {
-            guard.Parameters.AddWithValue("mutex", mutex);
+            guard.Parameters.AddWithValue("lock_input", lockInput);
             await guard.ExecuteNonQueryAsync(ct);
         }
 
@@ -108,9 +104,8 @@ public sealed class PgLegacyXmlCaseImportStore(NpgsqlDataSource dataSource)
             return new LegacyXmlCaseImportResult(existingId, Replayed: true);
         }
 
-        // The transaction mutex serializes competing *importers* for this
-        // exact case reference. Non-import writer races remain unresolved:
-        // no public import endpoint is wired until all writers share a gate.
+        // The V012 trigger now serializes every Sinistro INSERT/UPDATE on
+        // this exact reference and rejects any non-import collision.
         await using (var existing = scope.Command(
             "SELECT 1 FROM sinistri WHERE tenant_id=@tenant " +
             "AND external_reference=@reference LIMIT 1"))

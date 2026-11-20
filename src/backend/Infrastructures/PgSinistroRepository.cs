@@ -176,7 +176,11 @@ public sealed class PgSinistroRepository(NpgsqlDataSource dataSource) : ISinistr
             "VALUES (@tenant,@id,@reference,@occurred,@reported,@created,@version)"))
         {
             Fill(command, item);
-            await command.ExecuteNonQueryAsync(ct);
+            try { await command.ExecuteNonQueryAsync(ct); }
+            catch (PostgresException ex) when (IsImportedReferenceGuard(ex))
+            {
+                throw new LegacyXmlReferenceConflictException();
+            }
         }
         await PgSecurityAuditTrail.AppendWithinScopeAsync(scope, audit, ct);
         await scope.CommitAsync(ct);
@@ -197,7 +201,13 @@ public sealed class PgSinistroRepository(NpgsqlDataSource dataSource) : ISinistr
             "WHERE tenant_id=@tenant AND id=@id AND version=@version"))
         {
             Fill(command, item);
-            if (await command.ExecuteNonQueryAsync(ct) != 1)
+            int affected;
+            try { affected = await command.ExecuteNonQueryAsync(ct); }
+            catch (PostgresException ex) when (IsImportedReferenceGuard(ex))
+            {
+                throw new LegacyXmlReferenceConflictException();
+            }
+            if (affected != 1)
             {
                 // A foreign ID is deliberately indistinguishable from missing.
                 await using var existing = scope.Command(
@@ -265,6 +275,12 @@ public sealed class PgSinistroRepository(NpgsqlDataSource dataSource) : ISinistr
         await PgSecurityAuditTrail.AppendWithinScopeAsync(scope, audit, ct);
         await scope.CommitAsync(ct);
     }
+
+    // A V012 SQL trigger protects imported refs even against app-role raw SQL.
+    // Keep API conflict semantics stable without leaking an existing case ID.
+    private static bool IsImportedReferenceGuard(PostgresException ex) =>
+        ex.SqlState == PostgresErrorCodes.UniqueViolation &&
+        ex.ConstraintName == "ck_imported_sinistro_reference_guard";
 
     private static void ValidateAudit(Sinistro item, SecurityAuditEvent audit, string action)
     {

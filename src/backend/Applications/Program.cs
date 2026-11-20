@@ -214,6 +214,7 @@ app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
         PeriziaConcurrencyConflictException => StatusCodes.Status409Conflict,
         SinistroConcurrencyConflictException => StatusCodes.Status409Conflict,
         SinistroLinkedPerizieException => StatusCodes.Status409Conflict,
+        LegacyXmlReferenceConflictException => StatusCodes.Status409Conflict,
         UploadLeaseExpiredException => StatusCodes.Status503ServiceUnavailable,
         MalwareScannerUnavailableException => StatusCodes.Status503ServiceUnavailable,
         InvalidDataException => StatusCodes.Status413PayloadTooLarge,
