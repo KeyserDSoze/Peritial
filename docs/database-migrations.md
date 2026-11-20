@@ -358,3 +358,33 @@ non versionato. Il REST/MCP di import
 effettivo NON viene attivato nella V011;
 gli unici endpoint XML restano preview
 e piano read-only. [ADR 0053](../adr/0053-v011-xml-case-only-atomic-idempotency.md).
+
+## V012 — protezione globale delle referenze importate
+
+Nuova migrazione forward-only
+`V012__imported_sinistri_global_reference_guard.sql`
+nel journal con SHA-256 (12 versioni totali).
+Non modifica dati o checksum V001–V011 e non
+introduce un vincolo UNIQUE indiscriminato.
+In un'unica transazione prende
+`LOCK TABLE sinistri IN SHARE ROW EXCLUSIVE MODE`,
+ricerca collisioni preesistenti per prove V011 e
+**rifiuta l'upgrade** in caso di collisione.
+Crea una funzione invoker e trigger row-level
+INSERT/UPDATE; tutti i writer app-role sono
+serializzati per riferimento importato, sotto
+FORCE RLS, senza privilegi aggiuntivi sulle
+tabelle legacy. Non rimuovere la serratura
+o il controllo dati durante il deployment.
+
+Per il migrator .NET non serve cambiare il processo:
+le migrazioni vengono già eseguite come una sola
+transazione DDL. Per la fixture Compose V001
+non versionata, eseguire lo script V012 con
+`psql --single-transaction -f /dev/stdin`
+anziché STDIN autocommit; gli script V003–V011
+restano invariati. Serve una finestra di
+manutenzione con writer fermi e backup verificato.
+Il rollback operativo richiede restore gestito,
+non il `DROP TRIGGER` in un database popolato.
+[ADR 0054](../adr/0054-v012-imported-reference-global-sql-guard.md).

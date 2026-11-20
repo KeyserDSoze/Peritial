@@ -203,3 +203,27 @@ di abilitare un endpoint d'import. I Sinistri importati
 internamente hanno una FK ledger che impedisce hard
 delete senza una nuova policy esplicita.
 [ADR 0053](adr/0053-v011-xml-case-only-atomic-idempotency.md).
+
+## V012 — protezione SQL dei Sinistri importati (#24)
+
+La [V012](scripts/db/migrations/V012__imported_sinistri_global_reference_guard.sql)
+introduce un trigger **BEFORE INSERT/UPDATE** sulla tabella
+`sinistri`: ogni writer PostgreSQL, compresi REST/MCP e
+l'adapter d'import V011, usa lo stesso mutex transazionale
+tenant+riferimento. Un nuovo inserimento o aggiornamento
+che tenti di utilizzare un riferimento già attribuito
+a un Sinistro importato viene rifiutato (HTTP `409` tramite
+repository); il Sinistro importato rimane non modificabile
+finché non esiste un workflow di correzione verificato.
+La FK V011 continua a impedirne la cancellazione.
+
+I **duplicati storici** di riferimenti mai importati
+restano consentiti: non è stata introdotta una
+`UNIQUE(tenant_id,external_reference)` arbitraria.
+L'upgrade effettua un controllo delle collisioni
+preesistenti: se un duplicato confligge con un import
+V011, **fallisce senza riscrivere dati** e richiede
+riconciliazione manuale. Il commit dell'import completo
+rimane **non esposto**; #24 resta aperta per la corretta
+identità composita assicuratore/anno e gli altri gate.
+[ADR 0054](adr/0054-v012-imported-reference-global-sql-guard.md).

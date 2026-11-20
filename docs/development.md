@@ -1466,3 +1466,45 @@ Serve disegnare un enforcement valido per
 tutti i writer e completare la mappatura
 anagrafiche e documenti con antivirus.
 [ADR 0053](../adr/0053-v011-xml-case-only-atomic-idempotency.md).
+
+## V012 — trigger cross-writer sulla provenienza XML
+
+V012 aggiunge `guard_imported_sinistro_reference()`
+come funzione PostgreSQL **SECURITY INVOKER** e trigger
+su ogni `INSERT/UPDATE sinistri`. Il trigger usa
+`pg_advisory_xact_lock(hashtextextended(
+tenant_id::text || chr(10) || external_reference, 0))`;
+l'adapter V011 ha adottato esattamente la stessa
+espressione tramite parametro SQL, non un hash .NET
+calcolato diversamente. Il trigger rifiuta l'uso
+di un riferimento già associato a una prova V011
+e l'aggiornamento dei Sinistri importati; restituisce
+SQLSTATE 23505, constraint logico
+`ck_imported_sinistro_reference_guard`, convertito
+dal repository a conflitto Business e da REST in 409,
+senza divulgare ID cross-tenant. Gli import iniziali
+restano ammessi perché la FK V011 è differibile:
+la prova è inserita prima del Sinistro, verificata
+al commit. App usa SELECT su ledger sotto FORCE RLS.
+
+La V012 **non** impedisce tutti i duplicati V003:
+i casi ordinari non importati conservano la semantica
+legacy, in attesa di caratterizzazione per
+anno/compagnia. Blocca invece l'appropriazione
+di un riferimento **già riservato dall'import**.
+Test con PostgreSQL reale provano due pool distinti,
+tentativo concorrente import vs create, INSERT diretto
+app-role, UPDATE di Sinistro importato e UPDATE di
+altro Sinistro verso riferimento importato, conflitti
+senza audit successo, e duplicati ordinari preservati.
+Test di migrazione prova che i duplicati pre-V012
+su riferimento importato causano rollback.
+
+Nella CI Compose la V012 richiede
+`psql --single-transaction -f /dev/stdin`, perché
+`LOCK TABLE` non è valido in modalità autocommit;
+il migrator .NET usa già una transazione DDL unica.
+In produzione fermare tutti i writer, fare backup e
+preflight dei riferimenti importati prima di V012;
+non correggere mai le collisioni eliminando record
+automaticamente. [ADR 0054](../adr/0054-v012-imported-reference-global-sql-guard.md).

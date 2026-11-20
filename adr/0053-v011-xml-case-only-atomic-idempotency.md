@@ -113,3 +113,14 @@ compagnia/anno, anagrafiche, polizze,
 Perizie, report, allegati ClamAV/WORM,
 retention approvata, staging reale e
 concorrenza globale di tutti i writer.
+
+## Aggiornamento con V012 (ADR 0054)
+
+V012 rende condiviso il lock SQL anche con i normali
+`INSERT/UPDATE` di Sinistri e nega mutazioni sui
+Sinistri importati o la duplicazione del relativo
+riferimento da altri writer. La V011 resta
+interna: non abilita import completo, correzioni
+di origine, anagrafiche o gestione allegati.
+La discussione originale sui lock solo fra importatori
+descrive lo stato **prima** della V012.
