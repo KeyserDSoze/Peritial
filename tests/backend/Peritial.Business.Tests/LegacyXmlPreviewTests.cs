@@ -124,6 +124,38 @@ public sealed class LegacyXmlPreviewTests
     }
 
     [Theory]
+    [InlineData(" <NumeroSinistro> SPACE-REF </NumeroSinistro>", false)]
+    [InlineData("<NumeroSinistro> SPACE-REF </NumeroSinistro>", true)]
+    [InlineData("<NumeroSinistro>SPACE-REF</NumeroSinistro>", false)]
+    public void Preview_flags_trimmed_reference_without_leaking_original_lexical_form(
+        string field, bool expected)
+    {
+        // An ordinary whitespace-only separator before a field is NOT an
+        // identity mutation. Leading/trailing whitespace inside a scalar is.
+        var xml = "<it.autosoftws.ReIncaricoRecord>" +
+            field + "<DataOraSinistro>2026-11-19</DataOraSinistro>" +
+            "</it.autosoftws.ReIncaricoRecord>";
+        var result = Service.Preview(Encoding.UTF8.GetBytes(xml));
+        Assert.Equal("SPACE-REF", result.ExternalReference);
+        Assert.Equal(expected, result.HasUnmappedBusinessData);
+    }
+
+    [Theory]
+    [InlineData("<DataIncarico/>")]
+    [InlineData("<DataIncarico>  </DataIncarico>")]
+    public void Explicitly_empty_report_date_is_not_equivalent_to_missing_source_field(
+        string emptyField)
+    {
+        var xml = "<it.autosoftws.ReIncaricoRecord>" +
+            "<NumeroSinistro>SPACE-REF</NumeroSinistro>" +
+            "<DataOraSinistro>2026-11-19</DataOraSinistro>" +
+            emptyField + "</it.autosoftws.ReIncaricoRecord>";
+        var preview = Service.Preview(Encoding.UTF8.GetBytes(xml));
+        Assert.Null(preview.ReportedOn);
+        Assert.True(preview.HasUnmappedBusinessData);
+    }
+
+    [Theory]
     [InlineData("<unknown><NumeroSinistro>X</NumeroSinistro><DataOraSinistro>2026-11-18</DataOraSinistro></unknown>")]
     [InlineData("<it.autosoftws.ReIncaricoRecord xmlns='urn:other'><NumeroSinistro>X</NumeroSinistro><DataOraSinistro>2026-11-18</DataOraSinistro></it.autosoftws.ReIncaricoRecord>")]
     [InlineData("<it.autosoftws.ReIncaricoRecord><NumeroSinistro>X</NumeroSinistro><DataOraSinistro>2026-11-18</DataOraSinistro>")]

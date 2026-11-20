@@ -96,6 +96,30 @@ public sealed class LegacyXmlCaseImportTests
         Assert.Equal(0, store.Calls);
     }
 
+    [Theory]
+    [InlineData("<NumeroSinistro> IMP-001 </NumeroSinistro>", "<NumeroSinistro>IMP-001</NumeroSinistro>")]
+    [InlineData("<NumeroSinistro>\tIMP-001</NumeroSinistro>", "<NumeroSinistro>IMP-001</NumeroSinistro>")]
+    [InlineData("<DataOraSinistro> 2026-11-19 </DataOraSinistro>", "<DataOraSinistro>2026-11-19</DataOraSinistro>")]
+    [InlineData("<DataIncarico>2026-11-20 </DataIncarico>", "<DataIncarico>2026-11-20</DataIncarico>")]
+    [InlineData("<DataIncarico/>", "<DataIncarico>2026-11-20</DataIncarico>")]
+    public async Task Case_only_commit_rejects_normalized_or_empty_source_fields_before_writing(
+        string changed, string canonical)
+    {
+        var actor = new Actor(true);
+        var store = new Store();
+        var service = new LegacyXmlCaseImportService(
+            actor, new LegacyXmlPreviewService(actor), store);
+        var original = Encoding.UTF8.GetString(Xml());
+        var xml = Encoding.UTF8.GetBytes(original.Replace(canonical, changed,
+            StringComparison.Ordinal));
+        Assert.NotEqual(original, Encoding.UTF8.GetString(xml));
+        var preview = new LegacyXmlPreviewService(actor).Preview(xml);
+        Assert.True(preview.HasUnmappedBusinessData);
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.CommitAsync(xml, "normalization-key-000001"));
+        Assert.Equal(0, store.Calls);
+    }
+
     [Fact]
     public async Task No_scope_invalid_key_and_unsafe_xml_stop_before_write()
     {

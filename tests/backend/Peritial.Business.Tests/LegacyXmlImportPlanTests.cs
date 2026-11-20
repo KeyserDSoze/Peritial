@@ -9,7 +9,7 @@ public sealed class LegacyXmlImportPlanTests
 {
     private static readonly byte[] Sample = Encoding.UTF8.GetBytes(
         "<it.autosoftws.IncaricoAccertatoreRecord>" +
-        "<NumeroSinistro> SAME-REF </NumeroSinistro>" +
+        "<NumeroSinistro>SAME-REF</NumeroSinistro>" +
         "<DataOraSinistro>2026-11-17</DataOraSinistro>" +
         "<DataIncarico>2026-11-18</DataIncarico>" +
         "</it.autosoftws.IncaricoAccertatoreRecord>");
@@ -146,6 +146,29 @@ public sealed class LegacyXmlImportPlanTests
             "<DataOraSinistro>" + occurred + "</DataOraSinistro>" +
             "<DataIncarico>" + reported + "</DataIncarico>" +
             "</it.autosoftws.IncaricoAccertatoreRecord>");
+        var plan = await new LegacyXmlImportPlanService(actor,
+            new LegacyXmlPreviewService(actor), lookup).PlanAsync(xml);
+        Assert.Equal("review-required", plan.Status);
+        Assert.True(plan.Preview.HasUnmappedBusinessData);
+        Assert.Null(plan.ExistingSinistroId);
+        Assert.DoesNotContain(id.ToString(),
+            System.Text.Json.JsonSerializer.Serialize(plan));
+    }
+
+    [Fact]
+    public async Task Whitespace_normalized_reference_must_not_claim_existing_identity()
+    {
+        var actor = new Actor(true);
+        var lookup = new SpyLookup();
+        var id = Guid.NewGuid();
+        lookup.Add(actor.TenantId, "SAME-REF", id,
+            new DateOnly(2026, 11, 17), new DateOnly(2026, 11, 18));
+        var xml = Encoding.UTF8.GetBytes(
+            "<it.autosoftws.ReIncaricoRecord>" +
+            "<NumeroSinistro> SAME-REF </NumeroSinistro>" +
+            "<DataOraSinistro>2026-11-17</DataOraSinistro>" +
+            "<DataIncarico>2026-11-18</DataIncarico>" +
+            "</it.autosoftws.ReIncaricoRecord>");
         var plan = await new LegacyXmlImportPlanService(actor,
             new LegacyXmlPreviewService(actor), lookup).PlanAsync(xml);
         Assert.Equal("review-required", plan.Status);
