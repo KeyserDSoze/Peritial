@@ -74,3 +74,16 @@ scope negato e limiti; il job full stack prova
 stati REST/MCP con token OAuth reali. Le issue
 #10, #7 e #12 restano aperte per i propri scope
 non ancora completati.
+
+## Aggiornamento ADR 0055 — riferimenti ricchi non sono identità
+
+Il confronto originale numero/data resta valido
+per XML **minimale**. Quando la preview contiene
+campi/attributi aggiuntivi non mappati,
+l'unico match con date compatibili produce ora
+`review-required` e `existingSinistroId=null`.
+Lo stato `new` può comunque includere il flag
+`hasUnmappedBusinessData=true`, senza autorizzare
+un futuro commit. Conflict/ambiguous continuano
+a prevalere e non espongono ID. Vedi
+[ADR 0055](0055-legacy-xml-identity-review-gate.md).

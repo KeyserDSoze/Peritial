@@ -437,7 +437,8 @@ date non canoniche.
 
 Il tool **non importa** e non tocca DB, S3 o audit.
 La risposta è solo `format`, `externalReference`,
-`occurredOn`, `reportedOn` e `attachmentCount`:
+`occurredOn`, `reportedOn`, `attachmentCount`
+e `hasUnmappedBusinessData` (booleano):
 non sono restituiti allegati, nomi, altri dati personali,
 chiavi di storage o file bytes. La preview **non esegue**
 un controllo antivirus e non abilita l'importazione
@@ -456,10 +457,19 @@ ID/date nel **tenant dell'attore** per riferimento
 **esattamente uguale** e `LIMIT 2`.
 Restituisce `{preview,status,existingSinistroId}`.
 Gli stati possibili sono `new`, `existing`,
-`conflict`, `ambiguous`. Solo `existing`
+`review-required`, `conflict`, `ambiguous`.
+`review-required` indica che esiste un solo
+riferimento a date compatibili, ma l'XML contiene
+dati non ancora mappabili alla identità storica
+compagnia/polizza/anno; **nessun UUID è restituito**.
+La presenza di altri campi viene comunicata solo
+dal booleano `preview.hasUnmappedBusinessData`,
+mai tramite nomi o dati assicurativi.
+Solo `existing` per XML minimale
 include l'UUID del Sinistro univoco compatibile;
 nessun ID per gli altri stati. Non è un token,
 una riserva, né un comando d'importazione:
 non crea, aggiorna, collega o elimina record
 e non tocca documenti, storage, audit di successo.
-[ADR 0052](../adr/0052-xml-legacy-reconciliation-dryrun.md).
+[ADR 0052](../adr/0052-xml-legacy-reconciliation-dryrun.md),
+[ADR 0055](../adr/0055-legacy-xml-identity-review-gate.md).

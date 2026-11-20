@@ -1382,9 +1382,19 @@ inclusi stream chunked, OAuth `peritial.write`;
 MCP `plan_legacy_xml(xml)` usa lo stesso servizio.
 `LegacyXmlImportPlanDto` include `Preview`, `Status`
 e `ExistingSinistroId`; l'ultimo viene popolato
-solo se un unico match ha data evento uguale e data
-denuncia uguale *se disponibile nell'XML*.
-Stati: `new`, `existing`, `conflict`, `ambiguous`.
+solo se un unico match ha data evento uguale, data
+denuncia uguale *se disponibile nell'XML* e la preview
+**non ha elementi ulteriori** da riconciliare.
+Stati: `new`, `existing`, `review-required`,
+`conflict`, `ambiguous`. Il booleano
+`preview.hasUnmappedBusinessData` segnala
+la presenza (non i valori) di campi oltre
+`NumeroSinistro`, `DataOraSinistro`,
+`DataIncarico` o di attributi non supportati.
+Con un solo match a date compatibili e dati aggiuntivi
+`review-required` non restituisce alcun UUID:
+i campi compagnia/polizza/anno non esistono
+ancora come identità verificata in V003.
 In caso di conflitto/duplicato non viene esposto
 alcun ID. In tutti i casi i dati restano immutati
 e non vengono generate attestazioni di import
@@ -1397,12 +1407,13 @@ duplicati e assenza match stranieri. PostgreSQL
 reale: due tenant con riferimento uguale, due
 Sinistri nello stesso tenant, suffissi, wildcard
 letterali, pool senza contesto residuo. Playwright
-Keycloak: `new/existing/conflict/ambiguous`, 401,
+Keycloak: `new/existing/review-required/conflict/ambiguous`, 401,
 403, 400, 415, parità REST/MCP e assenza di update.
 Dati cross-tenant e concorrenti **non sono mai**
 risolti automaticamente; l'importazione finale e
 i gate di unicità/approval restano aperti.
-[ADR 0052](../adr/0052-xml-legacy-reconciliation-dryrun.md).
+[ADR 0052](../adr/0052-xml-legacy-reconciliation-dryrun.md)
+e [ADR 0055](../adr/0055-legacy-xml-identity-review-gate.md).
 
 ## V011 — implementazione solo interna del commit XML case-only
 

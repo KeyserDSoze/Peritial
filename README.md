@@ -162,12 +162,23 @@ un duplicato arbitrario. Il risultato è
 
 - `new`: nessun riferimento presente;
 - `existing`: un solo Sinistro e data evento compatibile
-  (data denuncia verificata solo se inclusa nell'XML);
+  (data denuncia verificata solo se inclusa nell'XML),
+  **solo se l'XML contiene esclusivamente i tre campi base**;
+- `review-required`: un singolo riferimento con date compatibili,
+  ma l'XML contiene dati di compagnia, polizza, persona,
+  allegati, attributi o altri elementi non ancora riconciliati.
+  Nessun UUID candidato è restituito;
 - `conflict`: un solo riferimento ma date incompatibili;
 - `ambiguous`: più di un Sinistro con lo stesso riferimento.
 
 Solo `existing` può riportare `existingSinistroId`;
-gli altri esiti non identificano alcun record. Il piano
+gli altri esiti non identificano alcun record. La `preview`
+contiene anche il solo booleano `hasUnmappedBusinessData`:
+non rivela compagnia, polizza, nomi, payload o altri dati.
+Il match `existing` è **un suggerimento su numero e date**,
+non una prova d'identità o una licenza d'import.
+[ADR 0055](adr/0055-legacy-xml-identity-review-gate.md).
+Il piano
 **non inserisce né modifica Sinistri/Perizie**, allegati,
 audit di mutazione o dati assicurativi; `new` non
 è un permesso di creazione. Lo schema non ha ancora

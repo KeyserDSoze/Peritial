@@ -78,3 +78,14 @@ idempotenza e transazione PostgreSQL+audit,
 report di import, allegati con ClamAV e recovery
 object store. Non chiamare questa API `import`
 né esporre un endpoint di commit prima dei gate.
+
+## Aggiornamento ADR 0055 — segnale booleano di campi non mappati
+
+La preview espone ora anche `hasUnmappedBusinessData`.
+Questo flag comunica soltanto la **presenza** di
+altri elementi/attributi non inclusi nei tre
+scalari base (numero, data evento, data incarico):
+non divulga compagnie, persone, polizze, allegati
+o contenuti XML. Il parser sicuro e il limite di
+1 MiB restano invariati. Il gate di identità
+nel planner è descritto in [ADR 0055](0055-legacy-xml-identity-review-gate.md).
