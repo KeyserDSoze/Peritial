@@ -87,6 +87,39 @@ public sealed class LegacyXmlPreviewTests
     }
 
     [Theory]
+    [InlineData("2026-11-19 18:44:20", null)]
+    [InlineData("2026-11-19 00:00:00", null)]
+    [InlineData("2026-11-19", "2026-11-20 09:30:15")]
+    public void Timestamp_values_are_marked_as_not_fully_representable_by_DateOnly(
+        string occurred, string? reported)
+    {
+        var xml = "<it.autosoftws.ReIncaricoRecord>" +
+            "<NumeroSinistro>TIME-REF</NumeroSinistro>" +
+            "<DataOraSinistro>" + occurred + "</DataOraSinistro>" +
+            (reported is null ? "" : "<DataIncarico>" + reported + "</DataIncarico>") +
+            "</it.autosoftws.ReIncaricoRecord>";
+        var parsed = Service.Preview(Encoding.UTF8.GetBytes(xml));
+        Assert.Equal(new DateOnly(2026, 11, 19), parsed.OccurredOn);
+        Assert.True(parsed.HasUnmappedBusinessData);
+        Assert.DoesNotContain(occurred, JsonSerializer.Serialize(parsed));
+    }
+
+    [Theory]
+    [InlineData("<!--PRIVATE-COMMENT-->")]
+    [InlineData("<?customer name='PRIVATE-PROCESSING'?>")]
+    public void Comments_and_processing_instructions_flag_hidden_metadata(string metadata)
+    {
+        var xml = "<it.autosoftws.ReIncaricoRecord>" +
+            "<NumeroSinistro>TIME-REF</NumeroSinistro>" +
+            "<DataOraSinistro>2026-11-19</DataOraSinistro>" +
+            metadata + "</it.autosoftws.ReIncaricoRecord>";
+        var parsed = Service.Preview(Encoding.UTF8.GetBytes(xml));
+        Assert.True(parsed.HasUnmappedBusinessData);
+        Assert.DoesNotContain("PRIVATE", JsonSerializer.Serialize(parsed));
+    }
+
+    [Theory]
+    [InlineData("<unknown>    [Theory]
     [InlineData("<unknown><NumeroSinistro>X</NumeroSinistro><DataOraSinistro>2026-11-18</DataOraSinistro></unknown>")]
     [InlineData("<it.autosoftws.ReIncaricoRecord xmlns='urn:other'><NumeroSinistro>X</NumeroSinistro><DataOraSinistro>2026-11-18</DataOraSinistro></it.autosoftws.ReIncaricoRecord>")]
     [InlineData("<it.autosoftws.ReIncaricoRecord><NumeroSinistro>X</NumeroSinistro><DataOraSinistro>2026-11-18</DataOraSinistro>")]

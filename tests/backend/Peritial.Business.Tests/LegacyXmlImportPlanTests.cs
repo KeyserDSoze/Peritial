@@ -129,7 +129,34 @@ public sealed class LegacyXmlImportPlanTests
         Assert.Null(noMatch.ExistingSinistroId);
     }
 
+    [Theory]
+    [InlineData("2026-11-17 12:40:15", "2026-11-18")]
+    [InlineData("2026-11-17", "2026-11-18 00:00:00")]
+    public async Task Timestamp_precision_requires_review_even_for_a_single_matching_case(
+        string occurred, string reported)
+    {
+        var actor = new Actor(true);
+        var lookup = new SpyLookup();
+        var id = Guid.NewGuid();
+        lookup.Add(actor.TenantId, "SAME-REF", id,
+            new DateOnly(2026, 11, 17), new DateOnly(2026, 11, 18));
+        var xml = Encoding.UTF8.GetBytes(
+            "<it.autosoftws.IncaricoAccertatoreRecord>" +
+            "<NumeroSinistro>SAME-REF</NumeroSinistro>" +
+            "<DataOraSinistro>" + occurred + "</DataOraSinistro>" +
+            "<DataIncarico>" + reported + "</DataIncarico>" +
+            "</it.autosoftws.IncaricoAccertatoreRecord>");
+        var plan = await new LegacyXmlImportPlanService(actor,
+            new LegacyXmlPreviewService(actor), lookup).PlanAsync(xml);
+        Assert.Equal("review-required", plan.Status);
+        Assert.True(plan.Preview.HasUnmappedBusinessData);
+        Assert.Null(plan.ExistingSinistroId);
+        Assert.DoesNotContain(id.ToString(),
+            System.Text.Json.JsonSerializer.Serialize(plan));
+    }
+
     [Fact]
+    public async Task Unauthorized_and_invalid_xml_stop_before_database_access()    [Fact]
     public async Task Unauthorized_and_invalid_xml_stop_before_database_access()
     {
         var noScope = new Actor(false);

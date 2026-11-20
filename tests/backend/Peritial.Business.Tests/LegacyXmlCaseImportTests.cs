@@ -58,7 +58,46 @@ public sealed class LegacyXmlCaseImportTests
         Assert.Equal(0, store.Calls);
     }
 
+    [Theory]
+    [InlineData("2026-11-19 18:44:20", "2026-11-20")]
+    [InlineData("2026-11-19 00:00:00", "2026-11-20")]
+    [InlineData("2026-11-19", "2026-11-20 09:30:15")]
+    public async Task Case_only_commit_never_truncates_a_legacy_timestamp(
+        string occurred, string reported)
+    {
+        var actor = new Actor(true);
+        var store = new Store();
+        var svc = new LegacyXmlCaseImportService(
+            actor, new LegacyXmlPreviewService(actor), store);
+        var xml = Encoding.UTF8.GetBytes(
+            "<it.autosoftws.ReIncaricoRecord>" +
+            "<NumeroSinistro>IMP-001</NumeroSinistro>" +
+            "<DataOraSinistro>" + occurred + "</DataOraSinistro>" +
+            "<DataIncarico>" + reported + "</DataIncarico>" +
+            "</it.autosoftws.ReIncaricoRecord>");
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            svc.CommitAsync(xml, "time-truncation-key-0001"));
+        Assert.Equal(0, store.Calls);
+    }
+
+    [Theory]
+    [InlineData("<!--PRIVATE-CLAIM-METADATA-->")]
+    [InlineData("<?routing private='claim'?>")]
+    [InlineData("<NumeroSinistro>EXTRA</NumeroSinistro><!--SECRET-->")]
+    public async Task Case_only_commit_rejects_comments_and_pi_instead_of_dropping_them(
+        string metadata)
+    {
+        var actor = new Actor(true);
+        var store = new Store();
+        var svc = new LegacyXmlCaseImportService(
+            actor, new LegacyXmlPreviewService(actor), store);
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            svc.CommitAsync(Xml(extra: metadata), "hidden-metadata-key-0001"));
+        Assert.Equal(0, store.Calls);
+    }
+
     [Fact]
+    public async Task No_scope_invalid_key_and_unsafe_xml_stop_before_write()    [Fact]
     public async Task No_scope_invalid_key_and_unsafe_xml_stop_before_write()
     {
         var deniedActor = new Actor(false);
