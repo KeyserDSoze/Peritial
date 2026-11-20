@@ -29,7 +29,8 @@ public static partial class SchemaMigrator
             (7, "V007__perizie_link_audit_guards.sql"),
             (8, "V008__perizie_revoke_app_delete.sql"),
             (9, "V009__documents_revoke_app_mutations.sql"),
-            (10, "V010__documents_catalog_keyset_indexes.sql")
+            (10, "V010__documents_catalog_keyset_indexes.sql"),
+            (11, "V011__legacy_xml_import_idempotency.sql")
         };
         var scripts = new List<Script>();
         foreach (var (version, file) in definitions)

@@ -11,13 +11,13 @@ public sealed class SchemaMigrationTests
     {
         await WithIsolatedSchemaAsync(async db =>
         {
-            Assert.Equal(10, await SchemaMigrator.ApplyAsync(db));
+            Assert.Equal(11, await SchemaMigrator.ApplyAsync(db));
             Assert.Equal(0, await SchemaMigrator.ApplyAsync(db));
 
             await using var conn = await db.OpenConnectionAsync();
             await using (var query = new NpgsqlCommand(
-                "SELECT count(*) FROM schema_migrations WHERE version IN (1, 2, 3, 4, 5, 6, 7, 8, 9, 10)", conn))
-                Assert.Equal(10L, (long)(await query.ExecuteScalarAsync())!);
+                "SELECT count(*) FROM schema_migrations WHERE version IN (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)", conn))
+                Assert.Equal(11L, (long)(await query.ExecuteScalarAsync())!);
             await using (var index = new NpgsqlCommand(
                 "SELECT to_regclass('ix_security_audit_tenant_action_time') IS NOT NULL", conn))
                 Assert.True((bool)(await index.ExecuteScalarAsync())!);
@@ -87,7 +87,7 @@ public sealed class SchemaMigrationTests
             }
             await tx.CommitAsync();
             await conn.CloseAsync();
-            Assert.Equal(5,await SchemaMigrator.ApplyAsync(db));
+            Assert.Equal(6,await SchemaMigrator.ApplyAsync(db));
             Assert.Equal(0,await SchemaMigrator.ApplyAsync(db));
             await using var verify = await db.OpenConnectionAsync();
             await using(var record = new NpgsqlCommand(
@@ -105,8 +105,8 @@ public sealed class SchemaMigrationTests
                 "SELECT count(*) FROM perizia_sinistro_history",verify);
             Assert.Equal(0L,(long)(await history.ExecuteScalarAsync())!);
             await using var journalCount = new NpgsqlCommand(
-                "SELECT count(*) FROM schema_migrations WHERE version BETWEEN 1 AND 10",verify);
-            Assert.Equal(10L,(long)(await journalCount.ExecuteScalarAsync())!);
+                "SELECT count(*) FROM schema_migrations WHERE version BETWEEN 1 AND 11",verify);
+            Assert.Equal(11L,(long)(await journalCount.ExecuteScalarAsync())!);
         });
     }
 
@@ -115,7 +115,7 @@ public sealed class SchemaMigrationTests
     {
         await WithIsolatedSchemaAsync(async db =>
         {
-            Assert.Equal(10, await SchemaMigrator.ApplyAsync(db));
+            Assert.Equal(11, await SchemaMigrator.ApplyAsync(db));
             Assert.Equal(0, await SchemaMigrator.ApplyAsync(db));
 
             await using var conn = await db.OpenConnectionAsync();
@@ -223,11 +223,11 @@ public sealed class SchemaMigrationTests
         {
             var results = await Task.WhenAll(
                 SchemaMigrator.ApplyAsync(db), SchemaMigrator.ApplyAsync(db));
-            Assert.Equal(10, results.Sum());
+            Assert.Equal(11, results.Sum());
             await using var conn = await db.OpenConnectionAsync();
             await using var cmd = new NpgsqlCommand(
                 "SELECT count(*) FROM schema_migrations", conn);
-            Assert.Equal(10L, (long)(await cmd.ExecuteScalarAsync())!);
+            Assert.Equal(11L, (long)(await cmd.ExecuteScalarAsync())!);
         });
     }
 

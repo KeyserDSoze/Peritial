@@ -21,5 +21,6 @@
     <EmbeddedResource Include="../../../scripts/db/migrations/V008__perizie_revoke_app_delete.sql" />
     <EmbeddedResource Include="../../../scripts/db/migrations/V009__documents_revoke_app_mutations.sql" />
     <EmbeddedResource Include="../../../scripts/db/migrations/V010__documents_catalog_keyset_indexes.sql" />
+    <EmbeddedResource Include="../../../scripts/db/migrations/V011__legacy_xml_import_idempotency.sql" />
   </ItemGroup>
 </Project>
