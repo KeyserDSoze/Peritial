@@ -187,6 +187,102 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
     expect(replay.status(), await replay.text()).toBe(400);
   });
 
+  test("legacy XML Classic/Accertatore preview is bounded, auth-gated, and never imports", async ({request}) => {
+    const writer = await tokenFor(request, "peritial-test-write");
+    const reader = await tokenFor(request, "peritial-test-readonly");
+    const noScope = await tokenFor(request, "peritial-test-no-scope");
+    const ref = "PREVIEW-" + Date.now() + "-" + Math.floor(Math.random() * 100000);
+    const xml = `<?xml version="1.0" encoding="utf-8"?>
+      <it.autosoftws.ReIncaricoBaseRecord>
+        <NumeroSinistro>${ref}</NumeroSinistro>
+        <DataOraSinistro>2026-11-19 08:44:11</DataOraSinistro>
+        <DataIncarico>2026-11-20</DataIncarico>
+        <Contraente><Nome>PRIVATE-PERSON</Nome></Contraente>
+        <allegati><it.autosoftws.AllegatoRecord>
+          <Nome>PRIVATE-FILE.pdf</Nome><Allegato>UERG</Allegato>
+        </it.autosoftws.AllegatoRecord></allegati>
+      </it.autosoftws.ReIncaricoBaseRecord>`;
+    const endpoint = api + "/api/imports/xml/preview";
+    const headers = {Authorization: "Bearer " + writer, "Content-Type": "application/xml"};
+    const valid = await request.post(endpoint, {headers, data: xml});
+    expect(valid.status(), await valid.text()).toBe(200);
+    expect(valid.headers()["cache-control"]).toContain("no-store");
+    const data = await valid.json() as {
+      format: string; externalReference: string; occurredOn: string;
+      reportedOn: string | null; attachmentCount: number;
+    };
+    expect(data).toEqual({
+      format: "classic", externalReference: ref, occurredOn: "2026-11-19",
+      reportedOn: "2026-11-20", attachmentCount: 1
+    });
+    for (const secret of ["PRIVATE-PERSON", "PRIVATE-FILE", "UERG", "tenantId", "storageKey"])
+      expect(await valid.text()).not.toContain(secret);
+
+    const accertatoreXml = `<it.autosoftws.IncaricoAccertatoreRecord>
+      <NumeroSinistro>${ref}</NumeroSinistro>
+      <DataOraSinistro>2026-11-18</DataOraSinistro>
+    </it.autosoftws.IncaricoAccertatoreRecord>`;
+    const accertatore = await request.post(endpoint, {headers, data: accertatoreXml});
+    expect(accertatore.status(), await accertatore.text()).toBe(200);
+    expect((await accertatore.json() as {format: string}).format).toBe("accertatore");
+
+    const denied = await request.post(endpoint, {
+      headers: {Authorization: "Bearer " + reader, "Content-Type": "application/xml"}, data: xml
+    });
+    expect(denied.status(), await denied.text()).toBe(403);
+    expect((await request.post(endpoint, {
+      headers: {Authorization: "Bearer " + noScope, "Content-Type": "application/xml"}, data: xml
+    })).status()).toBe(403);
+    expect((await request.post(endpoint, {
+      headers: {"Content-Type": "application/xml"}, data: xml
+    })).status()).toBe(401);
+
+    for (const invalid of [
+      "<unknown/>",
+      "<!DOCTYPE it.autosoftws.ReIncaricoBaseRecord SYSTEM 'file:///etc/passwd'>" + xml.substring(xml.indexOf("<it.autosoftws.ReIncaricoBaseRecord>")),
+      "<it.autosoftws.ReIncaricoRecord><NumeroSinistro>missing date</NumeroSinistro></it.autosoftws.ReIncaricoRecord>"
+    ]) {
+      const result = await request.post(endpoint, {headers, data: invalid});
+      expect(result.status(), await result.text()).toBe(400);
+    }
+    const wrongMedia = await request.post(endpoint, {
+      headers: {Authorization: "Bearer " + writer, "Content-Type": "application/json"},
+      data: JSON.stringify({xml})
+    });
+    expect(wrongMedia.status(), await wrongMedia.text()).toBe(415);
+
+    const mcp = await request.post(api + "/mcp", {
+      headers: mcpHeaders(writer),
+      data: {jsonrpc: "2.0", id: 1300, method: "tools/call", params: {
+        name: "preview_legacy_xml", arguments: {xml}
+      }}
+    });
+    expect(mcp.ok(), await mcp.text()).toBeTruthy();
+    expect(await mcp.text()).toContain(ref);
+    expect(await mcp.text()).toContain("classic");
+    expect(await mcp.text()).not.toContain("PRIVATE-PERSON");
+    expect(await mcp.text()).not.toContain("UERG");
+    expect(await mcp.text()).not.toContain('"isError":true');
+
+    const deniedMcp = await request.post(api + "/mcp", {
+      headers: mcpHeaders(reader),
+      data: {jsonrpc: "2.0", id: 1301, method: "tools/call", params: {
+        name: "preview_legacy_xml", arguments: {xml}
+      }}
+    });
+    expect(deniedMcp.ok(), await deniedMcp.text()).toBeTruthy();
+    expect(await deniedMcp.text()).toContain('"isError":true');
+
+    // Preview must never create a Sinistro or mutate tenant state.
+    const search = await request.get(api + "/api/sinistri/search?" +
+      new URLSearchParams({prefix: ref, limit: "10"}), {
+      headers: {Authorization: "Bearer " + writer}
+    });
+    expect(search.status(), await search.text()).toBe(200);
+    expect((await search.json() as {externalReference:string}[])
+      .some(item => item.externalReference === ref)).toBe(false);
+  });
+
   test("document metadata catalog is scoped, bounded and identical in REST and MCP", async ({request}) => {
     const writer = await tokenFor(request, "peritial-test-write");
     const reader = await tokenFor(request, "peritial-test-readonly");

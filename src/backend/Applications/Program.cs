@@ -181,6 +181,7 @@ builder.Services.AddSingleton(sp => new PgUploadReconciler(
     NpgsqlDataSource.Create(recoveryConnectionString), sp.GetRequiredService<IObjectStore>()));
 builder.Services.AddHostedService<UploadRecoveryWorker>();
 builder.Services.AddScoped<FileIngestionService>();
+builder.Services.AddScoped<LegacyXmlPreviewService>();
 if (string.Equals(builder.Configuration["Storage:Provider"], "Azure", StringComparison.OrdinalIgnoreCase))
     builder.Services.AddSingleton<IObjectStore, AzureBlobObjectStore>();
 else
@@ -242,6 +243,12 @@ app.Use(async (context, next) =>
             return Task.CompletedTask;
         });
     }
+    if (context.Request.Path.Equals("/api/imports/xml/preview", StringComparison.OrdinalIgnoreCase))
+    {
+        var xmlBody = context.Features.Get<IHttpMaxRequestBodySizeFeature>();
+        if (xmlBody is { IsReadOnly: false })
+            xmlBody.MaxRequestBodySize = LegacyXmlPreviewService.MaxXmlBytes;
+    }
     if (context.Request.Path.Equals("/api/files", StringComparison.OrdinalIgnoreCase))
     {
         var feature = context.Features.Get<IHttpMaxRequestBodySizeFeature>();
@@ -271,6 +278,32 @@ app.MapGet("/.well-known/oauth-protected-resource", () =>
     Results.Json(metadata.AsApiMetadata(authIssuer)));
 
 var api = app.MapGroup("/api").RequireAuthorization();
+// Import preview is strictly non-mutating: no Sinistri/Perizie/metadata or
+// embedded attachments are ever written, decoded, returned or logged.
+// The ingress budget is enforced both by Kestrel and by this streaming
+// read, including for chunked requests without Content-Length.
+api.MapPost("/imports/xml/preview", async (
+    HttpRequest request, LegacyXmlPreviewService preview, CancellationToken ct) =>
+{
+    var mediaType = request.ContentType?.Split(';', 2)[0].Trim();
+    if (!string.Equals(mediaType, "application/xml", StringComparison.OrdinalIgnoreCase) &&
+        !string.Equals(mediaType, "text/xml", StringComparison.OrdinalIgnoreCase))
+        return Results.StatusCode(StatusCodes.Status415UnsupportedMediaType);
+    if (request.ContentLength is > LegacyXmlPreviewService.MaxXmlBytes)
+        return Results.StatusCode(StatusCodes.Status413PayloadTooLarge);
+
+    using var body = new MemoryStream();
+    var chunk = new byte[16 * 1024];
+    int bytesRead;
+    while ((bytesRead = await request.Body.ReadAsync(chunk, ct)) > 0)
+    {
+        if (body.Length + bytesRead > LegacyXmlPreviewService.MaxXmlBytes)
+            return Results.StatusCode(StatusCodes.Status413PayloadTooLarge);
+        await body.WriteAsync(chunk.AsMemory(0, bytesRead), ct);
+    }
+    return Results.Ok(preview.Preview(body.ToArray()));
+}).RequireAuthorization("peritial.write");
+
 api.MapGet("/perizie", (PeriziaService service, CancellationToken ct) => service.ListAsync(ct))
     .RequireAuthorization("peritial.read");
 api.MapGet("/perizie/{id:guid}", (Guid id, PeriziaService service, CancellationToken ct) =>
