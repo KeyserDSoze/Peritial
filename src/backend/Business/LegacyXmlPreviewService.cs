@@ -31,7 +31,18 @@ public sealed class LegacyXmlPreviewService(ITenantContext context)
         return Preview(Encoding.UTF8.GetBytes(xml));
     }
 
-    public LegacyXmlPreviewDto Preview(ReadOnlyMemory<byte> xml)
+    public LegacyXmlPreviewDto Preview(ReadOnlyMemory<byte> xml) =>
+        Parse(xml, caseOnly: false);
+
+    /// <summary>
+    /// Fail-closed, intentionally narrow input accepted by the *internal*
+    /// case-only import commit. Rich XML is previewable but cannot be partly
+    /// imported: people, policies or attachments would otherwise be lost.
+    /// </summary>
+    public LegacyXmlPreviewDto PreviewCaseOnly(ReadOnlyMemory<byte> xml) =>
+        Parse(xml, caseOnly: true);
+
+    private LegacyXmlPreviewDto Parse(ReadOnlyMemory<byte> xml, bool caseOnly)
     {
         RequireWrite();
         if (xml.IsEmpty || xml.Length > MaxXmlBytes)
@@ -73,6 +84,21 @@ public sealed class LegacyXmlPreviewService(ITenantContext context)
             AccertatoreRoot => "accertatore",
             _ => throw new ArgumentException("Unsupported legacy XML root.", nameof(xml))
         };
+
+        if (caseOnly)
+        {
+            // No silent discarding of insurers, persons, claims, nested
+            // attachments or any other unsupported legacy business fields.
+            var allowed = new HashSet<XName>
+            {
+                "NumeroSinistro", "DataOraSinistro", "DataIncarico"
+            };
+            if (root.DescendantsAndSelf().Any(e => e.HasAttributes) ||
+                root.Elements().Any(e => !allowed.Contains(e.Name) || e.HasElements) ||
+                root.Nodes().OfType<XText>().Any(t => !string.IsNullOrWhiteSpace(t.Value)))
+                throw new ArgumentException(
+                    "Case-only XML import rejects other fields and attachments.", nameof(xml));
+        }
 
         var number = ReadDirectScalar(root, "NumeroSinistro", required: true)!;
         if (number.Length > 100)
