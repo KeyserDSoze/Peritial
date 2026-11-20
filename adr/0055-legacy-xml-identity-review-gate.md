@@ -107,3 +107,17 @@ Completare mappatura e consentire correzioni
 controllate dei dati importati, cancellazione
 con retention, allegati ClamAV e approvazione
 prima di rendere pubblico il commit V011.
+
+## Integrazione ADR 0056 — precisione temporale e metadati XML
+
+Il flag `HasUnmappedBusinessData` comprende
+adesso anche la presenza di timestamp (formato
+`yyyy-MM-dd HH:mm:ss`, persino mezzanotte),
+commenti e processing instructions XML. In tutti
+questi casi `existing` sarebbe una scorciatoia
+non verificabile verso un'identità del Sinistro:
+il planner usa `review-required` senza UUID
+quando c'è un solo candidato compatibile.
+Il commit interno V011 rifiuta tali XML.
+Dettaglio e test: [ADR 0056]
+(0056-legacy-xml-temporal-precision-fail-closed.md).

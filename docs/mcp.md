@@ -473,3 +473,23 @@ non crea, aggiorna, collega o elimina record
 e non tocca documenti, storage, audit di successo.
 [ADR 0052](../adr/0052-xml-legacy-reconciliation-dryrun.md),
 [ADR 0055](../adr/0055-legacy-xml-identity-review-gate.md).
+
+## Precisione temporale e metadati XML nascosti (#25)
+
+`preview_legacy_xml(xml)` continua a leggere
+date con formato `yyyy-MM-dd HH:mm:ss` ma
+espone **solo** `occurredOn/reportedOn`
+come giorni e `hasUnmappedBusinessData=true`
+per indicare l'informazione oraria non persistibile
+nel modello attuale. Lo stesso flag è `true`
+per commenti XML o processing instructions presenti
+nel documento, il cui contenuto resta privato.
+`plan_legacy_xml(xml)` restituisce
+`review-required` senza UUID con un unico
+riferimento e date compatibili, anziché
+`existing`; non trasforma una data tronca
+in prova d'identità. L'API REST espone lo
+stesso comportamento. Gli import XML effettivi
+restano non disponibili fino a schema,
+convenzioni timezone e provenance verificati.
+[ADR 0056](../adr/0056-legacy-xml-temporal-precision-fail-closed.md).

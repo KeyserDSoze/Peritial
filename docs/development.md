@@ -1519,3 +1519,44 @@ In produzione fermare tutti i writer, fare backup e
 preflight dei riferimenti importati prima di V012;
 non correggere mai le collisioni eliminando record
 automaticamente. [ADR 0054](../adr/0054-v012-imported-reference-global-sql-guard.md).
+
+## #25 — gate fail-closed di precisione temporale legacy
+
+Il parser XML accetta per il **solo preflight**
+`yyyy-MM-dd` oppure `yyyy-MM-dd HH:mm:ss`
+per `DataOraSinistro` e l'opzionale
+`DataIncarico`; la preview restituisce il
+giorno già previsto nel contratto, ma segnala
+`hasUnmappedBusinessData=true` per ogni
+timestamp con ora, anche a mezzanotte.
+Questo impedisce di trattare una coincidenza
+su `DateOnly` come prova d'identità:
+con un solo match stesso riferimento/date,
+il planner restituisce `review-required`
+e `existingSinistroId=null`; resta una
+operazione read-only sotto JWT `peritial.write`.
+
+La funzione `PreviewCaseOnly` usata dal servizio
+d'import *interno* V011 rigetta tutte le date
+con ora **prima** del repository PostgreSQL,
+in modo da non perdere la precisione temporale.
+Il parser mantiene ora commenti e processing
+instructions nell'albero XML (non più ignorati
+dal reader), per poter segnalare la loro mera
+presenza nel booleano e rifiutarli con
+`PreviewCaseOnly` senza guardarne o restituirne
+il contenuto. XML declaration e documenti
+date-only minimali restano validi.
+DTD/XXE continuano a essere proibite;
+payload max 1 MiB; niente attachment decode.
+
+Test TDD verificano timestamp della data
+evento e incarico, inclusa ora `00:00:00`,
+XML comment/PI, stop prima del repository,
+e stato di revisione senza UUID/PII in
+Business e Playwright Keycloak REST/MCP.
+Non introdurre timezone o UNIQUE inventate.
+La conservazione integrale delle DateTime è
+lavoro ancora aperto nella [#25]
+(https://github.com/KeyserDSoze/Peritial/issues/25).
+[ADR 0056](../adr/0056-legacy-xml-temporal-precision-fail-closed.md).

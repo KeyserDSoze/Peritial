@@ -238,3 +238,27 @@ riconciliazione manuale. Il commit dell'import completo
 rimane **non esposto**; #24 resta aperta per la corretta
 identità composita assicuratore/anno e gli altri gate.
 [ADR 0054](adr/0054-v012-imported-reference-global-sql-guard.md).
+
+## Protezione della precisione temporale XML (#25)
+
+Il legacy memorizzava date/ore dei Sinistri come
+`DateTime`; il modello attuale conserva soltanto
+`DateOnly`. La preview XML accetta i formati canonici
+`yyyy-MM-dd` e `yyyy-MM-dd HH:mm:ss`, ma per i valori
+con componente oraria (anche `00:00:00`) imposta
+`hasUnmappedBusinessData=true`. Con un unico candidato
+compatibile, il piano restituisce `review-required`
+**senza UUID**, anziché presentare il match come
+identità verificata.
+
+Il commit XML interno V011, non collegato ad alcun
+endpoint, **rifiuta** date/ore non conservabili,
+commenti XML e processing instructions per non
+scartare silenziosamente metadati o precisione:
+nessun Sinistro, ledger o audit di successo viene
+scritto. I contenuti di commenti e PI non sono
+restituiti dalla preview. L'import completo
+richiederà uno schema e una politica timezone
+validati su sorgenti reali; non assumere UTC o
+l'anno solare. [ADR 0056](adr/0056-legacy-xml-temporal-precision-fail-closed.md),
+[issue #25](https://github.com/KeyserDSoze/Peritial/issues/25).
