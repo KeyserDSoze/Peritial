@@ -99,3 +99,24 @@ Le future versioni per client
 esterni e la matrice completa
 di compatibilità restano
 aperte nella issue #12.
+
+## Integrazione v1.1: default C# espliciti
+
+La prima versione di questo ADR aveva
+tre proprietà per parametro e 12 test
+statici. Il medesimo snapshot v1.1
+include ora una quarta proprietà
+`defaultLiteral`: `null` JSON
+quando il parametro è obbligatorio
+e una stringa quando il codice C#
+dichiara un default, compreso `"null"`.
+Il parser mantiene il valore C# **letterale**,
+così una variazione `limit=50` →
+`limit=100` non può cambiare il
+comportamento silenziosamente.
+Due regressioni avversariali
+portano la suite statica a 14 test.
+Non vi sono variazioni di firma
+pubblica o runtime; la keyword
+JSON Schema `default` rimane fuori
+dalle garanzie del test live SDK.

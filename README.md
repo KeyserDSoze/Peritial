@@ -332,3 +332,12 @@ versiona **il manifesto di verifica**, non
 aggiunge una route pubblica di negotiation
 né modifica l'SDK. [ADR 0060]
 (adr/0060-mcp-v1-1-full-parameter-contract.md).
+
+Il contratto MCP v1.1 protegge anche i **default C# letterali**
+(`defaultLiteral`): `null` significa nessun default
+su parametro obbligatorio; `"null"` significa
+default opzionale esplicito; `"50"` e `"10"`
+conservano i limiti dichiarati. Una variazione
+del valore `limit` non passa il gate neppure
+se il parametro rimane opzionale. [ADR 0060]
+(adr/0060-mcp-v1-1-full-parameter-contract.md).

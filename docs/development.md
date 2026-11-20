@@ -1672,3 +1672,18 @@ primario JSON. Non dichiara testata la
 negoziazione a runtime o la forma dettagliata
 di unione/nullabilità del JSON Schema.
 [ADR 0060](../adr/0060-mcp-v1-1-full-parameter-contract.md).
+
+### Default MCP fissati alla sorgente
+
+Il gate statico del catalogo v1.1 verifica
+`defaultLiteral` per ogni parametro,
+distinguendo nessun default da un valore
+opzionale `null`. Le regressioni ora sono
+**14 test**: oltre ai tipi e nomi, provano
+una mutazione del manifesto e la modifica
+diretta `limit=50` → `limit=100` nella
+firma C# senza alterare `required`. La
+verifica live `tools/list` continua a
+controllare tipo JSON primario e
+opzionalità, non l'interpretazione
+dei default applicati nei servizi.

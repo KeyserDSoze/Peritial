@@ -617,3 +617,19 @@ nel Business, RLS, CAS e audit restano
 invariati. Non è ancora una negotiation
 multi-versione per client remoti.
 [ADR 0060](../adr/0060-mcp-v1-1-full-parameter-contract.md).
+
+### Default letterali del contratto v1.1
+
+Ogni voce in `parameters` include anche
+`defaultLiteral`: `null` (JSON) per gli
+argomenti obbligatori che non hanno default,
+oppure una stringa contenente l'espressione
+C# esplicita (`"null"`, `"50"`, `"10"`).
+Il gate statico impedisce di sostituire
+`limit=50` con `limit=100` senza una
+revisione coordinata del manifesto.
+Non equivale a verificare la keyword
+`default` nello schema MCP generato
+dall'SDK, che non è garantita né richiesta
+dalla convalida live.
+[ADR 0060](../adr/0060-mcp-v1-1-full-parameter-contract.md).
