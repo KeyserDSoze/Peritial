@@ -277,3 +277,17 @@ con un singolo candidato compatibile il piano torna
 li rifiuta **prima** di creare Sinistro, ledger o audit.
 La formattazione XML tra elementi resta innocua. 
 [ADR 0057](adr/0057-xml-source-scalar-normalization-review.md).
+
+### Riferimenti XML decodificati e blocco della riscrittura silenziosa (#25)
+
+La preview ora rileva anche CDATA e riferimenti carattere
+XML (ad esempio `&#45;` e `&amp;`): il valore restituito
+può coincidere con una pratica esistente pur avendo una
+rappresentazione sorgente differente. Perciò
+`hasUnmappedBusinessData=true` impone
+`review-required` senza UUID sul singolo candidato.
+Il commit interno case-only V011 li rifiuta prima del DB,
+mentre la preview resta disponibile e non divulga
+markup XML originale, payload o dati personali.
+I test includono UTF-8, UTF-16 LE/BE e parità REST/MCP.
+[ADR 0058](adr/0058-xml-character-references-cdata-fail-closed.md).

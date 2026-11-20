@@ -1585,3 +1585,33 @@ date-only canonici. Playwright con Keycloak prova
 il comportamento REST/MCP e la mancata divulgazione
 dell'UUID. Non cambia V011/V012, RLS o il DTO pubblico.
 [ADR 0057](../adr/0057-xml-source-scalar-normalization-review.md).
+
+## #25 — CDATA e riferimenti carattere nelle sorgenti XML
+
+`XDocument.Load` conserva i nodi `XCData`, ma
+`XElement.Value` combina testi e CDATA e
+`XmlReader` espande riferimenti predefiniti o
+numerici prima di materializzare l'albero.
+Confrontare solo `Value.Trim()` non basta quindi
+a garantire che la forma originale dell'XML
+sia stata conservata. La preview marca
+`hasUnmappedBusinessData=true` se trova nodi
+CDATA oppure il byte del marker `&` nella
+sorgente XML. La verifica raw-byte è volutamente
+**conservativa**: può flaggare anche riferimenti
+fuori dagli scalari, ma non trasforma mai un input
+in un commit permesso. DTD/XXE restano proibiti.
+
+`PreviewCaseOnly` usata dal commit XML V011
+(non DI, REST o MCP) rigetta in modo fail-closed
+questi formati prima del repository; nessun
+inserimento Sinistro, ledger o audit di successo
+ne deriva. L'endpoint REST `/api/imports/xml/plan`
+e MCP `plan_legacy_xml` condividono
+`review-required` senza UUID per l'unico match.
+I test RED/GREEN Business verificano CDATA e
+numerici/entità predefinite su riferimento e data;
+ci sono regressioni anche con BOM UTF-16 LE/BE
+e Keycloak REST/MCP. Non assumere che la sola
+identità decodificata basti all'import.
+[ADR 0058](../adr/0058-xml-character-references-cdata-fail-closed.md).

@@ -70,3 +70,12 @@ Non cambiamo lo schema o la semantica
 La risoluzione definitiva richiede caratterizzare
 i campioni XML reali e fissare la policy di
 normalizzazione nella #25/#24 senza inventarla.
+
+## Estensione ADR 0058 — riferimenti carattere e CDATA
+
+La normalizzazione può avvenire **dentro il parser XML**,
+prima di qualunque `Trim()`: riferimenti carattere e
+CDATA diventano testo ordinario nella proiezione DTO.
+Il gate è ora conservativo sulla sintassi sorgente
+e non sul solo valore `XElement.Value`.
+Vedi [ADR 0058](0058-xml-character-references-cdata-fail-closed.md).

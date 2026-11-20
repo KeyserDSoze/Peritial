@@ -508,3 +508,19 @@ lo stato di un documento altrimenti minimale.
 La preview può rendere il numero/data normalizzati,
 ma il commit interno dell'import è fail-closed.
 [ADR 0057](../adr/0057-xml-source-scalar-normalization-review.md).
+
+## CDATA e riferimenti XML decodificati (#25)
+
+`preview_legacy_xml` e `plan_legacy_xml`
+non considerano equivalenti, per una futura
+scrittura, un riferimento scritto in testo
+semplice e uno che utilizza `<![CDATA[...]]>`
+o `&#...;`. La preview rende i **soli valori
+decodificati già ammessi dal contratto** e
+`hasUnmappedBusinessData=true`; per l'unico
+candidato compatibile, il planner restituisce
+`review-required` e nessun UUID, anche via REST.
+Non sono restituiti il markup originale né dati
+aggiuntivi. Il commit XML resta interno e bloccato
+per questi input. [ADR 0058]
+(../adr/0058-xml-character-references-cdata-fail-closed.md).
