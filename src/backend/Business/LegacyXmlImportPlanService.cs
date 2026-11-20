@@ -63,6 +63,13 @@ public sealed class LegacyXmlImportPlanService(
             (parsed.ReportedOn.HasValue && parsed.ReportedOn != match.ReportedOn))
             return new LegacyXmlImportPlanDto(parsed, "conflict", null);
 
+        // The legacy model links cases to a policy and yearly identity.
+        // V003 has neither. Rich XML must never claim a verified match based
+        // solely on numeroSinistro and date; do not disclose a candidate ID.
+        if (parsed.HasUnmappedBusinessData)
+            return new LegacyXmlImportPlanDto(parsed, "review-required", null);
+
+        // Reference/date-only advisory result, NOT approval to import.
         return new LegacyXmlImportPlanDto(parsed, "existing", match.Id);
     }
 

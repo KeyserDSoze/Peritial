@@ -12,7 +12,8 @@ namespace Peritial.Business;
 /// </summary>
 public sealed record LegacyXmlPreviewDto(
     string Format, string ExternalReference,
-    DateOnly OccurredOn, DateOnly? ReportedOn, int AttachmentCount);
+    DateOnly OccurredOn, DateOnly? ReportedOn, int AttachmentCount,
+    bool HasUnmappedBusinessData = false);
 
 public sealed class LegacyXmlPreviewService(ITenantContext context)
 {
@@ -85,20 +86,20 @@ public sealed class LegacyXmlPreviewService(ITenantContext context)
             _ => throw new ArgumentException("Unsupported legacy XML root.", nameof(xml))
         };
 
-        if (caseOnly)
+        // The preview intentionally does not interpret business identity
+        // fields. Even matching claim numbers/dates cannot reconcile an
+        // insurer, policy, contractor or attachment with the current schema.
+        // Report their *presence* only, never values/PII or XML fragments.
+        var allowed = new HashSet<XName>
         {
-            // No silent discarding of insurers, persons, claims, nested
-            // attachments or any other unsupported legacy business fields.
-            var allowed = new HashSet<XName>
-            {
-                "NumeroSinistro", "DataOraSinistro", "DataIncarico"
-            };
-            if (root.DescendantsAndSelf().Any(e => e.HasAttributes) ||
-                root.Elements().Any(e => !allowed.Contains(e.Name) || e.HasElements) ||
-                root.Nodes().OfType<XText>().Any(t => !string.IsNullOrWhiteSpace(t.Value)))
-                throw new ArgumentException(
-                    "Case-only XML import rejects other fields and attachments.", nameof(xml));
-        }
+            "NumeroSinistro", "DataOraSinistro", "DataIncarico"
+        };
+        var unmapped = root.DescendantsAndSelf().Any(e => e.HasAttributes) ||
+            root.Elements().Any(e => !allowed.Contains(e.Name) || e.HasElements) ||
+            root.Nodes().OfType<XText>().Any(t => !string.IsNullOrWhiteSpace(t.Value));
+        if (caseOnly && unmapped)
+            throw new ArgumentException(
+                "Case-only XML import rejects other fields and attachments.", nameof(xml));
 
         var number = ReadDirectScalar(root, "NumeroSinistro", required: true)!;
         if (number.Length > 100)
@@ -128,7 +129,7 @@ public sealed class LegacyXmlPreviewService(ITenantContext context)
 
         // Do not return names, addresses, persons, base64 attachment payloads
         // or storage references: preview is only an import preflight.
-        return new LegacyXmlPreviewDto(format, number, occurred, reported, count);
+        return new LegacyXmlPreviewDto(format, number, occurred, reported, count, unmapped);
     }
 
     private static string? ReadDirectScalar(XElement root, string name, bool required)

@@ -296,7 +296,8 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
     const endpoint = api + "/api/imports/xml/plan";
     const headers = {Authorization: "Bearer " + writer, "Content-Type": "application/xml"};
     type Plan = {status:string; existingSinistroId:string|null;
-      preview:{format:string; externalReference:string; attachmentCount:number}};
+      preview:{format:string; externalReference:string; attachmentCount:number;
+        hasUnmappedBusinessData:boolean}};
     async function plan(payload = xml) {
       const response = await request.post(endpoint, {headers, data: payload});
       expect(response.status(), await response.text()).toBe(200);
@@ -309,13 +310,30 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
     expect(first.status).toBe("new");
     expect(first.existingSinistroId).toBeNull();
     expect(first.preview.externalReference).toBe(ref);
+    expect(first.preview.hasUnmappedBusinessData).toBe(true);
     const created = await request.post(api + "/api/sinistri", {
       headers: {Authorization: "Bearer " + writer},
       data: {externalReference:ref, occurredOn:"2026-11-17", reportedOn:"2026-11-18"}
     });
     expect(created.status(), await created.text()).toBe(201);
     const id = (await created.json() as {id:string}).id;
-    expect(await plan()).toMatchObject({status:"existing", existingSinistroId:id});
+    // Rich Accertatore data may contain insurer/policy/person identity that
+    // V003 cannot match. Never report a candidate UUID on dates alone.
+    const review = await plan();
+    expect(review).toMatchObject({
+      status:"review-required", existingSinistroId:null,
+      preview:{hasUnmappedBusinessData:true}
+    });
+    expect(JSON.stringify(review)).not.toContain(id);
+    const minimalXml = `<it.autosoftws.IncaricoAccertatoreRecord>
+      <NumeroSinistro>${ref}</NumeroSinistro>
+      <DataOraSinistro>2026-11-17</DataOraSinistro>
+      <DataIncarico>2026-11-18</DataIncarico>
+    </it.autosoftws.IncaricoAccertatoreRecord>`;
+    expect(await plan(minimalXml)).toMatchObject({
+      status:"existing",existingSinistroId:id,
+      preview:{hasUnmappedBusinessData:false}
+    });
     const conflict = await plan(xml.replace("2026-11-17", "2026-11-16"));
     expect(conflict.status).toBe("conflict");
     expect(conflict.existingSinistroId).toBeNull();
