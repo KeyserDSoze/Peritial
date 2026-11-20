@@ -108,7 +108,15 @@ public sealed class LegacyXmlPreviewService(ITenantContext context)
         var unmapped = root.DescendantsAndSelf().Any(e => e.HasAttributes) ||
             root.Elements().Any(e => !allowed.Contains(e.Name) || e.HasElements) ||
             root.Nodes().OfType<XText>().Any(t => !string.IsNullOrWhiteSpace(t.Value)) ||
-            document.DescendantNodes().Any(n => n is XComment or XProcessingInstruction) ||
+            document.DescendantNodes().Any(n => n is XComment or XProcessingInstruction or XCData) ||
+            // XML character/predefined references are expanded by XmlReader
+            // before LINQ-to-XML materializes XElement.Value. The raw-byte
+            // digest still knows the source differs, but the case-only writer
+            // cannot reconstruct the original literal. Conservatively flag
+            // any raw ampersand marker, including references outside scalars.
+            // In supported UTF-8/UTF-16/UTF-32 XML encodings, '&' contains a
+            // 0x26 byte; false positives only deny case-only import.
+            xml.Span.IndexOf((byte)'&') >= 0 ||
             normalizedSourceScalar;
 
         var number = ReadDirectScalar(root, "NumeroSinistro", required: true)!;
