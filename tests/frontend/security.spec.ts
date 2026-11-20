@@ -347,6 +347,39 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
       status:"existing",existingSinistroId:id,
       preview:{hasUnmappedBusinessData:false}
     });
+    // V003 stores calendar days, not original legacy times. Even identical
+    // dates are not enough to reconcile a timestamp bearing hours/minutes.
+    const timestampXml = minimalXml.replace(
+      "2026-11-17</DataOraSinistro>",
+      "2026-11-17 11:42:30</DataOraSinistro>");
+    const timestampPlan = await plan(timestampXml);
+    expect(timestampPlan).toMatchObject({
+      status:"review-required",existingSinistroId:null,
+      preview:{hasUnmappedBusinessData:true}
+    });
+    expect(JSON.stringify(timestampPlan)).not.toContain(id);
+    expect(JSON.stringify(timestampPlan)).not.toContain("11:42:30");
+    const timestampMcp = await request.post(api + "/mcp", {
+      headers:mcpHeaders(writer),data:{jsonrpc:"2.0",id:1398,method:"tools/call",
+        params:{name:"plan_legacy_xml",arguments:{xml:timestampXml}}}
+    });
+    expect(timestampMcp.ok(), await timestampMcp.text()).toBeTruthy();
+    expect(await timestampMcp.text()).toContain("review-required");
+    expect(await timestampMcp.text()).not.toContain(id);
+    expect(await timestampMcp.text()).not.toContain("11:42:30");
+    expect(await timestampMcp.text()).not.toContain('"isError":true');
+
+    const metadataXml = minimalXml.replace(
+      "</it.autosoftws.IncaricoAccertatoreRecord>",
+      "<!--PRIVATE-ROUTING-COMMENT--></it.autosoftws.IncaricoAccertatoreRecord>");
+    const metadataPlan = await plan(metadataXml);
+    expect(metadataPlan).toMatchObject({
+      status:"review-required",existingSinistroId:null,
+      preview:{hasUnmappedBusinessData:true}
+    });
+    expect(JSON.stringify(metadataPlan)).not.toContain("PRIVATE-ROUTING-COMMENT");
+    expect(JSON.stringify(metadataPlan)).not.toContain(id);
+
     const conflict = await plan(xml.replace("2026-11-17", "2026-11-16"));
     expect(conflict.status).toBe("conflict");
     expect(conflict.existingSinistroId).toBeNull();
