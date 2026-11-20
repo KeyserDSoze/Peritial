@@ -178,6 +178,31 @@ public sealed class LegacyXmlImportPlanTests
             System.Text.Json.JsonSerializer.Serialize(plan));
     }
 
+    [Theory]
+    [InlineData("<NumeroSinistro>SAME&#45;REF</NumeroSinistro>")]
+    [InlineData("<NumeroSinistro><![CDATA[SAME-REF]]></NumeroSinistro>")]
+    public async Task Entity_encoded_reference_never_authorizes_a_reconciled_match(
+        string referenceNode)
+    {
+        var actor = new Actor(true);
+        var lookup = new SpyLookup();
+        var id = Guid.NewGuid();
+        lookup.Add(actor.TenantId, "SAME-REF", id,
+            new DateOnly(2026, 11, 17), new DateOnly(2026, 11, 18));
+        var xml = Encoding.UTF8.GetBytes(
+            "<it.autosoftws.ReIncaricoRecord>" +
+            referenceNode + "<DataOraSinistro>2026-11-17</DataOraSinistro>" +
+            "<DataIncarico>2026-11-18</DataIncarico>" +
+            "</it.autosoftws.ReIncaricoRecord>");
+        var plan = await new LegacyXmlImportPlanService(actor,
+            new LegacyXmlPreviewService(actor), lookup).PlanAsync(xml);
+        Assert.Equal("review-required", plan.Status);
+        Assert.True(plan.Preview.HasUnmappedBusinessData);
+        Assert.Null(plan.ExistingSinistroId);
+        Assert.DoesNotContain(id.ToString(),
+            System.Text.Json.JsonSerializer.Serialize(plan));
+    }
+
     [Fact]
     public async Task Unauthorized_and_invalid_xml_stop_before_database_access()
     {

@@ -120,6 +120,29 @@ public sealed class LegacyXmlCaseImportTests
         Assert.Equal(0, store.Calls);
     }
 
+    [Theory]
+    [InlineData("<NumeroSinistro><![CDATA[IMP-001]]></NumeroSinistro>", "<NumeroSinistro>IMP-001</NumeroSinistro>")]
+    [InlineData("<NumeroSinistro>IMP&#45;001</NumeroSinistro>", "<NumeroSinistro>IMP-001</NumeroSinistro>")]
+    [InlineData("<DataOraSinistro><![CDATA[2026-11-19]]></DataOraSinistro>", "<DataOraSinistro>2026-11-19</DataOraSinistro>")]
+    [InlineData("<DataOraSinistro>2026-11-&#49;9</DataOraSinistro>", "<DataOraSinistro>2026-11-19</DataOraSinistro>")]
+    [InlineData("<DataIncarico><![CDATA[2026-11-20]]></DataIncarico>", "<DataIncarico>2026-11-20</DataIncarico>")]
+    public async Task Case_only_commit_rejects_decoded_entity_or_cdata_source_forms(
+        string transformed, string original)
+    {
+        var actor = new Actor(true);
+        var store = new Store();
+        var svc = new LegacyXmlCaseImportService(
+            actor, new LegacyXmlPreviewService(actor), store);
+        var xml = Encoding.UTF8.GetBytes(
+            Encoding.UTF8.GetString(Xml()).Replace(original, transformed,
+                StringComparison.Ordinal));
+        var parsed = new LegacyXmlPreviewService(actor).Preview(xml);
+        Assert.True(parsed.HasUnmappedBusinessData);
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            svc.CommitAsync(xml, "entity-syntax-key-0001"));
+        Assert.Equal(0, store.Calls);
+    }
+
     [Fact]
     public async Task No_scope_invalid_key_and_unsafe_xml_stop_before_write()
     {

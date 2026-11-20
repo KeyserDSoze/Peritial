@@ -156,6 +156,41 @@ public sealed class LegacyXmlPreviewTests
     }
 
     [Theory]
+    [InlineData("<NumeroSinistro><![CDATA[ENTITY-REF]]></NumeroSinistro>", "ENTITY-REF")]
+    [InlineData("<NumeroSinistro>ENTITY&#45;REF</NumeroSinistro>", "ENTITY-REF")]
+    [InlineData("<NumeroSinistro>ENT<![CDATA[ITY]]>-REF</NumeroSinistro>", "ENTITY-REF")]
+    [InlineData("<NumeroSinistro>ENTITY&#x2D;REF</NumeroSinistro>", "ENTITY-REF")]
+    [InlineData("<NumeroSinistro>ENTITY&amp;REF</NumeroSinistro>", "ENTITY&REF")]
+    public void Character_references_and_cdata_are_visible_as_unmapped_source_forms(
+        string field, string expectedReference)
+    {
+        var xml = "<it.autosoftws.ReIncaricoRecord>" +
+            field + "<DataOraSinistro>2026-11-19</DataOraSinistro>" +
+            "</it.autosoftws.ReIncaricoRecord>";
+        var parsed = Service.Preview(Encoding.UTF8.GetBytes(xml));
+        Assert.Equal(expectedReference, parsed.ExternalReference);
+        Assert.True(parsed.HasUnmappedBusinessData);
+        var json = JsonSerializer.Serialize(parsed);
+        Assert.DoesNotContain("CDATA", json);
+        Assert.DoesNotContain("&#", json);
+        Assert.DoesNotContain("&amp;", json);
+    }
+
+    [Theory]
+    [InlineData("<DataOraSinistro><![CDATA[2026-11-19]]></DataOraSinistro>")]
+    [InlineData("<DataOraSinistro>2026-11-&#49;9</DataOraSinistro>")]
+    public void Date_scalar_lexical_markup_is_not_silently_accepted_as_canonical(
+        string dateField)
+    {
+        var xml = "<it.autosoftws.ReIncaricoRecord>" +
+            "<NumeroSinistro>ENTITY-REF</NumeroSinistro>" +
+            dateField + "</it.autosoftws.ReIncaricoRecord>";
+        var parsed = Service.Preview(Encoding.UTF8.GetBytes(xml));
+        Assert.Equal(new DateOnly(2026, 11, 19), parsed.OccurredOn);
+        Assert.True(parsed.HasUnmappedBusinessData);
+    }
+
+    [Theory]
     [InlineData("<unknown><NumeroSinistro>X</NumeroSinistro><DataOraSinistro>2026-11-18</DataOraSinistro></unknown>")]
     [InlineData("<it.autosoftws.ReIncaricoRecord xmlns='urn:other'><NumeroSinistro>X</NumeroSinistro><DataOraSinistro>2026-11-18</DataOraSinistro></it.autosoftws.ReIncaricoRecord>")]
     [InlineData("<it.autosoftws.ReIncaricoRecord><NumeroSinistro>X</NumeroSinistro><DataOraSinistro>2026-11-18</DataOraSinistro>")]
