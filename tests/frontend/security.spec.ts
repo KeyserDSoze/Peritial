@@ -210,10 +210,12 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
     const data = await valid.json() as {
       format: string; externalReference: string; occurredOn: string;
       reportedOn: string | null; attachmentCount: number;
+      hasUnmappedBusinessData: boolean;
     };
     expect(data).toEqual({
       format: "classic", externalReference: ref, occurredOn: "2026-11-19",
-      reportedOn: "2026-11-20", attachmentCount: 1
+      reportedOn: "2026-11-20", attachmentCount: 1,
+      hasUnmappedBusinessData: true
     });
     for (const secret of ["PRIVATE-PERSON", "PRIVATE-FILE", "UERG", "tenantId", "storageKey"])
       expect(await valid.text()).not.toContain(secret);
