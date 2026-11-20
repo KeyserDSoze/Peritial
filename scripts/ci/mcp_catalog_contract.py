@@ -61,6 +61,9 @@ def parse_mcp_parameters(source: str) -> dict[str, dict[str, dict]]:
                 "type": _KIND[cs_type],
                 "optional": default is not None,
                 "nullable": nullable is not None,
+                # Preserve the exact literal: absent != explicit 'null', and
+                # changing a numeric/default value is an MCP behavior change.
+                "defaultLiteral": default,
             }
         result[name] = parameters
     return result

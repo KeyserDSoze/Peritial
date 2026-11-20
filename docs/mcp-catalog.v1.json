@@ -14,12 +14,14 @@
         "id": {
           "type": "uuid",
           "optional": false,
-          "nullable": false
+          "nullable": false,
+          "defaultLiteral": null
         },
         "target": {
           "type": "string",
           "optional": false,
-          "nullable": false
+          "nullable": false,
+          "defaultLiteral": null
         }
       }
     },
@@ -35,12 +37,14 @@
         "id": {
           "type": "uuid",
           "optional": false,
-          "nullable": false
+          "nullable": false,
+          "defaultLiteral": null
         },
         "assignee": {
           "type": "string",
           "optional": false,
-          "nullable": false
+          "nullable": false,
+          "defaultLiteral": null
         }
       }
     },
@@ -55,7 +59,8 @@
         "id": {
           "type": "uuid",
           "optional": false,
-          "nullable": false
+          "nullable": false,
+          "defaultLiteral": null
         }
       }
     },
@@ -70,7 +75,8 @@
         "reference": {
           "type": "string",
           "optional": false,
-          "nullable": false
+          "nullable": false,
+          "defaultLiteral": null
         }
       }
     },
@@ -86,17 +92,20 @@
         "externalReference": {
           "type": "string",
           "optional": false,
-          "nullable": false
+          "nullable": false,
+          "defaultLiteral": null
         },
         "occurredOn": {
           "type": "date",
           "optional": false,
-          "nullable": false
+          "nullable": false,
+          "defaultLiteral": null
         },
         "reportedOn": {
           "type": "date",
           "optional": true,
-          "nullable": true
+          "nullable": true,
+          "defaultLiteral": "null"
         }
       }
     },
@@ -112,12 +121,14 @@
         "id": {
           "type": "uuid",
           "optional": false,
-          "nullable": false
+          "nullable": false,
+          "defaultLiteral": null
         },
         "expectedVersion": {
           "type": "integer",
           "optional": false,
-          "nullable": false
+          "nullable": false,
+          "defaultLiteral": null
         }
       }
     },
@@ -132,7 +143,8 @@
         "id": {
           "type": "uuid",
           "optional": false,
-          "nullable": false
+          "nullable": false,
+          "defaultLiteral": null
         }
       }
     },
@@ -147,7 +159,8 @@
         "id": {
           "type": "uuid",
           "optional": false,
-          "nullable": false
+          "nullable": false,
+          "defaultLiteral": null
         }
       }
     },
@@ -162,7 +175,8 @@
         "periziaId": {
           "type": "uuid",
           "optional": false,
-          "nullable": false
+          "nullable": false,
+          "defaultLiteral": null
         }
       }
     },
@@ -177,7 +191,8 @@
         "id": {
           "type": "uuid",
           "optional": false,
-          "nullable": false
+          "nullable": false,
+          "defaultLiteral": null
         }
       }
     },
@@ -194,27 +209,32 @@
         "fileName": {
           "type": "string",
           "optional": false,
-          "nullable": false
+          "nullable": false,
+          "defaultLiteral": null
         },
         "contentType": {
           "type": "string",
           "optional": false,
-          "nullable": false
+          "nullable": false,
+          "defaultLiteral": null
         },
         "base64": {
           "type": "string",
           "optional": false,
-          "nullable": false
+          "nullable": false,
+          "defaultLiteral": null
         },
         "periziaId": {
           "type": "uuid",
           "optional": true,
-          "nullable": true
+          "nullable": true,
+          "defaultLiteral": "null"
         },
         "idempotencyKey": {
           "type": "string",
           "optional": true,
-          "nullable": true
+          "nullable": true,
+          "defaultLiteral": "null"
         }
       }
     },
@@ -231,17 +251,20 @@
         "periziaId": {
           "type": "uuid",
           "optional": false,
-          "nullable": false
+          "nullable": false,
+          "defaultLiteral": null
         },
         "sinistroId": {
           "type": "uuid",
           "optional": false,
-          "nullable": false
+          "nullable": false,
+          "defaultLiteral": null
         },
         "expectedLinkVersion": {
           "type": "integer",
           "optional": false,
-          "nullable": false
+          "nullable": false,
+          "defaultLiteral": null
         }
       }
     },
@@ -254,12 +277,14 @@
         "periziaId": {
           "type": "uuid",
           "optional": true,
-          "nullable": true
+          "nullable": true,
+          "defaultLiteral": "null"
         },
         "limit": {
           "type": "integer",
           "optional": true,
-          "nullable": false
+          "nullable": false,
+          "defaultLiteral": "50"
         }
       }
     },
@@ -281,7 +306,8 @@
         "sinistroId": {
           "type": "uuid",
           "optional": false,
-          "nullable": false
+          "nullable": false,
+          "defaultLiteral": null
         }
       }
     },
@@ -294,7 +320,8 @@
         "limit": {
           "type": "integer",
           "optional": true,
-          "nullable": false
+          "nullable": false,
+          "defaultLiteral": "50"
         }
       }
     },
@@ -307,17 +334,20 @@
         "periziaId": {
           "type": "uuid",
           "optional": true,
-          "nullable": true
+          "nullable": true,
+          "defaultLiteral": "null"
         },
         "limit": {
           "type": "integer",
           "optional": true,
-          "nullable": false
+          "nullable": false,
+          "defaultLiteral": "50"
         },
         "cursor": {
           "type": "string",
           "optional": true,
-          "nullable": true
+          "nullable": true,
+          "defaultLiteral": "null"
         }
       }
     },
@@ -330,12 +360,14 @@
         "cursor": {
           "type": "string",
           "optional": true,
-          "nullable": true
+          "nullable": true,
+          "defaultLiteral": "null"
         },
         "limit": {
           "type": "integer",
           "optional": true,
-          "nullable": false
+          "nullable": false,
+          "defaultLiteral": "50"
         }
       }
     },
@@ -350,7 +382,8 @@
         "xml": {
           "type": "string",
           "optional": false,
-          "nullable": false
+          "nullable": false,
+          "defaultLiteral": null
         }
       }
     },
@@ -365,7 +398,8 @@
         "xml": {
           "type": "string",
           "optional": false,
-          "nullable": false
+          "nullable": false,
+          "defaultLiteral": null
         }
       }
     },
@@ -383,22 +417,26 @@
         "periziaId": {
           "type": "uuid",
           "optional": false,
-          "nullable": false
+          "nullable": false,
+          "defaultLiteral": null
         },
         "expectedSinistroId": {
           "type": "uuid",
           "optional": false,
-          "nullable": false
+          "nullable": false,
+          "defaultLiteral": null
         },
         "newSinistroId": {
           "type": "uuid",
           "optional": false,
-          "nullable": false
+          "nullable": false,
+          "defaultLiteral": null
         },
         "expectedLinkVersion": {
           "type": "integer",
           "optional": false,
-          "nullable": false
+          "nullable": false,
+          "defaultLiteral": null
         }
       }
     },
@@ -413,22 +451,26 @@
         "prefix": {
           "type": "string",
           "optional": false,
-          "nullable": false
+          "nullable": false,
+          "defaultLiteral": null
         },
         "occurredFrom": {
           "type": "date",
           "optional": true,
-          "nullable": true
+          "nullable": true,
+          "defaultLiteral": "null"
         },
         "occurredTo": {
           "type": "date",
           "optional": true,
-          "nullable": true
+          "nullable": true,
+          "defaultLiteral": "null"
         },
         "limit": {
           "type": "integer",
           "optional": true,
-          "nullable": false
+          "nullable": false,
+          "defaultLiteral": "10"
         }
       }
     },
@@ -443,27 +485,32 @@
         "prefix": {
           "type": "string",
           "optional": false,
-          "nullable": false
+          "nullable": false,
+          "defaultLiteral": null
         },
         "occurredFrom": {
           "type": "date",
           "optional": true,
-          "nullable": true
+          "nullable": true,
+          "defaultLiteral": "null"
         },
         "occurredTo": {
           "type": "date",
           "optional": true,
-          "nullable": true
+          "nullable": true,
+          "defaultLiteral": "null"
         },
         "limit": {
           "type": "integer",
           "optional": true,
-          "nullable": false
+          "nullable": false,
+          "defaultLiteral": "50"
         },
         "cursor": {
           "type": "string",
           "optional": true,
-          "nullable": true
+          "nullable": true,
+          "defaultLiteral": "null"
         }
       }
     },
@@ -480,17 +527,20 @@
         "periziaId": {
           "type": "uuid",
           "optional": false,
-          "nullable": false
+          "nullable": false,
+          "defaultLiteral": null
         },
         "expectedSinistroId": {
           "type": "uuid",
           "optional": false,
-          "nullable": false
+          "nullable": false,
+          "defaultLiteral": null
         },
         "expectedLinkVersion": {
           "type": "integer",
           "optional": false,
-          "nullable": false
+          "nullable": false,
+          "defaultLiteral": null
         }
       }
     },
@@ -508,27 +558,32 @@
         "id": {
           "type": "uuid",
           "optional": false,
-          "nullable": false
+          "nullable": false,
+          "defaultLiteral": null
         },
         "externalReference": {
           "type": "string",
           "optional": false,
-          "nullable": false
+          "nullable": false,
+          "defaultLiteral": null
         },
         "occurredOn": {
           "type": "date",
           "optional": false,
-          "nullable": false
+          "nullable": false,
+          "defaultLiteral": null
         },
         "expectedVersion": {
           "type": "integer",
           "optional": false,
-          "nullable": false
+          "nullable": false,
+          "defaultLiteral": null
         },
         "reportedOn": {
           "type": "date",
           "optional": true,
-          "nullable": true
+          "nullable": true,
+          "defaultLiteral": "null"
         }
       }
     }
