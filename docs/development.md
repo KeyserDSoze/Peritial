@@ -1650,3 +1650,25 @@ semantica devono comunque essere revisionati
 e testati separatamente, e gli scope reali
 continuano a essere verificati dal Business.
 [ADR 0059](../adr/0059-versioned-mcp-tool-contract-gate.md).
+
+## MCP v1.1: drift di parametri opzionali e tipi
+
+Il gate già esistente in `supply-chain-actions`
+ora valida `version=1.1.0` del medesimo
+`docs/mcp-catalog.v1.json`, 25 tool e
+55 parametri MCP visibili. `type`,
+`optional`, `nullable` derivano dalla
+firma C#, il parser rifiuta nuovi tipi o
+sintassi non riconosciute. Dopo ogni
+modifica a `McpTools.cs`, aggiornare
+consapevolmente manifesto, test e decisione
+compatibilità; non rimuovere i test negativi.
+
+La suite `test_mcp_catalog_contract.py`
+conta 12 casi. La Compose CI testa
+`tools/list` dell'SDK con Keycloak firmato,
+confrontando ogni `properties` e il tipo
+primario JSON. Non dichiara testata la
+negoziazione a runtime o la forma dettagliata
+di unione/nullabilità del JSON Schema.
+[ADR 0060](../adr/0060-mcp-v1-1-full-parameter-contract.md).

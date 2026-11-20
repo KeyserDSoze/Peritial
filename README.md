@@ -312,3 +312,23 @@ le operazioni mutative restano soggette a scope, RLS,
 audit e versioni CAS. `delete_sinistro` necessita
 inoltre di uno scope esplicito e del gate di sviluppo.
 [ADR 0059](adr/0059-versioned-mcp-tool-contract-gate.md).
+
+### MCP catalog v1.1: firme complete, non solo parametri obbligatori (#12)
+
+Il manifesto `docs/mcp-catalog.v1.json` è stato
+esteso a `version=1.1.0`, mantenendo gli
+stessi 25 tool. Descrive **tutti i 55 parametri**
+pubblici, compresi `cursor`, `limit`,
+`occurredFrom/To`, `reportedOn` e
+`idempotencyKey`, indicando tipo JSON atteso,
+opzionalità e nullabilità C#. Un cambiamento
+silenzioso alla firma di un parametro opzionale
+fallisce nel gate CI anche quando la lista
+`required` è identica. Playwright confronta
+con le proprietà e i tipi primari di
+`tools/list` generati dall'SDK con JWT
+Keycloak read/write. Il passaggio a v1.1
+versiona **il manifesto di verifica**, non
+aggiunge una route pubblica di negotiation
+né modifica l'SDK. [ADR 0060]
+(adr/0060-mcp-v1-1-full-parameter-contract.md).

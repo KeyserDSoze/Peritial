@@ -571,3 +571,49 @@ multi-versione, client MCP esterni reali,
 compatibilità semantica di ogni schema JSON
 o idempotenza per tutti i tool mutativi.
 L'issue #12 rimane aperta.
+
+## Contratto catalogo v1.1: tutti i parametri (#12)
+
+Il manifesto `mcp-catalog.v1.json` ora ha
+`version=1.1.0`, stessa serie di 25 tool e
+55 parametri pubblici. La sezione `parameters`
+di ogni tool è una mappa ordinata per
+firma C#, con per-parametro:
+
+- `type`: `string`, `uuid`, `date` o `integer`.
+  Gli UUID e le date hanno wire type JSON `string`,
+  mentre `int` e `long` usano `integer`.
+- `optional`: un valore default C# rende il
+  parametro omettibile; non implica che sia
+  nullable.
+- `nullable`: deriva da `?` C#,
+  distinto dall'omissibilità.
+
+La lista `required` precedente rimane per
+compatibilità con il controllo introdotto
+nell'ADR 0059. I `CancellationToken` di
+servizio non sono argomenti MCP, dunque non
+appaiono nel manifesto.
+
+Il gate `scripts/ci/mcp_catalog_contract.py`
+verifica **nomi, ordine, presenza e dettagli
+di tutti i parametri** contro il sorgente C#.
+La suite ha 12 test, inclusi regressioni
+avversariali su parametro opzionale rimosso
+o rinominato, `DateOnly`/UUID/`long` mutati,
+nullabilità e default che cambiano. Il test
+Keycloak E2E verifica la presenza esatta delle
+proprietà JSON (anche opzionali), i required,
+e il tipo primario esposto da
+`tools/list` per i client firmati read/write.
+Non impone oggi un JSON Schema completo per
+nullable/default/formati: le varianti dello
+SDK sono verificate per il tipo primario
+anziché per la forma del combinatore JSON.
+
+**Non** è una modifica degli strumenti o
+della loro semantica: gli scope applicati
+nel Business, RLS, CAS e audit restano
+invariati. Non è ancora una negotiation
+multi-versione per client remoti.
+[ADR 0060](../adr/0060-mcp-v1-1-full-parameter-contract.md).

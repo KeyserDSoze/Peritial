@@ -86,3 +86,16 @@ scritture. Nessuna migrazione SQL,
 endpoint addizionale, privilegi o
 modifica ai dati di produzione in
 questa tranche.
+
+## Estensione successiva: ADR 0060 (catalogo 1.1.0)
+
+La baseline qui descritta era
+`format=1`, `version=1.0.0`, 25 tool
+e test di `required`. Il medesimo manifesto
+è stato successivamente aggiornato a
+`version=1.1.0` e arricchito con il
+contratto completo degli argomenti,
+incluse le opzioni. La versione v1.0.0
+non è più il file presente in `main`:
+la storia è nei commit e
+[ADR 0060](0060-mcp-v1-1-full-parameter-contract.md).
