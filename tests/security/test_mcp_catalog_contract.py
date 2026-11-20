@@ -77,6 +77,78 @@ class McpCatalogContractTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "duplicated"):
             validate_catalog(altered, self.source)
 
+    def test_manifest_includes_every_optional_argument_and_its_wire_type(self):
+        manifest = self._manifest()
+        self.assertEqual("1.1.0", manifest["version"])
+        for item in manifest["tools"]:
+            self.assertIn("parameters", item)
+            self.assertIsInstance(item["parameters"], dict)
+        create = next(i for i in manifest["tools"] if i["name"] == "create_sinistro")
+        self.assertEqual(
+            {"type": "date", "optional": False, "nullable": False},
+            create["parameters"]["occurredOn"],
+        )
+        self.assertEqual(
+            {"type": "date", "optional": True, "nullable": True},
+            create["parameters"]["reportedOn"],
+        )
+        page = next(i for i in manifest["tools"] if i["name"] == "page_sinistri")
+        self.assertEqual(
+            {"type": "string", "optional": True, "nullable": True},
+            page["parameters"]["cursor"],
+        )
+        self.assertEqual(
+            {"type": "integer", "optional": True, "nullable": False},
+            page["parameters"]["limit"],
+        )
+        self.assertNotIn("ct", page["parameters"])
+
+    def test_optional_rename_is_rejected_even_when_required_unchanged(self):
+        manifest = self._manifest()
+        changed = copy.deepcopy(manifest)
+        page = next(i for i in changed["tools"] if i["name"] == "page_sinistri")
+        page["parameters"]["newCursor"] = page["parameters"].pop("cursor")
+        with self.assertRaisesRegex(ValueError, "parameter"):
+            validate_catalog(changed, self.source)
+
+    def test_required_and_optional_types_are_immutable_without_version_review(self):
+        manifest = self._manifest()
+        for tool, parameter, type_name in [
+            ("update_sinistro", "expectedVersion", "string"),
+            ("search_sinistri", "occurredFrom", "integer"),
+            ("create_sinistro", "reportedOn", "string"),
+        ]:
+            changed = copy.deepcopy(manifest)
+            row = next(i for i in changed["tools"] if i["name"] == tool)
+            row["parameters"][parameter]["type"] = type_name
+            with self.subTest(tool=tool, parameter=parameter):
+                with self.assertRaisesRegex(ValueError, "parameter"):
+                    validate_catalog(changed, self.source)
+
+    def test_nullable_and_optional_contract_cannot_be_misclassified(self):
+        manifest = self._manifest()
+        changed = copy.deepcopy(manifest)
+        row = next(i for i in changed["tools"] if i["name"] == "search_sinistri")
+        row["parameters"]["occurredFrom"]["nullable"] = False
+        with self.assertRaisesRegex(ValueError, "parameter"):
+            validate_catalog(changed, self.source)
+        changed = copy.deepcopy(manifest)
+        row = next(i for i in changed["tools"] if i["name"] == "list_sinistri")
+        row["parameters"]["limit"]["optional"] = False
+        with self.assertRaisesRegex(ValueError, "parameter"):
+            validate_catalog(changed, self.source)
+
+    def test_server_optional_signature_drift_is_detected(self):
+        manifest = self._manifest()
+        changed = self.source.replace(
+            "string? cursor = null, int limit = 50, CancellationToken ct = default",
+            "Guid? cursor = null, int limit = 50, CancellationToken ct = default",
+            1,
+        )
+        self.assertNotEqual(changed, self.source)
+        with self.assertRaisesRegex(ValueError, "parameter"):
+            validate_catalog(manifest, changed)
+
     @staticmethod
     def _manifest():
         return json.loads(CATALOG.read_text(encoding="utf-8"))
