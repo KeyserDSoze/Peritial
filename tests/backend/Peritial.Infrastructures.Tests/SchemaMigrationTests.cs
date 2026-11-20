@@ -175,6 +175,31 @@ public sealed class SchemaMigrationTests
     }
 
     [Fact]
+    public async Task V011_legacy_import_key_ledger_is_append_only_and_tenant_rls_forced()
+    {
+        await WithIsolatedSchemaAsync(async db =>
+        {
+            Assert.Equal(11, await SchemaMigrator.ApplyAsync(db));
+            Assert.Equal(0, await SchemaMigrator.ApplyAsync(db));
+            await using var conn = await db.OpenConnectionAsync();
+            await using var check = new NpgsqlCommand(
+                "SELECT relrowsecurity AND relforcerowsecurity FROM pg_class " +
+                "WHERE oid=to_regclass('legacy_xml_import_keys')", conn);
+            Assert.True((bool)(await check.ExecuteScalarAsync())!);
+            await using var privilege = new NpgsqlCommand(
+                "SELECT has_table_privilege('peritial_app','legacy_xml_import_keys','SELECT') " +
+                "AND has_table_privilege('peritial_app','legacy_xml_import_keys','INSERT') " +
+                "AND NOT has_table_privilege('peritial_app','legacy_xml_import_keys','UPDATE') " +
+                "AND NOT has_table_privilege('peritial_app','legacy_xml_import_keys','DELETE') " +
+                "AND NOT has_table_privilege('peritial_recovery','legacy_xml_import_keys','SELECT')", conn);
+            Assert.True((bool)(await privilege.ExecuteScalarAsync())!);
+            await using var journal = new NpgsqlCommand(
+                "SELECT count(*) FROM schema_migrations", conn);
+            Assert.Equal(11L, (long)(await journal.ExecuteScalarAsync())!);
+        });
+    }
+
+    [Fact]
     public async Task Untracked_legacy_schema_is_rejected_without_creating_a_journal()
     {
         await WithIsolatedSchemaAsync(async db =>

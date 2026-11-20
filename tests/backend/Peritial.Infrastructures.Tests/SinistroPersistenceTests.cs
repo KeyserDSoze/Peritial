@@ -119,6 +119,124 @@ public sealed class SinistroPersistenceTests
     }
 
     [Fact]
+    public async Task V011_case_only_import_replays_key_without_duplicate_case_or_audit()
+    {
+        await using var db = await IsolatedDatabases.CreateAsync();
+        var tenant = TenantId.From(Guid.NewGuid());
+        var other = TenantId.From(Guid.NewGuid());
+        var reference = "XML-COMMIT-" + Guid.NewGuid().ToString("N");
+        var parsed = new LegacyXmlPreviewDto("classic", reference,
+            new DateOnly(2026, 11, 19), new DateOnly(2026, 11, 20), 0);
+        var digest = System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes("safe-xml"));
+        var changed = System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes("different-safe-xml"));
+        var repo = new PgLegacyXmlCaseImportStore(db.App);
+        const string key = "import-test-key-00000001";
+        var created = await repo.CommitAsync(tenant, "subject-A", key, digest, parsed);
+        Assert.False(created.Replayed);
+        Assert.NotEqual(Guid.Empty, created.SinistroId);
+        var replay = await repo.CommitAsync(tenant, "subject-A", key, digest, parsed);
+        Assert.True(replay.Replayed);
+        Assert.Equal(created.SinistroId, replay.SinistroId);
+
+        await Assert.ThrowsAsync<LegacyXmlIdempotencyConflictException>(() =>
+            repo.CommitAsync(tenant, "subject-A", key, changed, parsed));
+        await Assert.ThrowsAsync<LegacyXmlReferenceConflictException>(() =>
+            repo.CommitAsync(tenant, "subject-A", "import-test-key-00000002", digest, parsed));
+        await Assert.ThrowsAsync<LegacyXmlReferenceConflictException>(() =>
+            repo.CommitAsync(tenant, "subject-B", key, digest, parsed));
+        Assert.NotNull(await new PgSinistroRepository(db.App).FindAsync(tenant, created.SinistroId));
+        Assert.Null(await new PgSinistroRepository(db.App).FindAsync(other, created.SinistroId));
+
+        var otherTenant = await repo.CommitAsync(other, "subject-A", key, digest, parsed);
+        Assert.False(otherTenant.Replayed);
+        Assert.NotEqual(created.SinistroId, otherTenant.SinistroId);
+
+        await using var count = db.Admin.CreateCommand(
+            "SELECT (SELECT count(*) FROM legacy_xml_import_keys WHERE tenant_id=@tenant), " +
+            "(SELECT count(*) FROM sinistri WHERE tenant_id=@tenant " +
+            "AND external_reference=@reference), " +
+            "(SELECT count(*) FROM security_audit WHERE tenant_id=@tenant " +
+            "AND action='sinistro.import-xml' AND outcome='succeeded')");
+        count.Parameters.AddWithValue("tenant", tenant.Value);
+        count.Parameters.AddWithValue("reference", reference);
+        await using var row = await count.ExecuteReaderAsync();
+        Assert.True(await row.ReadAsync());
+        Assert.Equal(1L, row.GetInt64(0));
+        Assert.Equal(1L, row.GetInt64(1));
+        Assert.Equal(1L, row.GetInt64(2));
+
+        // Every stored identity/request element is a SHA256 digest, not plaintext.
+        await using var digestSql = db.Admin.CreateCommand(
+            "SELECT octet_length(subject_digest),octet_length(key_digest)," +
+            "octet_length(request_digest) FROM legacy_xml_import_keys WHERE tenant_id=@tenant");
+        digestSql.Parameters.AddWithValue("tenant", tenant.Value);
+        await using var digests = await digestSql.ExecuteReaderAsync();
+        Assert.True(await digests.ReadAsync());
+        Assert.Equal(32, digests.GetInt32(0));
+        Assert.Equal(32, digests.GetInt32(1));
+        Assert.Equal(32, digests.GetInt32(2));
+    }
+
+    [Fact]
+    public async Task V011_two_simultaneous_imports_for_one_reference_allow_only_one_commit()
+    {
+        await using var db = await IsolatedDatabases.CreateAsync();
+        var tenant = TenantId.From(Guid.NewGuid());
+        var parsed = new LegacyXmlPreviewDto("accertatore",
+            "CONCURRENT-" + Guid.NewGuid().ToString("N"),
+            new DateOnly(2026, 11, 19), null, 0);
+        var digest = System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes("same-xml"));
+        var repo = new PgLegacyXmlCaseImportStore(db.App);
+        var jobs = await Task.WhenAll(new[] {"xml-import-unique-key-001", "xml-import-unique-key-002"}
+            .Select(async key =>
+            {
+                try { return (Ok: true, Outcome: await repo.CommitAsync(tenant, "subject-A", key, digest, parsed)); }
+                catch (LegacyXmlReferenceConflictException) { return (Ok: false, Outcome: (LegacyXmlCaseImportResult?)null); }
+            }));
+        Assert.Equal(1, jobs.Count(x => x.Ok));
+        Assert.Equal(1, jobs.Count(x => !x.Ok));
+        await using var count = db.Admin.CreateCommand(
+            "SELECT count(*) FROM sinistri WHERE tenant_id=@tenant AND external_reference=@reference");
+        count.Parameters.AddWithValue("tenant", tenant.Value);
+        count.Parameters.AddWithValue("reference", parsed.ExternalReference);
+        Assert.Equal(1L, (long)(await count.ExecuteScalarAsync())!);
+    }
+
+    [Fact]
+    public async Task V011_failed_success_audit_rolls_back_both_case_and_ledger()
+    {
+        await using var db = await IsolatedDatabases.CreateAsync();
+        var tenant = TenantId.From(Guid.NewGuid());
+        var parsed = new LegacyXmlPreviewDto("classic",
+            "NO-AUDIT-" + Guid.NewGuid().ToString("N"),
+            new DateOnly(2026, 11, 19), null, 0);
+        // Isolated schema: deliberately deny audit insert for the app role.
+        // If the implementation commits the case or idempotency row separately,
+        // this test will expose the partial commit.
+        await using (var revoke = db.Admin.CreateCommand(
+            "REVOKE INSERT ON security_audit FROM peritial_app"))
+            await revoke.ExecuteNonQueryAsync();
+        var digest = System.Security.Cryptography.SHA256.HashData("safe-input"u8);
+        await Assert.ThrowsAsync<PostgresException>(() =>
+            new PgLegacyXmlCaseImportStore(db.App).CommitAsync(
+                tenant, "subject-A", "audit-rejection-key-00001", digest, parsed));
+
+        await using var count = db.Admin.CreateCommand(
+            "SELECT (SELECT count(*) FROM sinistri WHERE tenant_id=@tenant " +
+            "AND external_reference=@reference), " +
+            "(SELECT count(*) FROM legacy_xml_import_keys WHERE tenant_id=@tenant)");
+        count.Parameters.AddWithValue("tenant", tenant.Value);
+        count.Parameters.AddWithValue("reference", parsed.ExternalReference);
+        await using var rows = await count.ExecuteReaderAsync();
+        Assert.True(await rows.ReadAsync());
+        Assert.Equal(0L, rows.GetInt64(0));
+        Assert.Equal(0L, rows.GetInt64(1));
+    }
+
+    [Fact]
     public async Task Stale_update_cannot_overwrite_newer_sinistro_or_append_success_audit()
     {
         await using var db = await IsolatedDatabases.CreateAsync();
