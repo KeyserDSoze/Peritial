@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "tools": [
     {
       "name": "advance_perizia",
@@ -9,7 +9,19 @@
         "target"
       ],
       "access": "write",
-      "effect": "mutating"
+      "effect": "mutating",
+      "parameters": {
+        "id": {
+          "type": "uuid",
+          "optional": false,
+          "nullable": false
+        },
+        "target": {
+          "type": "string",
+          "optional": false,
+          "nullable": false
+        }
+      }
     },
     {
       "name": "assign_perizia",
@@ -18,7 +30,19 @@
         "assignee"
       ],
       "access": "write",
-      "effect": "mutating"
+      "effect": "mutating",
+      "parameters": {
+        "id": {
+          "type": "uuid",
+          "optional": false,
+          "nullable": false
+        },
+        "assignee": {
+          "type": "string",
+          "optional": false,
+          "nullable": false
+        }
+      }
     },
     {
       "name": "cancel_perizia",
@@ -26,7 +50,14 @@
         "id"
       ],
       "access": "write",
-      "effect": "mutating"
+      "effect": "mutating",
+      "parameters": {
+        "id": {
+          "type": "uuid",
+          "optional": false,
+          "nullable": false
+        }
+      }
     },
     {
       "name": "create_perizia",
@@ -34,7 +65,14 @@
         "reference"
       ],
       "access": "write",
-      "effect": "mutating"
+      "effect": "mutating",
+      "parameters": {
+        "reference": {
+          "type": "string",
+          "optional": false,
+          "nullable": false
+        }
+      }
     },
     {
       "name": "create_sinistro",
@@ -43,7 +81,24 @@
         "occurredOn"
       ],
       "access": "write",
-      "effect": "mutating"
+      "effect": "mutating",
+      "parameters": {
+        "externalReference": {
+          "type": "string",
+          "optional": false,
+          "nullable": false
+        },
+        "occurredOn": {
+          "type": "date",
+          "optional": false,
+          "nullable": false
+        },
+        "reportedOn": {
+          "type": "date",
+          "optional": true,
+          "nullable": true
+        }
+      }
     },
     {
       "name": "delete_sinistro",
@@ -52,7 +107,19 @@
         "expectedVersion"
       ],
       "access": "write+delete",
-      "effect": "mutating"
+      "effect": "mutating",
+      "parameters": {
+        "id": {
+          "type": "uuid",
+          "optional": false,
+          "nullable": false
+        },
+        "expectedVersion": {
+          "type": "integer",
+          "optional": false,
+          "nullable": false
+        }
+      }
     },
     {
       "name": "get_document",
@@ -60,7 +127,14 @@
         "id"
       ],
       "access": "read",
-      "effect": "read-only"
+      "effect": "read-only",
+      "parameters": {
+        "id": {
+          "type": "uuid",
+          "optional": false,
+          "nullable": false
+        }
+      }
     },
     {
       "name": "get_perizia",
@@ -68,7 +142,14 @@
         "id"
       ],
       "access": "read",
-      "effect": "read-only"
+      "effect": "read-only",
+      "parameters": {
+        "id": {
+          "type": "uuid",
+          "optional": false,
+          "nullable": false
+        }
+      }
     },
     {
       "name": "get_perizia_sinistro",
@@ -76,7 +157,14 @@
         "periziaId"
       ],
       "access": "read",
-      "effect": "read-only"
+      "effect": "read-only",
+      "parameters": {
+        "periziaId": {
+          "type": "uuid",
+          "optional": false,
+          "nullable": false
+        }
+      }
     },
     {
       "name": "get_sinistro",
@@ -84,7 +172,14 @@
         "id"
       ],
       "access": "read",
-      "effect": "read-only"
+      "effect": "read-only",
+      "parameters": {
+        "id": {
+          "type": "uuid",
+          "optional": false,
+          "nullable": false
+        }
+      }
     },
     {
       "name": "ingest_file",
@@ -94,7 +189,34 @@
         "base64"
       ],
       "access": "write",
-      "effect": "mutating"
+      "effect": "mutating",
+      "parameters": {
+        "fileName": {
+          "type": "string",
+          "optional": false,
+          "nullable": false
+        },
+        "contentType": {
+          "type": "string",
+          "optional": false,
+          "nullable": false
+        },
+        "base64": {
+          "type": "string",
+          "optional": false,
+          "nullable": false
+        },
+        "periziaId": {
+          "type": "uuid",
+          "optional": true,
+          "nullable": true
+        },
+        "idempotencyKey": {
+          "type": "string",
+          "optional": true,
+          "nullable": true
+        }
+      }
     },
     {
       "name": "link_perizia_sinistro",
@@ -104,19 +226,49 @@
         "expectedLinkVersion"
       ],
       "access": "write",
-      "effect": "mutating"
+      "effect": "mutating",
+      "parameters": {
+        "periziaId": {
+          "type": "uuid",
+          "optional": false,
+          "nullable": false
+        },
+        "sinistroId": {
+          "type": "uuid",
+          "optional": false,
+          "nullable": false
+        },
+        "expectedLinkVersion": {
+          "type": "integer",
+          "optional": false,
+          "nullable": false
+        }
+      }
     },
     {
       "name": "list_documents",
       "required": [],
       "access": "read",
-      "effect": "read-only"
+      "effect": "read-only",
+      "parameters": {
+        "periziaId": {
+          "type": "uuid",
+          "optional": true,
+          "nullable": true
+        },
+        "limit": {
+          "type": "integer",
+          "optional": true,
+          "nullable": false
+        }
+      }
     },
     {
       "name": "list_perizie",
       "required": [],
       "access": "read",
-      "effect": "read-only"
+      "effect": "read-only",
+      "parameters": {}
     },
     {
       "name": "list_perizie_for_sinistro",
@@ -124,25 +276,68 @@
         "sinistroId"
       ],
       "access": "read",
-      "effect": "read-only"
+      "effect": "read-only",
+      "parameters": {
+        "sinistroId": {
+          "type": "uuid",
+          "optional": false,
+          "nullable": false
+        }
+      }
     },
     {
       "name": "list_sinistri",
       "required": [],
       "access": "read",
-      "effect": "read-only"
+      "effect": "read-only",
+      "parameters": {
+        "limit": {
+          "type": "integer",
+          "optional": true,
+          "nullable": false
+        }
+      }
     },
     {
       "name": "page_documents",
       "required": [],
       "access": "read",
-      "effect": "read-only"
+      "effect": "read-only",
+      "parameters": {
+        "periziaId": {
+          "type": "uuid",
+          "optional": true,
+          "nullable": true
+        },
+        "limit": {
+          "type": "integer",
+          "optional": true,
+          "nullable": false
+        },
+        "cursor": {
+          "type": "string",
+          "optional": true,
+          "nullable": true
+        }
+      }
     },
     {
       "name": "page_sinistri",
       "required": [],
       "access": "read",
-      "effect": "read-only"
+      "effect": "read-only",
+      "parameters": {
+        "cursor": {
+          "type": "string",
+          "optional": true,
+          "nullable": true
+        },
+        "limit": {
+          "type": "integer",
+          "optional": true,
+          "nullable": false
+        }
+      }
     },
     {
       "name": "plan_legacy_xml",
@@ -150,7 +345,14 @@
         "xml"
       ],
       "access": "write",
-      "effect": "read-only"
+      "effect": "read-only",
+      "parameters": {
+        "xml": {
+          "type": "string",
+          "optional": false,
+          "nullable": false
+        }
+      }
     },
     {
       "name": "preview_legacy_xml",
@@ -158,7 +360,14 @@
         "xml"
       ],
       "access": "write",
-      "effect": "read-only"
+      "effect": "read-only",
+      "parameters": {
+        "xml": {
+          "type": "string",
+          "optional": false,
+          "nullable": false
+        }
+      }
     },
     {
       "name": "reparent_perizia_sinistro",
@@ -169,7 +378,29 @@
         "expectedLinkVersion"
       ],
       "access": "write",
-      "effect": "mutating"
+      "effect": "mutating",
+      "parameters": {
+        "periziaId": {
+          "type": "uuid",
+          "optional": false,
+          "nullable": false
+        },
+        "expectedSinistroId": {
+          "type": "uuid",
+          "optional": false,
+          "nullable": false
+        },
+        "newSinistroId": {
+          "type": "uuid",
+          "optional": false,
+          "nullable": false
+        },
+        "expectedLinkVersion": {
+          "type": "integer",
+          "optional": false,
+          "nullable": false
+        }
+      }
     },
     {
       "name": "search_sinistri",
@@ -177,7 +408,29 @@
         "prefix"
       ],
       "access": "read",
-      "effect": "read-only"
+      "effect": "read-only",
+      "parameters": {
+        "prefix": {
+          "type": "string",
+          "optional": false,
+          "nullable": false
+        },
+        "occurredFrom": {
+          "type": "date",
+          "optional": true,
+          "nullable": true
+        },
+        "occurredTo": {
+          "type": "date",
+          "optional": true,
+          "nullable": true
+        },
+        "limit": {
+          "type": "integer",
+          "optional": true,
+          "nullable": false
+        }
+      }
     },
     {
       "name": "search_sinistri_page",
@@ -185,7 +438,34 @@
         "prefix"
       ],
       "access": "read",
-      "effect": "read-only"
+      "effect": "read-only",
+      "parameters": {
+        "prefix": {
+          "type": "string",
+          "optional": false,
+          "nullable": false
+        },
+        "occurredFrom": {
+          "type": "date",
+          "optional": true,
+          "nullable": true
+        },
+        "occurredTo": {
+          "type": "date",
+          "optional": true,
+          "nullable": true
+        },
+        "limit": {
+          "type": "integer",
+          "optional": true,
+          "nullable": false
+        },
+        "cursor": {
+          "type": "string",
+          "optional": true,
+          "nullable": true
+        }
+      }
     },
     {
       "name": "unlink_perizia_sinistro",
@@ -195,7 +475,24 @@
         "expectedLinkVersion"
       ],
       "access": "write",
-      "effect": "mutating"
+      "effect": "mutating",
+      "parameters": {
+        "periziaId": {
+          "type": "uuid",
+          "optional": false,
+          "nullable": false
+        },
+        "expectedSinistroId": {
+          "type": "uuid",
+          "optional": false,
+          "nullable": false
+        },
+        "expectedLinkVersion": {
+          "type": "integer",
+          "optional": false,
+          "nullable": false
+        }
+      }
     },
     {
       "name": "update_sinistro",
@@ -206,7 +503,34 @@
         "expectedVersion"
       ],
       "access": "write",
-      "effect": "mutating"
+      "effect": "mutating",
+      "parameters": {
+        "id": {
+          "type": "uuid",
+          "optional": false,
+          "nullable": false
+        },
+        "externalReference": {
+          "type": "string",
+          "optional": false,
+          "nullable": false
+        },
+        "occurredOn": {
+          "type": "date",
+          "optional": false,
+          "nullable": false
+        },
+        "expectedVersion": {
+          "type": "integer",
+          "optional": false,
+          "nullable": false
+        },
+        "reportedOn": {
+          "type": "date",
+          "optional": true,
+          "nullable": true
+        }
+      }
     }
   ]
 }

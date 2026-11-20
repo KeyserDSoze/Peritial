@@ -1,8 +1,7 @@
-"""Static MCP v1 contract gate: reject unreviewed tool/parameter drift.
+"""Fail-closed MCP v1 source-to-manifest compatibility policy.
 
-This is a SOURCE-code contract check, not a substitute for the live MCP
-tools/list Keycloak E2E gate. It deliberately does not execute application
-services or inspect tenant data.
+The manifest is declarative; JWT and tenant authorization remain in Business.
+The live Keycloak tools/list E2E separately verifies the SDK's JSON schema.
 """
 import json
 import re
@@ -17,6 +16,12 @@ _TOOL_RE = re.compile(
     r'public\s+(?:async\s+)?[^\n(]+\((.*?)\)\s*(?:=>|\{)',
     re.DOTALL,
 )
+_ARGUMENT_RE = re.compile(
+    r'^(string|Guid|DateOnly|int|long)(\?)?\s+([A-Za-z]\w*)'
+    r'(?:\s*=\s*(.+))?$'
+)
+_KIND = {"string": "string", "Guid": "uuid",
+         "DateOnly": "date", "int": "integer", "long": "integer"}
 _NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 _READ = {
     "list_perizie", "get_perizia", "get_perizia_sinistro",
@@ -28,40 +33,65 @@ _NONMUTATING_WRITE = {"preview_legacy_xml", "plan_legacy_xml"}
 _PRIVILEGED = {"delete_sinistro"}
 
 
-def parse_mcp_tool_signatures(source: str) -> dict[str, list[str]]:
+def parse_mcp_parameters(source: str) -> dict[str, dict[str, dict]]:
+    """Return each tool's ordered SDK-visible signature; fail on new shapes."""
     result = {}
     matches = list(_TOOL_RE.finditer(source))
-    found_names = re.findall(r'\[McpServerTool\(Name = "([^"]+)"\)', source)
-    if len(matches) != len(found_names):
+    declared = re.findall(r'\[McpServerTool\(Name = "([^"]+)"\)', source)
+    if len(matches) != len(declared):
         raise ValueError("Unrecognized MCP tool signature: fail closed on parser drift")
     for match in matches:
-        name, args = match.groups()
+        name, arguments = match.groups()
         if name in result:
             raise ValueError("Duplicate MCP tool name: " + name)
-        required = []
-        for arg in args.split(","):
+        parameters = {}
+        for arg in arguments.split(","):
             arg = arg.strip()
-            if not arg or arg.startswith("CancellationToken "):
+            if not arg:
                 continue
-            if "=" not in arg:
-                required.append(arg.rsplit(" ", 1)[-1])
-        result[name] = required
+            if arg == "CancellationToken ct = default":
+                continue
+            parsed = _ARGUMENT_RE.fullmatch(arg)
+            if not parsed:
+                raise ValueError(f"Unrecognized MCP parameter signature: {name}")
+            cs_type, nullable, param_name, default = parsed.groups()
+            if param_name in parameters:
+                raise ValueError(f"Duplicated MCP parameter: {name}")
+            parameters[param_name] = {
+                "type": _KIND[cs_type],
+                "optional": default is not None,
+                "nullable": nullable is not None,
+            }
+        result[name] = parameters
     return result
 
 
+def parse_mcp_tool_signatures(source: str) -> dict[str, list[str]]:
+    return {
+        name: [key for key, contract in parameters.items()
+               if not contract["optional"]]
+        for name, parameters in parse_mcp_parameters(source).items()
+    }
+
+
 def validate_catalog(manifest: dict, source: str) -> None:
-    if manifest.get("format") != 1 or manifest.get("version") != "1.0.0":
+    if manifest.get("format") != 1 or manifest.get("version") != "1.1.0":
         raise ValueError("Unreviewed MCP catalog version or format")
     items = manifest.get("tools")
     if not isinstance(items, list) or not items:
         raise ValueError("Empty or missing MCP catalog")
-    names = [i["name"] for i in items]
-    if any(not _NAME_RE.fullmatch(n) for n in names) or len(set(names)) != len(names):
+    if not all(isinstance(item, dict) and isinstance(item.get("name"), str)
+               for item in items):
+        raise ValueError("Malformed MCP catalog entry")
+    names = [item["name"] for item in items]
+    if any(not _NAME_RE.fullmatch(name) for name in names) or (
+        len(set(names)) != len(names)
+    ):
         raise ValueError("Invalid or duplicated MCP tool names")
     if names != sorted(names):
         raise ValueError("Keep the MCP tool catalog sorted by name")
 
-    actual = parse_mcp_tool_signatures(source)
+    actual = parse_mcp_parameters(source)
     if set(actual) != set(names):
         raise ValueError(
             f"MCP name drift: missing={sorted(set(actual) - set(names))}, "
@@ -70,9 +100,18 @@ def validate_catalog(manifest: dict, source: str) -> None:
 
     for item in items:
         name = item["name"]
-        if set(item) != {"name", "required", "access", "effect"}:
+        if set(item) != {"name", "required", "parameters", "access", "effect"}:
             raise ValueError("Unreviewed MCP catalog entry shape: " + name)
-        if item["required"] != actual[name]:
+        if not isinstance(item["parameters"], dict):
+            raise ValueError("Malformed MCP parameter contract: " + name)
+        if item["parameters"] != actual[name] or (
+            list(item["parameters"]) != list(actual[name])
+        ):
+            raise ValueError(f"MCP parameter contract drift: {name}")
+        expected_required = [
+            key for key, value in actual[name].items() if not value["optional"]
+        ]
+        if item["required"] != expected_required:
             raise ValueError(f"MCP required-argument drift: {name}")
         access = (
             "read" if name in _READ else
