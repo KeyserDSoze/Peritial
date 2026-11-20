@@ -53,18 +53,36 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
     );
   });
 
-  test("versioned MCP v1 contract matches live signed tools/list names and required parameters", async ({request}) => {
-    // The manifest is checked into docs/ and statically validated against
-    // McpTools.cs by a separate, fast CI job. This independently checks the
-    // actual SDK-generated public schema with signed Keycloak credentials.
+  test("versioned MCP v1.1 contract matches the full signed tools/list parameter schema", async ({request}) => {
+    // Static CI verifies C# signatures; this independent test observes the
+    // SDK-generated JSON schemas from both real Keycloak-authenticated clients.
     const {readFileSync} = await import("node:fs");
+    type Parameter = {type:"string"|"uuid"|"date"|"integer";
+      optional:boolean;nullable:boolean};
+    type Catalog = {format:number;version:string;tools:{
+      name:string;required:string[];parameters:Record<string,Parameter>;
+      access:string;effect:string
+    }[]};
     const manifest = JSON.parse(readFileSync(
       new URL("../../../docs/mcp-catalog.v1.json", import.meta.url), "utf8"
-    )) as {format:number;version:string;tools:{
-      name:string;required:string[];access:string;effect:string
-    }[]};
-    expect(manifest).toMatchObject({format:1,version:"1.0.0"});
+    )) as Catalog;
+    expect(manifest).toMatchObject({format:1,version:"1.1.0"});
     expect(manifest.tools.length).toBe(25);
+    const acceptedJsonTypes = (value:unknown):string[] => {
+      if (!value || typeof value !== "object") return [];
+      const schema = value as {
+        type?:string|string[];anyOf?:unknown[];oneOf?:unknown[];
+        allOf?:unknown[]
+      };
+      const direct = typeof schema.type === "string" ? [schema.type]
+        : Array.isArray(schema.type) ? schema.type : [];
+      return [...new Set([
+        ...direct,
+        ...(schema.anyOf ?? []).flatMap(acceptedJsonTypes),
+        ...(schema.oneOf ?? []).flatMap(acceptedJsonTypes),
+        ...(schema.allOf ?? []).flatMap(acceptedJsonTypes)
+      ])];
+    };
 
     for (const client of ["peritial-test-readonly","peritial-test-write"]) {
       const token = await tokenFor(request, client);
@@ -93,9 +111,19 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
         expect(tool.inputSchema, expected.name).toBeDefined();
         expect([...(tool.inputSchema?.required ?? [])].sort(),
           expected.name).toEqual([...expected.required].sort());
-        for (const parameter of expected.required) {
-          expect(tool.inputSchema?.properties, expected.name)
-            .toHaveProperty(parameter);
+        // Strictly compare ALL arguments, including optional cursor, limit,
+        // dates and idempotencyKey; never accept silent parameter removal.
+        expect(Object.keys(tool.inputSchema?.properties ?? {}).sort(),
+          expected.name).toEqual(Object.keys(expected.parameters).sort());
+        for (const [name, param] of Object.entries(expected.parameters)) {
+          const schema = tool.inputSchema!.properties![name];
+          const actualTypes = acceptedJsonTypes(schema);
+          const primary = param.type === "integer" ? "integer" : "string";
+          expect(actualTypes, `${expected.name}.${name} JSON type`)
+            .toContain(primary);
+          expect((tool.inputSchema?.required ?? []).includes(name),
+            `${expected.name}.${name} required flag`)
+            .toBe(!param.optional);
         }
       }
     }
