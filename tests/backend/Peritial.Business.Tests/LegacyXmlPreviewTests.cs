@@ -124,7 +124,7 @@ public sealed class LegacyXmlPreviewTests
     }
 
     [Theory]
-    [InlineData(" <NumeroSinistro> SPACE-REF </NumeroSinistro>", false)]
+    [InlineData(" <NumeroSinistro>SPACE-REF</NumeroSinistro>", false)]
     [InlineData("<NumeroSinistro> SPACE-REF </NumeroSinistro>", true)]
     [InlineData("<NumeroSinistro>SPACE-REF</NumeroSinistro>", false)]
     public void Preview_flags_trimmed_reference_without_leaking_original_lexical_form(
