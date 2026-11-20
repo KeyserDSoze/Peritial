@@ -206,6 +206,149 @@ public sealed class SinistroPersistenceTests
     }
 
     [Fact]
+    public async Task V012_every_writer_denies_duplicate_of_imported_reference_but_keeps_legacy_duplicates()
+    {
+        await using var db = await IsolatedDatabases.CreateAsync();
+        var repo = new PgSinistroRepository(db.App);
+        var import = new PgLegacyXmlCaseImportStore(db.App);
+        var a = TenantId.From(Guid.NewGuid());
+        var b = TenantId.From(Guid.NewGuid());
+        var reference = "GUARD-" + Guid.NewGuid().ToString("N");
+        var preview = new LegacyXmlPreviewDto("classic", reference,
+            new DateOnly(2026, 11, 20), null, 0);
+        var digest = System.Security.Cryptography.SHA256.HashData("guard-payload"u8);
+        var imported = await import.CommitAsync(a, "signed-actor", "import-guard-key-0000001", digest, preview);
+
+        var denied = Sinistro.Create(a, reference, new DateOnly(2026, 11, 20));
+        await Assert.ThrowsAsync<LegacyXmlReferenceConflictException>(() =>
+            repo.AddAuditedAsync(denied, Event(a, denied.Id, "sinistro.create")));
+        Assert.Null(await repo.FindAsync(a, denied.Id));
+
+        // A real app-role SQL writer cannot bypass the application repository.
+        await using (var conn = await db.App.OpenConnectionAsync())
+        await using (var transaction = await conn.BeginTransactionAsync())
+        {
+            await using (var scope = new NpgsqlCommand(
+                "SELECT set_config('peritial.tenant_id',@tenant,true)", conn, transaction))
+            {
+                scope.Parameters.AddWithValue("tenant", a.Value.ToString("D"));
+                await scope.ExecuteNonQueryAsync();
+            }
+            await using var raw = new NpgsqlCommand(
+                "INSERT INTO sinistri (tenant_id,id,external_reference,occurred_on,created_at_utc) " +
+                "VALUES (@tenant,@id,@reference,DATE '2026-11-20',now())",
+                conn, transaction);
+            raw.Parameters.AddWithValue("tenant", a.Value);
+            raw.Parameters.AddWithValue("id", Guid.NewGuid());
+            raw.Parameters.AddWithValue("reference", reference);
+            var violation = await Assert.ThrowsAsync<PostgresException>(
+                () => raw.ExecuteNonQueryAsync());
+            Assert.Equal(PostgresErrorCodes.UniqueViolation, violation.SqlState);
+            Assert.Equal("ck_imported_sinistro_reference_guard", violation.ConstraintName);
+            await transaction.RollbackAsync();
+        }
+
+        // Different tenant, identical reference, is fully independent.
+        var other = Sinistro.Create(b, reference, new DateOnly(2026, 11, 20));
+        await repo.AddAuditedAsync(other, Event(b, other.Id, "sinistro.create"));
+        Assert.NotNull(await repo.FindAsync(a, imported.SinistroId));
+        Assert.NotNull(await repo.FindAsync(b, other.Id));
+
+        // Historical duplicates are still allowed when no XML provenance
+        // exists; this change must not invent a global UNIQUE constraint.
+        var legacyReference = "LEGACY-DUP-" + Guid.NewGuid().ToString("N");
+        foreach (var existing in new[] {
+            Sinistro.Create(a, legacyReference, new DateOnly(2026, 11, 20)),
+            Sinistro.Create(a, legacyReference, new DateOnly(2026, 11, 19)) })
+            await repo.AddAuditedAsync(existing, Event(a, existing.Id, "sinistro.create"));
+        await using var check = db.Admin.CreateCommand(
+            "SELECT count(*) FROM sinistri WHERE tenant_id=@tenant AND external_reference=@reference");
+        check.Parameters.AddWithValue("tenant", a.Value);
+        check.Parameters.AddWithValue("reference", legacyReference);
+        Assert.Equal(2L, (long)(await check.ExecuteScalarAsync())!);
+    }
+
+    [Fact]
+    public async Task V012_protects_imported_case_from_update_and_blocks_retargeting()
+    {
+        await using var db = await IsolatedDatabases.CreateAsync();
+        var repo = new PgSinistroRepository(db.App);
+        var tenant = TenantId.From(Guid.NewGuid());
+        var reference = "IMMUTABLE-" + Guid.NewGuid().ToString("N");
+        var preview = new LegacyXmlPreviewDto("accertatore", reference,
+            new DateOnly(2026, 11, 19), null, 0);
+        var digest = System.Security.Cryptography.SHA256.HashData("immutable"u8);
+        var imported = await new PgLegacyXmlCaseImportStore(db.App).CommitAsync(
+            tenant, "signed-actor", "immutable-key-00000001", digest, preview);
+
+        var snapshot = (await repo.FindAsync(tenant, imported.SinistroId))!;
+        snapshot.Update(tenant, reference, new DateOnly(2026, 11, 18));
+        await Assert.ThrowsAsync<LegacyXmlReferenceConflictException>(() =>
+            repo.UpdateAuditedAsync(snapshot, Event(tenant, snapshot.Id, "sinistro.update")));
+
+        var ordinary = Sinistro.Create(tenant, "ORDINARY-" + Guid.NewGuid().ToString("N"),
+            new DateOnly(2026, 11, 19));
+        await repo.AddAuditedAsync(ordinary, Event(tenant, ordinary.Id, "sinistro.create"));
+        ordinary.Update(tenant, reference, new DateOnly(2026, 11, 20));
+        await Assert.ThrowsAsync<LegacyXmlReferenceConflictException>(() =>
+            repo.UpdateAuditedAsync(ordinary, Event(tenant, ordinary.Id, "sinistro.update")));
+        var unchanged = (await repo.FindAsync(tenant, ordinary.Id))!;
+        Assert.NotEqual(reference, unchanged.ExternalReference);
+        Assert.Equal(1L, unchanged.PersistedVersion);
+
+        await using var audit = db.Admin.CreateCommand(
+            "SELECT count(*) FROM security_audit WHERE tenant_id=@tenant AND " +
+            "action='sinistro.update' AND outcome='succeeded' AND " +
+            "resource_id IN (@imported,@ordinary)");
+        audit.Parameters.AddWithValue("tenant", tenant.Value);
+        audit.Parameters.AddWithValue("imported", imported.SinistroId);
+        audit.Parameters.AddWithValue("ordinary", ordinary.Id);
+        Assert.Equal(0L, (long)(await audit.ExecuteScalarAsync())!);
+    }
+
+    [Fact]
+    public async Task V012_import_and_regular_case_create_from_independent_pools_serialize_without_duplicate()
+    {
+        await using var db = await IsolatedDatabases.CreateAsync();
+        await using var otherPool = NpgsqlDataSource.Create(db.App.ConnectionString);
+        var tenant = TenantId.From(Guid.NewGuid());
+        var reference = "RACE-" + Guid.NewGuid().ToString("N");
+        var preview = new LegacyXmlPreviewDto("classic", reference,
+            new DateOnly(2026, 11, 20), null, 0);
+        var digest = System.Security.Cryptography.SHA256.HashData("race-case"u8);
+        var ordinary = Sinistro.Create(tenant, reference, preview.OccurredOn);
+        var importedStore = new PgLegacyXmlCaseImportStore(db.App);
+        var regularStore = new PgSinistroRepository(otherPool);
+
+        async Task<bool> ImportAsync()
+        {
+            try
+            {
+                await importedStore.CommitAsync(tenant, "signed-actor", "race-key-0000000001",
+                    digest, preview);
+                return true;
+            }
+            catch (LegacyXmlReferenceConflictException) { return false; }
+        }
+        async Task<bool> RegularAsync()
+        {
+            try
+            {
+                await regularStore.AddAuditedAsync(ordinary, Event(tenant, ordinary.Id, "sinistro.create"));
+                return true;
+            }
+            catch (LegacyXmlReferenceConflictException) { return false; }
+        }
+        var outcomes = await Task.WhenAll(ImportAsync(), RegularAsync());
+        Assert.Single(outcomes.Where(x => x));
+        await using var verify = db.Admin.CreateCommand(
+            "SELECT count(*) FROM sinistri WHERE tenant_id=@tenant AND external_reference=@reference");
+        verify.Parameters.AddWithValue("tenant", tenant.Value);
+        verify.Parameters.AddWithValue("reference", reference);
+        Assert.Equal(1L, (long)(await verify.ExecuteScalarAsync())!);
+    }
+
+    [Fact]
     public async Task V011_failed_success_audit_rolls_back_both_case_and_ledger()
     {
         await using var db = await IsolatedDatabases.CreateAsync();
