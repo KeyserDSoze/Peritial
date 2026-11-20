@@ -1,0 +1,212 @@
+{
+  "format": 1,
+  "version": "1.0.0",
+  "tools": [
+    {
+      "name": "advance_perizia",
+      "required": [
+        "id",
+        "target"
+      ],
+      "access": "write",
+      "effect": "mutating"
+    },
+    {
+      "name": "assign_perizia",
+      "required": [
+        "id",
+        "assignee"
+      ],
+      "access": "write",
+      "effect": "mutating"
+    },
+    {
+      "name": "cancel_perizia",
+      "required": [
+        "id"
+      ],
+      "access": "write",
+      "effect": "mutating"
+    },
+    {
+      "name": "create_perizia",
+      "required": [
+        "reference"
+      ],
+      "access": "write",
+      "effect": "mutating"
+    },
+    {
+      "name": "create_sinistro",
+      "required": [
+        "externalReference",
+        "occurredOn"
+      ],
+      "access": "write",
+      "effect": "mutating"
+    },
+    {
+      "name": "delete_sinistro",
+      "required": [
+        "id",
+        "expectedVersion"
+      ],
+      "access": "write+delete",
+      "effect": "mutating"
+    },
+    {
+      "name": "get_document",
+      "required": [
+        "id"
+      ],
+      "access": "read",
+      "effect": "read-only"
+    },
+    {
+      "name": "get_perizia",
+      "required": [
+        "id"
+      ],
+      "access": "read",
+      "effect": "read-only"
+    },
+    {
+      "name": "get_perizia_sinistro",
+      "required": [
+        "periziaId"
+      ],
+      "access": "read",
+      "effect": "read-only"
+    },
+    {
+      "name": "get_sinistro",
+      "required": [
+        "id"
+      ],
+      "access": "read",
+      "effect": "read-only"
+    },
+    {
+      "name": "ingest_file",
+      "required": [
+        "fileName",
+        "contentType",
+        "base64"
+      ],
+      "access": "write",
+      "effect": "mutating"
+    },
+    {
+      "name": "link_perizia_sinistro",
+      "required": [
+        "periziaId",
+        "sinistroId",
+        "expectedLinkVersion"
+      ],
+      "access": "write",
+      "effect": "mutating"
+    },
+    {
+      "name": "list_documents",
+      "required": [],
+      "access": "read",
+      "effect": "read-only"
+    },
+    {
+      "name": "list_perizie",
+      "required": [],
+      "access": "read",
+      "effect": "read-only"
+    },
+    {
+      "name": "list_perizie_for_sinistro",
+      "required": [
+        "sinistroId"
+      ],
+      "access": "read",
+      "effect": "read-only"
+    },
+    {
+      "name": "list_sinistri",
+      "required": [],
+      "access": "read",
+      "effect": "read-only"
+    },
+    {
+      "name": "page_documents",
+      "required": [],
+      "access": "read",
+      "effect": "read-only"
+    },
+    {
+      "name": "page_sinistri",
+      "required": [],
+      "access": "read",
+      "effect": "read-only"
+    },
+    {
+      "name": "plan_legacy_xml",
+      "required": [
+        "xml"
+      ],
+      "access": "write",
+      "effect": "read-only"
+    },
+    {
+      "name": "preview_legacy_xml",
+      "required": [
+        "xml"
+      ],
+      "access": "write",
+      "effect": "read-only"
+    },
+    {
+      "name": "reparent_perizia_sinistro",
+      "required": [
+        "periziaId",
+        "expectedSinistroId",
+        "newSinistroId",
+        "expectedLinkVersion"
+      ],
+      "access": "write",
+      "effect": "mutating"
+    },
+    {
+      "name": "search_sinistri",
+      "required": [
+        "prefix"
+      ],
+      "access": "read",
+      "effect": "read-only"
+    },
+    {
+      "name": "search_sinistri_page",
+      "required": [
+        "prefix"
+      ],
+      "access": "read",
+      "effect": "read-only"
+    },
+    {
+      "name": "unlink_perizia_sinistro",
+      "required": [
+        "periziaId",
+        "expectedSinistroId",
+        "expectedLinkVersion"
+      ],
+      "access": "write",
+      "effect": "mutating"
+    },
+    {
+      "name": "update_sinistro",
+      "required": [
+        "id",
+        "externalReference",
+        "occurredOn",
+        "expectedVersion"
+      ],
+      "access": "write",
+      "effect": "mutating"
+    }
+  ]
+}

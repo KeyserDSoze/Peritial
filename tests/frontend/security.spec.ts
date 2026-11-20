@@ -53,6 +53,54 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
     );
   });
 
+  test("versioned MCP v1 contract matches live signed tools/list names and required parameters", async ({request}) => {
+    // The manifest is checked into docs/ and statically validated against
+    // McpTools.cs by a separate, fast CI job. This independently checks the
+    // actual SDK-generated public schema with signed Keycloak credentials.
+    const {readFileSync} = await import("node:fs");
+    const manifest = JSON.parse(readFileSync(
+      new URL("../../../docs/mcp-catalog.v1.json", import.meta.url), "utf8"
+    )) as {format:number;version:string;tools:{
+      name:string;required:string[];access:string;effect:string
+    }[]};
+    expect(manifest).toMatchObject({format:1,version:"1.0.0"});
+    expect(manifest.tools.length).toBe(25);
+
+    for (const client of ["peritial-test-readonly","peritial-test-write"]) {
+      const token = await tokenFor(request, client);
+      const response = await request.post(api + "/mcp", {
+        headers:mcpHeaders(token),
+        data:{jsonrpc:"2.0",id:4250,method:"tools/list"}
+      });
+      expect(response.ok(), await response.text()).toBeTruthy();
+      const body = await response.text();
+      type ToolList = {result?:{tools:{name:string;inputSchema?:{
+        required?:string[];properties?:Record<string,unknown>
+      }}[]};error?:unknown};
+      const envelopes = body.trimStart().startsWith("{")
+        ? [JSON.parse(body) as ToolList]
+        : body.split(/\r?\n/).filter(line => line.startsWith("data:"))
+          .map(line => JSON.parse(line.slice(5).trim()) as ToolList);
+      const value = envelopes.find(item => item.result?.tools);
+      expect(value?.error).toBeUndefined();
+      expect(value?.result?.tools).toBeDefined();
+      const actual = value!.result!.tools;
+      expect(actual.map(tool => tool.name).sort()).toEqual(
+        manifest.tools.map(tool => tool.name).sort()
+      );
+      for (const expected of manifest.tools) {
+        const tool = actual.find(item => item.name === expected.name)!;
+        expect(tool.inputSchema, expected.name).toBeDefined();
+        expect([...(tool.inputSchema?.required ?? [])].sort(),
+          expected.name).toEqual([...expected.required].sort());
+        for (const parameter of expected.required) {
+          expect(tool.inputSchema?.properties, expected.name)
+            .toHaveProperty(parameter);
+        }
+      }
+    }
+  });
+
   test("signed REST and MCP responses are never browser-cacheable", async ({request}) => {
     const readOnly = await tokenFor(request, "peritial-test-readonly");
     const rest = await request.get(api + "/api/perizie", {
