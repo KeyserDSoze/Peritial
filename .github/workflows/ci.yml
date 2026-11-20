@@ -139,8 +139,12 @@ jobs:
           docker compose -f docker/compose.yml exec -T postgres \
             psql -X -U peritial -d peritial -v ON_ERROR_STOP=1 \
             < scripts/db/migrations/V011__legacy_xml_import_idempotency.sql
+          # V012 deliberately locks sinistri during its preexisting-collision
+          # check. Unlike V003-V011, it MUST run inside one transaction;
+          # -f /dev/stdin makes -1/--single-transaction effective in psql.
           docker compose -f docker/compose.yml exec -T postgres \
             psql -X -U peritial -d peritial -v ON_ERROR_STOP=1 \
+            --single-transaction -f /dev/stdin \
             < scripts/db/migrations/V012__imported_sinistri_global_reference_guard.sql
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
