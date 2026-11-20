@@ -191,6 +191,24 @@ public sealed class LegacyXmlPreviewTests
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Utf16_entity_references_do_not_bypass_case_only_source_fidelity(bool bigEndian)
+    {
+        var encoding = bigEndian ? Encoding.BigEndianUnicode : Encoding.Unicode;
+        var xml = "<?xml version=\"1.0\" encoding=\"utf-16\"?>" +
+            "<it.autosoftws.ReIncaricoRecord>" +
+            "<NumeroSinistro>BYTE&#45;REF</NumeroSinistro>" +
+            "<DataOraSinistro>2026-11-19</DataOraSinistro>" +
+            "</it.autosoftws.ReIncaricoRecord>";
+        var bytes = encoding.GetPreamble().Concat(encoding.GetBytes(xml)).ToArray();
+        var parsed = Service.Preview(bytes);
+        Assert.Equal("BYTE-REF", parsed.ExternalReference);
+        Assert.True(parsed.HasUnmappedBusinessData);
+        Assert.Throws<ArgumentException>(() => Service.PreviewCaseOnly(bytes));
+    }
+
+    [Theory]
     [InlineData("<unknown><NumeroSinistro>X</NumeroSinistro><DataOraSinistro>2026-11-18</DataOraSinistro></unknown>")]
     [InlineData("<it.autosoftws.ReIncaricoRecord xmlns='urn:other'><NumeroSinistro>X</NumeroSinistro><DataOraSinistro>2026-11-18</DataOraSinistro></it.autosoftws.ReIncaricoRecord>")]
     [InlineData("<it.autosoftws.ReIncaricoRecord><NumeroSinistro>X</NumeroSinistro><DataOraSinistro>2026-11-18</DataOraSinistro>")]
