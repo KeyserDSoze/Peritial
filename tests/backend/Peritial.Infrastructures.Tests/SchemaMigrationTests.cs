@@ -200,6 +200,65 @@ public sealed class SchemaMigrationTests
     }
 
     [Fact]
+    public async Task V012_guard_is_invoker_trigger_and_rejects_preexisting_import_reference_collision()
+    {
+        await WithIsolatedSchemaAsync(async db =>
+        {
+            Assert.Equal(12, await SchemaMigrator.ApplyAsync(db));
+            await using var conn = await db.OpenConnectionAsync();
+            await using (var check = new NpgsqlCommand(
+                "SELECT NOT p.prosecdef AND t.tgenabled='O' " +
+                "FROM pg_trigger t JOIN pg_proc p ON p.oid=t.tgfoid " +
+                "WHERE t.tgrelid=to_regclass('sinistri') AND " +
+                "t.tgname='trg_guard_imported_sinistro_reference'", conn))
+                Assert.True((bool)(await check.ExecuteScalarAsync())!);
+
+            // Model a V011 database that was hit by a competing raw writer
+            // BEFORE the new V012 trigger was installed. In this isolated
+            // fixture only, remove V012 and seed a real imported duplicate.
+            await using (var rewind = new NpgsqlCommand(
+                "DROP TRIGGER trg_guard_imported_sinistro_reference ON sinistri; " +
+                "DROP FUNCTION guard_imported_sinistro_reference(); " +
+                "DELETE FROM schema_migrations WHERE version=12", conn))
+                await rewind.ExecuteNonQueryAsync();
+            var tenant = Guid.NewGuid();
+            var importedId = Guid.NewGuid();
+            var otherId = Guid.NewGuid();
+            await using (var insert = new NpgsqlCommand(
+                "INSERT INTO sinistri(tenant_id,id,external_reference,occurred_on,created_at_utc) " +
+                "VALUES (@tenant,@imported,'COLLIDING-IMPORT',DATE '2026-11-20',now()), " +
+                "(@tenant,@other,'COLLIDING-IMPORT',DATE '2026-11-20',now()); " +
+                "INSERT INTO legacy_xml_import_keys " +
+                "(tenant_id,subject_digest,key_digest,request_digest,sinistro_id) " +
+                "VALUES (@tenant,decode(repeat('ab',32),'hex')," +
+                "decode(repeat('cd',32),'hex'),decode(repeat('ef',32),'hex'),@imported)", conn))
+            {
+                insert.Parameters.AddWithValue("tenant", tenant);
+                insert.Parameters.AddWithValue("imported", importedId);
+                insert.Parameters.AddWithValue("other", otherId);
+                await insert.ExecuteNonQueryAsync();
+            }
+
+            // The forward migration must fail closed with no journal entry
+            // and without silently deleting/relabeling either existing case.
+            var collision = await Assert.ThrowsAsync<PostgresException>(
+                () => SchemaMigrator.ApplyAsync(db));
+            Assert.Equal("P0001", collision.SqlState);
+            await using var verify = await db.OpenConnectionAsync();
+            await using (var journal = new NpgsqlCommand(
+                "SELECT count(*) FROM schema_migrations", verify))
+                Assert.Equal(11L, (long)(await journal.ExecuteScalarAsync())!);
+            await using (var cases = new NpgsqlCommand(
+                "SELECT count(*) FROM sinistri WHERE tenant_id=@tenant " +
+                "AND external_reference='COLLIDING-IMPORT'", verify))
+            {
+                cases.Parameters.AddWithValue("tenant", tenant);
+                Assert.Equal(2L, (long)(await cases.ExecuteScalarAsync())!);
+            }
+        });
+    }
+
+    [Fact]
     public async Task Untracked_legacy_schema_is_rejected_without_creating_a_journal()
     {
         await WithIsolatedSchemaAsync(async db =>
