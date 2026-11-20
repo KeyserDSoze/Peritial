@@ -148,10 +148,11 @@ SELECT
       AND audit_id='a1a1a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1')=1
  AND (SELECT count(*) FROM upload_intents)=1
  AND (SELECT count(*) FROM upload_request_keys WHERE status='completed')=1
- AND (SELECT count(*) FROM schema_migrations)=11
+ AND (SELECT count(*) FROM schema_migrations)=12
  AND to_regclass('ix_documents_tenant_created_id') IS NOT NULL
  AND to_regclass('ix_documents_tenant_perizia_created_id') IS NOT NULL
  AND to_regclass('legacy_xml_import_keys') IS NOT NULL
+ AND to_regprocedure('guard_imported_sinistro_reference()') IS NOT NULL
  AND (SELECT count(*) FROM pg_class WHERE relname IN
     ('perizie','documents','security_audit','upload_intents','upload_request_keys',
      'sinistri','perizia_sinistro_history')

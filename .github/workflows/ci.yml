@@ -106,10 +106,10 @@ jobs:
             sleep 2
           done
           test "$ready" = "1"
-      - name: Provision V003–V011 only for disposable Compose E2E
+      - name: Provision V003–V012 only for disposable Compose E2E
         run: |
           # The Compose demo still boots the historical unjournaled V001 schema.
-          # Apply additive V003-V011 ONLY inside this disposable CI
+          # Apply additive V003-V012 ONLY inside this disposable CI
           # database. Do not simulate a journal or silently mutate prod volumes.
           # Real versioned deployments use the explicit privileged migrator.
           docker compose -f docker/compose.yml exec -T postgres \
@@ -139,6 +139,9 @@ jobs:
           docker compose -f docker/compose.yml exec -T postgres \
             psql -X -U peritial -d peritial -v ON_ERROR_STOP=1 \
             < scripts/db/migrations/V011__legacy_xml_import_idempotency.sql
+          docker compose -f docker/compose.yml exec -T postgres \
+            psql -X -U peritial -d peritial -v ON_ERROR_STOP=1 \
+            < scripts/db/migrations/V012__imported_sinistri_global_reference_guard.sql
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: "22.23.4"
