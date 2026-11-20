@@ -43,6 +43,9 @@ class McpCatalogContractTests(unittest.TestCase):
         manifest = self._manifest()
         altered = copy.deepcopy(manifest)
         altered["tools"][0]["name"] = "renamed_tool"
+        # Keep sorting valid so the test probes the *name* invariant,
+        # not the independent catalog-order invariant.
+        altered["tools"].sort(key=lambda item: item["name"])
         with self.assertRaisesRegex(ValueError, "MCP name drift"):
             validate_catalog(altered, self.source)
 
