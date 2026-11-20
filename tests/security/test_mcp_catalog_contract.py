@@ -85,20 +85,20 @@ class McpCatalogContractTests(unittest.TestCase):
             self.assertIsInstance(item["parameters"], dict)
         create = next(i for i in manifest["tools"] if i["name"] == "create_sinistro")
         self.assertEqual(
-            {"type": "date", "optional": False, "nullable": False},
+            {"type": "date", "optional": False, "nullable": False, "defaultLiteral": None},
             create["parameters"]["occurredOn"],
         )
         self.assertEqual(
-            {"type": "date", "optional": True, "nullable": True},
+            {"type": "date", "optional": True, "nullable": True, "defaultLiteral": "null"},
             create["parameters"]["reportedOn"],
         )
         page = next(i for i in manifest["tools"] if i["name"] == "page_sinistri")
         self.assertEqual(
-            {"type": "string", "optional": True, "nullable": True},
+            {"type": "string", "optional": True, "nullable": True, "defaultLiteral": "null"},
             page["parameters"]["cursor"],
         )
         self.assertEqual(
-            {"type": "integer", "optional": True, "nullable": False},
+            {"type": "integer", "optional": True, "nullable": False, "defaultLiteral": "50"},
             page["parameters"]["limit"],
         )
         self.assertNotIn("ct", page["parameters"])
