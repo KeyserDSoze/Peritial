@@ -97,10 +97,19 @@ public sealed class LegacyXmlPreviewService(ITenantContext context)
         {
             "NumeroSinistro", "DataOraSinistro", "DataIncarico"
         };
+        // ReadDirectScalar intentionally trims for an advisory preview, but
+        // trimming an XML reference/date is not an identity-preserving import.
+        // Even an explicitly empty <DataIncarico/> differs from a missing
+        // source element: both would otherwise silently become null.
+        var normalizedSourceScalar = root.Elements().Any(e =>
+            allowed.Contains(e.Name) &&
+            (e.Value != e.Value.Trim() ||
+             (e.Name == "DataIncarico" && e.Value.Length == 0)));
         var unmapped = root.DescendantsAndSelf().Any(e => e.HasAttributes) ||
             root.Elements().Any(e => !allowed.Contains(e.Name) || e.HasElements) ||
             root.Nodes().OfType<XText>().Any(t => !string.IsNullOrWhiteSpace(t.Value)) ||
-            document.DescendantNodes().Any(n => n is XComment or XProcessingInstruction);
+            document.DescendantNodes().Any(n => n is XComment or XProcessingInstruction) ||
+            normalizedSourceScalar;
 
         var number = ReadDirectScalar(root, "NumeroSinistro", required: true)!;
         if (number.Length > 100)
