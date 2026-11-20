@@ -127,11 +127,11 @@ public sealed class McpTools(
     public Task<DocumentSummaryDto> GetDocument(Guid id, CancellationToken ct = default) =>
         documents.GetAsync(id, ct);
 
-    [McpServerTool(Name = "preview_legacy_xml"), Description("Validates and previews XML Classic / Classic Base / Accertatore without persisting, importing or decoding attachments. Requires signed peritial.write, max 1 MiB; returns only format, case reference, dates and attachment count.")]
+    [McpServerTool(Name = "preview_legacy_xml"), Description("Validates and previews XML Classic / Classic Base / Accertatore without persisting, importing or decoding attachments. Requires signed peritial.write, max 1 MiB; returns format, case reference, calendar dates, attachment count and a boolean for unmapped business data; never returns attachment content.")]
     public LegacyXmlPreviewDto PreviewLegacyXml(string xml) =>
         xmlPreview.PreviewUtf8(xml);
 
-    [McpServerTool(Name = "plan_legacy_xml"), Description("Read-only Classic/Accertatore import reconciliation: compares exact reference and dates within the signed tenant. Returns new/existing/conflict/ambiguous without writes. Requires peritial.write; max 1 MiB UTF-8. Not authorization to import.")]
+    [McpServerTool(Name = "plan_legacy_xml"), Description("Read-only Classic/Accertatore import reconciliation: compares exact reference and dates within the signed tenant. Returns new/existing/review-required/conflict/ambiguous without writes. Review-required never contains a candidate UUID. Requires peritial.write; max 1 MiB UTF-8. Not authorization to import.")]
     public Task<LegacyXmlImportPlanDto> PlanLegacyXml(
         string xml, CancellationToken ct = default) =>
         xmlPlan.PlanUtf8Async(xml, ct);

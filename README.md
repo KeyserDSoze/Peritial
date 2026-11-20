@@ -291,3 +291,24 @@ mentre la preview resta disponibile e non divulga
 markup XML originale, payload o dati personali.
 I test includono UTF-8, UTF-16 LE/BE e parità REST/MCP.
 [ADR 0058](adr/0058-xml-character-references-cdata-fail-closed.md).
+
+## Catalogo MCP versionato e guardia di compatibilità (#12)
+
+Il primo snapshot dichiarativo dei tool MCP è
+[`docs/mcp-catalog.v1.json`](docs/mcp-catalog.v1.json):
+**25 tool**, `format=1`, `version=1.0.0`, con nomi,
+parametri obbligatori, scope atteso e distinzione tra
+letture e operazioni mutative. Il job
+`supply-chain-actions` verifica il manifesto contro
+`McpTools.cs` e rifiuta rinominazioni, aggiunte/rimozioni,
+modifiche agli argomenti obbligatori e classificazioni
+di accesso non documentate. I test full-stack confrontano
+il manifesto col vero MCP `tools/list` sotto token
+Keycloak firmati `read` e `write`.
+
+Lo snapshot non è un sistema di negoziazione automatica
+tra versioni né sostituisce i controlli OAuth nei servizi:
+le operazioni mutative restano soggette a scope, RLS,
+audit e versioni CAS. `delete_sinistro` necessita
+inoltre di uno scope esplicito e del gate di sviluppo.
+[ADR 0059](adr/0059-versioned-mcp-tool-contract-gate.md).

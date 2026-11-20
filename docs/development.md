@@ -1615,3 +1615,38 @@ ci sono regressioni anche con BOM UTF-16 LE/BE
 e Keycloak REST/MCP. Non assumere che la sola
 identità decodificata basti all'import.
 [ADR 0058](../adr/0058-xml-character-references-cdata-fail-closed.md).
+
+## #12 — test del catalogo MCP versionato
+
+Per verificare il catalogo senza avviare la
+API, da radice repository:
+
+```sh
+python3 -m unittest discover -s tests/security -p 'test_mcp_catalog_contract.py' -v
+```
+
+Il gate confronta l'implementazione
+`src/backend/Applications/McpTools.cs` con
+`docs/mcp-catalog.v1.json`: un cambio di
+nome, numero di tool, argomento richiesto
+o categoria di accesso non coerente fallisce
+in CI nel job `supply-chain-actions`.
+Il parser delle firme fallisce chiuso se
+vede attributi tool non riconosciuti.
+Per modificare consapevolmente il catalogo
+serve aggiornare manifesto, documentazione,
+test e versione in modo coordinato;
+lo snapshot v1 di partenza rimane un baseline
+dichiarato.
+
+La CI Compose avvia PostgreSQL/Keycloak/API
+e usa Playwright per chiamare il vero MCP
+`tools/list` con JWT firmato `read`
+e `write`. Confronta il set dei tool e
+lo schema dei parametri `required`, evitando
+una falsa parità garantita soltanto dal
+parsing statico C#. Cambi opzionali o di
+semantica devono comunque essere revisionati
+e testati separatamente, e gli scope reali
+continuano a essere verificati dal Business.
+[ADR 0059](../adr/0059-versioned-mcp-tool-contract-gate.md).

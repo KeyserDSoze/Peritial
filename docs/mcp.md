@@ -524,3 +524,50 @@ Non sono restituiti il markup originale né dati
 aggiuntivi. Il commit XML resta interno e bloccato
 per questi input. [ADR 0058]
 (../adr/0058-xml-character-references-cdata-fail-closed.md).
+
+## Snapshot MCP v1, ABI e controlli di regressione (#12)
+
+Il contratto pubblico iniziale è
+[`mcp-catalog.v1.json`](mcp-catalog.v1.json),
+`format=1` e `version=1.0.0`. Elenca esattamente
+i 25 tool pubblicati in `McpTools.cs`, ordinati
+per nome. Ogni voce dichiara `required`
+(parametri MCP obbligatori), `access`
+(`read`, `write`, `write+delete`) ed
+`effect` (`read-only` oppure `mutating`).
+I tool di preview/plan XML sono `read-only`
+**ma richiedono `peritial.write`**; una chiamata
+a `delete_sinistro` richiede `peritial.write`
+e `peritial.sinistri.delete` e resta soggetta
+al gate esplicito che ne impedisce l'utilizzo in
+produzione.
+
+Il job `supply-chain-actions` esegue
+`tests/security/test_mcp_catalog_contract.py`:
+estrae nomi e firme C# dei tool, confronta
+l'elenco e gli argomenti obbligatori con
+lo snapshot, blocca nomi duplicati, tool con
+firme non riconosciute e categorie di rischio
+alterate. Include test negativi per rename,
+rimozione di `expectedVersion` e cambio
+di classificazione di `delete_sinistro`.
+Lo snapshot va aggiornato consapevolmente
+con ogni modifica di catalogo; non equivale
+a dimostrare a runtime i permessi.
+
+Un'ulteriore prova Playwright usa i **veri
+JWT Keycloak read-only e write** per interrogare
+`POST /mcp`, metodo `tools/list` e confronta
+nomi e `inputSchema.required` prodotti
+dall'SDK, con verifica delle proprietà
+obbligatorie. Non sono effettuate mutazioni
+per catalogare i tool. Le prove già esistenti
+restano autoritative per l'effettivo enforcement
+di scope, tenant e audit.
+[ADR 0059](../adr/0059-versioned-mcp-tool-contract-gate.md).
+
+Non sono ancora implementati negotiation
+multi-versione, client MCP esterni reali,
+compatibilità semantica di ogni schema JSON
+o idempotenza per tutti i tool mutativi.
+L'issue #12 rimane aperta.
