@@ -694,3 +694,28 @@ senza Compose.
 non una certificazione completa di `outputSchema` SDK per tutti
 i tool o del version negotiation con client esterni.
 La #12 resta aperta.
+
+## Copertura MCP wire read-only completa (#12)
+
+La [ADR 0064](../adr/0064-mcp-all-read-tools-wire-output.md)
+estende il test Playwright Keycloak autenticato `mcp-wire-output.spec.ts`
+da sei a **tutti i 12 tool MCP con classificazione `access:read`**.
+Il test confronta l'insieme dei tool `read` nel catalogo v1.2
+con l'insieme effettivamente esercitato: un nuovo tool di lettura
+non può essere aggiunto senza aggiornare anche la prova wire.
+
+I tipi effettivi `returnType` sono derivati **dal catalogo**,
+non passati arbitrariamente dal test, e le risposte sono validate
+contro il manifesto dei 10 DTO, includendo liste di DTO,
+risultati paginati e `IReadOnlyList<Guid>` non vuota.
+Le prove si svolgono sotto JWT Keycloak `peritial.read`.
+Solo i dati sintetici di fixture vengono creati/collegati
+tramite REST con token writer, prima della lettura.
+La CI frontend verifica anche le regressioni del validatore
+in assenza di Compose.
+
+Restano fuori dal perimetro wire i tool mutatori e i due
+tool di preflight XML non mutanti ma **write-scoped**
+(`preview_legacy_xml`, `plan_legacy_xml`).
+Non è ancora un test JSON `outputSchema` di tutti i 25 tool
+né una certificazione di compatibilità con client esterni.

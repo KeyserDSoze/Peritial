@@ -11,6 +11,20 @@ type OutputManifest = {
 const outputs = JSON.parse(readFileSync(
   new URL("../../../docs/mcp-output-dtos.v1.json", import.meta.url), "utf8"
 )) as OutputManifest;
+type Catalog = {format:number;version:string;tools:{
+  name:string;access:string;effect:string;returnType:string
+}[]};
+const catalog = JSON.parse(readFileSync(
+  new URL("../../../docs/mcp-catalog.v1.json", import.meta.url), "utf8"
+)) as Catalog;
+// The test fails when a new read-access tool is added without a signed
+// tools/call wire probe. Write-scoped preview/plan have a different grant.
+const readTools = [
+  "get_document", "get_perizia", "get_perizia_sinistro", "get_sinistro",
+  "list_documents", "list_perizie", "list_perizie_for_sinistro",
+  "list_sinistri", "page_documents", "page_sinistri",
+  "search_sinistri", "search_sinistri_page"
+] as const;
 
 const api = "http://localhost:8080";
 const issuer = "http://localhost:8081/realms/peritial";
@@ -23,7 +37,7 @@ function checkWireValue(type: string, value: unknown, label: string): void {
     if (value === null) return;
     type = type.slice(0, -1);
   }
-  const list = /^IReadOnlyList<([A-Za-z]\w*Dto)>$/.exec(type);
+  const list = /^IReadOnlyList<([A-Za-z]\w*)>$/.exec(type);
   if (list) {
     expect(Array.isArray(value), label).toBe(true);
     (value as unknown[]).forEach((row, index) =>
@@ -108,6 +122,17 @@ async function tokenFor(request: APIRequestContext): Promise<string> {
 }
 
 test.describe("Versioned MCP result JSON allowlist", () => {
+  test("all read-access MCP tools have a signed output wire probe", () => {
+    expect(catalog).toMatchObject({format:1,version:"1.2.0"});
+    const actual = catalog.tools.filter(t => t.access === "read").map(t => t.name).sort();
+    expect(actual).toEqual([...readTools].sort());
+    for (const name of readTools) {
+      const entry = catalog.tools.find(t => t.name === name);
+      expect(entry?.effect, name).toBe("read-only");
+      expect(entry?.returnType, name).toMatch(/^Task<.+>$/);
+    }
+  });
+
   test("wire validator rejects added fields, missing fields, wrong types and nullability", () => {
     expect(outputs).toMatchObject({format:1, version:"1.0.0", mcpCatalogVersion:"1.2.0"});
     const record = {
@@ -131,6 +156,10 @@ test.describe("Versioned MCP result JSON allowlist", () => {
     expect(() => checkWireValue("SinistroDto",
       {...sinistro, occurredOn:"2026-11-20T14:00:00Z"}, "sinistro")).toThrow();
     expect(() => checkWireValue("SinistroDto", {...sinistro, version:"1"}, "sinistro")).toThrow();
+    expect(() => checkWireValue("IReadOnlyList<Guid>", [record.id], "links")).not.toThrow();
+    expect(() => checkWireValue("IReadOnlyList<Guid>", ["not-a-guid"], "links")).toThrow();
+    expect(() => checkWireValue("IReadOnlyList<Guid>", [42], "links")).toThrow();
+    expect(() => checkWireValue("IReadOnlyList<Guid>", {items:[]}, "links")).toThrow();
   });
 
   test("real signed Keycloak MCP tools/call output matches the reviewed wire DTOs", async ({request}) => {
@@ -159,7 +188,14 @@ test.describe("Versioned MCP result JSON allowlist", () => {
     expect(sinistro.status(), await sinistro.text()).toBe(201);
     const sinistroId = (await sinistro.json() as {id:string}).id;
 
-    async function probe(name: string, args: Record<string, unknown>, dto: string, id: number) {
+    async function probe(name: string, args: Record<string, unknown>, id: number) {
+      // The manifest, not the caller, decides the expected output envelope.
+      const entry = catalog.tools.find(tool => tool.name === name);
+      expect(entry, name + " must be catalogued").toBeDefined();
+      expect(entry?.access, name).toBe("read");
+      expect(entry?.effect, name).toBe("read-only");
+      const outputType = /^Task<(.+)>$/.exec(entry!.returnType);
+      expect(outputType, name + " must have a reviewed async output").not.toBeNull();
       const response = await request.post(api + "/mcp", {
         headers: {
           Authorization:"Bearer " + readToken,
@@ -171,27 +207,26 @@ test.describe("Versioned MCP result JSON allowlist", () => {
       const body = await response.text();
       expect(response.ok(), body).toBeTruthy();
       const decoded = extractCallResult(body);
-      checkWireValue(dto, decoded, name);
-      return decoded as Record<string, unknown>;
+      checkWireValue(outputType![1], decoded, name);
+      return decoded as Record<string, unknown> & unknown[];
     }
 
-    const periziaDto = await probe("get_perizia", {id:periziaId}, "PeriziaDto", 6101);
+    const periziaDto = await probe("get_perizia", {id:periziaId}, 6101);
     expect(periziaDto.id).toBe(periziaId);
     expect(periziaDto.reference).toBe(periziaReference);
     // RED #44905796126 established SDK omits null-valued properties.
     expect(periziaDto).not.toHaveProperty("assignedTo");
-    const sinistroDto = await probe("get_sinistro", {id:sinistroId}, "SinistroDto", 6102);
+    const sinistroDto = await probe("get_sinistro", {id:sinistroId}, 6102);
     expect(sinistroDto.id).toBe(sinistroId);
     expect(sinistroDto.externalReference).toBe(sinistroReference);
     expect(sinistroDto.reportedOn ?? null).toBeNull();
-    const association = await probe("get_perizia_sinistro", {periziaId},
-      "PeriziaSinistroAssociationDto", 6103);
+    const association = await probe("get_perizia_sinistro", {periziaId}, 6103);
     expect(association.periziaId).toBe(periziaId);
     expect(association.linkVersion).toBe(1);
     expect(association.sinistroId ?? null).toBeNull();
     const page = await probe("search_sinistri_page", {
       prefix:sinistroReference, limit:10
-    }, "SinistroPageDto", 6104);
+    }, 6104);
     expect(page.items).toEqual(expect.arrayContaining([
       expect.objectContaining({id:sinistroId,externalReference:sinistroReference})
     ]));
@@ -204,12 +239,48 @@ test.describe("Versioned MCP result JSON allowlist", () => {
     });
     expect(upload.status(), await upload.text()).toBe(201);
     const documentId = (await upload.json() as {id:string}).id;
-    const doc = await probe("get_document", {id:documentId}, "DocumentSummaryDto", 6105);
+    const doc = await probe("get_document", {id:documentId}, 6105);
     expect(doc).toMatchObject({id:documentId,periziaId,fileName});
-    const docs = await probe("page_documents", {periziaId,limit:1},
-      "DocumentPageDto", 6106);
+    const docs = await probe("page_documents", {periziaId,limit:1}, 6106);
     expect(docs.items).toEqual(expect.arrayContaining([
       expect.objectContaining({id:documentId,periziaId,fileName})
     ]));
+
+    // Every read-access tool is exercised under a real read-only token.
+    // Verify the returned JSON against each catalog returnType, not only
+    // the primary single-record get operations.
+    const listedPerizie = await probe("list_perizie", {}, 6107);
+    expect(listedPerizie).toEqual(expect.arrayContaining([
+      expect.objectContaining({id:periziaId,reference:periziaReference})
+    ]));
+    const listedSinistri = await probe("list_sinistri", {limit:100}, 6108);
+    expect(Array.isArray(listedSinistri)).toBe(true);
+    const pagedSinistri = await probe("page_sinistri", {limit:10}, 6109);
+    expect(Array.isArray(pagedSinistri.items)).toBe(true);
+    const searched = await probe("search_sinistri", {
+      prefix:sinistroReference,limit:10
+    }, 6110);
+    expect(searched).toEqual(expect.arrayContaining([
+      expect.objectContaining({id:sinistroId,externalReference:sinistroReference})
+    ]));
+    const listedDocs = await probe("list_documents", {
+      periziaId,limit:50
+    }, 6111);
+    expect(listedDocs).toEqual(expect.arrayContaining([
+      expect.objectContaining({id:documentId,periziaId,fileName})
+    ]));
+
+    // A nonempty GUID-list is necessary to verify its element wire type.
+    // Use a signed REST writer for the setup; the subsequent MCP read is
+    // strictly scoped to peritial.read and never performs the mutation.
+    const linked = await request.post(
+      api + "/api/perizie/" + periziaId + "/sinistro", {
+        headers:auth, data:{sinistroId,expectedLinkVersion:1}
+      });
+    expect(linked.status(), await linked.text()).toBe(201);
+    const linkedPerizie = await probe("list_perizie_for_sinistro", {
+      sinistroId
+    }, 6112);
+    expect(linkedPerizie).toContain(periziaId);
   });
 });
