@@ -683,7 +683,9 @@ chiama con il token **read-only** i tool
 `page_documents`. Il test confronta il **JSON effettivamente
 restituito via `tools/call`** con i campi del manifesto
 `mcp-output-dtos.v1.json`: nomi lower-camel-case,
-proprietà esatte, tipi e nullabilità, UUID/DateOnly/DateTime e
+proprietà allowlisted con **campi non-nullable obbligatori**,
+campi nullable omissibili (l'SDK omette le proprietà `null`),
+tipi, UUID/DateOnly/DateTime e
 liste annidate. I test negativi contro aggiunte di campi,
 drift di tipi e date non ISO girano anche nella CI frontend
 senza Compose.

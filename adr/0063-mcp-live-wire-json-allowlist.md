@@ -26,9 +26,12 @@ ad allowlist direttamente su risposte JSON-RPC di `tools/call`:
   `structuredContent` quando manca testo JSON) e confronta
   le proprietà esatte, incluse le annidate, con
   `docs/mcp-output-dtos.v1.json`, usando nomi lower-camel-case.
-- Rifiuta nuove proprietà, campi mancanti, tipi cambiati,
-  UUID invalidi, date/date-time non ISO, numeri non interi
-  e nullabilità non prevista. Sono inclusi test negativi
+- Rifiuta nuove proprietà, campi **non-nullable** mancanti,
+  tipi cambiati, UUID invalidi, date/date-time non ISO,
+  numeri non interi e nullabilità non prevista. Per i campi
+  nullable l'SDK può **omettere la proprietà** quando il valore
+  è `null`: un campo nullable presente è comunque tipizzato
+  e controllato. Sono inclusi test negativi
   eseguiti anche senza Compose.
 
 L'intero test gira in Playwright desktop e mobile sul Compose
@@ -48,3 +51,16 @@ idempotenza generale restano aperti in #12.
 Non muta la firma di alcun tool, autorizzazioni, dominio,
 database, deployment o percorso di import XML. La #12
 rimane aperta finché i criteri completi non sono soddisfatti.
+
+## Verifica RED / correzione dell'omissione nullable
+
+La prima prova live [CI RED #44905796126](https://github.com/KeyserDSoze/Peritial/actions/runs/44905796126)
+ha individuato una vera particolarità di `tools/call`:
+l'SDK ha omesso `assignedTo` quando il valore C# era `null`
+su `get_perizia`, mentre il primo test richiedeva erroneamente
+la presenza di ogni campo CLR. La logica ora richiede tutte le
+proprietà non-nullable e nessuna proprietà fuori allowlist;
+per una nullable accetta la proprietà assente o presente con
+valore `null`/del tipo previsto. Il test positivo del DTO
+non assegnato si aspetta esplicitamente `assignedTo` assente.
+Non è stata cambiata la serializzazione applicativa.

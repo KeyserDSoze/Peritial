@@ -36,10 +36,24 @@ function checkWireValue(type: string, value: unknown, label: string): void {
     const record = value as Record<string, unknown>;
     const expected = outputs.types[type];
     const toWire = (name:string) => name[0].toLowerCase() + name.slice(1);
-    expect(Object.keys(record).sort(), label + " must have exact reviewed keys")
-      .toEqual(Object.keys(expected).map(toWire).sort());
-    for (const [property, fieldType] of Object.entries(expected))
-      checkWireValue(fieldType, record[toWire(property)], label + "." + property);
+    const reviewedNames = Object.keys(expected).map(toWire);
+    const actualNames = Object.keys(record);
+    // MCP SDK's JSON serializer omits null-valued properties. Nullable
+    // CLR fields are allowed to be absent, but no unknown key is allowed.
+    // Non-nullable fields MUST still be present. A present nullable field
+    // is always validated, including explicit JSON null.
+    expect(actualNames.filter(name => !reviewedNames.includes(name)),
+      label + " cannot expose unreviewed fields").toEqual([]);
+    const requiredNames = Object.entries(expected)
+      .filter(([, type]) => !type.endsWith("?"))
+      .map(([name]) => toWire(name));
+    expect(requiredNames.filter(name => !Object.prototype.hasOwnProperty.call(record, name)),
+      label + " is missing required fields").toEqual([]);
+    for (const [property, fieldType] of Object.entries(expected)) {
+      const wireName = toWire(property);
+      if (Object.prototype.hasOwnProperty.call(record, wireName))
+        checkWireValue(fieldType, record[wireName], label + "." + property);
+    }
     return;
   }
   if (type === "Guid") expect(value, label).toMatch(guid);
@@ -47,7 +61,7 @@ function checkWireValue(type: string, value: unknown, label: string): void {
   else if (type === "DateTime") expect(value, label).toMatch(isoDateTime);
   else if (type === "string") expect(typeof value, label).toBe("string");
   else if (type === "int" || type === "long")
-    expect(Number.isSafeInteger(value), label).toBe(true);
+    expect(typeof value === "number" && Number.isSafeInteger(value), label).toBe(true);
   else if (type === "bool") expect(typeof value, label).toBe("boolean");
   else throw new Error("Unreviewed MCP wire field type: " + type);
 }
@@ -101,8 +115,12 @@ test.describe("Versioned MCP result JSON allowlist", () => {
       status:"New", assignedTo:null, createdAtUtc:"2026-11-21T12:00:00Z"
     };
     expect(() => checkWireValue("PeriziaDto", record, "perizia")).not.toThrow();
+    const {assignedTo: _omittedNullable, ...withoutAssignedTo} = record;
+    expect(() => checkWireValue("PeriziaDto", withoutAssignedTo, "perizia")).not.toThrow();
     expect(() => checkWireValue("PeriziaDto", {...record, tenantId:"SECRET"}, "perizia")).toThrow();
     expect(() => checkWireValue("PeriziaDto", {id:record.id}, "perizia")).toThrow();
+    expect(() => checkWireValue("PeriziaDto",
+      { ...withoutAssignedTo, status:undefined }, "perizia")).toThrow();
     expect(() => checkWireValue("PeriziaDto", {...record, id:"not-a-guid"}, "perizia")).toThrow();
     expect(() => checkWireValue("PeriziaDto", {...record, assignedTo:42}, "perizia")).toThrow();
     const sinistro = {
@@ -160,13 +178,17 @@ test.describe("Versioned MCP result JSON allowlist", () => {
     const periziaDto = await probe("get_perizia", {id:periziaId}, "PeriziaDto", 6101);
     expect(periziaDto.id).toBe(periziaId);
     expect(periziaDto.reference).toBe(periziaReference);
+    // RED #44905796126 established SDK omits null-valued properties.
+    expect(periziaDto).not.toHaveProperty("assignedTo");
     const sinistroDto = await probe("get_sinistro", {id:sinistroId}, "SinistroDto", 6102);
     expect(sinistroDto.id).toBe(sinistroId);
     expect(sinistroDto.externalReference).toBe(sinistroReference);
-    expect(sinistroDto.reportedOn).toBeNull();
+    expect(sinistroDto.reportedOn ?? null).toBeNull();
     const association = await probe("get_perizia_sinistro", {periziaId},
       "PeriziaSinistroAssociationDto", 6103);
-    expect(association).toMatchObject({periziaId,sinistroId:null,linkVersion:1});
+    expect(association.periziaId).toBe(periziaId);
+    expect(association.linkVersion).toBe(1);
+    expect(association.sinistroId ?? null).toBeNull();
     const page = await probe("search_sinistri_page", {
       prefix:sinistroReference, limit:10
     }, "SinistroPageDto", 6104);
