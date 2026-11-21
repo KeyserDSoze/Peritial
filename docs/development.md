@@ -1687,3 +1687,32 @@ verifica live `tools/list` continua a
 controllare tipo JSON primario e
 opzionalità, non l'interpretazione
 dei default applicati nei servizi.
+
+## PWA in sola lettura con JWT Keycloak firmato (#13, ADR 0080)
+
+La PWA verifica lo scope `peritial.write` nel profilo OIDC
+**esclusivamente come indizio di interfaccia**, mai come
+autorizzazione. Un token che espone solo `peritial.read`
+può leggere Perizie, Sinistri e metadati dei documenti,
+ma la UI non presenta form di creazione Perizia, upload,
+assegnazione, avanzamento, cancellazione o creazione
+Sinistro. Il `PeriziaWorkflow` non avvia comunque POST
+mutativi quando `canWrite=false` anche in caso di
+richiamo programmato. I componenti Sinistro usavano già
+`canWrite`; il criterio viene ora uniformato.
+
+Il backend è **sempre** l'unico enforcement: REST/MCP
+usano lo scope del JWT firmato, FORCE RLS e audit.
+Non fidarsi dei controlli nascosti per proteggere operazioni.
+
+La prova E2E `authenticated.spec.ts` usa una vera
+sessione PKCE Keycloak e poi sostituisce **solo nel
+browser di test** il bearer e il relativo hint scope
+con un JWT firmato di sola lettura emesso per lo stesso
+soggetto e tenant da un client fixture Keycloak. Dopo
+reload controlla GET firmato, pratiche ancora visibili,
+assenza di tutti i controlli mutativi, REST 403 sulla
+creazione; ripristina il token PKCE writer verificando
+che i controlli riappaiano. Lo scambio di token è
+unicamente un meccanismo di test, **non** un flusso
+proposto per l'applicazione o per la produzione.

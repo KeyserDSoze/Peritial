@@ -15,11 +15,12 @@ const cancellable = new Set(["Registered", "Assigned", "ToBeRevised", "Revised",
 type Props = {
   item: Perizia;
   token: string;
+  canWrite: boolean;
   onUpdated: (updated: Perizia) => void;
   onUnavailable: () => void;
 };
 
-export function PeriziaWorkflow({item, token, onUpdated, onUnavailable}: Props) {
+export function PeriziaWorkflow({item, token, canWrite, onUpdated, onUnavailable}: Props) {
   const {t} = useTranslation();
   const [assignee, setAssignee] = useState("");
   const [busy, setBusy] = useState(false);
@@ -29,6 +30,7 @@ export function PeriziaWorkflow({item, token, onUpdated, onUnavailable}: Props) 
   const canCancel = cancellable.has(item.status);
 
   async function mutate(operation: () => Promise<Perizia>) {
+    if (!canWrite) return; // Defensive UI check; Business still authorizes.
     setBusy(true);
     setError(null);
     try {
@@ -45,12 +47,12 @@ export function PeriziaWorkflow({item, token, onUpdated, onUnavailable}: Props) 
 
   function assign(event: FormEvent) {
     event.preventDefault();
-    if (!assignee.trim()) return;
+    if (!canWrite || !assignee.trim()) return;
     void mutate(() => assignPerizia(token, item.id, assignee.trim()));
   }
 
   function advance() {
-    if (next) void mutate(() => advancePerizia(token, item.id, next));
+    if (canWrite && next) void mutate(() => advancePerizia(token, item.id, next));
   }
 
   async function reload() {
@@ -77,7 +79,7 @@ export function PeriziaWorkflow({item, token, onUpdated, onUnavailable}: Props) 
     {item.assignedTo && <p className="flex flex-wrap gap-2 text-sm text-slate-600 dark:text-slate-300">
       <span>{t("assignee")}:</span><span>{item.assignedTo}</span>
     </p>}
-    <div className="flex flex-wrap items-center gap-2">
+    {canWrite && <div className="flex flex-wrap items-center gap-2">
       {item.status === "Registered" && <form className="flex min-w-0 flex-wrap items-center gap-2" onSubmit={assign}>
         <input id={"assignee-" + item.id} aria-label={t("assignee") + " " + item.reference}
           value={assignee} required maxLength={160}
@@ -96,7 +98,7 @@ export function PeriziaWorkflow({item, token, onUpdated, onUnavailable}: Props) 
         <Button type="button" variant="outline" disabled={busy}
           onClick={() => setConfirmCancel(false)}>{t("keep")}</Button>
       </>}
-    </div>
+    </div>}
     {error && <div className="flex flex-wrap items-center gap-2">
       <p role="alert" className="text-sm text-red-700 dark:text-red-400">{t(error)}</p>
       {error === "conflict" && <Button type="button" variant="outline"

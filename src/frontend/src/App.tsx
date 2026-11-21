@@ -35,8 +35,10 @@ export default function App() {
   const [dataStatus, setDataStatus] = useState<"loading" | "ready" | "unavailable">("loading");
   const [refreshIndex, setRefreshIndex] = useState(0);
   const token = auth.user?.access_token;
-  // UI hints only: the server performs the actual signed JWT scope check.
-  const canLinkSinistro = Boolean(auth.user?.scope?.split(/\s+/).includes("peritial.write"));
+  // UI hints only: REST/MCP enforce the real signed JWT scope. A
+  // read-only identity must not be offered any write action in the PWA.
+  // Do not infer write access merely from "authenticated" or "online".
+  const canWrite = Boolean(auth.user?.scope?.split(/\s+/).includes("peritial.write"));
   function lockProtectedUi() {
     // Never retain a potentially stale tenant record after REST, auth or
     // network failure. Invalidate any pre-existing GET that may finish late.
@@ -181,7 +183,8 @@ export default function App() {
     }
   }
   async function create(event:FormEvent) {
-    event.preventDefault(); if(!token || !online || dataStatus !== "ready" || !reference.trim()) return;
+    event.preventDefault(); if(!token || !online || !canWrite ||
+      dataStatus !== "ready" || !reference.trim()) return;
     setBusy(true); setError("");
     try {
       const epochAtStart = requestEpoch.current;
@@ -197,7 +200,7 @@ export default function App() {
     } finally { setBusy(false); }
   }
   async function sendFile() {
-    if(!token || !online || dataStatus !== "ready" || !upload ||
+    if(!token || !online || !canWrite || dataStatus !== "ready" || !upload ||
       (uploadPeriziaId !== "" && !items.some(item => item.id === uploadPeriziaId))) return;
     setBusy(true); setError("");
     try {
@@ -247,25 +250,26 @@ export default function App() {
               <h2 className="text-xl font-semibold">{t("perizie")}</h2>
               <Button type="button" variant="outline" disabled={busy} onClick={refreshPerizie}>{t("refreshList")}</Button>
             </div>
-            <form onSubmit={event => void create(event)} className="mb-6 flex flex-wrap gap-2">
+            {canWrite && <form onSubmit={event => void create(event)} className="mb-6 flex flex-wrap gap-2">
               <label className="sr-only" htmlFor="reference">{t("reference")}</label>
               <input id="reference" className="min-w-0 flex-1 rounded-md border border-slate-300 bg-transparent px-3 py-2 dark:border-slate-700" value={reference} onChange={e=>setReference(e.target.value)} maxLength={160} placeholder={t("newPerizia")} required />
               <Button type="submit" disabled={busy}>{t("create")}</Button>
-            </form>
+            </form>}
             {items.length===0 ? <p className="text-slate-500">{t("empty")}</p> :
               <ul aria-label={t("perizie")} className="divide-y divide-slate-200 dark:divide-slate-800">{items.map(item =>
                 <li key={item.id} data-perizia-id={item.id} className="py-4">
-                  <PeriziaWorkflow item={item} token={token!} onUnavailable={lockProtectedUi} onUpdated={updated => {
+                  <PeriziaWorkflow item={item} token={token!} canWrite={canWrite} onUnavailable={lockProtectedUi} onUpdated={updated => {
                     mutations.current.set(updated.id, (mutations.current.get(updated.id) ?? 0) + 1);
                     setItems(current => current.map(value => value.id === updated.id ? updated : value));
                   }} />
                   <PeriziaSinistroPicker periziaId={item.id} periziaStatus={item.status}
-                    token={token!} canWrite={canLinkSinistro} onUnavailable={lockProtectedUi} />
+                    token={token!} canWrite={canWrite} onUnavailable={lockProtectedUi} />
                 </li>)}</ul>}
-            <SinistroCatalog token={token!} canWrite={canLinkSinistro} onUnavailable={lockProtectedUi} />
+            <SinistroCatalog token={token!} canWrite={canWrite} onUnavailable={lockProtectedUi} />
           </section>
           <section className="h-fit rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
-            <h2 className="mb-5 text-xl font-semibold">{t("upload")}</h2>
+            <h2 className="mb-5 text-xl font-semibold">{t(canWrite ? "upload" : "savedDocuments")}</h2>
+            {canWrite && <>
             <label htmlFor="upload-perizia" className="mb-2 block text-sm">{t("linkedPerizia")}</label>
             <select id="upload-perizia" value={uploadPeriziaId} disabled={busy}
               onChange={event => setUploadPeriziaId(event.target.value)}
@@ -276,8 +280,9 @@ export default function App() {
             <label htmlFor="file" className="mb-2 block text-sm">{t("file")}</label>
             <input id="file" type="file" accept=".pdf,.xml,.jpg,.jpeg,.png,.docx" className="mb-4 block w-full text-sm" onChange={e=>setUpload(e.target.files?.[0]||null)}/>
             <Button disabled={!upload||busy} onClick={() => void sendFile()}><FileUp size={16}/>{t("upload")}</Button>
-            <div className="mt-8 border-t border-slate-200 pt-5 dark:border-slate-700">
-              <h3 className="mb-3 font-semibold">{t("savedDocuments")}</h3>
+            </>}
+            <div className={canWrite ? "mt-8 border-t border-slate-200 pt-5 dark:border-slate-700" : ""}>
+              {canWrite && <h3 className="mb-3 font-semibold">{t("savedDocuments")}</h3>}
               <label htmlFor="documents-perizia" className="mb-2 block text-sm">{t("documentsFilter")}</label>
               <select id="documents-perizia" value={documentsPeriziaId}
                 onChange={event => changeDocumentFilter(event.target.value)}

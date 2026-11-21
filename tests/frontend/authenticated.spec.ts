@@ -985,6 +985,101 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
       .getByText(reference, {exact:true})).toBeVisible({timeout: 30_000});
   });
 
+  test("PWA read-only Keycloak scope hides all write controls and restores them on writer rotation", async ({page, request}) => {
+    test.setTimeout(120_000);
+    const issuer="http://localhost:8081/realms/peritial/protocol/openid-connect/token";
+    async function grant(clientId:string){
+      const response=await request.post(issuer,{
+        form:{grant_type:"password",client_id:clientId,
+          username:"localuser",password:"local-only-user"}
+      });
+      expect(response.status(),await response.text()).toBe(200);
+      return response.json() as Promise<{access_token:string;scope:string}>;
+    }
+    const reader=await grant("peritial-test-readonly");
+    const writer=await grant("peritial-test-write");
+    expect(reader.scope.split(/\s+/)).toContain("peritial.read");
+    expect(reader.scope.split(/\s+/)).not.toContain("peritial.write");
+    expect(writer.scope.split(/\s+/)).toContain("peritial.write");
+    const reference="READONLY-UI-"+Date.now()+"-"+Math.floor(Math.random()*100000);
+    const created=await request.post("http://localhost:8080/api/perizie",{
+      headers:{Authorization:"Bearer "+writer.access_token},
+      data:{reference}
+    });
+    expect(created.status(),await created.text()).toBe(201);
+    const id=(await created.json() as {id:string}).id;
+
+    // Start with a normal PKCE browser session. The test then swaps the
+    // session's bearer token for a real independently issued read-only JWT
+    // belonging to the same Keycloak subject and tenant. No fake unsigned
+    // permissions or mocked API response are used.
+    await page.goto("/");
+    await page.getByRole("button",{name:"Accedi"}).click();
+    await expect(page.locator("#username")).toBeVisible({timeout:30_000});
+    await page.locator("#username").fill("localuser");
+    await page.locator("#password").fill("local-only-user");
+    await page.locator("#kc-login").click();
+    await expect(page.getByRole("button",{name:"Esci"})).toBeVisible({timeout:30_000});
+    const row=page.locator('[data-perizia-id="'+id+'"]');
+    await expect(row.getByText(reference,{exact:true})).toBeVisible({timeout:30_000});
+    await expect(row.getByRole("button",{name:"Annulla"})).toBeVisible();
+    await expect(row.getByRole("button",{name:"Assegna"})).toBeVisible();
+    await expect(page.getByRole("button",{name:"Carica documento"})).toBeVisible();
+
+    const oldStorage=await page.evaluate(()=>{
+      const key=Object.keys(sessionStorage).find(k=>k.startsWith("oidc.user:"));
+      if(!key) throw new Error("PKCE user is not stored in browser session");
+      const raw=sessionStorage.getItem(key);
+      if(!raw) throw new Error("PKCE user session unavailable");
+      return {key,raw};
+    });
+    await page.evaluate(({key,token,scope})=>{
+      const raw=sessionStorage.getItem(key);
+      if(!raw) throw new Error("Cannot replace OIDC user");
+      const user=JSON.parse(raw) as {access_token:string;scope:string};
+      user.access_token=token;
+      user.scope=scope;
+      sessionStorage.setItem(key,JSON.stringify(user));
+    },{key:oldStorage.key,token:reader.access_token,scope:reader.scope});
+
+    const readList=page.waitForRequest(req=>req.url().endsWith("/api/perizie") &&
+      req.method()==="GET" &&
+      req.headers()["authorization"]==="Bearer "+reader.access_token);
+    await page.reload();
+    await readList;
+    await expect(row.getByText(reference,{exact:true})).toBeVisible({timeout:30_000});
+    await expect(row.getByText("Registrata",{exact:true})).toBeVisible();
+    await expect(page.locator("#reference")).toHaveCount(0);
+    await expect(page.getByRole("button",{name:"Crea",exact:true})).toHaveCount(0);
+    await expect(page.getByRole("button",{name:"Carica documento"})).toHaveCount(0);
+    await expect(page.locator("#file")).toHaveCount(0);
+    await expect(page.locator("#upload-perizia")).toHaveCount(0);
+    await expect(page.locator("#documents-perizia")).toBeVisible();
+    await expect(row.getByRole("button",{name:"Assegna"})).toHaveCount(0);
+    await expect(row.getByRole("button",{name:"Avanza"})).toHaveCount(0);
+    await expect(row.getByRole("button",{name:"Annulla"})).toHaveCount(0);
+    await page.getByRole("button",{name:"Apri catalogo sinistri"}).click();
+    await expect(page.getByRole("button",{name:"Crea sinistro"})).toHaveCount(0);
+
+    // The backend remains the actual authorization boundary.
+    const denied=await request.post("http://localhost:8080/api/perizie",{
+      headers:{Authorization:"Bearer "+reader.access_token},
+      data:{reference:reference+"-DENIED"}
+    });
+    expect(denied.status(),await denied.text()).toBe(403);
+
+    // Rotate to an authorized PKCE writer without remounting another
+    // tenant. The controls must reappear after the signed GET completes.
+    await page.evaluate(({key,raw})=>sessionStorage.setItem(key,raw),oldStorage);
+    await page.reload();
+    await expect(row.getByText(reference,{exact:true})).toBeVisible({timeout:30_000});
+    await expect(page.locator("#reference")).toBeVisible();
+    await expect(page.getByRole("button",{name:"Crea",exact:true})).toBeEnabled();
+    await expect(page.getByRole("button",{name:"Carica documento"})).toBeVisible();
+    await expect(row.getByRole("button",{name:"Assegna"})).toBeVisible();
+    await expect(row.getByRole("button",{name:"Annulla"})).toBeVisible();
+  });
+
   test("workflow perizia UI: assign, advance, cancel con conferma e i18n", async ({page}) => {
     await page.goto("/");
     await page.getByRole("button", {name: "Accedi"}).click();
