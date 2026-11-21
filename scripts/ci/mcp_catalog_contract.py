@@ -12,10 +12,12 @@ SOURCE = ROOT / "src/backend/Applications/McpTools.cs"
 CATALOG = ROOT / "docs/mcp-catalog.v1.json"
 OUTPUT_DTOS = ROOT / "docs/mcp-output-dtos.v1.json"
 ANNOTATIONS = ROOT / "docs/mcp-tool-annotations.v1.json"
+STRUCTURED = ROOT / "docs/mcp-structured-outputs.v1.json"
 
 _TOOL_RE = re.compile(
     r'\[McpServerTool\(Name = "([^"]+)"'
     r'(?:, ReadOnly = (true|false), Destructive = (true|false), OpenWorld = (true|false))?'
+    r'(?:, UseStructuredContent = true)?'
     r'\)[^\n]*\]\s*'
     r'public\s+(?:async\s+)?([A-Za-z][A-Za-z0-9_<>,? ]*)\s+'
     r'([A-Za-z]\w*)\((.*?)\)\s*(?:=>|\{)',
@@ -142,6 +144,29 @@ def validate_annotation_manifest(catalog: dict, annotated: dict, source: str) ->
             raise ValueError("MCP annotation drift: " + name)
 
 
+def validate_structured_output_tools(catalog: dict, manifest: dict, source: str) -> None:
+    """Pin explicit structured opt-ins and DTOs; live Keycloak checks SDK wire."""
+    if (set(manifest) != {"format", "version", "mcpCatalogVersion", "tools"}
+        or manifest["format"] != 1 or manifest["version"] != "1.0.0"
+        or manifest["mcpCatalogVersion"] != catalog["version"]):
+        raise ValueError("MCP structured output manifest version/shape drift")
+    selected = manifest["tools"]
+    if (not isinstance(selected, list) or selected != sorted(set(selected))
+        or any(not isinstance(name, str) for name in selected)):
+        raise ValueError("MCP structured output manifest tool list drift")
+    entries = {item["name"]: item for item in catalog["tools"]}
+    if any(name not in entries
+           or entries[name]["effect"] != "read-only"
+           or not entries[name]["returnType"].endswith("Dto>")
+           for name in selected):
+        raise ValueError("MCP structured output requires reviewed read DTOs")
+    actual = sorted(re.findall(
+        r'\[McpServerTool\(Name = "([^"]+)"[^\n]*?UseStructuredContent = true\)', source
+    ))
+    if actual != selected:
+        raise ValueError("MCP structured output drift: " + repr(actual))
+
+
 def parse_mcp_tool_signatures(source: str) -> dict[str, list[str]]:
     return {
         name: [key for key, contract in parameters.items()
@@ -263,6 +288,9 @@ def validate_repository() -> None:
     validate_output_dtos(catalog, json.loads(OUTPUT_DTOS.read_text(encoding="utf-8")))
     validate_annotation_manifest(
         catalog, json.loads(ANNOTATIONS.read_text(encoding="utf-8")), source
+    )
+    validate_structured_output_tools(
+        catalog, json.loads(STRUCTURED.read_text(encoding="utf-8")), source
     )
 
 

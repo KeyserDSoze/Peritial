@@ -747,4 +747,97 @@ test.describe("Versioned MCP result JSON allowlist", () => {
     ].sort());
   });
 
+  test("modern detail tools publish an output schema and natural structuredContent", async ({request}) => {
+    test.skip(!process.env.E2E_FULL_STACK,"Real Keycloak and PostgreSQL required");
+    test.setTimeout(90_000);
+    const manifest=JSON.parse(readFileSync(
+      new URL("../../../docs/mcp-structured-outputs.v1.json",import.meta.url),
+      "utf8"
+    )) as {format:number;version:string;mcpCatalogVersion:string;tools:string[]};
+    expect(manifest).toMatchObject({
+      format:1,version:"1.0.0",mcpCatalogVersion:catalog.version
+    });
+    expect(manifest.tools).toEqual(["get_perizia","get_sinistro"]);
+    const read=await tokenFor(request);
+    const writer=await tokenFor(request,"peritial-test-write");
+    const meta={
+      "io.modelcontextprotocol/protocolVersion":"2026-07-28",
+      "io.modelcontextprotocol/clientInfo":{
+        name:"peritial-structured-e2e",version:"1.0.0"
+      },
+      "io.modelcontextprotocol/clientCapabilities":{}
+    };
+    async function call(method:"tools/list"|"tools/call",args:Record<string,unknown>,id:number) {
+      const name=method==="tools/call" ? String(args.name) : "";
+      const response=await request.post(api+"/mcp",{
+        headers:{
+          Authorization:"Bearer "+read,
+          Accept:"application/json,text/event-stream",
+          "Content-Type":"application/json",
+          "MCP-Protocol-Version":"2026-07-28",
+          "Mcp-Method":method,
+          ...(method==="tools/call" ? {"Mcp-Name":name} : {})
+        },
+        data:{jsonrpc:"2.0",id,method,params:{...args,_meta:meta}}
+      });
+      const body=await response.text();
+      expect(response.ok(),body).toBeTruthy();
+      const packets:RpcResponse[]=body.trimStart().startsWith("{")
+        ? [JSON.parse(body) as RpcResponse]
+        : body.split(/\r?\n/).filter(x=>x.startsWith("data:"))
+          .map(x=>JSON.parse(x.slice(5).trim()) as RpcResponse);
+      const packet=packets.find(x=>x.result||x.error);
+      expect(packet?.error).toBeUndefined();
+      expect(packet?.result).toBeDefined();
+      return packet!.result!;
+    }
+    const listing=await call("tools/list",{},6601);
+    const tools=(listing as unknown as {tools:{name:string;outputSchema?:unknown}[]}).tools;
+    expect(tools).toHaveLength(25);
+    expect(tools.filter(x=>x.outputSchema!==undefined).map(x=>x.name).sort())
+      .toEqual(manifest.tools);
+
+    const nonce=Date.now()+"-"+Math.floor(Math.random()*1000000);
+    const fixtures=[
+      {name:"get_perizia",dtype:"PeriziaDto",path:"/api/perizie",
+        body:{reference:"MCP-STRUCT-P-"+nonce}},
+      {name:"get_sinistro",dtype:"SinistroDto",path:"/api/sinistri",
+        body:{externalReference:"MCP-STRUCT-S-"+nonce,occurredOn:"2026-11-21"}}
+    ];
+    for(const [i,item] of fixtures.entries()){
+      const create=await request.post(api+item.path,{
+        headers:{Authorization:"Bearer "+writer},data:item.body
+      });
+      expect(create.status(),await create.text()).toBe(201);
+      const id=(await create.json() as {id:string}).id;
+      const rawSchema=tools.find(x=>x.name===item.name)?.outputSchema;
+      expect(rawSchema).toBeDefined();
+      const schema=rawSchema as Record<string,unknown>;
+      const defs=(schema.$defs ?? {}) as Record<string,Record<string,unknown>>;
+      const root=typeof schema.$ref==="string" && schema.$ref.startsWith("#/$defs/")
+        ? defs[schema.$ref.slice(8)] : schema;
+      const props=root?.properties as Record<string,unknown>|undefined;
+      expect(props,item.name+" must publish JSON object properties").toBeDefined();
+      expect(Object.keys(props!).sort()).toEqual(
+        Object.keys(outputs.types[item.dtype])
+          .map(k=>k[0].toLowerCase()+k.slice(1)).sort()
+      );
+      expect(JSON.stringify(schema)).not.toContain("tenantId");
+      expect(JSON.stringify(schema)).not.toContain("storageKey");
+      const result=await call("tools/call",{
+        name:item.name,arguments:{id}
+      },6602+i);
+      expect(result.isError).not.toBe(true);
+      expect(result.structuredContent,item.name).toBeDefined();
+      checkWireValue(item.dtype,result.structuredContent,item.name);
+      expect((result.structuredContent as Record<string,unknown>).id).toBe(id);
+      expect(JSON.stringify(result.structuredContent)).not.toContain("tenantId");
+      const rest=await request.get(api+item.path+"/"+id,{
+        headers:{Authorization:"Bearer "+read}
+      });
+      expect(rest.status(),await rest.text()).toBe(200);
+      expect(result.structuredContent).toMatchObject(await rest.json());
+    }
+  });
+
 });

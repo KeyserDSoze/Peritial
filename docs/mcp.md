@@ -848,3 +848,21 @@ deve continuare a essere `401`.
 Questo non equivale ancora a test con client
 esterni con SDK diversi, né a un contratto completo
 `outputSchema`, che restano aperti nella #12.
+
+## MCP structured output per due tool di dettaglio (#12)
+
+L'[ADR 0070](../adr/0070-mcp-structured-detail-outputs.md)
+abilita in modo graduale `UseStructuredContent = true` per
+`get_perizia` e `get_sinistro`. Su protocollo MCP
+moderno 2026-07-28 questi tool annunciano un
+`outputSchema` e restituiscono `structuredContent`
+con lo stesso DTO della lettura REST firmata, senza
+campi tenant o chiavi storage. Il manifesto
+`mcp-structured-outputs.v1.json` fissa il set dei tool
+abilitati ed è controllato staticamente e con Keycloak in CI.
+
+Gli altri 23 tool conservano il comportamento
+precedente; non vengono modificati gli scope, il
+modello dati o la cancellazione Sinistri. L'estensione
+a tutto il catalogo e ai client SDK esterni resta
+da completare nell'issue #12.

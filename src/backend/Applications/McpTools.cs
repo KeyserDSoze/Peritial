@@ -15,7 +15,7 @@ public sealed class McpTools(
     [McpServerTool(Name = "list_perizie", ReadOnly = true, Destructive = false, OpenWorld = false), Description("Lists perizie visible to the authenticated tenant (peritial.read).")]
     public Task<IReadOnlyList<PeriziaDto>> ListPerizie(CancellationToken ct = default) => perizie.ListAsync(ct);
 
-    [McpServerTool(Name = "get_perizia", ReadOnly = true, Destructive = false, OpenWorld = false), Description("Gets a single perizia by ID within the signed tenant (peritial.read or peritial.write); foreign and missing IDs are indistinguishable.")]
+    [McpServerTool(Name = "get_perizia", ReadOnly = true, Destructive = false, OpenWorld = false, UseStructuredContent = true), Description("Gets a single perizia by ID within the signed tenant (peritial.read or peritial.write); foreign and missing IDs are indistinguishable.")]
     public Task<PeriziaDto> GetPerizia(Guid id, CancellationToken ct = default) =>
         perizie.GetAsync(id, ct);
 
@@ -89,7 +89,7 @@ public sealed class McpTools(
         int limit = 50, string? cursor = null, CancellationToken ct = default) =>
         sinistri.SearchPageAsync(prefix, occurredFrom, occurredTo, limit, cursor, ct);
 
-    [McpServerTool(Name = "get_sinistro", ReadOnly = true, Destructive = false, OpenWorld = false), Description("Gets a sinistro belonging to the signed tenant; missing/foreign IDs are indistinguishable (peritial.read).")]
+    [McpServerTool(Name = "get_sinistro", ReadOnly = true, Destructive = false, OpenWorld = false, UseStructuredContent = true), Description("Gets a sinistro belonging to the signed tenant; missing/foreign IDs are indistinguishable (peritial.read).")]
     public Task<SinistroDto> GetSinistro(Guid id, CancellationToken ct = default) =>
         sinistri.GetAsync(id, ct);
 

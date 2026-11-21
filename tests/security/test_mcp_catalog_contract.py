@@ -7,9 +7,10 @@ import sys
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "ci"))
 from mcp_catalog_contract import (  # noqa: E402
-    ANNOTATIONS, CATALOG, SOURCE, OUTPUT_DTOS, parse_mcp_returns,
+    ANNOTATIONS, CATALOG, SOURCE, OUTPUT_DTOS, STRUCTURED, parse_mcp_returns,
     parse_mcp_tool_signatures, parse_mcp_annotations,
-    validate_catalog, validate_output_dtos, validate_annotation_manifest
+    validate_catalog, validate_output_dtos, validate_annotation_manifest,
+    validate_structured_output_tools
 )
 
 
@@ -50,6 +51,29 @@ class McpCatalogContractTests(unittest.TestCase):
         changed["tools"]["delete_sinistro"]["destructiveHint"] = False
         with self.assertRaisesRegex(ValueError, "annotation drift"):
             validate_annotation_manifest(catalog, changed, self.source)
+
+    def test_structured_outputs_are_reviewed_and_fail_closed(self):
+        manifest = json.loads(STRUCTURED.read_text(encoding="utf-8"))
+        self.assertEqual(["get_perizia", "get_sinistro"], manifest["tools"])
+        validate_structured_output_tools(self._manifest(), manifest, self.source)
+        validate_catalog(self._manifest(), self.source)
+        missing = self.source.replace(
+            'Name = "get_perizia", ReadOnly = true, Destructive = false, OpenWorld = false, UseStructuredContent = true',
+            'Name = "get_perizia", ReadOnly = true, Destructive = false, OpenWorld = false', 1)
+        self.assertNotEqual(missing, self.source)
+        with self.assertRaisesRegex(ValueError, "structured output drift"):
+            validate_structured_output_tools(self._manifest(), manifest, missing)
+        new_writer = self.source.replace(
+            'Name = "create_perizia", ReadOnly = false, Destructive = false, OpenWorld = false',
+            'Name = "create_perizia", ReadOnly = false, Destructive = false, OpenWorld = false, UseStructuredContent = true', 1)
+        self.assertNotEqual(new_writer, self.source)
+        with self.assertRaisesRegex(ValueError, "structured output drift"):
+            validate_structured_output_tools(self._manifest(), manifest, new_writer)
+        changed = copy.deepcopy(manifest)
+        changed["tools"].append("delete_sinistro")
+        changed["tools"].sort()
+        with self.assertRaisesRegex(ValueError, "requires reviewed read DTOs"):
+            validate_structured_output_tools(self._manifest(), changed, self.source)
 
     def test_versioned_manifest_must_match_mcp_server_signatures(self):
         self.assertTrue(CATALOG.is_file(), "Versioned MCP catalog is missing")
