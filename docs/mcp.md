@@ -633,3 +633,20 @@ Non equivale a verificare la keyword
 dall'SDK, che non è garantita né richiesta
 dalla convalida live.
 [ADR 0060](../adr/0060-mcp-v1-1-full-parameter-contract.md).
+
+## Catalogo MCP v1.2: firme dei risultati C# (#12)
+
+Il manifesto `mcp-catalog.v1.json` è ora `version=1.2.0`, con
+`format=1`, gli stessi **25 tool** e **55 parametri**. Il nuovo
+`returnType` obbligatorio stabilizza il **tipo nominale C#** del
+risultato, inclusi `Task<T>`, `IReadOnlyList<T>` e metodi sincroni.
+Il gate `scripts/ci/mcp_catalog_contract.py` lo confronta direttamente
+con `McpTools.cs`, anche quando la firma di input non cambia.
+Quattro regressioni proteggono tipi scalari, liste annidate, risultati
+sincroni e manifesti alterati.
+
+Non cambia alcun endpoint, runtime MCP, DTO, permesso o database.
+Il tipo C# **non** equivale al JSON `outputSchema` né blocca le
+proprietà interne dei DTO o il serializer SDK. Il version negotiation
+per client esterni e la compatibilità degli output JSON restano aperti
+in #12. [ADR 0061](../adr/0061-mcp-v1-2-return-signature-gate.md).

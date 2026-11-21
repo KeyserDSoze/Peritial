@@ -53,7 +53,7 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
     );
   });
 
-  test("versioned MCP v1.1 contract matches the full signed tools/list parameter schema", async ({request}) => {
+  test("versioned MCP v1.2 contract matches signed tools/list parameter schema", async ({request}) => {
     // Static CI verifies C# signatures; this independent test observes the
     // SDK-generated JSON schemas from both real Keycloak-authenticated clients.
     const {readFileSync} = await import("node:fs");
@@ -61,13 +61,15 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
       optional:boolean;nullable:boolean};
     type Catalog = {format:number;version:string;tools:{
       name:string;required:string[];parameters:Record<string,Parameter>;
-      access:string;effect:string
+      access:string;effect:string;returnType:string
     }[]};
     const manifest = JSON.parse(readFileSync(
       new URL("../../../docs/mcp-catalog.v1.json", import.meta.url), "utf8"
     )) as Catalog;
-    expect(manifest).toMatchObject({format:1,version:"1.1.0"});
+    expect(manifest).toMatchObject({format:1,version:"1.2.0"});
     expect(manifest.tools.length).toBe(25);
+    expect(manifest.tools.every(tool => typeof tool.returnType === "string" &&
+      tool.returnType.length > 0)).toBeTruthy();
     const acceptedJsonTypes = (value:unknown):string[] => {
       if (!value || typeof value !== "object") return [];
       const schema = value as {

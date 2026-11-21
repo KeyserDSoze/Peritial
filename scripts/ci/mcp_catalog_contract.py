@@ -13,7 +13,8 @@ CATALOG = ROOT / "docs/mcp-catalog.v1.json"
 
 _TOOL_RE = re.compile(
     r'\[McpServerTool\(Name = "([^"]+)"\)[^\n]*\]\s*'
-    r'public\s+(?:async\s+)?[^\n(]+\((.*?)\)\s*(?:=>|\{)',
+    r'public\s+(?:async\s+)?([A-Za-z][A-Za-z0-9_<>,? ]*)\s+'
+    r'([A-Za-z]\w*)\((.*?)\)\s*(?:=>|\{)',
     re.DOTALL,
 )
 _ARGUMENT_RE = re.compile(
@@ -41,7 +42,7 @@ def parse_mcp_parameters(source: str) -> dict[str, dict[str, dict]]:
     if len(matches) != len(declared):
         raise ValueError("Unrecognized MCP tool signature: fail closed on parser drift")
     for match in matches:
-        name, arguments = match.groups()
+        name, _, _, arguments = match.groups()
         if name in result:
             raise ValueError("Duplicate MCP tool name: " + name)
         parameters = {}
@@ -69,6 +70,25 @@ def parse_mcp_parameters(source: str) -> dict[str, dict[str, dict]]:
     return result
 
 
+
+def parse_mcp_returns(source: str) -> dict[str, str]:
+    """Pin C# return signatures, including async and collection envelopes.
+
+    This static ABI check does not pin SDK JSON output schemas or DTO fields.
+    """
+    matches = list(_TOOL_RE.finditer(source))
+    declared = re.findall(r'\[McpServerTool\(Name = "([^"]+)"\)', source)
+    if len(matches) != len(declared):
+        raise ValueError("Unrecognized MCP tool signature: fail closed on parser drift")
+    result = {}
+    for match in matches:
+        name, return_type, _, _ = match.groups()
+        if name in result:
+            raise ValueError("Duplicate MCP tool name: " + name)
+        result[name] = return_type.strip()
+    return result
+
+
 def parse_mcp_tool_signatures(source: str) -> dict[str, list[str]]:
     return {
         name: [key for key, contract in parameters.items()
@@ -78,7 +98,7 @@ def parse_mcp_tool_signatures(source: str) -> dict[str, list[str]]:
 
 
 def validate_catalog(manifest: dict, source: str) -> None:
-    if manifest.get("format") != 1 or manifest.get("version") != "1.1.0":
+    if manifest.get("format") != 1 or manifest.get("version") != "1.2.0":
         raise ValueError("Unreviewed MCP catalog version or format")
     items = manifest.get("tools")
     if not isinstance(items, list) or not items:
@@ -95,6 +115,7 @@ def validate_catalog(manifest: dict, source: str) -> None:
         raise ValueError("Keep the MCP tool catalog sorted by name")
 
     actual = parse_mcp_parameters(source)
+    returns = parse_mcp_returns(source)
     if set(actual) != set(names):
         raise ValueError(
             f"MCP name drift: missing={sorted(set(actual) - set(names))}, "
@@ -103,8 +124,10 @@ def validate_catalog(manifest: dict, source: str) -> None:
 
     for item in items:
         name = item["name"]
-        if set(item) != {"name", "required", "parameters", "access", "effect"}:
+        if set(item) != {"name", "required", "parameters", "access", "effect", "returnType"}:
             raise ValueError("Unreviewed MCP catalog entry shape: " + name)
+        if item["returnType"] != returns[name]:
+            raise ValueError(f"MCP return-type drift: {name}")
         if not isinstance(item["parameters"], dict):
             raise ValueError("Malformed MCP parameter contract: " + name)
         if item["parameters"] != actual[name] or (

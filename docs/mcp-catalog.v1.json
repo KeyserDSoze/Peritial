@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "version": "1.1.0",
+  "version": "1.2.0",
   "tools": [
     {
       "name": "advance_perizia",
@@ -23,7 +23,8 @@
           "nullable": false,
           "defaultLiteral": null
         }
-      }
+      },
+      "returnType": "Task<PeriziaDto>"
     },
     {
       "name": "assign_perizia",
@@ -46,7 +47,8 @@
           "nullable": false,
           "defaultLiteral": null
         }
-      }
+      },
+      "returnType": "Task<PeriziaDto>"
     },
     {
       "name": "cancel_perizia",
@@ -62,7 +64,8 @@
           "nullable": false,
           "defaultLiteral": null
         }
-      }
+      },
+      "returnType": "Task<PeriziaDto>"
     },
     {
       "name": "create_perizia",
@@ -78,7 +81,8 @@
           "nullable": false,
           "defaultLiteral": null
         }
-      }
+      },
+      "returnType": "Task<PeriziaDto>"
     },
     {
       "name": "create_sinistro",
@@ -107,7 +111,8 @@
           "nullable": true,
           "defaultLiteral": "null"
         }
-      }
+      },
+      "returnType": "Task<SinistroDto>"
     },
     {
       "name": "delete_sinistro",
@@ -130,7 +135,8 @@
           "nullable": false,
           "defaultLiteral": null
         }
-      }
+      },
+      "returnType": "Task<bool>"
     },
     {
       "name": "get_document",
@@ -146,7 +152,8 @@
           "nullable": false,
           "defaultLiteral": null
         }
-      }
+      },
+      "returnType": "Task<DocumentSummaryDto>"
     },
     {
       "name": "get_perizia",
@@ -162,7 +169,8 @@
           "nullable": false,
           "defaultLiteral": null
         }
-      }
+      },
+      "returnType": "Task<PeriziaDto>"
     },
     {
       "name": "get_perizia_sinistro",
@@ -178,7 +186,8 @@
           "nullable": false,
           "defaultLiteral": null
         }
-      }
+      },
+      "returnType": "Task<PeriziaSinistroAssociationDto>"
     },
     {
       "name": "get_sinistro",
@@ -194,7 +203,8 @@
           "nullable": false,
           "defaultLiteral": null
         }
-      }
+      },
+      "returnType": "Task<SinistroDto>"
     },
     {
       "name": "ingest_file",
@@ -236,7 +246,8 @@
           "nullable": true,
           "defaultLiteral": "null"
         }
-      }
+      },
+      "returnType": "Task<DocumentDto>"
     },
     {
       "name": "link_perizia_sinistro",
@@ -266,7 +277,8 @@
           "nullable": false,
           "defaultLiteral": null
         }
-      }
+      },
+      "returnType": "Task<PeriziaSinistroLinkDto>"
     },
     {
       "name": "list_documents",
@@ -286,14 +298,16 @@
           "nullable": false,
           "defaultLiteral": "50"
         }
-      }
+      },
+      "returnType": "Task<IReadOnlyList<DocumentSummaryDto>>"
     },
     {
       "name": "list_perizie",
       "required": [],
       "access": "read",
       "effect": "read-only",
-      "parameters": {}
+      "parameters": {},
+      "returnType": "Task<IReadOnlyList<PeriziaDto>>"
     },
     {
       "name": "list_perizie_for_sinistro",
@@ -309,7 +323,8 @@
           "nullable": false,
           "defaultLiteral": null
         }
-      }
+      },
+      "returnType": "Task<IReadOnlyList<Guid>>"
     },
     {
       "name": "list_sinistri",
@@ -323,7 +338,8 @@
           "nullable": false,
           "defaultLiteral": "50"
         }
-      }
+      },
+      "returnType": "Task<IReadOnlyList<SinistroDto>>"
     },
     {
       "name": "page_documents",
@@ -349,7 +365,8 @@
           "nullable": true,
           "defaultLiteral": "null"
         }
-      }
+      },
+      "returnType": "Task<DocumentPageDto>"
     },
     {
       "name": "page_sinistri",
@@ -369,7 +386,8 @@
           "nullable": false,
           "defaultLiteral": "50"
         }
-      }
+      },
+      "returnType": "Task<SinistroPageDto>"
     },
     {
       "name": "plan_legacy_xml",
@@ -385,7 +403,8 @@
           "nullable": false,
           "defaultLiteral": null
         }
-      }
+      },
+      "returnType": "Task<LegacyXmlImportPlanDto>"
     },
     {
       "name": "preview_legacy_xml",
@@ -401,7 +420,8 @@
           "nullable": false,
           "defaultLiteral": null
         }
-      }
+      },
+      "returnType": "LegacyXmlPreviewDto"
     },
     {
       "name": "reparent_perizia_sinistro",
@@ -438,7 +458,8 @@
           "nullable": false,
           "defaultLiteral": null
         }
-      }
+      },
+      "returnType": "Task<PeriziaSinistroLinkDto>"
     },
     {
       "name": "search_sinistri",
@@ -472,7 +493,8 @@
           "nullable": false,
           "defaultLiteral": "10"
         }
-      }
+      },
+      "returnType": "Task<IReadOnlyList<SinistroDto>>"
     },
     {
       "name": "search_sinistri_page",
@@ -512,7 +534,8 @@
           "nullable": true,
           "defaultLiteral": "null"
         }
-      }
+      },
+      "returnType": "Task<SinistroPageDto>"
     },
     {
       "name": "unlink_perizia_sinistro",
@@ -542,7 +565,8 @@
           "nullable": false,
           "defaultLiteral": null
         }
-      }
+      },
+      "returnType": "Task<PeriziaSinistroAssociationDto>"
     },
     {
       "name": "update_sinistro",
@@ -585,7 +609,8 @@
           "nullable": true,
           "defaultLiteral": "null"
         }
-      }
+      },
+      "returnType": "Task<SinistroDto>"
     }
   ]
 }

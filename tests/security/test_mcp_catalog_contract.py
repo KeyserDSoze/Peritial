@@ -7,7 +7,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "ci"))
 from mcp_catalog_contract import (  # noqa: E402
-    CATALOG, SOURCE, parse_mcp_tool_signatures, validate_catalog
+    CATALOG, SOURCE, parse_mcp_returns, parse_mcp_tool_signatures, validate_catalog
 )
 
 
@@ -79,7 +79,7 @@ class McpCatalogContractTests(unittest.TestCase):
 
     def test_manifest_includes_every_optional_argument_and_its_wire_type(self):
         manifest = self._manifest()
-        self.assertEqual("1.1.0", manifest["version"])
+        self.assertEqual("1.2.0", manifest["version"])
         for item in manifest["tools"]:
             self.assertIn("parameters", item)
             self.assertIsInstance(item["parameters"], dict)
@@ -178,6 +178,48 @@ class McpCatalogContractTests(unittest.TestCase):
         self.assertNotEqual(changed_source, self.source)
         with self.assertRaisesRegex(ValueError, "parameter"):
             validate_catalog(manifest, changed_source)
+
+
+    def test_every_csharp_result_signature_is_pinned(self):
+        manifest = self._manifest()
+        actual = parse_mcp_returns(self.source)
+        self.assertEqual(25, len(actual))
+        self.assertEqual({item["name"] for item in manifest["tools"]}, set(actual))
+        for item in manifest["tools"]:
+            self.assertEqual(actual[item["name"]], item["returnType"])
+        self.assertEqual("Task<IReadOnlyList<PeriziaDto>>", actual["list_perizie"])
+        self.assertEqual("Task<DocumentPageDto>", actual["page_documents"])
+        self.assertEqual("Task<bool>", actual["delete_sinistro"])
+        self.assertEqual("LegacyXmlPreviewDto", actual["preview_legacy_xml"])
+
+    def test_source_return_type_change_rejected_with_same_arguments(self):
+        changed = self.source.replace(
+            "public Task<SinistroDto> GetSinistro(",
+            "public Task<PeriziaDto> GetSinistro(", 1)
+        self.assertNotEqual(changed, self.source)
+        with self.assertRaisesRegex(ValueError, "return-type drift"):
+            validate_catalog(self._manifest(), changed)
+
+    def test_nested_collection_return_change_fails_closed(self):
+        changed = self.source.replace(
+            "public Task<IReadOnlyList<PeriziaDto>> ListPerizie(",
+            "public Task<IReadOnlyList<Guid>> ListPerizie(", 1)
+        self.assertNotEqual(changed, self.source)
+        with self.assertRaisesRegex(ValueError, "return-type drift"):
+            validate_catalog(self._manifest(), changed)
+
+    def test_manifest_return_tampering_and_missing_field_fail_closed(self):
+        for replacement in ("Task<PeriziaDto>", "", None):
+            changed = copy.deepcopy(self._manifest())
+            item = next(i for i in changed["tools"] if i["name"] == "get_document")
+            item["returnType"] = replacement
+            with self.subTest(replacement=replacement):
+                with self.assertRaisesRegex(ValueError, "return-type drift"):
+                    validate_catalog(changed, self.source)
+        changed = copy.deepcopy(self._manifest())
+        changed["tools"][0].pop("returnType")
+        with self.assertRaisesRegex(ValueError, "entry shape"):
+            validate_catalog(changed, self.source)
 
     @staticmethod
     def _manifest():
