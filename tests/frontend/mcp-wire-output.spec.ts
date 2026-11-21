@@ -28,14 +28,17 @@ const readTools = [
 const preflightTools = ["plan_legacy_xml", "preview_legacy_xml"] as const;
 // Keep covered and explicitly deferred mutating operations disjoint.
 // A new catalogued mutator must be consciously classified and reviewed.
-const mutationWireTools = [
+const primaryMutationWireTools = [
   "advance_perizia", "assign_perizia", "cancel_perizia", "create_perizia",
   "create_sinistro", "update_sinistro"
 ] as const;
-const deferredMutationTools = [
-  "delete_sinistro", "ingest_file", "link_perizia_sinistro",
+const mutationWireTools = [
+  ...primaryMutationWireTools, "ingest_file", "link_perizia_sinistro",
   "reparent_perizia_sinistro", "unlink_perizia_sinistro"
 ] as const;
+// Hard-delete deliberately has no SUCCESS probe while the production
+// retention/legal-hold/approval gate is absent; test an explicit denial.
+const deferredMutationTools = ["delete_sinistro"] as const;
 
 const api = "http://localhost:8080";
 const issuer = "http://localhost:8081/realms/peritial";
@@ -154,15 +157,18 @@ test.describe("Versioned MCP result JSON allowlist", () => {
         .toMatch(/Dto>?$/);
   });
 
-  test("the six mutator wire probes and five deferred mutators exhaust the catalog", () => {
+  test("ten successful wire probes and guarded delete exhaust all 11 mutators", () => {
     expect(catalog.tools.filter(t => t.effect === "mutating").map(t => t.name).sort())
       .toEqual([...mutationWireTools, ...deferredMutationTools].sort());
     for (const name of mutationWireTools) {
       const tool = catalog.tools.find(t => t.name === name);
       expect(tool?.access, name + " requires writer").toBe("write");
       expect(tool?.effect, name).toBe("mutating");
-      expect(tool?.returnType, name).toMatch(/^Task<(PeriziaDto|SinistroDto)>$/);
+      expect(tool?.returnType, name).toMatch(/^Task<(PeriziaDto|SinistroDto|DocumentDto|PeriziaSinistroLinkDto|PeriziaSinistroAssociationDto)>$/);
     }
+    expect(catalog.tools.find(t => t.name === "delete_sinistro")).toMatchObject({
+      access:"write+delete", effect:"mutating", returnType:"Task<bool>"
+    });
   });
 
   test("wire validator rejects added fields, missing fields, wrong types and nullability", () => {
@@ -523,7 +529,7 @@ test.describe("Versioned MCP result JSON allowlist", () => {
       reportedOn:"2026-11-21"
     });
 
-    expect([...probed].sort()).toEqual([...mutationWireTools].sort());
+    expect([...probed].sort()).toEqual([...primaryMutationWireTools].sort());
 
     // Attempt the same six writers with a signed read-only subject.
     // Authorization is enforced before any side effect.
@@ -567,6 +573,178 @@ test.describe("Versioned MCP result JSON allowlist", () => {
     expect(deniedSearch.status(), await deniedSearch.text()).toBe(200);
     expect((await deniedSearch.json() as {externalReference:string}[])
       .some(item => item.externalReference === forbiddenSinistroRef)).toBe(false);
+  });
+
+  test("signed MCP CAS link lifecycle, scanned ingestion and guarded delete output", async ({request}) => {
+    test.skip(!process.env.E2E_FULL_STACK, "Real Keycloak, PostgreSQL, ClamAV and S3 required");
+    test.setTimeout(120_000);
+    const writer = await tokenFor(request, "peritial-test-write");
+    const reader = await tokenFor(request);
+    const headers = {Authorization:"Bearer " + reader};
+    const nonce = Date.now() + "-" + Math.floor(Math.random()*1000000);
+    const covered = new Set<string>();
+
+    async function call(name:string, args:Record<string, unknown>, token:string, id:number) {
+      const response = await request.post(api + "/mcp", {
+        headers:{
+          Authorization:"Bearer " + token,
+          Accept:"application/json,text/event-stream",
+          "Content-Type":"application/json"
+        },
+        data:{jsonrpc:"2.0",id,method:"tools/call",params:{name,arguments:args}}
+      });
+      const raw = await response.text();
+      expect(response.ok(), raw).toBeTruthy();
+      return raw;
+    }
+    async function mutate(name:typeof mutationWireTools[number],
+      args:Record<string, unknown>,id:number) {
+      const entry = catalog.tools.find(t=>t.name===name);
+      expect(entry?.access).toBe("write");
+      expect(entry?.effect).toBe("mutating");
+      const match = /^Task<(.+)>$/.exec(entry!.returnType);
+      expect(match).not.toBeNull();
+      const raw = await call(name,args,writer,id);
+      const result = extractCallResult(raw);
+      checkWireValue(match![1],result,name);
+      expect(raw).not.toContain("tenantId");
+      expect(raw).not.toContain("storageKey");
+      covered.add(name);
+      return result as Record<string, unknown>;
+    }
+    async function restGet(path:string) {
+      const response = await request.get(api + path,{headers});
+      expect(response.status(),await response.text()).toBe(200);
+      return response.json() as Promise<Record<string, unknown>>;
+    }
+    async function create(path:string, data:Record<string,unknown>) {
+      const response = await request.post(api + path,{
+        headers:{Authorization:"Bearer " + writer},data
+      });
+      expect(response.status(),await response.text()).toBe(201);
+      return response.json() as Promise<{id:string}>;
+    }
+
+    const perizia = await create("/api/perizie",{
+      reference:"MCP-WIRE-LINK-" + nonce
+    });
+    const sinistroA = await create("/api/sinistri",{
+      externalReference:"MCP-WIRE-LINK-A-" + nonce,occurredOn:"2026-11-18"
+    });
+    const sinistroB = await create("/api/sinistri",{
+      externalReference:"MCP-WIRE-LINK-B-" + nonce,occurredOn:"2026-11-19"
+    });
+    const associationPath = "/api/perizie/" + perizia.id + "/sinistro";
+    expect(await restGet(associationPath)).toMatchObject({
+      periziaId:perizia.id,sinistroId:null,linkVersion:1
+    });
+
+    const linked = await mutate("link_perizia_sinistro",{
+      periziaId:perizia.id,sinistroId:sinistroA.id,expectedLinkVersion:1
+    },6501);
+    expect(linked).toMatchObject({
+      periziaId:perizia.id,sinistroId:sinistroA.id,linkVersion:2
+    });
+    expect(await restGet(associationPath)).toMatchObject(linked);
+
+    // One single CAS advances the revision 2 -> 3, never a transient unlink.
+    const moved = await mutate("reparent_perizia_sinistro",{
+      periziaId:perizia.id,expectedSinistroId:sinistroA.id,
+      newSinistroId:sinistroB.id,expectedLinkVersion:2
+    },6502);
+    expect(moved).toMatchObject({
+      periziaId:perizia.id,sinistroId:sinistroB.id,linkVersion:3
+    });
+    expect(await restGet(associationPath)).toMatchObject(moved);
+
+    const unlinked = await mutate("unlink_perizia_sinistro",{
+      periziaId:perizia.id,expectedSinistroId:sinistroB.id,
+      expectedLinkVersion:3
+    },6503);
+    expect(unlinked).toMatchObject({periziaId:perizia.id,linkVersion:4});
+    expect(unlinked.sinistroId ?? null).toBeNull();
+    expect(await restGet(associationPath)).toMatchObject({
+      periziaId:perizia.id,sinistroId:null,linkVersion:4
+    });
+
+    // ABA: a stale version 1 cannot relink the same entity after unlink.
+    const stale = await call("link_perizia_sinistro",{
+      periziaId:perizia.id,sinistroId:sinistroA.id,expectedLinkVersion:1
+    },writer,6504);
+    expect(stale).toContain('"isError":true');
+    expect(await restGet(associationPath)).toMatchObject({
+      sinistroId:null,linkVersion:4
+    });
+
+    const pdf = Buffer.from("%PDF-1.7\n1 0 obj\n<<>>\nendobj\n%%EOF\n");
+    const fileName = "mcp-wire-ingest-" + nonce + ".pdf";
+    const ingestArgs = {
+      fileName,contentType:"application/pdf",base64:pdf.toString("base64"),
+      periziaId:perizia.id,idempotencyKey:"wire-" + nonce
+    };
+    const doc = await mutate("ingest_file",ingestArgs,6505);
+    expect(doc).toMatchObject({
+      periziaId:perizia.id,fileName,contentType:"application/pdf",length:pdf.length
+    });
+    const documentId = doc.id as string;
+    expect(await restGet("/api/files/" + documentId)).toMatchObject({
+      id:documentId,periziaId:perizia.id,fileName,length:pdf.length
+    });
+
+    // Idempotency key must return the exact prior document, not write a
+    // second object or expose its storage key in the MCP result.
+    const replay = await mutate("ingest_file",ingestArgs,6506);
+    expect(replay).toEqual(doc);
+    const catalogResponse = await request.get(
+      api + "/api/files?periziaId=" + perizia.id + "&limit=50",{headers});
+    expect(catalogResponse.status(),await catalogResponse.text()).toBe(200);
+    const docs = await catalogResponse.json() as {id:string}[];
+    expect(docs.filter(x=>x.id===documentId)).toHaveLength(1);
+
+    const denied = [
+      {name:"link_perizia_sinistro",
+        args:{periziaId:perizia.id,sinistroId:sinistroA.id,expectedLinkVersion:4}},
+      {name:"reparent_perizia_sinistro",
+        args:{periziaId:perizia.id,expectedSinistroId:sinistroA.id,
+          newSinistroId:sinistroB.id,expectedLinkVersion:4}},
+      {name:"unlink_perizia_sinistro",
+        args:{periziaId:perizia.id,expectedSinistroId:sinistroA.id,
+          expectedLinkVersion:4}},
+      {name:"ingest_file",
+        args:{...ingestArgs,idempotencyKey:"denied-wire-" + nonce}}
+    ];
+    for (const [i,item] of denied.entries()) {
+      const raw = await call(item.name,item.args,reader,6510+i);
+      expect(raw,item.name+" must deny read scope").toContain('"isError":true');
+      expect(raw).not.toContain("storageKey");
+      expect(raw).not.toContain("tenantId");
+    }
+    expect(await restGet(associationPath)).toMatchObject({
+      periziaId:perizia.id,sinistroId:null,linkVersion:4
+    });
+
+    // Hard deletion is not a supported successful wire operation until
+    // production retention, legal holds, approvals and recovery exist.
+    // It must remain denied even to the ordinary signed writer.
+    const deleteEntry = catalog.tools.find(t=>t.name==="delete_sinistro");
+    expect(deleteEntry).toMatchObject({
+      access:"write+delete",effect:"mutating",returnType:"Task<bool>"
+    });
+    const blocked = await call("delete_sinistro",{
+      id:sinistroA.id,expectedVersion:1
+    },writer,6520);
+    expect(blocked).toContain('"isError":true');
+    expect(blocked).not.toContain("tenantId");
+    expect(await restGet("/api/sinistri/" + sinistroA.id)).toMatchObject({
+      id:sinistroA.id,version:1
+    });
+    expect(await restGet("/api/sinistri/" + sinistroB.id)).toMatchObject({
+      id:sinistroB.id,version:1
+    });
+    expect([...covered].sort()).toEqual([
+      "ingest_file","link_perizia_sinistro",
+      "reparent_perizia_sinistro","unlink_perizia_sinistro"
+    ].sort());
   });
 
 });

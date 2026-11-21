@@ -761,3 +761,32 @@ Con questa tranche la copertura degli output osservati sale a
 modificare alcuna firma MCP, modello Business o policy.
 Version negotiation, outputSchema SDK e gli altri cinque
 mutatori restano aperti in #12.
+
+## MCP: CAS Perizia–Sinistro, ingestion e hard-delete negata (#12)
+
+L'[ADR 0067](../adr/0067-mcp-link-ingest-wire-and-delete-denial.md)
+introduce prove live sui quattro restanti tool MCP con output
+di mutazione abilitato: `link_perizia_sinistro`,
+`reparent_perizia_sinistro`, `unlink_perizia_sinistro`
+e `ingest_file`. Il test verifica il JSON effettivo
+`tools/call` contro l'allowlist v1.0, la versione monotona
+di associazione **1→2→3→4**, la persistenza REST e il
+rifiuto di una versione obsoleta (ABA).
+
+Il file PDF sintetico viene realmente scansionato da ClamAV,
+archiviato in S3 e letto come metadati REST, senza
+esporre storage key. L'`idempotencyKey` viene ripresentata
+con payload identico e deve restituire il medesimo documento,
+non creare un duplicato. Un JWT `peritial.read` deve essere
+respinto da tutte e quattro le mutazioni, senza
+cambiare l'associazione.
+
+Per `delete_sinistro` il gate **resta chiuso**: con
+ordinario token writer la risposta MCP deve essere errore
+e il sinistro deve continuare a esistere. Non si invoca il
+percorso successivo al gate, né si abilita la cancellazione
+produttiva (#22). Tutti e 25 i tool sono ora **classificati
+nei test**; 24 hanno una prova di output di successo,
+uno (`delete_sinistro`) soltanto una prova di rifiuto.
+Version negotiation, `outputSchema` SDK e client esterni
+restano aperti nella #12.
