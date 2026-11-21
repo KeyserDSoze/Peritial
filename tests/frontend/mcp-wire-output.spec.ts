@@ -758,9 +758,10 @@ test.describe("Versioned MCP result JSON allowlist", () => {
       format:1,version:"1.0.0",mcpCatalogVersion:catalog.version
     });
     expect(manifest.tools).toEqual([
-      "get_document","get_perizia","get_perizia_sinistro","get_sinistro",
-      "page_documents","page_sinistri","plan_legacy_xml",
-      "preview_legacy_xml","search_sinistri_page"
+      "create_perizia","create_sinistro","get_document","get_perizia",
+      "get_perizia_sinistro","get_sinistro","page_documents",
+      "page_sinistri","plan_legacy_xml","preview_legacy_xml",
+      "search_sinistri_page"
     ]);
     const read=await tokenFor(request);
     const writer=await tokenFor(request,"peritial-test-write");
@@ -857,6 +858,89 @@ test.describe("Versioned MCP result JSON allowlist", () => {
             item.name+"."+key+" missing").toBe(true);
           expect(structuredValue[key],item.name+"."+key).toEqual(value);
         }
+      }
+    }
+
+    // Modern MCP creation is separately reviewed from the read and
+    // XML-preflight surface. Caller must possess signed peritial.write;
+    // the JSON schema does not grant permissions. REST is only read-back:
+    // do not create a second record just to compare the two transports.
+    const creationProbes=[
+      {name:"create_perizia",dto:"PeriziaDto",
+        args:{reference:"MCP-STRUCT-CREATE-P-"+nonce},
+        readPath:"/api/perizie/",field:"reference",wanted:"MCP-STRUCT-CREATE-P-"+nonce},
+      {name:"create_sinistro",dto:"SinistroDto",
+        args:{externalReference:"MCP-STRUCT-CREATE-S-"+nonce,
+          occurredOn:"2026-11-18",reportedOn:null},
+        readPath:"/api/sinistri/",field:"externalReference",
+        wanted:"MCP-STRUCT-CREATE-S-"+nonce}
+    ];
+    for(const [offset,item] of creationProbes.entries()){
+      const rawSchema=tools.find(t=>t.name===item.name)?.outputSchema as
+        Record<string,unknown>|undefined;
+      expect(rawSchema,item.name+" must advertise outputSchema").toBeDefined();
+      const defs=(rawSchema!.$defs??{}) as Record<string,Record<string,unknown>>;
+      const root=typeof rawSchema!.$ref==="string" &&
+        rawSchema!.$ref.startsWith("#/$defs/")
+        ? defs[rawSchema!.$ref.slice(8)] : rawSchema!;
+      expect(Object.keys((root.properties??{}) as Record<string,unknown>).sort(),
+        item.name+" must expose only reviewed DTO properties")
+        .toEqual(Object.keys(outputs.types[item.dto])
+          .map(k=>k[0].toLowerCase()+k.slice(1)).sort());
+      expect(JSON.stringify(rawSchema)).not.toContain("tenantId");
+      expect(JSON.stringify(rawSchema)).not.toContain("storageKey");
+
+      // A read-only client cannot create through a structured tool.
+      const denied=await call("tools/call",{
+        name:item.name,arguments:item.args
+      },6700+offset);
+      expect(denied.isError,item.name+" read scope denied").toBe(true);
+      const creation=await call("tools/call",{
+        name:item.name,arguments:item.args
+      },6710+offset,writer);
+      expect(creation.isError,item.name+" writer must succeed").not.toBe(true);
+      expect(creation.structuredContent,item.name+" structuredContent").toBeDefined();
+      checkWireValue(item.dto,creation.structuredContent,item.name);
+      const actual=creation.structuredContent as Record<string,unknown>;
+      expect(actual[item.field]).toBe(item.wanted);
+      expect(JSON.stringify(actual)).not.toContain("tenantId");
+      expect(JSON.stringify(actual)).not.toContain("storageKey");
+      if(item.name==="create_perizia") expect(actual.status).toBe("Registered");
+      if(item.name==="create_sinistro") expect(actual.version).toBe(1);
+
+      const lookup=await request.get(api+item.readPath+String(actual.id),{
+        headers:{Authorization:"Bearer "+read}
+      });
+      expect(lookup.status(),await lookup.text()).toBe(200);
+      const expected=await lookup.json() as Record<string,unknown>;
+      checkWireValue(item.dto,actual,item.name+".readback");
+      for(const [key,value] of Object.entries(expected)){
+        const approvedType=outputs.types[item.dto][key[0].toUpperCase()+key.slice(1)];
+        expect(approvedType,item.name+"."+key+" must be reviewed").toBeDefined();
+        if(value===null && approvedType.endsWith("?")){
+          expect(actual[key]??null,item.name+"."+key).toBeNull();
+        }else{
+          expect(Object.prototype.hasOwnProperty.call(actual,key),
+            item.name+"."+key+" required").toBe(true);
+          expect(actual[key],item.name+"."+key).toEqual(value);
+        }
+      }
+      // A denied call must not have inserted a duplicate record.
+      if(item.name==="create_perizia"){
+        const list=await request.get(api+"/api/perizie",{
+          headers:{Authorization:"Bearer "+read}
+        });
+        expect(list.status(),await list.text()).toBe(200);
+        const rows=await list.json() as {reference:string}[];
+        expect(rows.filter(row=>row.reference===item.wanted)).toHaveLength(1);
+      }else{
+        const list=await request.get(api+"/api/sinistri/search?"+
+          new URLSearchParams({prefix:item.wanted,limit:"10"}),{
+          headers:{Authorization:"Bearer "+read}
+        });
+        expect(list.status(),await list.text()).toBe(200);
+        const rows=await list.json() as {externalReference:string}[];
+        expect(rows.filter(row=>row.externalReference===item.wanted)).toHaveLength(1);
       }
     }
 

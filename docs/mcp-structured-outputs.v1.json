@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "mcpCatalogVersion": "1.2.0",
   "tools": [
+    "create_perizia",
+    "create_sinistro",
     "get_document",
     "get_perizia",
     "get_perizia_sinistro",

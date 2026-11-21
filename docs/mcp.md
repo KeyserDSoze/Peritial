@@ -952,3 +952,25 @@ La suite Playwright usa JWT Keycloak writer/reader e XML sintetici,
 confronta i DTO MCP 2026-07-28 con REST, blocca accessi read-only
 e controlla che dati anagrafici e precisione temporale non siano
 esposti o persistiti. L'import XML V011 resta interno.
+
+## Creazione Perizia e Sinistro con risultati MCP strutturati (ADR 0075, #12)
+
+La [ADR 0075](../adr/0075-mcp-structured-case-creations.md)
+estende `UseStructuredContent=true` ai due tool
+`create_perizia` e `create_sinistro`, che già condividono
+i servizi Business con REST e restituiscono rispettivamente
+`PeriziaDto` e `SinistroDto`. Il manifesto passa da
+9 a **11 tool strutturati su 25**.
+
+Le due creazioni restano **mutative**, con
+`peritial.write` firmato obbligatorio, transazioni
+PostgreSQL FORCE RLS e audit di successo atomico.
+Una allowlist CI esplicita autorizza l'opt-in
+solo per queste due creazioni, oltre ai tool read
+e ai preflight XML già revisionati: non abilita
+`assign_perizia`, `update_sinistro`, `ingest_file`
+o `delete_sinistro`. Il test con Keycloak verifica
+`outputSchema`, `structuredContent`, diniego con
+JWT read-only, un solo record effettivamente creato
+e confronto puntuale con la lettura REST.
+Nessuna nuova mutazione né migrazione del database.

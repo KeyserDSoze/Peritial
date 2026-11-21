@@ -155,19 +155,26 @@ def validate_structured_output_tools(catalog: dict, manifest: dict, source: str)
         or any(not isinstance(name, str) for name in selected)):
         raise ValueError("MCP structured output manifest tool list drift")
     entries = {item["name"]: item for item in catalog["tools"]}
-    # XML preflight tools require a signed WRITE grant even though they
-    # do not mutate state. The allowlist below must not weaken that grant:
-    # only those two write-scoped nonmutators can opt into the DTO schema.
+    # Output opt-in is NOT an access-control primitive. These exact
+    # write-scoped preflights do not mutate state; only the two reviewed
+    # non-destructive creation use cases may expose structured results.
+    # No blanket allowance for destructive or future write-access tools.
     write_scoped_preflights = {"plan_legacy_xml", "preview_legacy_xml"}
-    if any(name not in entries
-           or entries[name]["effect"] != "read-only"
-           or not (entries[name]["access"] == "read"
-                   or (name in write_scoped_preflights
-                       and entries[name]["access"] == "write"))
+    reviewed_creations = {"create_perizia", "create_sinistro"}
+    def allowed(name: str) -> bool:
+        item = entries[name]
+        if item["access"] == "read" and item["effect"] == "read-only":
+            return True
+        if (name in write_scoped_preflights and item["access"] == "write"
+                and item["effect"] == "read-only"):
+            return True
+        return (name in reviewed_creations and item["access"] == "write"
+                and item["effect"] == "mutating")
+    if any(name not in entries or not allowed(name)
            or re.fullmatch(r"(?:Task<[A-Za-z]\w*Dto>|[A-Za-z]\w*Dto)",
                            entries[name]["returnType"]) is None
            for name in selected):
-        raise ValueError("MCP structured output requires reviewed read DTOs")
+        raise ValueError("MCP structured output requires reviewed DTO and explicit access review")
     actual = sorted(re.findall(
         r'\[McpServerTool\(Name = "([^"]+)"[^\n]*?UseStructuredContent = true\)', source
     ))

@@ -19,7 +19,7 @@ public sealed class McpTools(
     public Task<PeriziaDto> GetPerizia(Guid id, CancellationToken ct = default) =>
         perizie.GetAsync(id, ct);
 
-    [McpServerTool(Name = "create_perizia", ReadOnly = false, Destructive = false, OpenWorld = false), Description("Creates a perizia in the authenticated tenant (peritial.write).")]
+    [McpServerTool(Name = "create_perizia", ReadOnly = false, Destructive = false, OpenWorld = false, UseStructuredContent = true), Description("Creates a perizia in the authenticated tenant (peritial.write).")]
     public Task<PeriziaDto> CreatePerizia(string reference, CancellationToken ct = default) =>
         perizie.CreateAsync(reference, ct);
 
@@ -93,7 +93,7 @@ public sealed class McpTools(
     public Task<SinistroDto> GetSinistro(Guid id, CancellationToken ct = default) =>
         sinistri.GetAsync(id, ct);
 
-    [McpServerTool(Name = "create_sinistro", ReadOnly = false, Destructive = false, OpenWorld = false), Description("Creates a sinistro using signed tenant, required external reference and ISO calendar date; optional report date (peritial.write).")]
+    [McpServerTool(Name = "create_sinistro", ReadOnly = false, Destructive = false, OpenWorld = false, UseStructuredContent = true), Description("Creates a sinistro using signed tenant, required external reference and ISO calendar date; optional report date (peritial.write).")]
     public Task<SinistroDto> CreateSinistro(
         string externalReference, DateOnly occurredOn, DateOnly? reportedOn = null,
         CancellationToken ct = default) =>

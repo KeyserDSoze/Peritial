@@ -54,7 +54,8 @@ class McpCatalogContractTests(unittest.TestCase):
 
     def test_structured_outputs_are_reviewed_and_fail_closed(self):
         manifest = json.loads(STRUCTURED.read_text(encoding="utf-8"))
-        self.assertEqual(["get_document", "get_perizia", "get_perizia_sinistro",
+        self.assertEqual(["create_perizia", "create_sinistro",
+                          "get_document", "get_perizia", "get_perizia_sinistro",
                           "get_sinistro", "page_documents", "page_sinistri",
                           "plan_legacy_xml", "preview_legacy_xml",
                           "search_sinistri_page"],
@@ -67,12 +68,21 @@ class McpCatalogContractTests(unittest.TestCase):
         self.assertNotEqual(missing, self.source)
         with self.assertRaisesRegex(ValueError, "structured output drift"):
             validate_structured_output_tools(self._manifest(), manifest, missing)
-        new_writer = self.source.replace(
-            'Name = "create_perizia", ReadOnly = false, Destructive = false, OpenWorld = false',
-            'Name = "create_perizia", ReadOnly = false, Destructive = false, OpenWorld = false, UseStructuredContent = true', 1)
-        self.assertNotEqual(new_writer, self.source)
-        with self.assertRaisesRegex(ValueError, "structured output drift"):
-            validate_structured_output_tools(self._manifest(), manifest, new_writer)
+        # Both approved creators must be listed and explicitly opted in.
+        for name in ("create_perizia", "create_sinistro"):
+            with self.subTest(name=name):
+                without = copy.deepcopy(manifest)
+                without["tools"].remove(name)
+                with self.assertRaisesRegex(ValueError, "structured output drift"):
+                    validate_structured_output_tools(
+                        self._manifest(), without, self.source)
+                removed_annotation = self.source.replace(
+                    f'Name = "{name}", ReadOnly = false, Destructive = false, OpenWorld = false, UseStructuredContent = true',
+                    f'Name = "{name}", ReadOnly = false, Destructive = false, OpenWorld = false', 1)
+                self.assertNotEqual(removed_annotation, self.source)
+                with self.assertRaisesRegex(ValueError, "structured output drift"):
+                    validate_structured_output_tools(
+                        self._manifest(), manifest, removed_annotation)
         removed_from_manifest = copy.deepcopy(manifest)
         removed_from_manifest["tools"].remove("page_sinistri")
         with self.assertRaisesRegex(ValueError, "structured output drift"):
@@ -104,15 +114,18 @@ class McpCatalogContractTests(unittest.TestCase):
         changed = copy.deepcopy(manifest)
         changed["tools"].append("delete_sinistro")
         changed["tools"].sort()
-        with self.assertRaisesRegex(ValueError, "requires reviewed read DTOs"):
+        with self.assertRaisesRegex(ValueError, "explicit access review"):
             validate_structured_output_tools(self._manifest(), changed, self.source)
-        # The preflights are not a blanket exception for write-access
-        # tools, even when another writer happens to return a DTO.
-        changed = copy.deepcopy(manifest)
-        changed["tools"].append("create_perizia")
-        changed["tools"].sort()
-        with self.assertRaisesRegex(ValueError, "requires reviewed read DTOs"):
-            validate_structured_output_tools(self._manifest(), changed, self.source)
+        # The creator exceptions are NOT permission to opt-in any other
+        # writer (including other writers returning the same approved DTO).
+        for name in ("assign_perizia", "update_sinistro", "ingest_file"):
+            with self.subTest(forbidden=name):
+                changed = copy.deepcopy(manifest)
+                changed["tools"].append(name)
+                changed["tools"].sort()
+                with self.assertRaisesRegex(ValueError, "explicit access review"):
+                    validate_structured_output_tools(
+                        self._manifest(), changed, self.source)
 
     def test_versioned_manifest_must_match_mcp_server_signatures(self):
         self.assertTrue(CATALOG.is_file(), "Versioned MCP catalog is missing")
