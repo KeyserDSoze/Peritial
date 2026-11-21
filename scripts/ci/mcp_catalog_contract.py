@@ -11,9 +11,12 @@ ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / "src/backend/Applications/McpTools.cs"
 CATALOG = ROOT / "docs/mcp-catalog.v1.json"
 OUTPUT_DTOS = ROOT / "docs/mcp-output-dtos.v1.json"
+ANNOTATIONS = ROOT / "docs/mcp-tool-annotations.v1.json"
 
 _TOOL_RE = re.compile(
-    r'\[McpServerTool\(Name = "([^"]+)"\)[^\n]*\]\s*'
+    r'\[McpServerTool\(Name = "([^"]+)"'
+    r'(?:, ReadOnly = (true|false), Destructive = (true|false), OpenWorld = (true|false))?'
+    r'\)[^\n]*\]\s*'
     r'public\s+(?:async\s+)?([A-Za-z][A-Za-z0-9_<>,? ]*)\s+'
     r'([A-Za-z]\w*)\((.*?)\)\s*(?:=>|\{)',
     re.DOTALL,
@@ -39,11 +42,11 @@ def parse_mcp_parameters(source: str) -> dict[str, dict[str, dict]]:
     """Return each tool's ordered SDK-visible signature; fail on new shapes."""
     result = {}
     matches = list(_TOOL_RE.finditer(source))
-    declared = re.findall(r'\[McpServerTool\(Name = "([^"]+)"\)', source)
+    declared = re.findall(r'\[McpServerTool\(Name = "([^"]+)"', source)
     if len(matches) != len(declared):
         raise ValueError("Unrecognized MCP tool signature: fail closed on parser drift")
     for match in matches:
-        name, _, _, arguments = match.groups()
+        name, _, _, _, _, _, arguments = match.groups()
         if name in result:
             raise ValueError("Duplicate MCP tool name: " + name)
         parameters = {}
@@ -78,16 +81,65 @@ def parse_mcp_returns(source: str) -> dict[str, str]:
     This static ABI check does not pin SDK JSON output schemas or DTO fields.
     """
     matches = list(_TOOL_RE.finditer(source))
-    declared = re.findall(r'\[McpServerTool\(Name = "([^"]+)"\)', source)
+    declared = re.findall(r'\[McpServerTool\(Name = "([^"]+)"', source)
     if len(matches) != len(declared):
         raise ValueError("Unrecognized MCP tool signature: fail closed on parser drift")
     result = {}
     for match in matches:
-        name, return_type, _, _ = match.groups()
+        name, _, _, _, return_type, _, _ = match.groups()
         if name in result:
             raise ValueError("Duplicate MCP tool name: " + name)
         result[name] = return_type.strip()
     return result
+
+
+def parse_mcp_annotations(source: str) -> dict[str, dict[str, bool]]:
+    """Read source-level MCP hints; omission or unsupported syntax fails closed."""
+    matches = list(_TOOL_RE.finditer(source))
+    declared = re.findall(r'\[McpServerTool\(Name = "([^"]+)"', source)
+    if len(matches) != len(declared):
+        raise ValueError("MCP annotation drift: unrecognized tool declaration")
+    result = {}
+    for match in matches:
+        name, read_only, destructive, open_world, _, _, _ = match.groups()
+        if name in result or None in (read_only, destructive, open_world):
+            raise ValueError("MCP annotation drift: missing/duplicated hints for " + name)
+        result[name] = {
+            "readOnlyHint": read_only == "true",
+            "destructiveHint": destructive == "true",
+            "openWorldHint": open_world == "true",
+        }
+    return result
+
+
+def validate_annotation_manifest(catalog: dict, annotated: dict, source: str) -> None:
+    """Pin exact SDK-exported hints against access, effects and destructive policy."""
+    if (set(annotated) != {"format", "version", "mcpCatalogVersion", "tools"}
+        or annotated["format"] != 1 or annotated["version"] != "1.0.0"
+        or annotated["mcpCatalogVersion"] != catalog["version"]):
+        raise ValueError("MCP annotation manifest version/shape drift")
+    declared = annotated["tools"]
+    if not isinstance(declared, dict) or set(declared) != {
+        item["name"] for item in catalog["tools"]
+    }:
+        raise ValueError("MCP annotation manifest tool drift")
+    actual = parse_mcp_annotations(source)
+    if set(actual) != set(declared):
+        raise ValueError("MCP annotation source tool drift")
+    destructive_tools = {
+        "advance_perizia", "assign_perizia", "cancel_perizia", "delete_sinistro",
+        "link_perizia_sinistro", "reparent_perizia_sinistro",
+        "unlink_perizia_sinistro", "update_sinistro",
+    }
+    for item in catalog["tools"]:
+        name = item["name"]
+        expected = {
+            "readOnlyHint": item["effect"] == "read-only",
+            "destructiveHint": name in destructive_tools,
+            "openWorldHint": False,
+        }
+        if declared[name] != expected or actual[name] != expected:
+            raise ValueError("MCP annotation drift: " + name)
 
 
 def parse_mcp_tool_signatures(source: str) -> dict[str, list[str]]:
@@ -205,13 +257,12 @@ def validate_output_dtos(catalog: dict, output_contract: dict) -> None:
 
 
 def validate_repository() -> None:
-    validate_catalog(
-        json.loads(CATALOG.read_text(encoding="utf-8")),
-        SOURCE.read_text(encoding="utf-8"),
-    )
-    validate_output_dtos(
-        json.loads(CATALOG.read_text(encoding="utf-8")),
-        json.loads(OUTPUT_DTOS.read_text(encoding="utf-8")),
+    catalog = json.loads(CATALOG.read_text(encoding="utf-8"))
+    source = SOURCE.read_text(encoding="utf-8")
+    validate_catalog(catalog, source)
+    validate_output_dtos(catalog, json.loads(OUTPUT_DTOS.read_text(encoding="utf-8")))
+    validate_annotation_manifest(
+        catalog, json.loads(ANNOTATIONS.read_text(encoding="utf-8")), source
     )
 
 

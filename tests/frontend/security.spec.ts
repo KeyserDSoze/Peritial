@@ -67,6 +67,16 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
       new URL("../../../docs/mcp-catalog.v1.json", import.meta.url), "utf8"
     )) as Catalog;
     expect(manifest).toMatchObject({format:1,version:"1.2.0"});
+    const annotations = JSON.parse(readFileSync(
+      new URL("../../../docs/mcp-tool-annotations.v1.json", import.meta.url), "utf8"
+    )) as {format:number;version:string;mcpCatalogVersion:string;tools:
+      Record<string,{readOnlyHint:boolean;destructiveHint:boolean;openWorldHint:boolean}>};
+    expect(annotations).toMatchObject({
+      format:1,version:"1.0.0",mcpCatalogVersion:manifest.version
+    });
+    expect(Object.keys(annotations.tools).sort()).toEqual(
+      manifest.tools.map(tool=>tool.name).sort()
+    );
     expect(manifest.tools.length).toBe(25);
     expect(manifest.tools.every(tool => typeof tool.returnType === "string" &&
       tool.returnType.length > 0)).toBeTruthy();
@@ -96,7 +106,8 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
       const body = await response.text();
       type ToolList = {result?:{tools:{name:string;inputSchema?:{
         required?:string[];properties?:Record<string,unknown>
-      }}[]};error?:unknown};
+      };annotations?:{readOnlyHint?:boolean;destructiveHint?:boolean;
+        openWorldHint?:boolean;idempotentHint?:boolean}}[]};error?:unknown};
       const envelopes = body.trimStart().startsWith("{")
         ? [JSON.parse(body) as ToolList]
         : body.split(/\r?\n/).filter(line => line.startsWith("data:"))
@@ -110,6 +121,12 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
       );
       for (const expected of manifest.tools) {
         const tool = actual.find(item => item.name === expected.name)!;
+        expect(tool.annotations, expected.name + " must advertise policy hints")
+          .toMatchObject(annotations.tools[expected.name]);
+        // No broad idempotency promise: only a keyed ingest_file retry is
+        // independently tested; other writes must not be labelled idempotent.
+        expect(tool.annotations?.idempotentHint ?? false, expected.name)
+          .toBe(false);
         expect(tool.inputSchema, expected.name).toBeDefined();
         expect([...(tool.inputSchema?.required ?? [])].sort(),
           expected.name).toEqual([...expected.required].sort());

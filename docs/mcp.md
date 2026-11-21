@@ -790,3 +790,32 @@ nei test**; 24 hanno una prova di output di successo,
 uno (`delete_sinistro`) soltanto una prova di rifiuto.
 Version negotiation, `outputSchema` SDK e client esterni
 restano aperti nella #12.
+
+## Metadati di rischio per client MCP (ADR 0068, #12)
+
+Il manifesto revisionato `docs/mcp-tool-annotations.v1.json`
+fissa gli hint MCP `readOnlyHint`, `destructiveHint`,
+`openWorldHint` per **tutti e 25 i tool**; i valori sono
+esposti realmente dall'SDK C# 2.0 tramite `tools/list`.
+I **14 tool non mutanti**, inclusi i due preflight XML
+`peritial.write`, riportano `readOnlyHint:true`.
+Otto mutatori che cambiano o possono eliminare stato
+riportano `destructiveHint:true`; creazione pratica,
+creazione sinistro e ingestion documentale sono additive
+(`destructiveHint:false`). Tutti operano entro i domini
+tenant autenticati, quindi `openWorldHint:false`.
+Non viene dichiarata idempotenza generalizzata.
+
+La suite Python protegge il manifesto e gli attributi
+C# contro drift, omissioni e riclassificazioni non
+revisionate. La CI Playwright usa i veri token Keycloak
+reader e writer e confronta tutti gli hint sul wire
+`tools/list`. Il tool `delete_sinistro` resta
+**distruttivo e non autorizzato** in mancanza del gate
+produttivo (#22). Gli hint servono alle interfacce
+client per presentare avvisi e consenso, **non
+sostituiscono OAuth, FORCE RLS o controlli Business**.
+
+[ADR 0068](../adr/0068-mcp-tool-risk-annotations.md).
+`outputSchema` strutturati, negoziazione versioni e
+client esterni restano in #12.

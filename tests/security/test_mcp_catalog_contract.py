@@ -7,8 +7,9 @@ import sys
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "ci"))
 from mcp_catalog_contract import (  # noqa: E402
-    CATALOG, SOURCE, OUTPUT_DTOS, parse_mcp_returns, parse_mcp_tool_signatures,
-    validate_catalog, validate_output_dtos
+    ANNOTATIONS, CATALOG, SOURCE, OUTPUT_DTOS, parse_mcp_returns,
+    parse_mcp_tool_signatures, parse_mcp_annotations,
+    validate_catalog, validate_output_dtos, validate_annotation_manifest
 )
 
 
@@ -16,6 +17,39 @@ class McpCatalogContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.source = SOURCE.read_text(encoding="utf-8")
+
+    def test_mcp_tool_annotations_are_versioned_and_match_source(self):
+        catalog = self._manifest()
+        declared = json.loads(ANNOTATIONS.read_text(encoding="utf-8"))
+        validate_annotation_manifest(catalog, declared, self.source)
+        self.assertEqual(25, len(parse_mcp_annotations(self.source)))
+        self.assertTrue(parse_mcp_annotations(self.source)["get_perizia"]["readOnlyHint"])
+        self.assertTrue(parse_mcp_annotations(self.source)["plan_legacy_xml"]["readOnlyHint"])
+        self.assertFalse(parse_mcp_annotations(self.source)["create_perizia"]["destructiveHint"])
+        self.assertTrue(parse_mcp_annotations(self.source)["delete_sinistro"]["destructiveHint"])
+
+    def test_mcp_annotation_changes_cannot_be_silent(self):
+        catalog = self._manifest()
+        declared = json.loads(ANNOTATIONS.read_text(encoding="utf-8"))
+        for before, after in [
+            ('Name = "get_perizia", ReadOnly = true',
+             'Name = "get_perizia", ReadOnly = false'),
+            ('Name = "delete_sinistro", ReadOnly = false, Destructive = true',
+             'Name = "delete_sinistro", ReadOnly = false, Destructive = false'),
+            ('Name = "ingest_file", ReadOnly = false, Destructive = false, OpenWorld = false',
+             'Name = "ingest_file", ReadOnly = false, Destructive = false, OpenWorld = true'),
+            ('Name = "get_sinistro", ReadOnly = true, Destructive = false, OpenWorld = false',
+             'Name = "get_sinistro"'),
+        ]:
+            with self.subTest(before=before):
+                changed = self.source.replace(before, after, 1)
+                self.assertNotEqual(changed, self.source)
+                with self.assertRaisesRegex(ValueError, "annotation drift"):
+                    validate_annotation_manifest(catalog, declared, changed)
+        changed = copy.deepcopy(declared)
+        changed["tools"]["delete_sinistro"]["destructiveHint"] = False
+        with self.assertRaisesRegex(ValueError, "annotation drift"):
+            validate_annotation_manifest(catalog, changed, self.source)
 
     def test_versioned_manifest_must_match_mcp_server_signatures(self):
         self.assertTrue(CATALOG.is_file(), "Versioned MCP catalog is missing")
