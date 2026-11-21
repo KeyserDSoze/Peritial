@@ -63,9 +63,10 @@ def reviewed_fields(schema: dict) -> set[str]:
     ref = schema.get("$ref")
     if isinstance(ref, str) and ref.startswith("#/$defs/"):
         schema = defs[ref[len("#/$defs/"):]]
-    properties = schema.get("properties", {})
-    if not isinstance(properties, dict):
-        raise AssertionError("MCP outputSchema has no object properties")
+    properties = schema.get("properties")
+    if (schema.get("type") not in (None, "object")
+            or not isinstance(properties, dict) or not properties):
+        raise AssertionError("MCP outputSchema is not a reviewed nonempty object")
     return set(properties)
 
 
