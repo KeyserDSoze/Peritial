@@ -1,0 +1,17 @@
+{
+  "format": 1,
+  "version": "1.0.0",
+  "sdkPackage": "ModelContextProtocol.AspNetCore",
+  "sdkVersion": "2.0.0",
+  "transport": "streamable-http-stateless",
+  "modern": "2026-07-28",
+  "legacy": "2025-11-25",
+  "requiredModernHeaders": [
+    "MCP-Protocol-Version",
+    "Mcp-Method"
+  ],
+  "errorCodes": {
+    "unsupportedProtocolVersion": -32022,
+    "headerMismatch": -32020
+  }
+}

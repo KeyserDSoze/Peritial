@@ -819,3 +819,32 @@ sostituiscono OAuth, FORCE RLS o controlli Business**.
 [ADR 0068](../adr/0068-mcp-tool-risk-annotations.md).
 `outputSchema` strutturati, negoziazione versioni e
 client esterni restano in #12.
+
+## Version negotiation HTTP stateless MCP 2.0 (#12, #4)
+
+La [ADR 0069](../adr/0069-mcp-modern-legacy-wire-compatibility.md)
+fissa esplicitamente `HttpServerSessionMode.Stateless`
+nell'API .NET 10 e introduce
+`docs/mcp-protocol-eras.v1.json`: una policy revisionata
+per **MCP 2026-07-28 moderno** e **2025-11-25 legacy**.
+Non sono creati session ID server, e ogni POST autenticato
+rivalida JWT, tenant e scope separatamente.
+
+La suite Playwright `mcp-protocol-eras.spec.ts`
+esercita il vero endpoint HTTP con JWT Keycloak:
+`server/discover` + `tools/list` + `tools/call`
+per la modalità moderna con header `MCP-Protocol-Version`
+e `Mcp-Method`, e `initialize` + `tools/list`
+per il client legacy. Entrambe devono pubblicare
+i 25 tool identici, senza sessioni sticky e senza
+tenantId nelle risposte.
+
+I test negativi inviano `tools/call` mutativo con
+una versione non supportata (codice `-32022`) o
+header/metadata di protocollo incoerenti (`-32020`).
+Devono essere respinti **prima del dispatch**, senza
+creare una Perizia, e una chiamata moderna anonima
+deve continuare a essere `401`.
+Questo non equivale ancora a test con client
+esterni con SDK diversi, né a un contratto completo
+`outputSchema`, che restano aperti nella #12.

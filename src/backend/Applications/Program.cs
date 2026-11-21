@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.IdentityModel.Tokens;
 using ModelContextProtocol.Server;
+using ModelContextProtocol.AspNetCore;
 using Npgsql;
 using Peritial.Applications;
 using Peritial.Business;
@@ -189,7 +190,13 @@ if (string.Equals(builder.Configuration["Storage:Provider"], "Azure", StringComp
 else
     builder.Services.AddSingleton<IObjectStore, MinioObjectStore>();
 
-builder.Services.AddMcpServer().WithHttpTransport().WithTools<McpTools>();
+// Pin the dual-era, stateless HTTP boundary explicitly. The MCP C# SDK 2.0
+// serves modern 2026-07-28 requests with per-request _meta while keeping the
+// 2025-11-25 initialize handshake for legacy clients. No sticky sessions:
+// tenant, grants and tools are evaluated on EVERY HTTP request.
+builder.Services.AddMcpServer()
+    .WithHttpTransport(options => options.SessionMode = HttpServerSessionMode.Stateless)
+    .WithTools<McpTools>();
 builder.Services.AddCors(options => options.AddPolicy("web", policy =>
     policy.WithOrigins(builder.Configuration["Cors:Origin"] ?? "http://localhost:5173")
         .AllowAnyHeader().AllowAnyMethod()));
