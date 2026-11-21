@@ -39,7 +39,7 @@ public sealed class McpTools(
     public Task<PeriziaDto> CancelPerizia(Guid id, CancellationToken ct = default) =>
         perizie.CancelAsync(id, ct);
 
-    [McpServerTool(Name = "get_perizia_sinistro", ReadOnly = true, Destructive = false, OpenWorld = false), Description("Returns a perizia's current sinistro association or null for an unlinked perizia in the signed tenant; foreign and missing perizie are indistinguishable. Requires peritial.read or peritial.write.")]
+    [McpServerTool(Name = "get_perizia_sinistro", ReadOnly = true, Destructive = false, OpenWorld = false, UseStructuredContent = true), Description("Returns a perizia's current sinistro association or null for an unlinked perizia in the signed tenant; foreign and missing perizie are indistinguishable. Requires peritial.read or peritial.write.")]
     public Task<PeriziaSinistroAssociationDto> GetPeriziaSinistro(
         Guid periziaId, CancellationToken ct = default) =>
         periziaSinistroLinks.GetPeriziaAssociationAsync(periziaId, ct);
@@ -123,7 +123,7 @@ public sealed class McpTools(
         CancellationToken ct = default) =>
         documents.PageAsync(periziaId, limit, cursor, ct);
 
-    [McpServerTool(Name = "get_document", ReadOnly = true, Destructive = false, OpenWorld = false), Description("Gets safe metadata for one document in the signed tenant (peritial.read or peritial.write); foreign and missing IDs are indistinguishable.")]
+    [McpServerTool(Name = "get_document", ReadOnly = true, Destructive = false, OpenWorld = false, UseStructuredContent = true), Description("Gets safe metadata for one document in the signed tenant (peritial.read or peritial.write); foreign and missing IDs are indistinguishable.")]
     public Task<DocumentSummaryDto> GetDocument(Guid id, CancellationToken ct = default) =>
         documents.GetAsync(id, ct);
 

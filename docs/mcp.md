@@ -872,3 +872,28 @@ La serializzazione dell'SDK omette proprietà nullable con valore
 campi con `null` esplicito. I test distinguono rigorosamente le
 proprietà nullable da quelle obbligatorie e confrontano ogni campo
 non nullo, rifiutando differenze reali nel contratto.
+
+## Seconda estensione degli output MCP strutturati (ADR 0071, #12)
+
+La [ADR 0071](../adr/0071-mcp-structured-document-association.md)
+aggiunge gli schemi `outputSchema` e i risultati
+`structuredContent` di `get_document` e
+`get_perizia_sinistro` ai due tool di dettaglio precedenti.
+Il manifesto versionato contiene ora **4 tool** e il
+controllo statico fallisce se l'opt-in nel sorgente e il
+catalogo non corrispondono.
+
+In CI, il PDF di fixture viene caricato via REST con
+token writer e passa realmente da ClamAV e storage;
+un token di lettura interroga `get_document` su MCP
+2026-07-28 e confronta tutti i campi pubblici con
+il metadato REST. `get_perizia_sinistro` viene
+provato sia **non collegato** (sinistroId nullo,
+linkVersion 1) sia **collegato** (CAS 1→2).
+Le proprietà nullable omesse dall'SDK restano
+equivalenti al solo `null` previsto da manifesto;
+nessuna chiave di storage o tenant può essere esposta.
+
+I restanti **21 tool** mantengono l'attuale
+rappresentazione; non si modifica la compatibilità
+legacy, la logica di business o il gate di cancellazione.

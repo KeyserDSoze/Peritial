@@ -757,7 +757,9 @@ test.describe("Versioned MCP result JSON allowlist", () => {
     expect(manifest).toMatchObject({
       format:1,version:"1.0.0",mcpCatalogVersion:catalog.version
     });
-    expect(manifest.tools).toEqual(["get_perizia","get_sinistro"]);
+    expect(manifest.tools).toEqual([
+      "get_document","get_perizia","get_perizia_sinistro","get_sinistro"
+    ]);
     const read=await tokenFor(request);
     const writer=await tokenFor(request,"peritial-test-write");
     const meta={
@@ -854,6 +856,102 @@ test.describe("Versioned MCP result JSON allowlist", () => {
         }
       }
     }
+
+    // New read-only DTOs: scanned document metadata and a revisioned
+    // perizia association. Use REST only for fixture setup/read-back;
+    // never use the REST JSON as a substitute for an actual MCP result.
+    const caseResponse=await request.post(api+"/api/perizie",{
+      headers:{Authorization:"Bearer "+writer},
+      data:{reference:"MCP-STRUCT-ASSOC-"+nonce}
+    });
+    expect(caseResponse.status(),await caseResponse.text()).toBe(201);
+    const caseId=(await caseResponse.json() as {id:string}).id;
+    const claimResponse=await request.post(api+"/api/sinistri",{
+      headers:{Authorization:"Bearer "+writer},
+      data:{externalReference:"MCP-STRUCT-CLAIM-"+nonce,
+        occurredOn:"2026-11-20"}
+    });
+    expect(claimResponse.status(),await claimResponse.text()).toBe(201);
+    const claimId=(await claimResponse.json() as {id:string}).id;
+
+    const associationBefore=await call("tools/call",{
+      name:"get_perizia_sinistro",arguments:{periziaId:caseId}
+    },6610);
+    checkWireValue("PeriziaSinistroAssociationDto",
+      associationBefore.structuredContent,"association.unlinked");
+    expect(associationBefore.structuredContent).toMatchObject({
+      periziaId:caseId,linkVersion:1
+    });
+    expect((associationBefore.structuredContent as Record<string,unknown>)
+      .sinistroId??null).toBeNull();
+
+    const linked=await request.post(api+"/api/perizie/"+caseId+"/sinistro",{
+      headers:{Authorization:"Bearer "+writer},
+      data:{sinistroId:claimId,expectedLinkVersion:1}
+    });
+    expect(linked.status(),await linked.text()).toBe(201);
+
+    const pdf=Buffer.from("%PDF-1.7\n1 0 obj\n<<>>\nendobj\n%%EOF\n");
+    const fileName="mcp-structured-document-"+nonce+".pdf";
+    const uploaded=await request.post(api+"/api/files",{
+      headers:{Authorization:"Bearer "+writer},
+      multipart:{file:{name:fileName,mimeType:"application/pdf",buffer:pdf},
+        periziaId:caseId}
+    });
+    expect(uploaded.status(),await uploaded.text()).toBe(201);
+    const documentId=(await uploaded.json() as {id:string}).id;
+
+    const more=[
+      {name:"get_document",dtype:"DocumentSummaryDto",
+        args:{id:documentId},restPath:"/api/files/"+documentId},
+      {name:"get_perizia_sinistro",dtype:"PeriziaSinistroAssociationDto",
+        args:{periziaId:caseId},restPath:"/api/perizie/"+caseId+"/sinistro"}
+    ];
+    for(const [offset,item] of more.entries()){
+      const rawSchema=tools.find(t=>t.name===item.name)?.outputSchema;
+      expect(rawSchema,item.name+" must publish outputSchema").toBeDefined();
+      const schema=rawSchema as Record<string,unknown>;
+      const defs=(schema.$defs??{}) as Record<string,Record<string,unknown>>;
+      const root=typeof schema.$ref==="string" &&
+        schema.$ref.startsWith("#/$defs/")
+        ? defs[schema.$ref.slice(8)] : schema;
+      const props=root?.properties as Record<string,unknown>|undefined;
+      expect(props,item.name+" output properties").toBeDefined();
+      expect(Object.keys(props!).sort()).toEqual(
+        Object.keys(outputs.types[item.dtype])
+          .map(key=>key[0].toLowerCase()+key.slice(1)).sort()
+      );
+      expect(JSON.stringify(schema)).not.toContain("tenantId");
+      expect(JSON.stringify(schema)).not.toContain("storageKey");
+      const value=await call("tools/call",{
+        name:item.name,arguments:item.args
+      },6611+offset);
+      expect(value.isError).not.toBe(true);
+      expect(value.structuredContent,item.name+" structuredContent").toBeDefined();
+      checkWireValue(item.dtype,value.structuredContent,item.name+".structured");
+      const actual=value.structuredContent as Record<string,unknown>;
+      expect(JSON.stringify(actual)).not.toContain("tenantId");
+      expect(JSON.stringify(actual)).not.toContain("storageKey");
+      const readback=await request.get(api+item.restPath,{
+        headers:{Authorization:"Bearer "+read}
+      });
+      expect(readback.status(),await readback.text()).toBe(200);
+      const expected=await readback.json() as Record<string,unknown>;
+      for(const [key,entry] of Object.entries(expected)){
+        const typed=outputs.types[item.dtype][key[0].toUpperCase()+key.slice(1)];
+        expect(typed,item.name+"."+key+" approved property").toBeDefined();
+        if(entry===null && typed.endsWith("?")){
+          expect(actual[key]??null,item.name+"."+key).toBeNull();
+        }else{
+          expect(Object.prototype.hasOwnProperty.call(actual,key),
+            item.name+"."+key+" required").toBe(true);
+          expect(actual[key],item.name+"."+key).toEqual(entry);
+        }
+      }
+    }
+    expect((await request.get(api+"/api/perizie/"+caseId+"/sinistro",{
+      headers:{Authorization:"Bearer "+read}
+    })).status()).toBe(200);
   });
 
 });

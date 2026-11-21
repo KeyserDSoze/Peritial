@@ -54,7 +54,8 @@ class McpCatalogContractTests(unittest.TestCase):
 
     def test_structured_outputs_are_reviewed_and_fail_closed(self):
         manifest = json.loads(STRUCTURED.read_text(encoding="utf-8"))
-        self.assertEqual(["get_perizia", "get_sinistro"], manifest["tools"])
+        self.assertEqual(["get_document", "get_perizia", "get_perizia_sinistro",
+                          "get_sinistro"], manifest["tools"])
         validate_structured_output_tools(self._manifest(), manifest, self.source)
         validate_catalog(self._manifest(), self.source)
         missing = self.source.replace(
@@ -69,6 +70,12 @@ class McpCatalogContractTests(unittest.TestCase):
         self.assertNotEqual(new_writer, self.source)
         with self.assertRaisesRegex(ValueError, "structured output drift"):
             validate_structured_output_tools(self._manifest(), manifest, new_writer)
+        added_without_annotation = copy.deepcopy(manifest)
+        added_without_annotation["tools"].append("list_documents")
+        added_without_annotation["tools"].sort()
+        with self.assertRaisesRegex(ValueError, "structured output drift"):
+            validate_structured_output_tools(
+                self._manifest(), added_without_annotation, self.source)
         changed = copy.deepcopy(manifest)
         changed["tools"].append("delete_sinistro")
         changed["tools"].sort()
