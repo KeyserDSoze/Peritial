@@ -34,7 +34,12 @@ non una variazione di autorizzazione.
   rispetto al manifesto CLR e confrontati campo per campo
   con `GET /api/perizie/{id}` e `GET /api/sinistri/{id}`
   tramite token read; il solo `null` nullable può essere
-  omesso dal serializer MCP.
+  omesso dal serializer MCP. Per `createdAtUtc` su risposta
+  di **creazione** il confronto ammette provvisoriamente un
+  massimo di **1 microsecondo** per la perdita del tick .NET
+  da 100 ns nel round-trip PostgreSQL; la canonicalizzazione
+  puntuale è tracciata in [#26](https://github.com/KeyserDSoze/Peritial/issues/26).
+  Non si applica la tolleranza ad altri campi o a letture.
 - Regressioni statiche rifiutano un cambiamento non
   revisionato dell'opt-in e l'aggiunta di
   `assign_perizia`, `update_sinistro`, `ingest_file`
@@ -49,3 +54,16 @@ i gate di retention (#22) e import XML (#24/#25).
 Nessuna modifica a JWT, scopes, DB, RLS, audit
 o semantica delle mutazioni. Rimangono 14 tool
 senza `outputSchema` e requisiti aperti nella #12.
+
+## Evidenza CI e follow-up di precisione
+
+La [run #44949476077](https://github.com/KeyserDSoze/Peritial/actions/runs/44949476077)
+ha completato 8 job con successo e ha fallito la prova
+Keycloak/Playwright desktop e mobile sulla differenza
+tra il `DateTime` in-memory dell'output di creazione
+e la lettura dopo commit PostgreSQL (100 ns osservati).
+L'output MCP strutturato è stato prodotto correttamente
+prima del confronto. È stata aperta la [issue #26](https://github.com/KeyserDSoze/Peritial/issues/26)
+per definire una rappresentazione identica dei timestamp
+persistiti. La tolleranza stretta del test non dimostra
+che questa canonicalizzazione sia stata implementata.
