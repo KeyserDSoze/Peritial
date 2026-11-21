@@ -71,7 +71,7 @@ class McpCatalogContractTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "structured output drift"):
             validate_structured_output_tools(self._manifest(), manifest, new_writer)
         added_without_annotation = copy.deepcopy(manifest)
-        added_without_annotation["tools"].append("list_documents")
+        added_without_annotation["tools"].append("page_documents")
         added_without_annotation["tools"].sort()
         with self.assertRaisesRegex(ValueError, "structured output drift"):
             validate_structured_output_tools(
