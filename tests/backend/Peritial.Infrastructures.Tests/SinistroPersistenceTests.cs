@@ -13,6 +13,36 @@ namespace Peritial.Infrastructures.Tests;
 public sealed class SinistroPersistenceTests
 {
     [Fact]
+    public async Task New_sinistro_createdAt_round_trips_postgres_without_tick_loss_or_audit_drift()
+    {
+        await using var db = await IsolatedDatabases.CreateAsync();
+        var tenant = TenantId.From(Guid.NewGuid());
+        var repo = new PgSinistroRepository(db.App);
+        var occurred = new DateOnly(2026, 11, 19);
+        var reported = new DateOnly(2026, 11, 20);
+        var item = Sinistro.Create(tenant,
+            "PG-MICROS-" + Guid.NewGuid().ToString("N"), occurred, reported);
+        Assert.Equal(0, item.CreatedAtUtc.Ticks % 10);
+
+        await repo.AddAuditedAsync(item, Event(tenant, item.Id, "sinistro.create"));
+        var restored = await repo.FindAsync(tenant, item.Id);
+        Assert.NotNull(restored);
+        Assert.Equal(item.CreatedAtUtc.Ticks, restored.CreatedAtUtc.Ticks);
+        Assert.Equal(DateTimeKind.Utc, restored.CreatedAtUtc.Kind);
+        Assert.Equal(occurred, restored.OccurredOn);
+        Assert.Equal(reported, restored.ReportedOn);
+        Assert.Null(await repo.FindAsync(TenantId.From(Guid.NewGuid()), item.Id));
+        Assert.Equal(1L, restored.PersistedVersion);
+
+        await using var auditCount = db.Admin.CreateCommand(
+            "SELECT count(*) FROM security_audit WHERE tenant_id=@tenant " +
+            "AND resource_id=@id AND action='sinistro.create' AND outcome='succeeded'");
+        auditCount.Parameters.AddWithValue("tenant", tenant.Value);
+        auditCount.Parameters.AddWithValue("id", item.Id);
+        Assert.Equal(1L, (long)(await auditCount.ExecuteScalarAsync())!);
+    }
+
+    [Fact]
     public async Task V003_creates_forced_tenant_rls_with_least_privilege_and_idempotent_journal()
     {
         await using var db = await IsolatedDatabases.CreateAsync();

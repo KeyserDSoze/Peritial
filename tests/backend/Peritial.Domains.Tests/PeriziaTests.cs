@@ -16,6 +16,28 @@ public sealed class PeriziaTests
     }
 
     [Fact]
+    public void Nuova_perizia_ha_timestamp_utc_esattamente_persistibile_in_PostgreSQL()
+    {
+        var created = Perizia.Create(Tenant(), "MICROSECOND-PERIZIA");
+        Assert.Equal(DateTimeKind.Utc, created.CreatedAtUtc.Kind);
+        Assert.Equal(0, created.CreatedAtUtc.Ticks % 10);
+        var restored = Perizia.Restore(created.Id, created.TenantId, created.Reference,
+            created.Status, created.AssignedTo, created.CreatedAtUtc);
+        Assert.Equal(created.CreatedAtUtc, restored.CreatedAtUtc);
+    }
+
+    [Fact]
+    public void Restore_non_riscrive_la_precisione_di_un_timestamp_storico()
+    {
+        var tenant = Tenant();
+        var historical = new DateTime(2026, 11, 21, 23, 59, 59, DateTimeKind.Utc)
+            .AddTicks(9);
+        var perizia = Perizia.Restore(Guid.NewGuid(), tenant, "LEGACY-PERIZIA",
+            PeriziaStatus.Registered, null, historical);
+        Assert.Equal(historical.Ticks, perizia.CreatedAtUtc.Ticks);
+    }
+
+    [Fact]
     public void Assegnazione_richiede_utente_e_tenant_proprietario()
     {
         var tenant = Tenant();

@@ -9,6 +9,30 @@ namespace Peritial.Infrastructures.Tests;
 public sealed class PeriziaAtomicAuditTests
 {
     [Fact]
+    public async Task New_perizia_createdAt_round_trips_postgres_without_tick_loss_or_audit_drift()
+    {
+        await using var db = await TestDatabases.OpenAsync();
+        var tenant = TenantId.From(Guid.NewGuid());
+        var repo = new PgPeriziaRepository(db.App);
+        var item = Perizia.Create(tenant, "PG-MICROS-" + Guid.NewGuid().ToString("N"));
+        Assert.Equal(0, item.CreatedAtUtc.Ticks % 10);
+
+        await repo.AddAuditedAsync(item, Entry(tenant, item.Id, "perizia.create"));
+        var restored = await repo.FindAsync(tenant, item.Id);
+        Assert.NotNull(restored);
+        Assert.Equal(item.CreatedAtUtc.Ticks, restored.CreatedAtUtc.Ticks);
+        Assert.Equal(DateTimeKind.Utc, restored.CreatedAtUtc.Kind);
+        Assert.Null(await repo.FindAsync(TenantId.From(Guid.NewGuid()), item.Id));
+
+        await using var auditCount = db.Admin.CreateCommand(
+            "SELECT count(*) FROM security_audit WHERE tenant_id=@tenant " +
+            "AND resource_id=@id AND action='perizia.create' AND outcome='succeeded'");
+        auditCount.Parameters.AddWithValue("tenant", tenant.Value);
+        auditCount.Parameters.AddWithValue("id", item.Id);
+        Assert.Equal(1L, (long)(await auditCount.ExecuteScalarAsync())!);
+    }
+
+    [Fact]
     public async Task Create_and_assign_commit_aggregate_and_audit_in_one_transaction()
     {
         await using var databases = await TestDatabases.OpenAsync();

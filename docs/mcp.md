@@ -975,16 +975,20 @@ JWT read-only, un solo record effettivamente creato
 e confronto puntuale con la lettura REST.
 Nessuna nuova mutazione né migrazione del database.
 
-### Nota sulla precisione `createdAtUtc` delle creazioni (#26)
+### Precisione canonica `createdAtUtc` delle nuove creazioni (#26, ADR 0076)
 
-Il risultato MCP `create_perizia`/`create_sinistro` può
-esporre un `DateTime` in-memory a precisione 100 ns,
-mentre il medesimo valore letto da PostgreSQL dopo commit
-ha granularità di microsecondi. Il test di parità sulla
-**sola risposta di creazione** ammette provvisoriamente
-un massimo di 1 µs su `createdAtUtc`, confrontando i
-tick UTC numericamente. Tutti gli altri campi restano
-esatti, comprese le date di evento Sinistro. La divergenza
-è tracciata nella [#26](https://github.com/KeyserDSoze/Peritial/issues/26)
-e non riguarda l'import XML legacy (#25). Il comportamento
-runtime non viene modificato da questo test.
+La [ADR 0076](../adr/0076-canonical-created-at-utc-postgres.md)
+stabilisce che le **nuove** Perizie e i **nuovi** Sinistri
+generano `createdAtUtc` UTC troncato a microsecondi
+prima della prima persistenza e dell'audit atomico. Si evita
+così di pubblicare tick .NET da 100 ns che PostgreSQL
+non conserva. Le risposte di creazione REST/MCP devono
+essere **identiche** alla successiva lettura REST,
+senza alcuna tolleranza nel test end-to-end.
+
+`Restore` lascia intatti gli eventuali timestamp storici:
+non sono previste migrazioni, riscritture o correzioni a dati
+già salvati. Le date `occurredOn` e `reportedOn` del
+Sinistro e l'import XML legacy #25 non vengono toccati.
+Test specifici verificano tick, rollover, UTC rigoroso,
+roundtrip PostgreSQL con RLS e audit, e Playwright Keycloak.

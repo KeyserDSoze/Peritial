@@ -38,7 +38,8 @@ public sealed class Sinistro
 
     public static Sinistro Create(TenantId tenant, string externalReference,
         DateOnly occurredOn, DateOnly? reportedOn = null) =>
-        new(Guid.NewGuid(), tenant, externalReference, occurredOn, reportedOn, DateTime.UtcNow, 1);
+        new(Guid.NewGuid(), tenant, externalReference, occurredOn, reportedOn,
+            PersistedUtcTimestamp.ForNewRecord(DateTime.UtcNow), 1);
 
     /// <summary>Rehydrate from a trusted, tenant-filtered persistence adapter only.</summary>
     public static Sinistro Restore(Guid id, TenantId tenant, string externalReference,

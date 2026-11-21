@@ -25,6 +25,28 @@ public sealed class SinistroTests
     }
 
     [Fact]
+    public void Nuovo_sinistro_canonicalizza_solo_createdAt_e_non_le_date_legacy()
+    {
+        var reported = new DateOnly(2026, 10, 8);
+        var sinistro = Sinistro.Create(Tenant(), "MICROSECOND-SINISTRO",
+            Occurred, reported);
+        Assert.Equal(DateTimeKind.Utc, sinistro.CreatedAtUtc.Kind);
+        Assert.Equal(0, sinistro.CreatedAtUtc.Ticks % 10);
+        Assert.Equal(Occurred, sinistro.OccurredOn);
+        Assert.Equal(reported, sinistro.ReportedOn);
+    }
+
+    [Fact]
+    public void Restore_sinistro_con_timestamp_legacy_non_perde_tick()
+    {
+        var legacy = new DateTime(2026, 11, 21, 23, 59, 59, DateTimeKind.Utc)
+            .AddTicks(9);
+        var restored = Sinistro.Restore(Guid.NewGuid(), Tenant(), "LEGACY-EXACT",
+            Occurred, null, legacy);
+        Assert.Equal(legacy.Ticks, restored.CreatedAtUtc.Ticks);
+    }
+
+    [Fact]
     public void Data_denuncia_e_opzionale_senza_inventare_regole_temporali_legacy()
     {
         var sinistro = Sinistro.Create(Tenant(), "SIN-2026-002", Occurred);

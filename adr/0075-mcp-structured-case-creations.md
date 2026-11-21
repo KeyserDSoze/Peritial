@@ -34,12 +34,11 @@ non una variazione di autorizzazione.
   rispetto al manifesto CLR e confrontati campo per campo
   con `GET /api/perizie/{id}` e `GET /api/sinistri/{id}`
   tramite token read; il solo `null` nullable può essere
-  omesso dal serializer MCP. Per `createdAtUtc` su risposta
-  di **creazione** il confronto ammette provvisoriamente un
-  massimo di **1 microsecondo** per la perdita del tick .NET
-  da 100 ns nel round-trip PostgreSQL; la canonicalizzazione
-  puntuale è tracciata in [#26](https://github.com/KeyserDSoze/Peritial/issues/26).
-  Non si applica la tolleranza ad altri campi o a letture.
+  omesso dal serializer MCP. La [ADR 0076](0076-canonical-created-at-utc-postgres.md)
+  impone una granularità UTC di microsecondi ai nuovi
+  `createdAtUtc` prima della persistenza. Il confronto
+  MCP/REST torna **esatto**, senza tolleranze di timestamp;
+  i dati legacy vengono preservati senza riscrittura.
 - Regressioni statiche rifiutano un cambiamento non
   revisionato dell'opt-in e l'aggiunta di
   `assign_perizia`, `update_sinistro`, `ingest_file`
@@ -67,3 +66,14 @@ prima del confronto. È stata aperta la [issue #26](https://github.com/KeyserDSo
 per definire una rappresentazione identica dei timestamp
 persistiti. La tolleranza stretta del test non dimostra
 che questa canonicalizzazione sia stata implementata.
+
+## Risoluzione del follow-up #26
+
+La [ADR 0076](0076-canonical-created-at-utc-postgres.md)
+risolve nel dominio la diversa granularità tra il tick
+100 ns di `DateTime.UtcNow` e i microsecondi PostgreSQL:
+si canonicalizza prima di creare il nuovo aggregate, e si
+ripristina nel test l'uguaglianza esatta della creazione MCP
+con la lettura REST. Non si modificano `Restore`, le date
+legacy o l'audit persistente. La conferma end-to-end dipende
+dalla CI dello specifico commit ADR 0076.

@@ -865,21 +865,8 @@ test.describe("Versioned MCP result JSON allowlist", () => {
     // XML-preflight surface. Caller must possess signed peritial.write;
     // the JSON schema does not grant permissions. REST is only read-back:
     // do not create a second record just to compare the two transports.
-    // A freshly created CLR DateTime can contain 100-ns ticks that
-    // PostgreSQL cannot round-trip (microsecond storage granularity).
-    // This explicit <=1us tolerance is *only* for createdAtUtc on
-    // creation responses, not a general timestamp/string exception.
-    // See #26 for canonical persisted timestamp equality.
-    function utcDateTimeTicks(value:unknown,label:string):bigint{
-      const parsed=/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,7}))?Z$/
-        .exec(String(value));
-      expect(parsed,label+" must be canonical UTC DateTime").not.toBeNull();
-      const milliseconds=Date.parse(parsed![1]+"Z");
-      expect(Number.isFinite(milliseconds),label+" must be a real UTC date")
-        .toBe(true);
-      return BigInt(milliseconds)*10000n+
-        BigInt((parsed![2]??"").padEnd(7,"0"));
-    }
+    // New aggregate timestamps are canonicalized before the PostgreSQL
+    // commit (#26). Creation DTOs must now match REST byte-for-byte.
     const creationProbes=[
       {name:"create_perizia",dto:"PeriziaDto",
         args:{reference:"MCP-STRUCT-CREATE-P-"+nonce},
@@ -934,12 +921,6 @@ test.describe("Versioned MCP result JSON allowlist", () => {
         expect(approvedType,item.name+"."+key+" must be reviewed").toBeDefined();
         if(value===null && approvedType.endsWith("?")){
           expect(actual[key]??null,item.name+"."+key).toBeNull();
-        }else if(key==="createdAtUtc" && approvedType==="DateTime"){
-          const difference=utcDateTimeTicks(actual[key],item.name+" MCP createdAtUtc")-
-            utcDateTimeTicks(value,item.name+" REST createdAtUtc");
-          expect(difference>=-10n && difference<=10n,
-            item.name+".createdAtUtc must differ by no more than one microsecond")
-            .toBe(true);
         }else{
           expect(Object.prototype.hasOwnProperty.call(actual,key),
             item.name+"."+key+" required").toBe(true);

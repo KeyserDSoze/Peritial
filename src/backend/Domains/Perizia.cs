@@ -29,7 +29,8 @@ public sealed class Perizia
     }
 
     public static Perizia Create(TenantId tenantId, string reference) =>
-        new(Guid.NewGuid(), tenantId, reference, PeriziaStatus.Registered, null, DateTime.UtcNow);
+        new(Guid.NewGuid(), tenantId, reference, PeriziaStatus.Registered, null,
+            PersistedUtcTimestamp.ForNewRecord(DateTime.UtcNow));
 
     /// <summary>Used exclusively by the persistence adapter to reconstruct an aggregate.</summary>
     public static Perizia Restore(Guid id, TenantId tenantId, string reference, PeriziaStatus status, string? assignedTo, DateTime createdAtUtc)
