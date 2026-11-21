@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.IdentityModel.Tokens;
 using ModelContextProtocol.Server;
-using ModelContextProtocol.AspNetCore;
 using Npgsql;
 using Peritial.Applications;
 using Peritial.Business;
@@ -195,7 +194,7 @@ else
 // 2025-11-25 initialize handshake for legacy clients. No sticky sessions:
 // tenant, grants and tools are evaluated on EVERY HTTP request.
 builder.Services.AddMcpServer()
-    .WithHttpTransport(options => options.SessionMode = HttpServerSessionMode.Stateless)
+    .WithHttpTransport(options => options.Stateless = true)
     .WithTools<McpTools>();
 builder.Services.AddCors(options => options.AddPolicy("web", policy =>
     policy.WithOrigins(builder.Configuration["Cors:Origin"] ?? "http://localhost:5173")

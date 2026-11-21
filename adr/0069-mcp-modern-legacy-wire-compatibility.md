@@ -18,7 +18,7 @@ negoziate e `tools/list`, pur verificando 25 tools.
 ## Decisione
 
 Impostare esplicitamente
-`HttpServerSessionMode.Stateless` nella registrazione
+`HttpServerTransportOptions.Stateless = true` nella registrazione
 del server: nessuno stato di sessione legato a JWT,
 utente o nodo. Manteniamo il medesimo endpoint
 `/mcp` e non alteriamo policy OAuth o tool.
@@ -56,3 +56,13 @@ ancora integrato. Non cambia il gate di cancellazione
 #22, né viene attivato un servizio MCP pubblico.
 La #12 resta aperta per outputSchema, client esterni
 e ulteriore version negotiation.
+
+## Correzione per il pacchetto distribuito
+
+La prima versione del commit usava `SessionMode` in base
+alle API della documentazione più recente dell'SDK, ma
+il pacchetto **2.0.0 effettivo** non espone ancora questa
+proprietà. La CI RED #44922371015 ha segnalato CS1061/CS0103.
+Il commit correttivo usa la proprietà booleana `Stateless`
+verificata per questo pacchetto, senza modificare la
+semantica richiesta né il numero di versione SDK.

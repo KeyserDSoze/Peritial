@@ -823,7 +823,7 @@ client esterni restano in #12.
 ## Version negotiation HTTP stateless MCP 2.0 (#12, #4)
 
 La [ADR 0069](../adr/0069-mcp-modern-legacy-wire-compatibility.md)
-fissa esplicitamente `HttpServerSessionMode.Stateless`
+fissa esplicitamente `HttpServerTransportOptions.Stateless = true`
 nell'API .NET 10 e introduce
 `docs/mcp-protocol-eras.v1.json`: una policy revisionata
 per **MCP 2026-07-28 moderno** e **2025-11-25 legacy**.
