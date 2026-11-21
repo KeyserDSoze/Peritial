@@ -897,3 +897,25 @@ nessuna chiave di storage o tenant può essere esposta.
 I restanti **21 tool** mantengono l'attuale
 rappresentazione; non si modifica la compatibilità
 legacy, la logica di business o il gate di cancellazione.
+
+## OutputSchema paginati con cursori filter-bound (ADR 0072, #12)
+
+La [ADR 0072](../adr/0072-mcp-structured-pages.md)
+estende `UseStructuredContent=true` a
+`page_documents` (`DocumentPageDto`) e
+`search_sinistri_page` (`SinistroPageDto`).
+Il manifesto versionato dichiara **6 tool strutturati
+su 25**; i restanti 19 conservano il wire precedente.
+
+I due nuovi output contengono `items` annidati, con
+soli metadati documentali o proiezioni Sinistri
+approvate, e `nextCursor` opzionale. Il test
+Playwright autentica un lettore Keycloak, crea tramite
+writer due documenti scansionati per la stessa Perizia
+e due Sinistri con prefisso dedicato, quindi controlla
+due pagine da un elemento con cursore opaco e parità
+REST/MCP; l'utilizzo del cursore con filtro diverso
+deve fallire, non eludere tenant/scoping.
+
+Restano invariati OAuth, FORCE RLS, audit,
+cancellazione Sinistri e compatibilità legacy.

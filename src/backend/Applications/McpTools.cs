@@ -83,7 +83,7 @@ public sealed class McpTools(
         int limit = 10, CancellationToken ct = default) =>
         sinistri.SearchAsync(prefix, occurredFrom, occurredTo, limit, ct);
 
-    [McpServerTool(Name = "search_sinistri_page", ReadOnly = true, Destructive = false, OpenWorld = false), Description("Keyset-pages a tenant-scoped literal-reference prefix search, with optional inclusive occurredFrom/occurredTo and limit 1..50. The opaque cursor is bound to those filters, never an authorization credential. Requires peritial.read or peritial.write.")]
+    [McpServerTool(Name = "search_sinistri_page", ReadOnly = true, Destructive = false, OpenWorld = false, UseStructuredContent = true), Description("Keyset-pages a tenant-scoped literal-reference prefix search, with optional inclusive occurredFrom/occurredTo and limit 1..50. The opaque cursor is bound to those filters, never an authorization credential. Requires peritial.read or peritial.write.")]
     public Task<SinistroPageDto> SearchSinistriPage(
         string prefix, DateOnly? occurredFrom = null, DateOnly? occurredTo = null,
         int limit = 50, string? cursor = null, CancellationToken ct = default) =>
@@ -117,7 +117,7 @@ public sealed class McpTools(
         Guid? periziaId = null, int limit = 50, CancellationToken ct = default) =>
         documents.ListAsync(periziaId, limit, ct);
 
-    [McpServerTool(Name = "page_documents", ReadOnly = true, Destructive = false, OpenWorld = false), Description("Keyset-pages 1..50 safe tenant document metadata entries, optional periziaId filter, with opaque filter-bound nextCursor. Requires peritial.read or peritial.write. Never exposes storage keys or file bytes.")]
+    [McpServerTool(Name = "page_documents", ReadOnly = true, Destructive = false, OpenWorld = false, UseStructuredContent = true), Description("Keyset-pages 1..50 safe tenant document metadata entries, optional periziaId filter, with opaque filter-bound nextCursor. Requires peritial.read or peritial.write. Never exposes storage keys or file bytes.")]
     public Task<DocumentPageDto> PageDocuments(
         Guid? periziaId = null, int limit = 50, string? cursor = null,
         CancellationToken ct = default) =>

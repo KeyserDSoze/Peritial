@@ -6,6 +6,8 @@
     "get_document",
     "get_perizia",
     "get_perizia_sinistro",
-    "get_sinistro"
+    "get_sinistro",
+    "page_documents",
+    "search_sinistri_page"
   ]
 }

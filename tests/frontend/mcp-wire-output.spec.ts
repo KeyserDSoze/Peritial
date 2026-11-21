@@ -758,7 +758,8 @@ test.describe("Versioned MCP result JSON allowlist", () => {
       format:1,version:"1.0.0",mcpCatalogVersion:catalog.version
     });
     expect(manifest.tools).toEqual([
-      "get_document","get_perizia","get_perizia_sinistro","get_sinistro"
+      "get_document","get_perizia","get_perizia_sinistro","get_sinistro",
+      "page_documents","search_sinistri_page"
     ]);
     const read=await tokenFor(request);
     const writer=await tokenFor(request,"peritial-test-write");
@@ -952,6 +953,114 @@ test.describe("Versioned MCP result JSON allowlist", () => {
     expect((await request.get(api+"/api/perizie/"+caseId+"/sinistro",{
       headers:{Authorization:"Bearer "+read}
     })).status()).toBe(200);
+
+    // Paginated nested DTOs: MCP must advertise their outputSchema and
+    // preserve a filter-bound cursor over REAL reader-scoped records.
+    // Reuse the scanned document / linked claim created above, then add
+    // one document and two filtered Sinistri for deterministic 2-page tests.
+    const secondName="mcp-structured-second-"+nonce+".pdf";
+    const uploaded2=await request.post(api+"/api/files",{
+      headers:{Authorization:"Bearer "+writer},
+      multipart:{file:{name:secondName,mimeType:"application/pdf",buffer:pdf},
+        periziaId:caseId}
+    });
+    expect(uploaded2.status(),await uploaded2.text()).toBe(201);
+    const document2=(await uploaded2.json() as {id:string}).id;
+    const prefix="MCP-STRUCT-PAGED-"+nonce;
+    const pagedClaims=[
+      {externalReference:prefix+"-A",occurredOn:"2026-11-18"},
+      {externalReference:prefix+"-B",occurredOn:"2026-11-19"}
+    ];
+    const claimIds:string[]=[];
+    for(const body of pagedClaims){
+      const response=await request.post(api+"/api/sinistri",{
+        headers:{Authorization:"Bearer "+writer},data:body
+      });
+      expect(response.status(),await response.text()).toBe(201);
+      claimIds.push((await response.json() as {id:string}).id);
+    }
+    const pageSchemas=[
+      {name:"page_documents",type:"DocumentPageDto",
+        nested:"DocumentSummaryDto"},
+      {name:"search_sinistri_page",type:"SinistroPageDto",
+        nested:"SinistroDto"}
+    ];
+    for(const item of pageSchemas){
+      const schema=tools.find(t=>t.name===item.name)?.outputSchema
+        as Record<string,unknown>|undefined;
+      expect(schema,item.name+" outputSchema").toBeDefined();
+      const defs=(schema!.$defs??{}) as Record<string,Record<string,unknown>>;
+      const root=typeof schema!.$ref==="string" &&
+        schema!.$ref.startsWith("#/$defs/")
+        ? defs[schema!.$ref.slice(8)] : schema!;
+      expect(Object.keys((root.properties??{}) as Record<string,unknown>).sort(),
+        item.name+" public pagination contract").toEqual(["items","nextCursor"]);
+      const property=(root.properties as Record<string,unknown>).items;
+      expect(property,item.name+" items array schema").toBeDefined();
+      expect(JSON.stringify(schema)).not.toContain("storageKey");
+      expect(JSON.stringify(schema)).not.toContain("tenantId");
+    }
+    const pageCases=[
+      {name:"page_documents",dto:"DocumentPageDto",
+        args:{periziaId:caseId,limit:1},
+        restPath:"/api/files/page?periziaId="+caseId+"&limit=1",
+        expectedIds:[documentId,document2]},
+      {name:"search_sinistri_page",dto:"SinistroPageDto",
+        args:{prefix,occurredFrom:"2026-11-18",
+          occurredTo:"2026-11-19",limit:1},
+        restPath:"/api/sinistri/search/page?prefix="+encodeURIComponent(prefix)+
+          "&occurredFrom=2026-11-18&occurredTo=2026-11-19&limit=1",
+        expectedIds:claimIds}
+    ];
+    for(const [offset,paged] of pageCases.entries()){
+      const page1=await call("tools/call",{
+        name:paged.name,arguments:paged.args
+      },6640+offset*5);
+      expect(page1.isError,paged.name+" first page").not.toBe(true);
+      checkWireValue(paged.dto,page1.structuredContent,paged.name+".page1");
+      const first=page1.structuredContent as {
+        items:Record<string,unknown>[];nextCursor?:string|null};
+      expect(first.items).toHaveLength(1);
+      expect(typeof first.nextCursor,paged.name+" must paginate").toBe("string");
+      expect(first.nextCursor?.length).toBeGreaterThan(0);
+      const page2=await call("tools/call",{
+        name:paged.name,arguments:{...paged.args,cursor:first.nextCursor}
+      },6641+offset*5);
+      expect(page2.isError,paged.name+" second page").not.toBe(true);
+      checkWireValue(paged.dto,page2.structuredContent,paged.name+".page2");
+      const second=page2.structuredContent as {
+        items:Record<string,unknown>[];nextCursor?:string|null};
+      expect(second.items).toHaveLength(1);
+      expect(second.nextCursor??null,paged.name+" pagination ends").toBeNull();
+      expect([first.items[0].id,second.items[0].id].sort(),
+        paged.name+" paged IDs").toEqual([...paged.expectedIds].sort());
+      for(const [page,cursor] of [[first,undefined],[second,first.nextCursor]] as const){
+        const url=api+paged.restPath+
+          (cursor===undefined?"":"&cursor="+encodeURIComponent(cursor??""));
+        const rest=await request.get(url,{
+          headers:{Authorization:"Bearer "+read}
+        });
+        expect(rest.status(),await rest.text()).toBe(200);
+        const restPage=await rest.json() as {
+          items:Record<string,unknown>[];nextCursor?:string|null};
+        expect(page.items.map(x=>x.id)).toEqual(restPage.items.map(x=>x.id));
+        expect(page.nextCursor??null).toEqual(restPage.nextCursor??null);
+        expect(JSON.stringify(page)).not.toContain("tenantId");
+        expect(JSON.stringify(page)).not.toContain("storageKey");
+      }
+      // A cursor for another filter is never an authorization primitive.
+      // The REST gate must reject it even for an otherwise signed reader.
+      const wrongFilter=paged.name==="page_documents"
+        ? {periziaId:"00000000-0000-4000-8000-000000000002",
+          limit:1,cursor:first.nextCursor}
+        : {prefix:prefix+"-MISMATCH",occurredFrom:"2026-11-18",
+          occurredTo:"2026-11-19",limit:1,cursor:first.nextCursor};
+      const bad=await call("tools/call",{
+        name:paged.name,arguments:wrongFilter
+      },6642+offset*5);
+      expect(bad.isError,paged.name+" foreign-filter cursor denied").toBe(true);
+    }
+
   });
 
 });
