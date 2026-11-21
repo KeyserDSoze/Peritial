@@ -986,8 +986,7 @@ test.describe("Versioned MCP result JSON allowlist", () => {
         nested:"SinistroDto"}
     ];
     for(const item of pageSchemas){
-      const schema=(tools.find(t=>t.name===item.name)?.outputSchema)
-        as Record<string,unknown>|undefined;
+      const schema = tools.find(t => t.name === item.name)?.outputSchema as Record<string, unknown> | undefined;
       expect(schema,item.name+" outputSchema").toBeDefined();
       const defs=(schema!.$defs??{}) as Record<string,Record<string,unknown>>;
       const root=typeof schema!.$ref==="string" &&
