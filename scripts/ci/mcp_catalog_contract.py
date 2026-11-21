@@ -155,12 +155,15 @@ def validate_structured_output_tools(catalog: dict, manifest: dict, source: str)
         or any(not isinstance(name, str) for name in selected)):
         raise ValueError("MCP structured output manifest tool list drift")
     entries = {item["name"]: item for item in catalog["tools"]}
-    # Output opt-in is NOT an access-control primitive. These exact
-    # write-scoped preflights do not mutate state; only the two reviewed
-    # non-destructive creation use cases may expose structured results.
-    # No blanket allowance for destructive or future write-access tools.
+    # Opt-in only controls the SDK wire representation, never OAuth grants.
+    # Mutators are deliberately approved individually; delete, linking,
+    # file writes and any future writer remain fail-closed by default.
     write_scoped_preflights = {"plan_legacy_xml", "preview_legacy_xml"}
     reviewed_creations = {"create_perizia", "create_sinistro"}
+    reviewed_state_changes = {
+        "advance_perizia", "assign_perizia", "cancel_perizia",
+        "update_sinistro",
+    }
     def allowed(name: str) -> bool:
         item = entries[name]
         if item["access"] == "read" and item["effect"] == "read-only":
@@ -168,8 +171,8 @@ def validate_structured_output_tools(catalog: dict, manifest: dict, source: str)
         if (name in write_scoped_preflights and item["access"] == "write"
                 and item["effect"] == "read-only"):
             return True
-        return (name in reviewed_creations and item["access"] == "write"
-                and item["effect"] == "mutating")
+        return (name in reviewed_creations | reviewed_state_changes
+                and item["access"] == "write" and item["effect"] == "mutating")
     if any(name not in entries or not allowed(name)
            or re.fullmatch(r"(?:Task<[A-Za-z]\w*Dto>|[A-Za-z]\w*Dto)",
                            entries[name]["returnType"]) is None

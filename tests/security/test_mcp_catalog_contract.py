@@ -54,11 +54,12 @@ class McpCatalogContractTests(unittest.TestCase):
 
     def test_structured_outputs_are_reviewed_and_fail_closed(self):
         manifest = json.loads(STRUCTURED.read_text(encoding="utf-8"))
-        self.assertEqual(["create_perizia", "create_sinistro",
+        self.assertEqual(["advance_perizia", "assign_perizia",
+                          "cancel_perizia", "create_perizia", "create_sinistro",
                           "get_document", "get_perizia", "get_perizia_sinistro",
                           "get_sinistro", "page_documents", "page_sinistri",
                           "plan_legacy_xml", "preview_legacy_xml",
-                          "search_sinistri_page"],
+                          "search_sinistri_page", "update_sinistro"],
                          manifest["tools"])
         validate_structured_output_tools(self._manifest(), manifest, self.source)
         validate_catalog(self._manifest(), self.source)
@@ -83,6 +84,23 @@ class McpCatalogContractTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "structured output drift"):
                     validate_structured_output_tools(
                         self._manifest(), manifest, removed_annotation)
+        # Destructive-state changes are reviewed one at a time. Removing
+        # any opt-in from either side is versioned contract drift.
+        for name in ("advance_perizia", "assign_perizia",
+                     "cancel_perizia", "update_sinistro"):
+            with self.subTest(name=name):
+                without = copy.deepcopy(manifest)
+                without["tools"].remove(name)
+                with self.assertRaisesRegex(ValueError, "structured output drift"):
+                    validate_structured_output_tools(
+                        self._manifest(), without, self.source)
+                previous = self.source.replace(
+                    f'Name = "{name}", ReadOnly = false, Destructive = true, OpenWorld = false, UseStructuredContent = true',
+                    f'Name = "{name}", ReadOnly = false, Destructive = true, OpenWorld = false', 1)
+                self.assertNotEqual(previous, self.source)
+                with self.assertRaisesRegex(ValueError, "structured output drift"):
+                    validate_structured_output_tools(
+                        self._manifest(), manifest, previous)
         removed_from_manifest = copy.deepcopy(manifest)
         removed_from_manifest["tools"].remove("page_sinistri")
         with self.assertRaisesRegex(ValueError, "structured output drift"):
@@ -116,9 +134,10 @@ class McpCatalogContractTests(unittest.TestCase):
         changed["tools"].sort()
         with self.assertRaisesRegex(ValueError, "explicit access review"):
             validate_structured_output_tools(self._manifest(), changed, self.source)
-        # The creator exceptions are NOT permission to opt-in any other
-        # writer (including other writers returning the same approved DTO).
-        for name in ("assign_perizia", "update_sinistro", "ingest_file"):
+        # Reviewed writer opt-ins are NOT permission to add new writer
+        # classes, association mutators, ingestion or the privileged delete.
+        for name in ("link_perizia_sinistro", "reparent_perizia_sinistro",
+                     "unlink_perizia_sinistro", "ingest_file"):
             with self.subTest(forbidden=name):
                 changed = copy.deepcopy(manifest)
                 changed["tools"].append(name)

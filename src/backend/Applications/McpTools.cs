@@ -23,11 +23,11 @@ public sealed class McpTools(
     public Task<PeriziaDto> CreatePerizia(string reference, CancellationToken ct = default) =>
         perizie.CreateAsync(reference, ct);
 
-    [McpServerTool(Name = "assign_perizia", ReadOnly = false, Destructive = true, OpenWorld = false), Description("Assigns a registered perizia to an operator in the authenticated tenant (peritial.write).")]
+    [McpServerTool(Name = "assign_perizia", ReadOnly = false, Destructive = true, OpenWorld = false, UseStructuredContent = true), Description("Assigns a registered perizia to an operator in the authenticated tenant (peritial.write).")]
     public Task<PeriziaDto> AssignPerizia(Guid id, string assignee, CancellationToken ct = default) =>
         perizie.AssignAsync(id, assignee, ct);
 
-    [McpServerTool(Name = "advance_perizia", ReadOnly = false, Destructive = true, OpenWorld = false), Description("Advances a perizia one step; target must be exactly ToBeRevised, Revised, ToSend, Sent, or Billed (peritial.write).")]
+    [McpServerTool(Name = "advance_perizia", ReadOnly = false, Destructive = true, OpenWorld = false, UseStructuredContent = true), Description("Advances a perizia one step; target must be exactly ToBeRevised, Revised, ToSend, Sent, or Billed (peritial.write).")]
     public Task<PeriziaDto> AdvancePerizia(Guid id, string target, CancellationToken ct = default)
     {
         // REST and MCP share an exact symbolic-state contract; Business
@@ -35,7 +35,7 @@ public sealed class McpTools(
         return perizie.AdvanceAsync(id, PeriziaAdvanceTarget.Parse(target), ct);
     }
 
-    [McpServerTool(Name = "cancel_perizia", ReadOnly = false, Destructive = true, OpenWorld = false), Description("Cancels a non-terminal perizia belonging to the authenticated tenant (peritial.write).")]
+    [McpServerTool(Name = "cancel_perizia", ReadOnly = false, Destructive = true, OpenWorld = false, UseStructuredContent = true), Description("Cancels a non-terminal perizia belonging to the authenticated tenant (peritial.write).")]
     public Task<PeriziaDto> CancelPerizia(Guid id, CancellationToken ct = default) =>
         perizie.CancelAsync(id, ct);
 
@@ -99,7 +99,7 @@ public sealed class McpTools(
         CancellationToken ct = default) =>
         sinistri.CreateAsync(externalReference, occurredOn, reportedOn, ct);
 
-    [McpServerTool(Name = "update_sinistro", ReadOnly = false, Destructive = true, OpenWorld = false), Description("Updates a sinistro using a required last-seen version; stale versions are rejected (peritial.write).")]
+    [McpServerTool(Name = "update_sinistro", ReadOnly = false, Destructive = true, OpenWorld = false, UseStructuredContent = true), Description("Updates a sinistro using a required last-seen version; stale versions are rejected (peritial.write).")]
     public Task<SinistroDto> UpdateSinistro(
         Guid id, string externalReference, DateOnly occurredOn, long expectedVersion,
         DateOnly? reportedOn = null, CancellationToken ct = default) =>

@@ -992,3 +992,29 @@ già salvati. Le date `occurredOn` e `reportedOn` del
 Sinistro e l'import XML legacy #25 non vengono toccati.
 Test specifici verificano tick, rollover, UTC rigoroso,
 roundtrip PostgreSQL con RLS e audit, e Playwright Keycloak.
+
+## Stati Perizie e aggiornamento Sinistri con output MCP strutturato (ADR 0077, #12)
+
+La [ADR 0077](../adr/0077-mcp-structured-audited-state-changes.md)
+estende l'opt-in `UseStructuredContent=true` a quattro tool già
+presenti: `assign_perizia`, `advance_perizia`, `cancel_perizia`
+(`PeriziaDto`) e `update_sinistro` (`SinistroDto`).
+Il manifesto versione 1.0.0 per il catalogo MCP 1.2.0 ora
+dichiara **15 tool strutturati su 25**.
+
+Le mutazioni restano `ReadOnly=false`, `Destructive=true`,
+`OpenWorld=false`. Il gate statico autorizza unicamente queste
+quattro operazioni aggiuntive, oltre alle due creazioni, ai due
+preflight XML write-scoped e ai read-tool precedenti; non
+generalizza ad altri mutatori. I controlli Business mantengono
+`peritial.write` firmato, tenant FORCE RLS, audit SQL atomico,
+verifica degli stati Perizia e `expectedVersion` CAS dei Sinistri.
+
+Playwright su Keycloak/MCP 2026-07-28 verifica che lo
+`outputSchema` contenga solo campi DTO revisionati, che un
+JWT read-only non modifichi i record, che le chiamate write
+restituiscano `structuredContent` confrontabile **esattamente**
+con il successivo `GET` REST, e che replay di annullamenti
+terminali e aggiornamenti Sinistro con versione superata siano
+rifiutati senza modificare lo stato corrente. Nessun nuovo
+endpoint, migrazione, scope o abilitazione hard-delete.

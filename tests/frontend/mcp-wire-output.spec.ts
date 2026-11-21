@@ -749,7 +749,7 @@ test.describe("Versioned MCP result JSON allowlist", () => {
 
   test("modern detail tools publish an output schema and natural structuredContent", async ({request}) => {
     test.skip(!process.env.E2E_FULL_STACK,"Real Keycloak and PostgreSQL required");
-    test.setTimeout(90_000);
+    test.setTimeout(120_000);
     const manifest=JSON.parse(readFileSync(
       new URL("../../../docs/mcp-structured-outputs.v1.json",import.meta.url),
       "utf8"
@@ -758,10 +758,11 @@ test.describe("Versioned MCP result JSON allowlist", () => {
       format:1,version:"1.0.0",mcpCatalogVersion:catalog.version
     });
     expect(manifest.tools).toEqual([
+      "advance_perizia","assign_perizia","cancel_perizia",
       "create_perizia","create_sinistro","get_document","get_perizia",
       "get_perizia_sinistro","get_sinistro","page_documents",
       "page_sinistri","plan_legacy_xml","preview_legacy_xml",
-      "search_sinistri_page"
+      "search_sinistri_page","update_sinistro"
     ]);
     const read=await tokenFor(request);
     const writer=await tokenFor(request,"peritial-test-write");
@@ -945,6 +946,132 @@ test.describe("Versioned MCP result JSON allowlist", () => {
         expect(rows.filter(row=>row.externalReference===item.wanted)).toHaveLength(1);
       }
     }
+
+    // Destructive state changes reuse the same Business transactions as
+    // REST. This is an output-contract upgrade, never an OAuth permission.
+    // Reader denials must have no side effects; writer results match the
+    // committed REST DTO exactly (including canonical UTC timestamps).
+    const mutationPerizia=await request.post(api+"/api/perizie",{
+      headers:{Authorization:"Bearer "+writer},
+      data:{reference:"MCP-STRUCT-STATE-P-"+nonce}
+    });
+    expect(mutationPerizia.status(),await mutationPerizia.text()).toBe(201);
+    const mutationPeriziaId=(await mutationPerizia.json() as {id:string}).id;
+    const mutationSinistro=await request.post(api+"/api/sinistri",{
+      headers:{Authorization:"Bearer "+writer},
+      data:{externalReference:"MCP-STRUCT-STATE-S-"+nonce,
+        occurredOn:"2026-11-18"}
+    });
+    expect(mutationSinistro.status(),await mutationSinistro.text()).toBe(201);
+    const mutationSinistroId=(await mutationSinistro.json() as {id:string}).id;
+    const mutationStages=[
+      {name:"assign_perizia",dtype:"PeriziaDto",
+        args:{id:mutationPeriziaId,assignee:"mcp-structured-assignee"},
+        restPath:"/api/perizie/"+mutationPeriziaId,
+        expected:{id:mutationPeriziaId,status:"Assigned",
+          assignedTo:"mcp-structured-assignee"}},
+      {name:"advance_perizia",dtype:"PeriziaDto",
+        args:{id:mutationPeriziaId,target:"ToBeRevised"},
+        restPath:"/api/perizie/"+mutationPeriziaId,
+        expected:{id:mutationPeriziaId,status:"ToBeRevised",
+          assignedTo:"mcp-structured-assignee"}},
+      {name:"cancel_perizia",dtype:"PeriziaDto",
+        args:{id:mutationPeriziaId},
+        restPath:"/api/perizie/"+mutationPeriziaId,
+        expected:{id:mutationPeriziaId,status:"Cancelled",
+          assignedTo:"mcp-structured-assignee"}},
+      {name:"update_sinistro",dtype:"SinistroDto",
+        args:{id:mutationSinistroId,
+          externalReference:"MCP-STRUCT-STATE-S-UPDATED-"+nonce,
+          occurredOn:"2026-11-19",reportedOn:"2026-11-20",
+          expectedVersion:1},
+        restPath:"/api/sinistri/"+mutationSinistroId,
+        expected:{id:mutationSinistroId,version:2,
+          externalReference:"MCP-STRUCT-STATE-S-UPDATED-"+nonce,
+          occurredOn:"2026-11-19",reportedOn:"2026-11-20"}}
+    ];
+    for(const [i,item] of mutationStages.entries()){
+      const schema=tools.find(t=>t.name===item.name)?.outputSchema as
+        Record<string,unknown>|undefined;
+      expect(schema,item.name+" must have outputSchema").toBeDefined();
+      const defs=(schema!.$defs??{}) as Record<string,Record<string,unknown>>;
+      const root=typeof schema!.$ref==="string" &&
+        schema!.$ref.startsWith("#/$defs/")
+        ? defs[schema!.$ref.slice(8)] : schema!;
+      expect(Object.keys((root.properties??{}) as Record<string,unknown>).sort(),
+        item.name+" only approved DTO fields")
+        .toEqual(Object.keys(outputs.types[item.dtype])
+          .map(k=>k[0].toLowerCase()+k.slice(1)).sort());
+      expect(JSON.stringify(schema)).not.toContain("tenantId");
+      expect(JSON.stringify(schema)).not.toContain("storageKey");
+
+      const baseline=await request.get(api+item.restPath,{
+        headers:{Authorization:"Bearer "+read}
+      });
+      expect(baseline.status(),await baseline.text()).toBe(200);
+      const before=await baseline.json();
+      const denied=await call("tools/call",{
+        name:item.name,arguments:item.args
+      },6740+i);
+      expect(denied.isError,item.name+" needs write scope").toBe(true);
+      expect(JSON.stringify(denied)).not.toContain("tenantId");
+      const afterDenied=await request.get(api+item.restPath,{
+        headers:{Authorization:"Bearer "+read}
+      });
+      expect(afterDenied.status(),await afterDenied.text()).toBe(200);
+      expect(await afterDenied.json(),item.name+" reader must not mutate")
+        .toEqual(before);
+
+      const response=await call("tools/call",{
+        name:item.name,arguments:item.args
+      },6750+i,writer);
+      expect(response.isError,item.name+" writer must succeed").not.toBe(true);
+      expect(response.structuredContent,item.name+" structured result").toBeDefined();
+      checkWireValue(item.dtype,response.structuredContent,item.name);
+      const actual=response.structuredContent as Record<string,unknown>;
+      expect(actual).toMatchObject(item.expected);
+      const wire=JSON.stringify(actual);
+      expect(wire).not.toContain("tenantId");
+      expect(wire).not.toContain("storageKey");
+      const rest=await request.get(api+item.restPath,{
+        headers:{Authorization:"Bearer "+read}
+      });
+      expect(rest.status(),await rest.text()).toBe(200);
+      const expected=await rest.json() as Record<string,unknown>;
+      for(const [prop,kind] of Object.entries(outputs.types[item.dtype])){
+        const name=prop[0].toLowerCase()+prop.slice(1);
+        expect(Object.prototype.hasOwnProperty.call(expected,name),
+          item.name+" REST."+name+" must exist").toBe(true);
+        if(expected[name]===null && kind.endsWith("?")){
+          expect(actual[name]??null,item.name+"."+name).toBeNull();
+        }else{
+          expect(Object.prototype.hasOwnProperty.call(actual,name),
+            item.name+"."+name+" required").toBe(true);
+          expect(actual[name],item.name+"."+name).toEqual(expected[name]);
+        }
+      }
+    }
+    // Stale/terminal replays remain denied. Exposing outputSchema must
+    // not change CAS checks, successful audit count or terminal states.
+    const staleUpdate=await call("tools/call",{
+      name:"update_sinistro",arguments:mutationStages[3].args
+    },6760,writer);
+    expect(staleUpdate.isError).toBe(true);
+    const replayCancellation=await call("tools/call",{
+      name:"cancel_perizia",arguments:{id:mutationPeriziaId}
+    },6761,writer);
+    expect(replayCancellation.isError).toBe(true);
+    const afterReplays=await Promise.all([
+      request.get(api+"/api/perizie/"+mutationPeriziaId,
+        {headers:{Authorization:"Bearer "+read}}),
+      request.get(api+"/api/sinistri/"+mutationSinistroId,
+        {headers:{Authorization:"Bearer "+read}})
+    ]);
+    expect(afterReplays[0].status(),await afterReplays[0].text()).toBe(200);
+    expect(afterReplays[1].status(),await afterReplays[1].text()).toBe(200);
+    expect(await afterReplays[0].json()).toMatchObject({status:"Cancelled"});
+    expect(await afterReplays[1].json()).toMatchObject({version:2,
+      externalReference:"MCP-STRUCT-STATE-S-UPDATED-"+nonce});
 
     // New read-only DTOs: scanned document metadata and a revisioned
     // perizia association. Use REST only for fixture setup/read-back;

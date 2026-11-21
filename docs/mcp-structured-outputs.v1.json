@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "mcpCatalogVersion": "1.2.0",
   "tools": [
+    "advance_perizia",
+    "assign_perizia",
+    "cancel_perizia",
     "create_perizia",
     "create_sinistro",
     "get_document",
@@ -13,6 +16,7 @@
     "page_sinistri",
     "plan_legacy_xml",
     "preview_legacy_xml",
-    "search_sinistri_page"
+    "search_sinistri_page",
+    "update_sinistro"
   ]
 }
