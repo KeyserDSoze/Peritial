@@ -919,3 +919,19 @@ deve fallire, non eludere tenant/scoping.
 
 Restano invariati OAuth, FORCE RLS, audit,
 cancellazione Sinistri e compatibilità legacy.
+
+## Catalogo globale Sinistri con `outputSchema` (ADR 0073, #12)
+
+La [ADR 0073](../adr/0073-mcp-structured-global-sinistri-pages.md)
+aggiunge `page_sinistri` (`SinistroPageDto`) alla lista
+dei tool MCP che pubblicano `outputSchema` e restituiscono
+`structuredContent`. Il manifesto passa da 6 a **7 tool su 25**;
+gli altri 18 rimangono invariati. Il tool mantiene lo stesso endpoint
+Business, la stessa paginazione a cursore, gli scope firmati
+e l'isolamento FORCE RLS: non viene creato un nuovo percorso di scrittura.
+
+Il test Playwright con token Keycloak read confronta le prime due pagine
+MCP `limit=1` con REST, inclusi gli UUID, i campi pubblici e
+`nextCursor`, senza presumere che il catalogo del tenant sia vuoto.
+Il controllo statico rifiuta sia la rimozione dell'opt-in in C#
+sia il disallineamento del manifesto.

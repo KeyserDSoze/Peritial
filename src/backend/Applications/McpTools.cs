@@ -72,7 +72,7 @@ public sealed class McpTools(
     public Task<IReadOnlyList<SinistroDto>> ListSinistri(int limit = 50, CancellationToken ct = default) =>
         sinistri.ListAsync(limit, ct);
 
-    [McpServerTool(Name = "page_sinistri", ReadOnly = true, Destructive = false, OpenWorld = false), Description("Pages the complete tenant Sinistri catalog with 1..50 rows, opaque nextCursor and deterministic date/UUID order. Requires peritial.read or peritial.write. The cursor is positional metadata, never an authorization token.")]
+    [McpServerTool(Name = "page_sinistri", ReadOnly = true, Destructive = false, OpenWorld = false, UseStructuredContent = true), Description("Pages the complete tenant Sinistri catalog with 1..50 rows, opaque nextCursor and deterministic date/UUID order. Requires peritial.read or peritial.write. The cursor is positional metadata, never an authorization token.")]
     public Task<SinistroPageDto> PageSinistri(
         string? cursor = null, int limit = 50, CancellationToken ct = default) =>
         sinistri.PageAsync(limit, cursor, ct);

@@ -759,7 +759,7 @@ test.describe("Versioned MCP result JSON allowlist", () => {
     });
     expect(manifest.tools).toEqual([
       "get_document","get_perizia","get_perizia_sinistro","get_sinistro",
-      "page_documents","search_sinistri_page"
+      "page_documents","page_sinistri","search_sinistri_page"
     ]);
     const read=await tokenFor(request);
     const writer=await tokenFor(request,"peritial-test-write");
@@ -982,6 +982,8 @@ test.describe("Versioned MCP result JSON allowlist", () => {
     const pageSchemas=[
       {name:"page_documents",type:"DocumentPageDto",
         nested:"DocumentSummaryDto"},
+      {name:"page_sinistri",type:"SinistroPageDto",
+        nested:"SinistroDto"},
       {name:"search_sinistri_page",type:"SinistroPageDto",
         nested:"SinistroDto"}
     ];
@@ -1058,6 +1060,47 @@ test.describe("Versioned MCP result JSON allowlist", () => {
         name:paged.name,arguments:wrongFilter
       },6642+offset*5);
       expect(bad.isError,paged.name+" foreign-filter cursor denied").toBe(true);
+    }
+
+    // Global (unfiltered) Sinistri cursor: do not assume an empty or
+    // isolated tenant catalog. Compare both signed MCP pages with REST,
+    // including the cursor and reviewed nested DTOs, under the same read token.
+    const globalArgs={limit:1};
+    const globalFirst=await call("tools/call",{
+      name:"page_sinistri",arguments:globalArgs
+    },6660);
+    expect(globalFirst.isError).not.toBe(true);
+    checkWireValue("SinistroPageDto",globalFirst.structuredContent,
+      "page_sinistri.page1");
+    const globalPage1=globalFirst.structuredContent as {
+      items:Record<string,unknown>[];nextCursor?:string|null};
+    expect(globalPage1.items).toHaveLength(1);
+    expect(typeof globalPage1.nextCursor).toBe("string");
+    const globalSecond=await call("tools/call",{
+      name:"page_sinistri",arguments:{
+        ...globalArgs,cursor:globalPage1.nextCursor
+      }
+    },6661);
+    expect(globalSecond.isError).not.toBe(true);
+    checkWireValue("SinistroPageDto",globalSecond.structuredContent,
+      "page_sinistri.page2");
+    const globalPage2=globalSecond.structuredContent as {
+      items:Record<string,unknown>[];nextCursor?:string|null};
+    expect(globalPage2.items).toHaveLength(1);
+    expect(globalPage1.items[0].id).not.toBe(globalPage2.items[0].id);
+    for(const [page,cursor] of [[globalPage1,undefined],
+      [globalPage2,globalPage1.nextCursor]] as const){
+      const suffix=cursor===undefined?"":"&cursor="+encodeURIComponent(cursor??"");
+      const rest=await request.get(api+"/api/sinistri/page?limit=1"+suffix,{
+        headers:{Authorization:"Bearer "+read}
+      });
+      expect(rest.status(),await rest.text()).toBe(200);
+      const expected=await rest.json() as {
+        items:Record<string,unknown>[];nextCursor?:string|null};
+      expect(page.items).toEqual(expected.items);
+      expect(page.nextCursor??null).toEqual(expected.nextCursor??null);
+      expect(JSON.stringify(page)).not.toContain("tenantId");
+      expect(JSON.stringify(page)).not.toContain("storageKey");
     }
 
   });

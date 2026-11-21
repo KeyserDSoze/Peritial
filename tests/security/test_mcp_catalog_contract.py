@@ -55,7 +55,8 @@ class McpCatalogContractTests(unittest.TestCase):
     def test_structured_outputs_are_reviewed_and_fail_closed(self):
         manifest = json.loads(STRUCTURED.read_text(encoding="utf-8"))
         self.assertEqual(["get_document", "get_perizia", "get_perizia_sinistro",
-                          "get_sinistro", "page_documents", "search_sinistri_page"],
+                          "get_sinistro", "page_documents", "page_sinistri",
+                          "search_sinistri_page"],
                          manifest["tools"])
         validate_structured_output_tools(self._manifest(), manifest, self.source)
         validate_catalog(self._manifest(), self.source)
@@ -71,12 +72,18 @@ class McpCatalogContractTests(unittest.TestCase):
         self.assertNotEqual(new_writer, self.source)
         with self.assertRaisesRegex(ValueError, "structured output drift"):
             validate_structured_output_tools(self._manifest(), manifest, new_writer)
-        added_without_annotation = copy.deepcopy(manifest)
-        added_without_annotation["tools"].append("page_sinistri")
-        added_without_annotation["tools"].sort()
+        removed_from_manifest = copy.deepcopy(manifest)
+        removed_from_manifest["tools"].remove("page_sinistri")
         with self.assertRaisesRegex(ValueError, "structured output drift"):
             validate_structured_output_tools(
-                self._manifest(), added_without_annotation, self.source)
+                self._manifest(), removed_from_manifest, self.source)
+        missing_page_annotation = self.source.replace(
+            'Name = "page_sinistri", ReadOnly = true, Destructive = false, OpenWorld = false, UseStructuredContent = true',
+            'Name = "page_sinistri", ReadOnly = true, Destructive = false, OpenWorld = false', 1)
+        self.assertNotEqual(missing_page_annotation, self.source)
+        with self.assertRaisesRegex(ValueError, "structured output drift"):
+            validate_structured_output_tools(
+                self._manifest(), manifest, missing_page_annotation)
         changed = copy.deepcopy(manifest)
         changed["tools"].append("delete_sinistro")
         changed["tools"].sort()

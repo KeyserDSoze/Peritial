@@ -8,6 +8,7 @@
     "get_perizia_sinistro",
     "get_sinistro",
     "page_documents",
+    "page_sinistri",
     "search_sinistri_page"
   ]
 }
