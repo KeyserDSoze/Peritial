@@ -1018,3 +1018,32 @@ con il successivo `GET` REST, e che replay di annullamenti
 terminali e aggiornamenti Sinistro con versione superata siano
 rifiutati senza modificare lo stato corrente. Nessun nuovo
 endpoint, migrazione, scope o abilitazione hard-delete.
+
+## Ciclo link / reparent / unlink Perizia–Sinistro con output strutturato (ADR 0078, #12)
+
+La [ADR 0078](../adr/0078-mcp-structured-association-cas.md)
+estende `UseStructuredContent=true` ai tool
+`link_perizia_sinistro`, `reparent_perizia_sinistro`
+(entrambi `PeriziaSinistroLinkDto`) e
+`unlink_perizia_sinistro` (`PeriziaSinistroAssociationDto`).
+Il manifesto sale a **18/25 tool** MCP con `outputSchema`
+e `structuredContent`; il numero di tool e il contratto
+degli argomenti rimangono invariati.
+
+I tre tool restano **mutativi e destructive**, richiedono
+`peritial.write` firmato e una `expectedLinkVersion`
+positiva; il repository gestisce il compare-and-swap
+tenant-scoped sotto FORCE RLS con audit/history atomici.
+Il versionamento monotono impedisce il replay ABA
+anche quando il collegamento torna a `null`.
+Il cambiamento aggiorna soltanto la serializzazione del
+risultato MCP, non le transazioni né la policy OAuth.
+
+I test Playwright Keycloak sul protocollo 2026-07-28
+verificano `outputSchema` con soli campi DTO revisionati,
+read-only denial senza side-effect, ciclo link
+(versione 1→2), reparent (2→3), unlink (3→4),
+parità dei risultati MCP con GET REST, gestione di
+`sinistroId:null` e diniego di ogni replay stale,
+incluso ABA con versione 1 dopo unlink.
+Nessun hard-delete, upload o modifica delle date Sinistro.

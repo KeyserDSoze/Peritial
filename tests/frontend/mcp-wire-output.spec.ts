@@ -747,6 +747,175 @@ test.describe("Versioned MCP result JSON allowlist", () => {
     ].sort());
   });
 
+  test("modern structured association mutators keep exact CAS, tenant and REST parity", async ({request}) => {
+    test.skip(!process.env.E2E_FULL_STACK,"Real Keycloak and PostgreSQL required");
+    test.setTimeout(120_000);
+    const reader=await tokenFor(request);
+    const writer=await tokenFor(request,"peritial-test-write");
+    const meta={
+      "io.modelcontextprotocol/protocolVersion":"2026-07-28",
+      "io.modelcontextprotocol/clientInfo":{
+        name:"peritial-structured-associations-e2e",version:"1.0.0"
+      },
+      "io.modelcontextprotocol/clientCapabilities":{}
+    };
+    async function rpc(method:"tools/list"|"tools/call",
+      args:Record<string,unknown>,id:number,token=reader) {
+      const name=method==="tools/call" ? String(args.name) : "";
+      const response=await request.post(api+"/mcp",{
+        headers:{
+          Authorization:"Bearer "+token,
+          Accept:"application/json,text/event-stream",
+          "Content-Type":"application/json",
+          "MCP-Protocol-Version":"2026-07-28",
+          "Mcp-Method":method,
+          ...(method==="tools/call"?{"Mcp-Name":name}:{})
+        },
+        data:{jsonrpc:"2.0",id,method,params:{...args,_meta:meta}}
+      });
+      const body=await response.text();
+      expect(response.ok(),body).toBeTruthy();
+      const packets:RpcResponse[]=body.trimStart().startsWith("{")
+        ? [JSON.parse(body) as RpcResponse]
+        : body.split(/\r?\n/).filter(s=>s.startsWith("data:"))
+          .map(s=>JSON.parse(s.slice(5).trim()) as RpcResponse);
+      const packet=packets.find(p=>p.result||p.error);
+      expect(packet?.error,body).toBeUndefined();
+      expect(packet?.result,body).toBeDefined();
+      return packet!.result!;
+    }
+    const listing=await rpc("tools/list",{},6801);
+    const tools=(listing as unknown as {tools:{
+      name:string;outputSchema?:Record<string,unknown>
+    }[]}).tools;
+    expect(tools).toHaveLength(25);
+    const names=[
+      "link_perizia_sinistro","reparent_perizia_sinistro",
+      "unlink_perizia_sinistro"
+    ];
+    const typeNames=[
+      "PeriziaSinistroLinkDto","PeriziaSinistroLinkDto",
+      "PeriziaSinistroAssociationDto"
+    ];
+    for(const [i,name] of names.entries()){
+      const schema=tools.find(t=>t.name===name)?.outputSchema;
+      expect(schema,name+" publishes outputSchema").toBeDefined();
+      const defs=(schema!.$defs??{}) as Record<string,Record<string,unknown>>;
+      const root=typeof schema!.$ref==="string" &&
+        schema!.$ref.startsWith("#/$defs/")
+        ? defs[schema!.$ref.slice(8)] : schema!;
+      expect(Object.keys((root.properties??{}) as Record<string,unknown>).sort(),
+        name+" exposes only reviewed association DTO fields").toEqual(
+          Object.keys(outputs.types[typeNames[i]])
+            .map(k=>k[0].toLowerCase()+k.slice(1)).sort());
+      expect(JSON.stringify(schema)).not.toContain("tenantId");
+      expect(JSON.stringify(schema)).not.toContain("storageKey");
+    }
+    const nonce=Date.now()+"-"+Math.floor(Math.random()*1000000);
+    async function create(path:string,data:Record<string,unknown>):Promise<string>{
+      const response=await request.post(api+path,{
+        headers:{Authorization:"Bearer "+writer},data
+      });
+      expect(response.status(),await response.text()).toBe(201);
+      return (await response.json() as {id:string}).id;
+    }
+    const periziaId=await create("/api/perizie",{
+      reference:"MCP-STRUCT-ASSOC-LIFE-"+nonce
+    });
+    const sinistroA=await create("/api/sinistri",{
+      externalReference:"MCP-STRUCT-LINK-A-"+nonce,
+      occurredOn:"2026-11-18"
+    });
+    const sinistroB=await create("/api/sinistri",{
+      externalReference:"MCP-STRUCT-LINK-B-"+nonce,
+      occurredOn:"2026-11-19"
+    });
+    const path="/api/perizie/"+periziaId+"/sinistro";
+    async function restAssociation():Promise<Record<string,unknown>>{
+      const response=await request.get(api+path,{
+        headers:{Authorization:"Bearer "+reader}
+      });
+      expect(response.status(),await response.text()).toBe(200);
+      return response.json() as Promise<Record<string,unknown>>;
+    }
+    expect(await restAssociation()).toEqual({
+      periziaId,sinistroId:null,linkVersion:1
+    });
+    const stages=[
+      {name:names[0],dtype:typeNames[0],
+        args:{periziaId,sinistroId:sinistroA,expectedLinkVersion:1},
+        expected:{periziaId,sinistroId:sinistroA,linkVersion:2}},
+      {name:names[1],dtype:typeNames[1],
+        args:{periziaId,expectedSinistroId:sinistroA,
+          newSinistroId:sinistroB,expectedLinkVersion:2},
+        expected:{periziaId,sinistroId:sinistroB,linkVersion:3}},
+      {name:names[2],dtype:typeNames[2],
+        args:{periziaId,expectedSinistroId:sinistroB,
+          expectedLinkVersion:3},
+        expected:{periziaId,sinistroId:null,linkVersion:4}}
+    ];
+    for(const [i,stage] of stages.entries()){
+      const before=await restAssociation();
+      const denied=await rpc("tools/call",{
+        name:stage.name,arguments:stage.args
+      },6810+i);
+      expect(denied.isError,stage.name+" requires a signed writer").toBe(true);
+      expect(JSON.stringify(denied)).not.toContain("tenantId");
+      expect(await restAssociation(),stage.name+" reader no-op").toEqual(before);
+
+      const result=await rpc("tools/call",{
+        name:stage.name,arguments:stage.args
+      },6820+i,writer);
+      expect(result.isError,stage.name+" writer succeeds").not.toBe(true);
+      expect(result.structuredContent,stage.name+" structuredContent").toBeDefined();
+      checkWireValue(stage.dtype,result.structuredContent,stage.name);
+      const actual=result.structuredContent as Record<string,unknown>;
+      expect(actual.periziaId).toBe(periziaId);
+      expect(actual.linkVersion).toBe(stage.expected.linkVersion);
+      expect(actual.sinistroId??null).toBe(stage.expected.sinistroId);
+      expect(JSON.stringify(actual)).not.toContain("tenantId");
+      expect(JSON.stringify(actual)).not.toContain("storageKey");
+      const stored=await restAssociation();
+      expect(stored).toEqual(stage.expected);
+      for(const [property,kind] of Object.entries(outputs.types[stage.dtype])){
+        const key=property[0].toLowerCase()+property.slice(1);
+        if(stored[key]===null && kind.endsWith("?")){
+          expect(actual[key]??null,stage.name+"."+key).toBeNull();
+        }else{
+          expect(Object.prototype.hasOwnProperty.call(actual,key),
+            stage.name+"."+key+" required").toBe(true);
+          expect(actual[key],stage.name+"."+key).toEqual(stored[key]);
+        }
+      }
+
+      // A retry with the already-consumed link revision must conflict
+      // without adding a second success mutation (or incrementing CAS).
+      const stale=await rpc("tools/call",{
+        name:stage.name,arguments:stage.args
+      },6830+i,writer);
+      expect(stale.isError,stage.name+" stale replay must conflict").toBe(true);
+      expect(await restAssociation(),stage.name+" stale no-op").toEqual(stored);
+    }
+    // Even when association is null again, a stale revision 1 cannot
+    // recreate an ABA link after link -> reparent -> unlink (revision 4).
+    const aba=await rpc("tools/call",{
+      name:"link_perizia_sinistro",
+      arguments:{periziaId,sinistroId:sinistroA,expectedLinkVersion:1}
+    },6840,writer);
+    expect(aba.isError).toBe(true);
+    expect(await restAssociation()).toEqual({
+      periziaId,sinistroId:null,linkVersion:4
+    });
+    // No operation cascades deletes or mutates either Sinistro record.
+    for(const id of [sinistroA,sinistroB]){
+      const response=await request.get(api+"/api/sinistri/"+id,{
+        headers:{Authorization:"Bearer "+reader}
+      });
+      expect(response.status(),await response.text()).toBe(200);
+      expect((await response.json() as {version:number}).version).toBe(1);
+    }
+  });
+
   test("modern detail tools publish an output schema and natural structuredContent", async ({request}) => {
     test.skip(!process.env.E2E_FULL_STACK,"Real Keycloak and PostgreSQL required");
     test.setTimeout(120_000);
@@ -760,9 +929,10 @@ test.describe("Versioned MCP result JSON allowlist", () => {
     expect(manifest.tools).toEqual([
       "advance_perizia","assign_perizia","cancel_perizia",
       "create_perizia","create_sinistro","get_document","get_perizia",
-      "get_perizia_sinistro","get_sinistro","page_documents",
-      "page_sinistri","plan_legacy_xml","preview_legacy_xml",
-      "search_sinistri_page","update_sinistro"
+      "get_perizia_sinistro","get_sinistro","link_perizia_sinistro",
+      "page_documents","page_sinistri","plan_legacy_xml",
+      "preview_legacy_xml","reparent_perizia_sinistro",
+      "search_sinistri_page","unlink_perizia_sinistro","update_sinistro"
     ]);
     const read=await tokenFor(request);
     const writer=await tokenFor(request,"peritial-test-write");

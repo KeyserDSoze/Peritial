@@ -12,11 +12,14 @@
     "get_perizia",
     "get_perizia_sinistro",
     "get_sinistro",
+    "link_perizia_sinistro",
     "page_documents",
     "page_sinistri",
     "plan_legacy_xml",
     "preview_legacy_xml",
+    "reparent_perizia_sinistro",
     "search_sinistri_page",
+    "unlink_perizia_sinistro",
     "update_sinistro"
   ]
 }

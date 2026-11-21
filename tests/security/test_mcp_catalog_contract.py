@@ -57,9 +57,11 @@ class McpCatalogContractTests(unittest.TestCase):
         self.assertEqual(["advance_perizia", "assign_perizia",
                           "cancel_perizia", "create_perizia", "create_sinistro",
                           "get_document", "get_perizia", "get_perizia_sinistro",
-                          "get_sinistro", "page_documents", "page_sinistri",
-                          "plan_legacy_xml", "preview_legacy_xml",
-                          "search_sinistri_page", "update_sinistro"],
+                          "get_sinistro", "link_perizia_sinistro",
+                          "page_documents", "page_sinistri", "plan_legacy_xml",
+                          "preview_legacy_xml", "reparent_perizia_sinistro",
+                          "search_sinistri_page", "unlink_perizia_sinistro",
+                          "update_sinistro"],
                          manifest["tools"])
         validate_structured_output_tools(self._manifest(), manifest, self.source)
         validate_catalog(self._manifest(), self.source)
@@ -88,6 +90,23 @@ class McpCatalogContractTests(unittest.TestCase):
         # any opt-in from either side is versioned contract drift.
         for name in ("advance_perizia", "assign_perizia",
                      "cancel_perizia", "update_sinistro"):
+            with self.subTest(name=name):
+                without = copy.deepcopy(manifest)
+                without["tools"].remove(name)
+                with self.assertRaisesRegex(ValueError, "structured output drift"):
+                    validate_structured_output_tools(
+                        self._manifest(), without, self.source)
+                previous = self.source.replace(
+                    f'Name = "{name}", ReadOnly = false, Destructive = true, OpenWorld = false, UseStructuredContent = true',
+                    f'Name = "{name}", ReadOnly = false, Destructive = true, OpenWorld = false', 1)
+                self.assertNotEqual(previous, self.source)
+                with self.assertRaisesRegex(ValueError, "structured output drift"):
+                    validate_structured_output_tools(
+                        self._manifest(), manifest, previous)
+        # Link changes use versioned DTOs and exact writer allowlist.
+        # An opt-in drift in either direction must fail the static gate.
+        for name in ("link_perizia_sinistro", "reparent_perizia_sinistro",
+                     "unlink_perizia_sinistro"):
             with self.subTest(name=name):
                 without = copy.deepcopy(manifest)
                 without["tools"].remove(name)
@@ -134,10 +153,9 @@ class McpCatalogContractTests(unittest.TestCase):
         changed["tools"].sort()
         with self.assertRaisesRegex(ValueError, "explicit access review"):
             validate_structured_output_tools(self._manifest(), changed, self.source)
-        # Reviewed writer opt-ins are NOT permission to add new writer
-        # classes, association mutators, ingestion or the privileged delete.
-        for name in ("link_perizia_sinistro", "reparent_perizia_sinistro",
-                     "unlink_perizia_sinistro", "ingest_file"):
+        # Reviewed writer opt-ins are NOT permission to add unrelated
+        # writers such as document ingestion or privileged hard-delete.
+        for name in ("ingest_file",):
             with self.subTest(forbidden=name):
                 changed = copy.deepcopy(manifest)
                 changed["tools"].append(name)
