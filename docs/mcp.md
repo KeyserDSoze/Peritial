@@ -719,3 +719,18 @@ tool di preflight XML non mutanti ma **write-scoped**
 (`preview_legacy_xml`, `plan_legacy_xml`).
 Non è ancora un test JSON `outputSchema` di tutti i 25 tool
 né una certificazione di compatibilità con client esterni.
+
+## Preflight XML: output MCP write-scoped (#12)
+
+L'[ADR 0065](../adr/0065-mcp-xml-preflight-wire-contract.md)
+aggiunge al gate Playwright `tools/call` i due tool XML
+`preview_legacy_xml` e `plan_legacy_xml` (entrambi
+`effect:read-only` ma `access:write`). Con JWT Keycloak
+`peritial.write` vengono testati XML sintetici Classic e
+Accertatore: controllo JSON dei DTO pubblici, assenza di dati
+privati/orari legacy e nessun sinistro creato prima o dopo il
+preflight. Un JWT `peritial.read` deve essere rifiutato.
+Un controllo statico impedisce di aggiungere preflight write-scoped
+senza copertura. Il totale dei tool con prove wire sale a
+**14/25**. Rimangono 11 mutatori, version negotiation e
+`outputSchema` SDK formale; nessun import XML viene abilitato.

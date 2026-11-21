@@ -25,6 +25,7 @@ const readTools = [
   "list_sinistri", "page_documents", "page_sinistri",
   "search_sinistri", "search_sinistri_page"
 ] as const;
+const preflightTools = ["plan_legacy_xml", "preview_legacy_xml"] as const;
 
 const api = "http://localhost:8080";
 const issuer = "http://localhost:8081/realms/peritial";
@@ -110,10 +111,11 @@ function extractCallResult(body: string): unknown {
   return result!.structuredContent;
 }
 
-async function tokenFor(request: APIRequestContext): Promise<string> {
+async function tokenFor(request: APIRequestContext,
+  clientId = "peritial-test-readonly"): Promise<string> {
   const response = await request.post(issuer + "/protocol/openid-connect/token", {
     form: {
-      grant_type: "password", client_id: "peritial-test-readonly",
+      grant_type: "password", client_id: clientId,
       username: "localuser", password: "local-only-user"
     }
   });
@@ -131,6 +133,15 @@ test.describe("Versioned MCP result JSON allowlist", () => {
       expect(entry?.effect, name).toBe("read-only");
       expect(entry?.returnType, name).toMatch(/^Task<.+>$/);
     }
+  });
+
+  test("catalogue pins all write-scoped non-mutating MCP preflight tools", () => {
+    const actual = catalog.tools.filter(t => t.effect === "read-only" &&
+      t.access === "write").map(t => t.name).sort();
+    expect(actual).toEqual([...preflightTools].sort());
+    for (const name of preflightTools)
+      expect(catalog.tools.find(t => t.name === name)?.returnType)
+        .toMatch(/Dto>?$/);
   });
 
   test("wire validator rejects added fields, missing fields, wrong types and nullability", () => {
@@ -283,4 +294,100 @@ test.describe("Versioned MCP result JSON allowlist", () => {
     }, 6112);
     expect(linkedPerizie).toContain(periziaId);
   });
+  test("signed write-only XML preflights use reviewed MCP JSON and do not import", async ({request}) => {
+    test.skip(!process.env.E2E_FULL_STACK, "Real Keycloak, PostgreSQL, and MCP required");
+    test.setTimeout(90_000);
+    const writer = await tokenFor(request, "peritial-test-write");
+    const reader = await tokenFor(request);
+    const nonce = Date.now() + "-" + Math.floor(Math.random() * 1000000);
+    const secret = "PRIVATE-PREFLIGHT-" + nonce;
+    const samples = [
+      {
+        ref:"MCP-WIRE-ACCERTATORE-" + nonce,
+        format:"accertatore",
+        date:"2026-11-17",
+        xml: "<it.autosoftws.IncaricoAccertatoreRecord>" +
+          "<NumeroSinistro>MCP-WIRE-ACCERTATORE-" + nonce + "</NumeroSinistro>" +
+          "<DataOraSinistro>2026-11-17</DataOraSinistro>" +
+          "<DataIncarico>2026-11-18</DataIncarico>" +
+          "<Contraente><Nome>" + secret + "</Nome></Contraente>" +
+          "</it.autosoftws.IncaricoAccertatoreRecord>"
+      },
+      {
+        ref:"MCP-WIRE-CLASSIC-" + nonce,
+        format:"classic",
+        date:"2026-11-19",
+        xml:"<it.autosoftws.ReIncaricoBaseRecord>" +
+          "<NumeroSinistro>MCP-WIRE-CLASSIC-" + nonce + "</NumeroSinistro>" +
+          "<DataOraSinistro>2026-11-19 09:00:00</DataOraSinistro>" +
+          "<DataIncarico>2026-11-20</DataIncarico>" +
+          "</it.autosoftws.ReIncaricoBaseRecord>"
+      }
+    ];
+
+    async function assertUnimported(reference:string) {
+      const response = await request.get(api + "/api/sinistri/search?" +
+        new URLSearchParams({prefix:reference,limit:"10"}), {
+        headers:{Authorization:"Bearer " + writer}
+      });
+      expect(response.status(), await response.text()).toBe(200);
+      const matches = await response.json() as {externalReference:string}[];
+      expect(matches.some(row => row.externalReference === reference)).toBe(false);
+    }
+
+    async function call(name:typeof preflightTools[number], xml:string,
+      token:string, id:number) {
+      const response = await request.post(api + "/mcp", {
+        headers:{
+          Authorization:"Bearer " + token,
+          Accept:"application/json,text/event-stream",
+          "Content-Type":"application/json"
+        },
+        data:{jsonrpc:"2.0",id,method:"tools/call",
+          params:{name,arguments:{xml}}}
+      });
+      const raw = await response.text();
+      expect(response.ok(), raw).toBeTruthy();
+      return raw;
+    }
+
+    for (const [i, sample] of samples.entries()) {
+      await assertUnimported(sample.ref);
+      for (const [j, name] of preflightTools.entries()) {
+        const entry = catalog.tools.find(t => t.name === name);
+        expect(entry?.access).toBe("write");
+        expect(entry?.effect).toBe("read-only");
+        const raw = await call(name, sample.xml, writer, 6300+i*2+j);
+        const actual = extractCallResult(raw);
+        const outputType = /^Task<(.+)>$/.exec(entry!.returnType)?.[1] ??
+          entry!.returnType;
+        checkWireValue(outputType, actual, name);
+        const result = actual as Record<string, unknown>;
+        const preview = (name === "plan_legacy_xml" ? result.preview : result) as
+          Record<string, unknown>;
+        expect(preview).toMatchObject({
+          format:sample.format,
+          externalReference:sample.ref,
+          occurredOn:sample.date,
+          attachmentCount:0,
+          hasUnmappedBusinessData:true
+        });
+        if (name === "plan_legacy_xml") {
+          expect(result.status).toBe("new");
+          expect(result.existingSinistroId ?? null).toBeNull();
+        }
+        const visible = JSON.stringify(actual);
+        expect(visible).not.toContain(secret);
+        expect(visible).not.toContain("09:00:00");
+        expect(visible).not.toContain("tenantId");
+      }
+      await assertUnimported(sample.ref);
+    }
+    for (const [i,name] of preflightTools.entries()) {
+      const raw = await call(name, samples[0].xml, reader, 6320+i);
+      expect(raw).toContain('"isError":true');
+      expect(raw).not.toContain(secret);
+    }
+  });
+
 });
