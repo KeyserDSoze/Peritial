@@ -747,6 +747,156 @@ test.describe("Versioned MCP result JSON allowlist", () => {
     ].sort());
   });
 
+  test("modern structured document ingestion returns metadata only with cross-protocol idempotency", async ({request}) => {
+    test.skip(!process.env.E2E_FULL_STACK,"Real Keycloak, PostgreSQL, ClamAV and S3 required");
+    test.setTimeout(120_000);
+    const reader=await tokenFor(request);
+    const writer=await tokenFor(request,"peritial-test-write");
+    const meta={
+      "io.modelcontextprotocol/protocolVersion":"2026-07-28",
+      "io.modelcontextprotocol/clientInfo":{
+        name:"peritial-structured-ingestion-e2e",version:"1.0.0"
+      },
+      "io.modelcontextprotocol/clientCapabilities":{}
+    };
+    async function rpc(method:"tools/list"|"tools/call",
+      args:Record<string,unknown>,id:number,token=reader) {
+      const name=method==="tools/call" ? String(args.name) : "";
+      const response=await request.post(api+"/mcp",{
+        headers:{
+          Authorization:"Bearer "+token,
+          Accept:"application/json,text/event-stream",
+          "Content-Type":"application/json",
+          "MCP-Protocol-Version":"2026-07-28",
+          "Mcp-Method":method,
+          ...(method==="tools/call"?{"Mcp-Name":name}:{})
+        },
+        data:{jsonrpc:"2.0",id,method,params:{...args,_meta:meta}}
+      });
+      const body=await response.text();
+      expect(response.ok(),body).toBeTruthy();
+      const packets:RpcResponse[]=body.trimStart().startsWith("{")
+        ? [JSON.parse(body) as RpcResponse]
+        : body.split(/\r?\n/).filter(s=>s.startsWith("data:"))
+          .map(s=>JSON.parse(s.slice(5).trim()) as RpcResponse);
+      const packet=packets.find(p=>p.result||p.error);
+      expect(packet?.error,body).toBeUndefined();
+      expect(packet?.result,body).toBeDefined();
+      return packet!.result!;
+    }
+    const list=await rpc("tools/list",{},6900);
+    const tools=(list as unknown as {tools:{
+      name:string;outputSchema?:Record<string,unknown>
+    }[]}).tools;
+    expect(tools).toHaveLength(25);
+    const schema=tools.find(t=>t.name==="ingest_file")?.outputSchema;
+    expect(schema,"ingest_file must advertise outputSchema").toBeDefined();
+    const defs=(schema!.$defs??{}) as Record<string,Record<string,unknown>>;
+    const root=typeof schema!.$ref==="string" &&
+      schema!.$ref.startsWith("#/$defs/")
+      ? defs[schema!.$ref.slice(8)] : schema!;
+    expect(Object.keys((root.properties??{}) as Record<string,unknown>).sort())
+      .toEqual(Object.keys(outputs.types.DocumentDto)
+        .map(k=>k[0].toLowerCase()+k.slice(1)).sort());
+    const serializedSchema=JSON.stringify(schema);
+    for(const secret of ["tenantId","storageKey","base64","createdAtUtc",
+      "malware","audit","subject","uploadIntent"])
+      expect(serializedSchema,"unreviewed schema field "+secret).not.toContain(secret);
+
+    const nonce=Date.now()+"-"+Math.floor(Math.random()*1000000);
+    const periziaResponse=await request.post(api+"/api/perizie",{
+      headers:{Authorization:"Bearer "+writer},
+      data:{reference:"MCP-STRUCT-UPLOAD-P-"+nonce}
+    });
+    expect(periziaResponse.status(),await periziaResponse.text()).toBe(201);
+    const periziaId=(await periziaResponse.json() as {id:string}).id;
+    const content=Buffer.from("%PDF-1.7\n1 0 obj\n<<>>\nendobj\n%%EOF\n");
+    const fileName="mcp-struct-upload-"+nonce+".pdf";
+    const base64=content.toString("base64");
+    const idempotencyKey="mcp-structured-upload-"+nonce;
+    const args={fileName,contentType:"application/pdf",base64,
+      periziaId,idempotencyKey};
+    async function filteredDocuments():Promise<{id:string;fileName:string}[]>{
+      const response=await request.get(api+"/api/files?"+
+        new URLSearchParams({periziaId,limit:"50"}),{
+          headers:{Authorization:"Bearer "+reader}
+        });
+      expect(response.status(),await response.text()).toBe(200);
+      return response.json() as Promise<{id:string;fileName:string}[]>;
+    }
+    const before=(await filteredDocuments()).filter(d=>d.fileName===fileName);
+    expect(before).toHaveLength(0);
+    const denied=await rpc("tools/call",{
+      name:"ingest_file",arguments:args
+    },6901);
+    expect(denied.isError,"JWT read-only must deny write before storage").toBe(true);
+    expect(JSON.stringify(denied)).not.toContain(base64);
+    expect((await filteredDocuments()).filter(d=>d.fileName===fileName))
+      .toHaveLength(0);
+
+    const upload=await rpc("tools/call",{
+      name:"ingest_file",arguments:args
+    },6902,writer);
+    expect(upload.isError,"JWT writer must upload clean PDF").not.toBe(true);
+    expect(upload.structuredContent,"ingest_file structuredContent").toBeDefined();
+    checkWireValue("DocumentDto",upload.structuredContent,"ingest_file");
+    const created=upload.structuredContent as Record<string,unknown>;
+    expect(Object.keys(created).sort()).toEqual(
+      Object.keys(outputs.types.DocumentDto)
+        .map(k=>k[0].toLowerCase()+k.slice(1)).sort());
+    expect(created).toMatchObject({fileName,periziaId,
+      contentType:"application/pdf",length:content.length});
+    for(const secret of ["tenantId","storageKey","base64","createdAtUtc",
+      "uploadIntent","malware","audit","subject"])
+      expect(JSON.stringify(upload.structuredContent)).not.toContain(secret);
+    expect(JSON.stringify(upload)).not.toContain(base64);
+
+    const fetch=await request.get(api+"/api/files/"+String(created.id),{
+      headers:{Authorization:"Bearer "+reader}
+    });
+    expect(fetch.status(),await fetch.text()).toBe(200);
+    const stored=await fetch.json() as Record<string,unknown>;
+    for(const prop of Object.keys(outputs.types.DocumentDto)){
+      const key=prop[0].toLowerCase()+prop.slice(1);
+      expect(created[key],"MCP and REST metadata."+key).toEqual(stored[key]);
+    }
+    expect((await filteredDocuments()).filter(d=>d.id===created.id))
+      .toHaveLength(1);
+
+    // A retry through the same MCP transport must preserve the same
+    // document ID; it must not trigger a new successful metadata insert.
+    const replay=await rpc("tools/call",{
+      name:"ingest_file",arguments:args
+    },6903,writer);
+    expect(replay.isError).not.toBe(true);
+    expect(replay.structuredContent).toEqual(created);
+    // REST's Idempotency-Key shares the signed tenant/subject fingerprint
+    // reservation with MCP. No duplicate even across API transports.
+    const restReplay=await request.post(api+"/api/files",{
+      headers:{
+        Authorization:"Bearer "+writer,
+        "Idempotency-Key":idempotencyKey
+      },
+      multipart:{file:{name:fileName,mimeType:"application/pdf",buffer:content},
+        periziaId}
+    });
+    expect(restReplay.status(),await restReplay.text()).toBe(201);
+    expect(await restReplay.json()).toEqual(created);
+    const changedPayload=await request.post(api+"/api/files",{
+      headers:{
+        Authorization:"Bearer "+writer,
+        "Idempotency-Key":idempotencyKey
+      },
+      multipart:{file:{name:"different-"+fileName,
+        mimeType:"application/pdf",buffer:content},periziaId}
+    });
+    expect(changedPayload.status(),await changedPayload.text()).toBe(409);
+    const finalDocs=await filteredDocuments();
+    expect(finalDocs.filter(d=>d.id===created.id)).toHaveLength(1);
+    expect(finalDocs.filter(d=>d.fileName==="different-"+fileName))
+      .toHaveLength(0);
+  });
+
   test("modern structured association mutators keep exact CAS, tenant and REST parity", async ({request}) => {
     test.skip(!process.env.E2E_FULL_STACK,"Real Keycloak and PostgreSQL required");
     test.setTimeout(120_000);
@@ -929,8 +1079,9 @@ test.describe("Versioned MCP result JSON allowlist", () => {
     expect(manifest.tools).toEqual([
       "advance_perizia","assign_perizia","cancel_perizia",
       "create_perizia","create_sinistro","get_document","get_perizia",
-      "get_perizia_sinistro","get_sinistro","link_perizia_sinistro",
-      "page_documents","page_sinistri","plan_legacy_xml",
+      "get_perizia_sinistro","get_sinistro","ingest_file",
+      "link_perizia_sinistro","page_documents","page_sinistri",
+      "plan_legacy_xml",
       "preview_legacy_xml","reparent_perizia_sinistro",
       "search_sinistri_page","unlink_perizia_sinistro","update_sinistro"
     ]);

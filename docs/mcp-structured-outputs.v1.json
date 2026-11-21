@@ -12,6 +12,7 @@
     "get_perizia",
     "get_perizia_sinistro",
     "get_sinistro",
+    "ingest_file",
     "link_perizia_sinistro",
     "page_documents",
     "page_sinistri",

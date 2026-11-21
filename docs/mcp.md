@@ -1047,3 +1047,37 @@ parità dei risultati MCP con GET REST, gestione di
 `sinistroId:null` e diniego di ogni replay stale,
 incluso ABA con versione 1 dopo unlink.
 Nessun hard-delete, upload o modifica delle date Sinistro.
+
+## Output MCP strutturato di `ingest_file` (ADR 0079, #12/#5/#11/#21)
+
+La [ADR 0079](../adr/0079-mcp-structured-safe-document-ingestion.md)
+abilita `UseStructuredContent=true` sul tool già esistente
+`ingest_file`, senza introdurre nuovi canali di upload.
+Il risultato `Task<DocumentDto>` espone **soltanto**:
+`id`, `periziaId` (nullable), `fileName`, `contentType`,
+`length`. Il manifesto MCP comprende ora **19 tool
+strutturati su 25**. Nessun byte/Base64, storage key,
+tenant, subject, audit, stato del malware o upload intent
+compare nello schema o nella risposta.
+
+L'input rimane `base64` (max 4 MiB) con scope
+`peritial.write` firmato; Business applica gli stessi
+controlli REST: tenant FORCE RLS, verifica dell'eventuale
+Perizia associata, validazione dei contenuti e scanner
+ClamAV fail-closed prima della persistenza, registrazione
+degli intenti, audit di successo nello stesso commit
+PostgreSQL e chiave `idempotencyKey` opzionale condivisa
+con l'header REST `Idempotency-Key`. L'opt-in è
+**solo una variazione del formato di output**, non
+una autorizzazione o un ampliamento del limite.
+
+La suite Playwright con Keycloak reale verifica `tools/list`
+e `tools/call` sul protocollo 2026-07-28, il diniego
+read-only senza documento creato, il DTO esatto confrontato
+con `GET /api/files/{id}`, assenza di dati sensibili,
+il replay MCP con stesso ID, il replay REST della medesima
+richiesta e il conflitto HTTP 409 quando la stessa chiave
+di idempotenza viene riutilizzata con un filename differente.
+Lo storage, il controllo virus, il rate limiting e
+l'upload presigned per file grandi sono lavori distinti
+e rimangono tracciati nelle issue pertinenti.

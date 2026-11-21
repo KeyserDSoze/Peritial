@@ -156,8 +156,9 @@ def validate_structured_output_tools(catalog: dict, manifest: dict, source: str)
         raise ValueError("MCP structured output manifest tool list drift")
     entries = {item["name"]: item for item in catalog["tools"]}
     # Opt-in only controls the SDK wire representation, never OAuth grants.
-    # Mutators are approved individually; delete, file writes and
-    # future writers remain fail-closed by default.
+    # Mutators are approved individually; privileged delete and
+    # future writers remain fail-closed by default. Document ingestion
+    # is a separate review: only DocumentDto metadata can be returned.
     write_scoped_preflights = {"plan_legacy_xml", "preview_legacy_xml"}
     reviewed_creations = {"create_perizia", "create_sinistro"}
     reviewed_state_changes = {
@@ -168,8 +169,14 @@ def validate_structured_output_tools(catalog: dict, manifest: dict, source: str)
         "link_perizia_sinistro", "reparent_perizia_sinistro",
         "unlink_perizia_sinistro",
     }
+    reviewed_ingestion = {"ingest_file"}
     def allowed(name: str) -> bool:
         item = entries[name]
+        # Do not let a catalogue edit turn a mutator into an apparent
+        # read-only tool, or change the reviewed metadata projection.
+        if name in reviewed_ingestion:
+            return (item["access"] == "write" and item["effect"] == "mutating"
+                    and item["returnType"] == "Task<DocumentDto>")
         if item["access"] == "read" and item["effect"] == "read-only":
             return True
         if (name in write_scoped_preflights and item["access"] == "write"

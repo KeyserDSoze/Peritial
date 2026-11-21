@@ -57,8 +57,9 @@ class McpCatalogContractTests(unittest.TestCase):
         self.assertEqual(["advance_perizia", "assign_perizia",
                           "cancel_perizia", "create_perizia", "create_sinistro",
                           "get_document", "get_perizia", "get_perizia_sinistro",
-                          "get_sinistro", "link_perizia_sinistro",
-                          "page_documents", "page_sinistri", "plan_legacy_xml",
+                          "get_sinistro", "ingest_file",
+                          "link_perizia_sinistro", "page_documents",
+                          "page_sinistri", "plan_legacy_xml",
                           "preview_legacy_xml", "reparent_perizia_sinistro",
                           "search_sinistri_page", "unlink_perizia_sinistro",
                           "update_sinistro"],
@@ -120,6 +121,30 @@ class McpCatalogContractTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "structured output drift"):
                     validate_structured_output_tools(
                         self._manifest(), manifest, previous)
+        # The ingest file result may contain ONLY reviewed DocumentDto
+        # metadata. It must remain write-scoped and non-destructive;
+        # never treat the Base64 input as an output field.
+        without_ingestion = copy.deepcopy(manifest)
+        without_ingestion["tools"].remove("ingest_file")
+        with self.assertRaisesRegex(ValueError, "structured output drift"):
+            validate_structured_output_tools(
+                self._manifest(), without_ingestion, self.source)
+        missing_ingestion_annotation = self.source.replace(
+            'Name = "ingest_file", ReadOnly = false, Destructive = false, OpenWorld = false, UseStructuredContent = true',
+            'Name = "ingest_file", ReadOnly = false, Destructive = false, OpenWorld = false', 1)
+        self.assertNotEqual(self.source, missing_ingestion_annotation)
+        with self.assertRaisesRegex(ValueError, "structured output drift"):
+            validate_structured_output_tools(
+                self._manifest(), manifest, missing_ingestion_annotation)
+        for changed_field, changed_value in (
+            ("access", "read"), ("effect", "read-only"),
+            ("returnType", "Task<SinistroDto>")):
+            altered = copy.deepcopy(self._manifest())
+            next(item for item in altered["tools"]
+                 if item["name"] == "ingest_file")[changed_field] = changed_value
+            with self.subTest(field=changed_field), self.assertRaisesRegex(
+                ValueError, "explicit access review"):
+                validate_structured_output_tools(altered, manifest, self.source)
         removed_from_manifest = copy.deepcopy(manifest)
         removed_from_manifest["tools"].remove("page_sinistri")
         with self.assertRaisesRegex(ValueError, "structured output drift"):
@@ -153,16 +178,8 @@ class McpCatalogContractTests(unittest.TestCase):
         changed["tools"].sort()
         with self.assertRaisesRegex(ValueError, "explicit access review"):
             validate_structured_output_tools(self._manifest(), changed, self.source)
-        # Reviewed writer opt-ins are NOT permission to add unrelated
-        # writers such as document ingestion or privileged hard-delete.
-        for name in ("ingest_file",):
-            with self.subTest(forbidden=name):
-                changed = copy.deepcopy(manifest)
-                changed["tools"].append(name)
-                changed["tools"].sort()
-                with self.assertRaisesRegex(ValueError, "explicit access review"):
-                    validate_structured_output_tools(
-                        self._manifest(), changed, self.source)
+        # The privileged hard-delete remains excluded even after
+        # individually reviewing non-destructive document ingestion.
 
     def test_versioned_manifest_must_match_mcp_server_signatures(self):
         self.assertTrue(CATALOG.is_file(), "Versioned MCP catalog is missing")

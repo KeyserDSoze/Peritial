@@ -136,7 +136,7 @@ public sealed class McpTools(
         string xml, CancellationToken ct = default) =>
         xmlPlan.PlanUtf8Async(xml, ct);
 
-    [McpServerTool(Name = "ingest_file", ReadOnly = false, Destructive = false, OpenWorld = false), Description("Uploads a PDF, XML, JPEG, PNG or DOCX document (base64, max 4 MiB, peritial.write).")]
+    [McpServerTool(Name = "ingest_file", ReadOnly = false, Destructive = false, OpenWorld = false, UseStructuredContent = true), Description("Uploads a PDF, XML, JPEG, PNG or DOCX document (base64, max 4 MiB, peritial.write). Returns only approved DocumentDto metadata, never file bytes or storage keys.")]
     public Task<DocumentDto> IngestFile(
         string fileName, string contentType, string base64, Guid? periziaId = null,
         string? idempotencyKey = null, CancellationToken ct = default) =>
