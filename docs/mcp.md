@@ -671,3 +671,24 @@ né una verifica del nome JSON effettivo delle proprietà.
 Le conversioni JSON, i DTO con logica runtime e l'interoperabilità
 fra versioni rimangono in #12; nessuna release produttiva è abilitata.
 [ADR 0062](../adr/0062-mcp-public-output-dto-contract.md).
+
+## Prova `tools/call` JSON reale e vincolo dei campi (#12)
+
+La tranche [ADR 0063](../adr/0063-mcp-live-wire-json-allowlist.md)
+introduce un test Playwright autonomo: crea dati sintetici
+perizia/sinistro/documento con un utente writer Keycloak, poi
+chiama con il token **read-only** i tool
+`get_perizia`, `get_sinistro`, `get_perizia_sinistro`,
+`search_sinistri_page`, `get_document` e
+`page_documents`. Il test confronta il **JSON effettivamente
+restituito via `tools/call`** con i campi del manifesto
+`mcp-output-dtos.v1.json`: nomi lower-camel-case,
+proprietà esatte, tipi e nullabilità, UUID/DateOnly/DateTime e
+liste annidate. I test negativi contro aggiunte di campi,
+drift di tipi e date non ISO girano anche nella CI frontend
+senza Compose.
+
+È una protezione per il solo campione di **sei tool di lettura**,
+non una certificazione completa di `outputSchema` SDK per tutti
+i tool o del version negotiation con client esterni.
+La #12 resta aperta.
