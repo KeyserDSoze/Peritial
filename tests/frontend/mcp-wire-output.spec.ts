@@ -1196,8 +1196,7 @@ test.describe("Versioned MCP result JSON allowlist", () => {
         expect(result.structuredContent,item.name).toBeDefined();
         checkWireValue(item.dto,result.structuredContent,item.name);
         const actual=result.structuredContent as Record<string,unknown>;
-        const preview=(item.name==="plan_legacy_xml" ? actual.preview : actual)
-          as Record<string,unknown>;
+        const preview=(item.name==="plan_legacy_xml" ? actual.preview : actual) as Record<string,unknown>;
         expect(preview).toMatchObject({
           format:fixture.format,externalReference:fixture.reference,
           occurredOn:fixture.occurredOn,attachmentCount:0,
