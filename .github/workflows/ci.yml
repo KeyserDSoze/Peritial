@@ -461,7 +461,7 @@ jobs:
         run: python3 -m unittest discover -s tests/security -p 'test_infra_oci_pins.py' -v
       - name: Reject unreviewed floating runner, Node and .NET CI toolchains
         run: python3 -m unittest discover -s tests/security -p 'test_ci_toolchain_pins.py' -v
-      - name: Reject undocumented MCP tool-name, required-arg or access-contract drift
+      - name: Reject undocumented MCP input, result and reachable DTO contract drift
         run: python3 -m unittest discover -s tests/security -p 'test_mcp_catalog_contract.py' -v
 
   terraform:

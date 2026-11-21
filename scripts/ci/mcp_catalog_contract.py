@@ -10,6 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / "src/backend/Applications/McpTools.cs"
 CATALOG = ROOT / "docs/mcp-catalog.v1.json"
+OUTPUT_DTOS = ROOT / "docs/mcp-output-dtos.v1.json"
 
 _TOOL_RE = re.compile(
     r'\[McpServerTool\(Name = "([^"]+)"\)[^\n]*\]\s*'
@@ -148,10 +149,69 @@ def validate_catalog(manifest: dict, source: str) -> None:
             raise ValueError(f"MCP scope/effect classification drift: {name}")
 
 
+
+_OUTPUT_NAME = re.compile(r"^[A-Za-z]\w*Dto$")
+_OUTPUT_FIELD = re.compile(r"^[A-Z][A-Za-z0-9]*$")
+_OUTPUT_TYPE = re.compile(
+    r"^(?:Guid|DateOnly|DateTime|string|int|long|bool)(?:\?)?$"
+    r"|^[A-Za-z]\w*Dto(?:\?)?$"
+    r"|^IReadOnlyList<[A-Za-z]\w*Dto>$"
+)
+
+
+def validate_output_dtos(catalog: dict, output_contract: dict) -> None:
+    """Ensure every C# DTO reachable from a public MCP return has a snapshot.
+
+    Reflection tests in Business.Tests verify exact public CLR properties,
+    including nullability and properties added in a record body. This
+    lightweight check pins reachability, not the SDK's wire outputSchema.
+    """
+    if (output_contract.get("format") != 1
+        or output_contract.get("version") != "1.0.0"
+        or output_contract.get("mcpCatalogVersion") != catalog.get("version")):
+        raise ValueError("Unreviewed MCP output DTO manifest version")
+    if set(output_contract) != {"format", "version", "mcpCatalogVersion", "types"}:
+        raise ValueError("Unreviewed MCP output DTO manifest shape")
+    types = output_contract.get("types")
+    if not isinstance(types, dict) or not types:
+        raise ValueError("Missing MCP output DTO declarations")
+    for name, properties in types.items():
+        if not isinstance(name, str) or not _OUTPUT_NAME.fullmatch(name):
+            raise ValueError("Invalid MCP output DTO name")
+        if not isinstance(properties, dict) or not properties:
+            raise ValueError("Invalid MCP output DTO fields: " + name)
+        for field, type_name in properties.items():
+            if (not isinstance(field, str) or not _OUTPUT_FIELD.fullmatch(field)
+                or not isinstance(type_name, str)
+                or not _OUTPUT_TYPE.fullmatch(type_name)):
+                raise ValueError("Invalid MCP output DTO field contract: " + name)
+    pending = {
+        value for tool in catalog["tools"]
+        for value in re.findall(r"\b[A-Za-z]\w*Dto\b", tool["returnType"])
+    }
+    reached = set()
+    while pending:
+        name = pending.pop()
+        if name in reached:
+            continue
+        if name not in types:
+            raise ValueError("Missing reachable MCP output DTO: " + name)
+        reached.add(name)
+        for type_name in types[name].values():
+            pending.update(re.findall(r"\b[A-Za-z]\w*Dto\b", type_name))
+    if set(types) != reached:
+        raise ValueError("Unreachable/unreviewed MCP output DTO: "
+                         + ", ".join(sorted(set(types) - reached)))
+
+
 def validate_repository() -> None:
     validate_catalog(
         json.loads(CATALOG.read_text(encoding="utf-8")),
         SOURCE.read_text(encoding="utf-8"),
+    )
+    validate_output_dtos(
+        json.loads(CATALOG.read_text(encoding="utf-8")),
+        json.loads(OUTPUT_DTOS.read_text(encoding="utf-8")),
     )
 
 

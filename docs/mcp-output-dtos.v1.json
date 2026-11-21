@@ -1,0 +1,68 @@
+{
+  "format": 1,
+  "version": "1.0.0",
+  "mcpCatalogVersion": "1.2.0",
+  "types": {
+    "DocumentDto": {
+      "Id": "Guid",
+      "PeriziaId": "Guid?",
+      "FileName": "string",
+      "ContentType": "string",
+      "Length": "long"
+    },
+    "DocumentPageDto": {
+      "Items": "IReadOnlyList<DocumentSummaryDto>",
+      "NextCursor": "string?"
+    },
+    "DocumentSummaryDto": {
+      "Id": "Guid",
+      "PeriziaId": "Guid?",
+      "FileName": "string",
+      "ContentType": "string",
+      "Length": "long",
+      "CreatedAtUtc": "DateTime"
+    },
+    "LegacyXmlImportPlanDto": {
+      "Preview": "LegacyXmlPreviewDto",
+      "Status": "string",
+      "ExistingSinistroId": "Guid?"
+    },
+    "LegacyXmlPreviewDto": {
+      "Format": "string",
+      "ExternalReference": "string",
+      "OccurredOn": "DateOnly",
+      "ReportedOn": "DateOnly?",
+      "AttachmentCount": "int",
+      "HasUnmappedBusinessData": "bool"
+    },
+    "PeriziaDto": {
+      "Id": "Guid",
+      "Reference": "string",
+      "Status": "string",
+      "AssignedTo": "string?",
+      "CreatedAtUtc": "DateTime"
+    },
+    "PeriziaSinistroAssociationDto": {
+      "PeriziaId": "Guid",
+      "SinistroId": "Guid?",
+      "LinkVersion": "long"
+    },
+    "PeriziaSinistroLinkDto": {
+      "PeriziaId": "Guid",
+      "SinistroId": "Guid",
+      "LinkVersion": "long"
+    },
+    "SinistroDto": {
+      "Id": "Guid",
+      "ExternalReference": "string",
+      "OccurredOn": "DateOnly",
+      "ReportedOn": "DateOnly?",
+      "CreatedAtUtc": "DateTime",
+      "Version": "long"
+    },
+    "SinistroPageDto": {
+      "Items": "IReadOnlyList<SinistroDto>",
+      "NextCursor": "string?"
+    }
+  }
+}

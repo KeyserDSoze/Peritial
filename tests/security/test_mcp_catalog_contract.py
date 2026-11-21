@@ -7,7 +7,8 @@ import sys
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "ci"))
 from mcp_catalog_contract import (  # noqa: E402
-    CATALOG, SOURCE, parse_mcp_returns, parse_mcp_tool_signatures, validate_catalog
+    CATALOG, SOURCE, OUTPUT_DTOS, parse_mcp_returns, parse_mcp_tool_signatures,
+    validate_catalog, validate_output_dtos
 )
 
 
@@ -220,6 +221,43 @@ class McpCatalogContractTests(unittest.TestCase):
         changed["tools"][0].pop("returnType")
         with self.assertRaisesRegex(ValueError, "entry shape"):
             validate_catalog(changed, self.source)
+
+
+    def test_output_dto_manifest_reaches_all_public_mcp_results(self):
+        catalog = self._manifest()
+        outputs = json.loads(OUTPUT_DTOS.read_text(encoding="utf-8"))
+        self.assertEqual("1.2.0", outputs["mcpCatalogVersion"])
+        self.assertEqual(10, len(outputs["types"]))
+        validate_output_dtos(catalog, outputs)
+
+    def test_missing_nested_or_direct_output_dto_is_rejected(self):
+        catalog = self._manifest()
+        outputs = json.loads(OUTPUT_DTOS.read_text(encoding="utf-8"))
+        for missing in ("DocumentSummaryDto", "SinistroPageDto", "LegacyXmlPreviewDto"):
+            changed = copy.deepcopy(outputs)
+            del changed["types"][missing]
+            with self.subTest(missing=missing):
+                with self.assertRaisesRegex(ValueError, "Missing reachable"):
+                    validate_output_dtos(catalog, changed)
+
+    def test_unreachable_or_unrecognized_output_dto_is_rejected(self):
+        catalog = self._manifest()
+        outputs = json.loads(OUTPUT_DTOS.read_text(encoding="utf-8"))
+        added = copy.deepcopy(outputs)
+        added["types"]["ExposedSecretDto"] = {"TenantId": "Guid"}
+        with self.assertRaisesRegex(ValueError, "Unreachable/unreviewed"):
+            validate_output_dtos(catalog, added)
+        added = copy.deepcopy(outputs)
+        added["types"]["PeriziaDto"]["Internal"] = "Dictionary<string, string>"
+        with self.assertRaisesRegex(ValueError, "Invalid MCP output DTO field"):
+            validate_output_dtos(catalog, added)
+
+    def test_output_manifest_version_must_match_input_catalog(self):
+        outputs = json.loads(OUTPUT_DTOS.read_text(encoding="utf-8"))
+        changed = copy.deepcopy(outputs)
+        changed["mcpCatalogVersion"] = "1.0.0"
+        with self.assertRaisesRegex(ValueError, "version"):
+            validate_output_dtos(self._manifest(), changed)
 
     @staticmethod
     def _manifest():

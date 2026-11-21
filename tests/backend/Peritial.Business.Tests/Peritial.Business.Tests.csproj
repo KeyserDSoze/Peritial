@@ -6,4 +6,7 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
   </ItemGroup>
   <ItemGroup><ProjectReference Include="../../../src/backend/Business/Peritial.Business.csproj" /></ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="../../../docs/mcp-output-dtos.v1.json" LogicalName="Peritial.McpOutputDtoContract" />
+  </ItemGroup>
 </Project>

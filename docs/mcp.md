@@ -650,3 +650,24 @@ Il tipo C# **non** equivale al JSON `outputSchema` né blocca le
 proprietà interne dei DTO o il serializer SDK. Il version negotiation
 per client esterni e la compatibilità degli output JSON restano aperti
 in #12. [ADR 0061](../adr/0061-mcp-v1-2-return-signature-gate.md).
+
+## Manifesto DTO MCP di uscita v1.0 (#12)
+
+Il controllo `docs/mcp-output-dtos.v1.json` elenca i **10 record DTO**
+raggiungibili dai 25 ritorni dei tool MCP del catalogo 1.2.0 (incluse
+le collezioni e i record annidati). La suite Python
+`tests/security/test_mcp_catalog_contract.py` impedisce di
+omettere un DTO raggiungibile, introdurne uno non revisionato o
+disallineare la versione del catalogo. In aggiunta, il test xUnit
+`McpOutputDtoContractTests` eseguito nel job backend usa reflection
+sui tipi .NET reali: qualsiasi campo pubblico aggiunto o rimosso,
+tipo cambiato o variazione di nullabilità C# interrompe il gate,
+anche se il metodo MCP conserva lo stesso `returnType`.
+Sono inclusi controlli avversariali su campi extra e nullabilità.
+
+Questo è un **contratto del modello CLR**, non una promessa
+di equivalenza con `outputSchema` JSON generato dall'SDK,
+né una verifica del nome JSON effettivo delle proprietà.
+Le conversioni JSON, i DTO con logica runtime e l'interoperabilità
+fra versioni rimangono in #12; nessuna release produttiva è abilitata.
+[ADR 0062](../adr/0062-mcp-public-output-dto-contract.md).
