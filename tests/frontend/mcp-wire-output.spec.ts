@@ -26,6 +26,16 @@ const readTools = [
   "search_sinistri", "search_sinistri_page"
 ] as const;
 const preflightTools = ["plan_legacy_xml", "preview_legacy_xml"] as const;
+// Keep covered and explicitly deferred mutating operations disjoint.
+// A new catalogued mutator must be consciously classified and reviewed.
+const mutationWireTools = [
+  "advance_perizia", "assign_perizia", "cancel_perizia", "create_perizia",
+  "create_sinistro", "update_sinistro"
+] as const;
+const deferredMutationTools = [
+  "delete_sinistro", "ingest_file", "link_perizia_sinistro",
+  "reparent_perizia_sinistro", "unlink_perizia_sinistro"
+] as const;
 
 const api = "http://localhost:8080";
 const issuer = "http://localhost:8081/realms/peritial";
@@ -142,6 +152,17 @@ test.describe("Versioned MCP result JSON allowlist", () => {
     for (const name of preflightTools)
       expect(catalog.tools.find(t => t.name === name)?.returnType)
         .toMatch(/Dto>?$/);
+  });
+
+  test("the six mutator wire probes and five deferred mutators exhaust the catalog", () => {
+    expect(catalog.tools.filter(t => t.effect === "mutating").map(t => t.name).sort())
+      .toEqual([...mutationWireTools, ...deferredMutationTools].sort());
+    for (const name of mutationWireTools) {
+      const tool = catalog.tools.find(t => t.name === name);
+      expect(tool?.access, name + " requires writer").toBe("write");
+      expect(tool?.effect, name).toBe("mutating");
+      expect(tool?.returnType, name).toMatch(/^Task<(PeriziaDto|SinistroDto)>$/);
+    }
   });
 
   test("wire validator rejects added fields, missing fields, wrong types and nullability", () => {
@@ -388,6 +409,164 @@ test.describe("Versioned MCP result JSON allowlist", () => {
       expect(raw).toContain('"isError":true');
       expect(raw).not.toContain(secret);
     }
+  });
+
+  test("six signed MCP mutators return reviewed JSON and preserve REST/tenant authorization", async ({request}) => {
+    test.skip(!process.env.E2E_FULL_STACK,
+      "Real Keycloak, PostgreSQL, and audited MCP writers required");
+    test.setTimeout(120_000);
+    const writeToken = await tokenFor(request, "peritial-test-write");
+    const readToken = await tokenFor(request);
+    const nonce = Date.now() + "-" + Math.floor(Math.random()*1000000);
+    const writeHeaders = {Authorization:"Bearer " + writeToken};
+    const readHeaders = {Authorization:"Bearer " + readToken};
+    const probed = new Set<string>();
+
+    async function signedCall(name:string, args:Record<string, unknown>,
+      token:string, rpcId:number) {
+      const response = await request.post(api + "/mcp", {
+        headers:{
+          Authorization:"Bearer " + token,
+          Accept:"application/json,text/event-stream",
+          "Content-Type":"application/json"
+        },
+        data:{jsonrpc:"2.0",id:rpcId,method:"tools/call",
+          params:{name,arguments:args}}
+      });
+      const raw = await response.text();
+      expect(response.ok(), raw).toBeTruthy();
+      return raw;
+    }
+
+    async function writerCall(name:typeof mutationWireTools[number],
+      args:Record<string, unknown>, rpcId:number) {
+      const entry = catalog.tools.find(t => t.name === name);
+      expect(entry?.access, name).toBe("write");
+      expect(entry?.effect, name).toBe("mutating");
+      const outputType = /^Task<(.+)>$/.exec(entry!.returnType);
+      expect(outputType, name + " requires reviewed result type").not.toBeNull();
+      const raw = await signedCall(name, args, writeToken, rpcId);
+      const result = extractCallResult(raw);
+      checkWireValue(outputType![1], result, name);
+      expect(raw).not.toContain("storageKey");
+      expect(raw).not.toContain("tenantId");
+      probed.add(name);
+      return result as Record<string, unknown>;
+    }
+
+    async function get(path:string) {
+      const response = await request.get(api + path, {headers:readHeaders});
+      expect(response.status(), await response.text()).toBe(200);
+      return response.json() as Promise<Record<string, unknown>>;
+    }
+
+    // Two entirely synthetic cases separate the workflow and cancellation paths.
+    const reference = "MCP-MUT-P-" + nonce;
+    const perizia = await writerCall("create_perizia", {reference}, 6401);
+    const periziaId = perizia.id as string;
+    expect(perizia.reference).toBe(reference);
+    expect((await get("/api/perizie/" + periziaId)).status).toBe(perizia.status);
+
+    const assignee = "assigned-through-mcp";
+    const assigned = await writerCall("assign_perizia", {
+      id:periziaId,assignee
+    }, 6402);
+    expect(assigned).toMatchObject({id:periziaId,assignedTo:assignee,status:"Assigned"});
+    expect(await get("/api/perizie/" + periziaId)).toMatchObject({
+      id:periziaId,reference,assignedTo:assignee,status:"Assigned"
+    });
+
+    const advanced = await writerCall("advance_perizia", {
+      id:periziaId,target:"ToBeRevised"
+    }, 6403);
+    expect(advanced).toMatchObject({id:periziaId,status:"ToBeRevised"});
+    expect(await get("/api/perizie/" + periziaId)).toMatchObject({
+      id:periziaId,assignedTo:assignee,status:"ToBeRevised"
+    });
+
+    const cancelReference = "MCP-MUT-CANCEL-" + nonce;
+    const cancelSeed = await writerCall("create_perizia", {
+      reference:cancelReference
+    }, 6404);
+    const cancelId = cancelSeed.id as string;
+    const cancelled = await writerCall("cancel_perizia", {id:cancelId}, 6405);
+    expect(cancelled).toMatchObject({id:cancelId,reference:cancelReference,
+      status:"Cancelled"});
+    expect(await get("/api/perizie/" + cancelId)).toMatchObject({
+      id:cancelId,status:"Cancelled"
+    });
+
+    const claimRef = "MCP-MUT-S-" + nonce;
+    const createdClaim = await writerCall("create_sinistro", {
+      externalReference:claimRef,occurredOn:"2026-11-19",
+      reportedOn:null
+    }, 6406);
+    const claimId = createdClaim.id as string;
+    expect(createdClaim).toMatchObject({
+      id:claimId,externalReference:claimRef,occurredOn:"2026-11-19",version:1
+    });
+    expect(await get("/api/sinistri/" + claimId)).toMatchObject({
+      id:claimId,externalReference:claimRef,version:1
+    });
+
+    const updatedRef = "MCP-MUT-UPDATED-" + nonce;
+    const updatedClaim = await writerCall("update_sinistro", {
+      id:claimId,externalReference:updatedRef,
+      occurredOn:"2026-11-20",reportedOn:"2026-11-21",expectedVersion:1
+    }, 6407);
+    expect(updatedClaim).toMatchObject({
+      id:claimId,externalReference:updatedRef,
+      occurredOn:"2026-11-20",reportedOn:"2026-11-21",version:2
+    });
+    expect(await get("/api/sinistri/" + claimId)).toMatchObject({
+      id:claimId,externalReference:updatedRef,version:2,
+      reportedOn:"2026-11-21"
+    });
+
+    expect([...probed].sort()).toEqual([...mutationWireTools].sort());
+
+    // Attempt the same six writers with a signed read-only subject.
+    // Authorization is enforced before any side effect.
+    const forbiddenPeriziaRef = "MCP-DENY-P-" + nonce;
+    const forbiddenSinistroRef = "MCP-DENY-S-" + nonce;
+    const denied = [
+      {name:"create_perizia",args:{reference:forbiddenPeriziaRef}},
+      {name:"assign_perizia",args:{id:periziaId,assignee:"forbidden"}},
+      {name:"advance_perizia",args:{id:periziaId,target:"Revised"}},
+      {name:"cancel_perizia",args:{id:periziaId}},
+      {name:"create_sinistro",args:{
+        externalReference:forbiddenSinistroRef,occurredOn:"2026-11-20"}},
+      {name:"update_sinistro",args:{
+        id:claimId,externalReference:forbiddenSinistroRef,
+        occurredOn:"2026-11-20",expectedVersion:2}}
+    ];
+    for (const [i, item] of denied.entries()) {
+      const raw = await signedCall(item.name, item.args, readToken, 6420+i);
+      expect(raw, item.name + " must be denied").toContain('"isError":true');
+      expect(raw).not.toContain("tenantId");
+    }
+    expect(await get("/api/perizie/" + periziaId)).toMatchObject({
+      id:periziaId,status:"ToBeRevised",assignedTo:assignee
+    });
+    expect(await get("/api/perizie/" + cancelId)).toMatchObject({
+      id:cancelId,status:"Cancelled"
+    });
+    expect(await get("/api/sinistri/" + claimId)).toMatchObject({
+      id:claimId,externalReference:updatedRef,version:2
+    });
+    const perizieList = await request.get(api + "/api/perizie", {
+      headers:readHeaders
+    });
+    expect(perizieList.status(), await perizieList.text()).toBe(200);
+    expect((await perizieList.json() as {reference:string}[])
+      .some(item => item.reference === forbiddenPeriziaRef)).toBe(false);
+    const deniedSearch = await request.get(api + "/api/sinistri/search?" +
+      new URLSearchParams({prefix:forbiddenSinistroRef,limit:"10"}), {
+      headers:readHeaders
+    });
+    expect(deniedSearch.status(), await deniedSearch.text()).toBe(200);
+    expect((await deniedSearch.json() as {externalReference:string}[])
+      .some(item => item.externalReference === forbiddenSinistroRef)).toBe(false);
   });
 
 });

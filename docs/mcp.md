@@ -734,3 +734,30 @@ Un controllo statico impedisce di aggiungere preflight write-scoped
 senza copertura. Il totale dei tool con prove wire sale a
 **14/25**. Rimangono 11 mutatori, version negotiation e
 `outputSchema` SDK formale; nessun import XML viene abilitato.
+
+## MCP: output JSON dei primi mutatori su JWT writer (#12)
+
+L'[ADR 0066](../adr/0066-mcp-perizie-sinistri-mutator-wire-contract.md)
+estende il gate live `tools/call` a sei tool di mutazione:
+`create_perizia`, `assign_perizia`, `advance_perizia`,
+`cancel_perizia`, `create_sinistro` e `update_sinistro`.
+I valori JSON reali vengono verificati contro il `returnType`
+del catalogo e l'allowlist del manifesto DTO; lo stesso stato
+viene letto successivamente tramite REST autenticato in modo
+indipendente. In particolare, la modifica Sinistro richiede
+`expectedVersion` e il test verifica l'incremento da 1 a 2.
+
+Il test esegue inoltre tutti i sei mutatori con JWT
+**`peritial.read`** e verifica `isError:true`, assenza di
+nuovi riferimenti e assenza di modifiche di stato.
+Un controllo statico obbliga a classificare esplicitamente
+tutti gli **11 tool mutatori** tra sei già coperti e cinque
+deferiti. Questi cinque (`delete_sinistro`, `ingest_file`,
+`link_perizia_sinistro`, `reparent_perizia_sinistro`,
+`unlink_perizia_sinistro`) restano fuori dalla prova JSON live.
+
+Con questa tranche la copertura degli output osservati sale a
+**20/25 tool** (12 read, 2 preflight, 6 mutatori), senza
+modificare alcuna firma MCP, modello Business o policy.
+Version negotiation, outputSchema SDK e gli altri cinque
+mutatori restano aperti in #12.
