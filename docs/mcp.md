@@ -1081,3 +1081,46 @@ di idempotenza viene riutilizzata con un filename differente.
 Lo storage, il controllo virus, il rate limiting e
 l'upload presigned per file grandi sono lavori distinti
 e rimangono tracciati nelle issue pertinenti.
+
+## Client Python indipendente e test di interoperabilità firmata (ADR 0081, #12/#4)
+
+Oltre alle suite Playwright TypeScript, la CI Compose esegue
+`python3 tests/security/mcp_client_interop.py` usando solo
+la **standard library Python**, senza condividere il parser,
+client HTTP, logica JSON-RPC o SDK dei test browser.
+La prova utilizza soltanto gli host locali del realm Keycloak
+di test, non tenta discovery o grant contro server esterni
+ed evita di stampare token, contenuti e riferimenti.
+
+Il client verifica il bootstrap `server/discover` nel protocollo
+**2026-07-28**, il vecchio `initialize` **2025-11-25**
+e la parità del catalogo `tools/list` (25 tool).
+Per il protocollo moderno confronta anche l'elenco
+dei 19 `outputSchema` con il manifesto revisionato,
+lo schema del `PeriziaDto` e l'assenza di campi interni.
+Crea una Perizia via REST writer e la legge via MCP
+modern e legacy con un vero JWT reader firmato,
+controllando `structuredContent` e corrispondenza
+dei dati; un token reader non può eseguire
+`create_perizia`. Versioni sconosciute e
+disaccordo `Mcp-Method`/metodo JSON-RPC
+sono rifiutati con errori codificati prima delle
+mutazioni, senza un nuovo record.
+
+Il decoder del client gestisce JSON ed eventi SSE,
+e fallisce in caso di ID mancante/sbagliato/duplicato,
+schema JSON-RPC malformato o risposta eccessiva.
+Test offline distinti girano nel job
+`supply-chain-actions`. Il test reale gira nel job
+`compose` subito dopo Playwright, sullo stesso
+stack applicativo con Keycloak/PostgreSQL.
+
+**Limite:** è un secondo client indipendente scritto
+per l'interoperabilità wire, **non** un client MCP
+di terze parti con SDK ufficiale o un flusso OAuth
+di produzione. Il password grant è una fixture CI
+localhost; la PWA continua con Authorization Code
++ PKCE e nessun account reale usa il grant di test.
+Compatibilità di client esterni, registrazione OAuth
+dinamica/resource indicators e deploy Entra reale
+restano aperti nelle issue #12/#4.
