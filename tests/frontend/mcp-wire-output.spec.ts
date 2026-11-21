@@ -759,7 +759,8 @@ test.describe("Versioned MCP result JSON allowlist", () => {
     });
     expect(manifest.tools).toEqual([
       "get_document","get_perizia","get_perizia_sinistro","get_sinistro",
-      "page_documents","page_sinistri","search_sinistri_page"
+      "page_documents","page_sinistri","plan_legacy_xml",
+      "preview_legacy_xml","search_sinistri_page"
     ]);
     const read=await tokenFor(request);
     const writer=await tokenFor(request,"peritial-test-write");
@@ -770,11 +771,12 @@ test.describe("Versioned MCP result JSON allowlist", () => {
       },
       "io.modelcontextprotocol/clientCapabilities":{}
     };
-    async function call(method:"tools/list"|"tools/call",args:Record<string,unknown>,id:number) {
+    async function call(method:"tools/list"|"tools/call",args:Record<string,unknown>,
+      id:number, token=read) {
       const name=method==="tools/call" ? String(args.name) : "";
       const response=await request.post(api+"/mcp",{
         headers:{
-          Authorization:"Bearer "+read,
+          Authorization:"Bearer "+token,
           Accept:"application/json,text/event-stream",
           "Content-Type":"application/json",
           "MCP-Protocol-Version":"2026-07-28",
@@ -1116,6 +1118,120 @@ test.describe("Versioned MCP result JSON allowlist", () => {
       expect(page.nextCursor??null).toEqual(expected.nextCursor??null);
       expect(JSON.stringify(page)).not.toContain("tenantId");
       expect(JSON.stringify(page)).not.toContain("storageKey");
+    }
+
+    // XML preflights are read-only in effect, but NEVER read-scope
+    // authorized. Modern MCP must expose reviewed nested DTO schemas
+    // without returning source PII or importing an unrepresentable case.
+    const xmlPrivate="PRIVATE-STRUCT-PREFLIGHT-"+nonce;
+    const xmlFixtures=[
+      {
+        format:"accertatore",
+        reference:"MCP-STRUCT-ACCERTATORE-"+nonce,
+        occurredOn:"2026-11-17",
+        xml:"<it.autosoftws.IncaricoAccertatoreRecord>"+
+          "<NumeroSinistro>MCP-STRUCT-ACCERTATORE-"+nonce+"</NumeroSinistro>"+
+          "<DataOraSinistro>2026-11-17</DataOraSinistro>"+
+          "<DataIncarico>2026-11-18</DataIncarico>"+
+          "<Contraente><Nome>"+xmlPrivate+"</Nome></Contraente>"+
+          "</it.autosoftws.IncaricoAccertatoreRecord>"
+      },
+      {
+        format:"classic",
+        reference:"MCP-STRUCT-CLASSIC-"+nonce,
+        occurredOn:"2026-11-19",
+        xml:"<it.autosoftws.ReIncaricoBaseRecord>"+
+          "<NumeroSinistro>MCP-STRUCT-CLASSIC-"+nonce+"</NumeroSinistro>"+
+          "<DataOraSinistro>2026-11-19 09:00:00</DataOraSinistro>"+
+          "<DataIncarico>2026-11-20</DataIncarico>"+
+          "</it.autosoftws.ReIncaricoBaseRecord>"
+      }
+    ];
+    const preflightShapes=[
+      {name:"preview_legacy_xml",dto:"LegacyXmlPreviewDto",rest:"preview"},
+      {name:"plan_legacy_xml",dto:"LegacyXmlImportPlanDto",rest:"plan"}
+    ];
+    for(const item of preflightShapes){
+      const schema=tools.find(t=>t.name===item.name)?.outputSchema as
+        Record<string,unknown>|undefined;
+      expect(schema,item.name+" must publish outputSchema").toBeDefined();
+      const defs=(schema!.$defs??{}) as Record<string,Record<string,unknown>>;
+      const root=typeof schema!.$ref==="string" &&
+        schema!.$ref.startsWith("#/$defs/")
+        ? defs[schema!.$ref.slice(8)] : schema!;
+      expect(Object.keys((root.properties??{}) as Record<string,unknown>).sort())
+        .toEqual(Object.keys(outputs.types[item.dto])
+          .map(key=>key[0].toLowerCase()+key.slice(1)).sort());
+      const schemaJson=JSON.stringify(schema);
+      expect(schemaJson).not.toContain("tenantId");
+      expect(schemaJson).not.toContain("storageKey");
+      if(item.name==="plan_legacy_xml")
+        expect(schemaJson).toContain("hasUnmappedBusinessData");
+    }
+    function assertPreflightParity(type:string,mcp:unknown,rest:unknown,label:string):void{
+      checkWireValue(type,mcp,label);
+      const actual=mcp as Record<string,unknown>;
+      const expected=rest as Record<string,unknown>;
+      for(const [prop,kind] of Object.entries(outputs.types[type])){
+        const name=prop[0].toLowerCase()+prop.slice(1);
+        expect(Object.prototype.hasOwnProperty.call(expected,name),
+          label+" REST."+name+" must exist").toBe(true);
+        if(expected[name]===null && kind.endsWith("?")){
+          expect(actual[name]??null,label+"."+name).toBeNull();
+        }else if(outputs.types[kind]){
+          assertPreflightParity(kind,actual[name],expected[name],label+"."+name);
+        }else{
+          expect(Object.prototype.hasOwnProperty.call(actual,name),
+            label+"."+name+" required").toBe(true);
+          expect(actual[name],label+"."+name).toEqual(expected[name]);
+        }
+      }
+    }
+    for(const [i,fixture] of xmlFixtures.entries()){
+      for(const [j,item] of preflightShapes.entries()){
+        const result=await call("tools/call",{
+          name:item.name,arguments:{xml:fixture.xml}
+        },6680+i*4+j,writer);
+        expect(result.isError,item.name+" must succeed with write").not.toBe(true);
+        expect(result.structuredContent,item.name).toBeDefined();
+        checkWireValue(item.dto,result.structuredContent,item.name);
+        const actual=result.structuredContent as Record<string,unknown>;
+        const preview=(item.name==="plan_legacy_xml" ? actual.preview : actual)
+          as Record<string,unknown>;
+        expect(preview).toMatchObject({
+          format:fixture.format,externalReference:fixture.reference,
+          occurredOn:fixture.occurredOn,attachmentCount:0,
+          hasUnmappedBusinessData:true
+        });
+        if(item.name==="plan_legacy_xml"){
+          expect(actual.status).toBe("new");
+          expect(actual.existingSinistroId??null).toBeNull();
+        }
+        const serialized=JSON.stringify(actual);
+        expect(serialized).not.toContain(xmlPrivate);
+        expect(serialized).not.toContain("09:00:00");
+        expect(serialized).not.toContain("tenantId");
+        expect(serialized).not.toContain("storageKey");
+        const rest=await request.post(api+"/api/imports/xml/"+item.rest,{
+          headers:{Authorization:"Bearer "+writer,
+            "Content-Type":"application/xml"},
+          data:Buffer.from(fixture.xml,"utf8")
+        });
+        expect(rest.status(),await rest.text()).toBe(200);
+        assertPreflightParity(item.dto,actual,await rest.json(),item.name);
+        const denied=await call("tools/call",{
+          name:item.name,arguments:{xml:fixture.xml}
+        },6690+i*4+j);
+        expect(denied.isError,item.name+" read scope must be denied").toBe(true);
+        expect(JSON.stringify(denied)).not.toContain(xmlPrivate);
+      }
+      const searched=await request.get(api+"/api/sinistri/search?"+
+        new URLSearchParams({prefix:fixture.reference,limit:"10"}),{
+        headers:{Authorization:"Bearer "+writer}
+      });
+      expect(searched.status(),await searched.text()).toBe(200);
+      const cases=await searched.json() as {externalReference:string}[];
+      expect(cases.some(x=>x.externalReference===fixture.reference)).toBe(false);
     }
 
   });

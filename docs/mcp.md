@@ -935,3 +935,20 @@ MCP `limit=1` con REST, inclusi gli UUID, i campi pubblici e
 `nextCursor`, senza presumere che il catalogo del tenant sia vuoto.
 Il controllo statico rifiuta sia la rimozione dell'opt-in in C#
 sia il disallineamento del manifesto.
+
+## Preview e piano XML con `outputSchema` (ADR 0074, #12/#10)
+
+La [ADR 0074](../adr/0074-mcp-structured-xml-preflight.md)
+estende `UseStructuredContent=true` a `preview_legacy_xml`
+(`LegacyXmlPreviewDto`) e `plan_legacy_xml`
+(`LegacyXmlImportPlanDto`, con preview annidata).
+Il manifesto dichiara **9 tool MCP strutturati su 25**.
+
+I due tool restano **read-only negli effetti ma richiedono sempre
+`peritial.write`**. Non è introdotto un nuovo percorso di import.
+Il gate statico consente esplicitamente solo questi due preflight
+write-scoped, oltre ai tool con accesso read e DTO revisionati.
+La suite Playwright usa JWT Keycloak writer/reader e XML sintetici,
+confronta i DTO MCP 2026-07-28 con REST, blocca accessi read-only
+e controlla che dati anagrafici e precisione temporale non siano
+esposti o persistiti. L'import XML V011 resta interno.

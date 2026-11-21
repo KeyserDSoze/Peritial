@@ -9,6 +9,8 @@
     "get_sinistro",
     "page_documents",
     "page_sinistri",
+    "plan_legacy_xml",
+    "preview_legacy_xml",
     "search_sinistri_page"
   ]
 }

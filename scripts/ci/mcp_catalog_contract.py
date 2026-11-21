@@ -155,9 +155,17 @@ def validate_structured_output_tools(catalog: dict, manifest: dict, source: str)
         or any(not isinstance(name, str) for name in selected)):
         raise ValueError("MCP structured output manifest tool list drift")
     entries = {item["name"]: item for item in catalog["tools"]}
+    # XML preflight tools require a signed WRITE grant even though they
+    # do not mutate state. The allowlist below must not weaken that grant:
+    # only those two write-scoped nonmutators can opt into the DTO schema.
+    write_scoped_preflights = {"plan_legacy_xml", "preview_legacy_xml"}
     if any(name not in entries
            or entries[name]["effect"] != "read-only"
-           or not entries[name]["returnType"].endswith("Dto>")
+           or not (entries[name]["access"] == "read"
+                   or (name in write_scoped_preflights
+                       and entries[name]["access"] == "write"))
+           or re.fullmatch(r"(?:Task<[A-Za-z]\w*Dto>|[A-Za-z]\w*Dto)",
+                           entries[name]["returnType"]) is None
            for name in selected):
         raise ValueError("MCP structured output requires reviewed read DTOs")
     actual = sorted(re.findall(

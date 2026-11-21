@@ -56,6 +56,7 @@ class McpCatalogContractTests(unittest.TestCase):
         manifest = json.loads(STRUCTURED.read_text(encoding="utf-8"))
         self.assertEqual(["get_document", "get_perizia", "get_perizia_sinistro",
                           "get_sinistro", "page_documents", "page_sinistri",
+                          "plan_legacy_xml", "preview_legacy_xml",
                           "search_sinistri_page"],
                          manifest["tools"])
         validate_structured_output_tools(self._manifest(), manifest, self.source)
@@ -84,8 +85,31 @@ class McpCatalogContractTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "structured output drift"):
             validate_structured_output_tools(
                 self._manifest(), manifest, missing_page_annotation)
+        # Both safe XML preflights must remain explicitly versioned and
+        # opt-in; other write-scoped tools stay forbidden.
+        for name in ("plan_legacy_xml", "preview_legacy_xml"):
+            with self.subTest(name=name):
+                without = copy.deepcopy(manifest)
+                without["tools"].remove(name)
+                with self.assertRaisesRegex(ValueError, "structured output drift"):
+                    validate_structured_output_tools(
+                        self._manifest(), without, self.source)
+                without_attribute = self.source.replace(
+                    f'Name = "{name}", ReadOnly = true, Destructive = false, OpenWorld = false, UseStructuredContent = true',
+                    f'Name = "{name}", ReadOnly = true, Destructive = false, OpenWorld = false', 1)
+                self.assertNotEqual(self.source, without_attribute)
+                with self.assertRaisesRegex(ValueError, "structured output drift"):
+                    validate_structured_output_tools(
+                        self._manifest(), manifest, without_attribute)
         changed = copy.deepcopy(manifest)
         changed["tools"].append("delete_sinistro")
+        changed["tools"].sort()
+        with self.assertRaisesRegex(ValueError, "requires reviewed read DTOs"):
+            validate_structured_output_tools(self._manifest(), changed, self.source)
+        # The preflights are not a blanket exception for write-access
+        # tools, even when another writer happens to return a DTO.
+        changed = copy.deepcopy(manifest)
+        changed["tools"].append("create_perizia")
         changed["tools"].sort()
         with self.assertRaisesRegex(ValueError, "requires reviewed read DTOs"):
             validate_structured_output_tools(self._manifest(), changed, self.source)
