@@ -836,7 +836,23 @@ test.describe("Versioned MCP result JSON allowlist", () => {
         headers:{Authorization:"Bearer "+read}
       });
       expect(rest.status(),await rest.text()).toBe(200);
-      expect(result.structuredContent).toMatchObject(await rest.json());
+      const restValue=await rest.json() as Record<string,unknown>;
+      const structuredValue=result.structuredContent as Record<string,unknown>;
+      // The MCP serializer omits nullable nulls, whereas ASP.NET REST
+      // includes them explicitly. Compare every reviewed property: only
+      // a declared nullable null can be absent in the MCP projection.
+      for(const [key,value] of Object.entries(restValue)){
+        const property=key[0].toUpperCase()+key.slice(1);
+        const reviewedType=outputs.types[item.dtype][property];
+        expect(reviewedType,item.name+" REST property must be reviewed").toBeDefined();
+        if(value===null && reviewedType.endsWith("?")){
+          expect(structuredValue[key]??null,item.name+"."+key).toBeNull();
+        }else{
+          expect(Object.prototype.hasOwnProperty.call(structuredValue,key),
+            item.name+"."+key+" missing").toBe(true);
+          expect(structuredValue[key],item.name+"."+key).toEqual(value);
+        }
+      }
     }
   });
 

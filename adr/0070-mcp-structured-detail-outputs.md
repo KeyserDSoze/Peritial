@@ -31,3 +31,13 @@ Non cambiano OAuth, FORCE RLS, audit, DB o il
 gate produttivo per `delete_sinistro`.
 La #12 resta aperta per il resto del catalogo
 e l'integrazione con client SDK terzi.
+
+## Verifica RED e allineamento nullability
+
+La prima pipeline [#44923971662](https://github.com/KeyserDSoze/Peritial/actions/runs/44923971662)
+ha verificato la presenza di `outputSchema` e il contenuto naturale
+ma ha fallito su confronto `toMatchObject` col REST: REST include
+`assignedTo:null`, mentre l'SDK MCP omette la proprietà nullable.
+Il test è stato corretto per accettare omissioni soltanto per
+campi nullable dal manifesto DTO, confrontando esattamente ogni
+campo non nullo e continuando a rifiutare proprietà ignote.

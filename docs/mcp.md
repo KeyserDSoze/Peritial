@@ -866,3 +866,9 @@ precedente; non vengono modificati gli scope, il
 modello dati o la cancellazione Sinistri. L'estensione
 a tutto il catalogo e ai client SDK esterni resta
 da completare nell'issue #12.
+
+La serializzazione dell'SDK omette proprietà nullable con valore
+`null` nello `structuredContent`; REST restituisce gli stessi
+campi con `null` esplicito. I test distinguono rigorosamente le
+proprietà nullable da quelle obbligatorie e confrontano ogni campo
+non nullo, rifiutando differenze reali nel contratto.
