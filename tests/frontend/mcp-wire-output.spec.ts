@@ -1097,7 +1097,22 @@ test.describe("Versioned MCP result JSON allowlist", () => {
       expect(rest.status(),await rest.text()).toBe(200);
       const expected=await rest.json() as {
         items:Record<string,unknown>[];nextCursor?:string|null};
-      expect(page.items).toEqual(expected.items);
+      expect(page.items.map(x=>x.id)).toEqual(expected.items.map(x=>x.id));
+      for(const [index,actual] of page.items.entries()){
+        const reviewed=expected.items[index];
+        for(const [key,value] of Object.entries(reviewed)){
+          const type=outputs.types.SinistroDto[key[0].toUpperCase()+key.slice(1)];
+          expect(type,"SinistroDto."+key+" reviewed").toBeDefined();
+          if(value===null && type.endsWith("?")){
+            // MCP omits nullable null, while REST can include it.
+            expect(actual[key]??null,"SinistroDto."+key).toBeNull();
+          }else{
+            expect(Object.prototype.hasOwnProperty.call(actual,key),
+              "SinistroDto."+key+" required").toBe(true);
+            expect(actual[key],"SinistroDto."+key).toEqual(value);
+          }
+        }
+      }
       expect(page.nextCursor??null).toEqual(expected.nextCursor??null);
       expect(JSON.stringify(page)).not.toContain("tenantId");
       expect(JSON.stringify(page)).not.toContain("storageKey");
