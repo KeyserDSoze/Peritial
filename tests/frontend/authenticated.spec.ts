@@ -548,6 +548,61 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     await expect(list.getByText(secondName, {exact: true})).toBeVisible();
   });
 
+  test("PWA document continuation is single-flight under synchronous double click", async ({page}) => {
+    const record = (id: string, name: string) => ({
+      id, periziaId: null, fileName: name, contentType: "application/pdf",
+      length: 21, createdAtUtc: "2026-11-22T18:00:00Z"
+    });
+    let continuations = 0;
+    let announceContinuation!: () => void;
+    let releaseContinuation!: () => void;
+    const firstContinuation = new Promise<void>(resolve => {announceContinuation = resolve;});
+    const gate = new Promise<void>(resolve => {releaseContinuation = resolve;});
+    await page.route("**/api/files/page?**", async route => {
+      const cursor = new URL(route.request().url()).searchParams.get("cursor");
+      if (!cursor) {
+        await route.fulfill({status: 200, contentType: "application/json",
+          body: JSON.stringify({items:[record("00000000-0000-4000-8000-000000000111",
+            "single-flight-first.pdf")], nextCursor:"single-flight-cursor"})});
+        return;
+      }
+      expect(cursor).toBe("single-flight-cursor");
+      continuations += 1;
+      announceContinuation();
+      await gate;
+      await route.fulfill({status:200,contentType:"application/json",
+        body:JSON.stringify({items:[record("00000000-0000-4000-8000-000000000112",
+          "single-flight-second.pdf")],nextCursor:null})});
+    });
+    await page.goto("/");
+    await page.getByRole("button",{name:"Accedi"}).click();
+    await expect(page.locator("#username")).toBeVisible({timeout:30_000});
+    await page.locator("#username").fill("localuser");
+    await page.locator("#password").fill("local-only-user");
+    await page.locator("#kc-login").click();
+    await expect(page.getByRole("button",{name:"Esci"})).toBeVisible({timeout:30_000});
+
+    const docs = page.getByRole("list",{name:"Documenti caricati"});
+    await expect(docs.getByText("single-flight-first.pdf")).toBeVisible();
+    const more = page.getByRole("button",{name:"Carica altri documenti"});
+    await expect(more).toBeEnabled();
+    await more.evaluate(el => {
+      (el as HTMLButtonElement).click();
+      (el as HTMLButtonElement).click();
+    });
+    await firstContinuation;
+    // Keep the first HTTP response blocked until any duplicate request has
+    // had a chance to reach the Playwright route. No perizia/document writes.
+    await page.waitForTimeout(200);
+    const observedContinuations = continuations;
+    releaseContinuation();
+    await expect(docs.getByText("single-flight-second.pdf")).toBeVisible();
+    await expect(docs.getByText("single-flight-first.pdf")).toBeVisible();
+    await expect(more).toHaveCount(0);
+    expect(observedContinuations,"one cursor must be fetched once per page action").toBe(1);
+    await expect(docs.locator("a,button")).toHaveCount(0);
+  });
+
   test("PWA progressively loads document metadata and rejects stale continuation", async ({page}) => {
     const firstId = "00000000-0000-4000-8000-000000000101";
     const secondId = "00000000-0000-4000-8000-000000000102";
