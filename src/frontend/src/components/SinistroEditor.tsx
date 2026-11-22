@@ -27,9 +27,14 @@ export function SinistroEditor({id, token, onConfirmed, onConflict, onUnavailabl
   const [error, setError] = useState<"invalid" | "conflict" | "read" | "save" | null>(null);
   const [saved, setSaved] = useState(false);
   const epoch = useRef(0);
+  // A synchronous CAS guard, independent of React setBusy render timing.
+  const saveInFlight = useRef(false);
 
   // A previous JWT, case, or component lifetime must not restore late data.
-  useEffect(() => () => {epoch.current += 1;}, [id, token]);
+  useEffect(() => () => {
+    epoch.current += 1;
+    saveInFlight.current = false;
+  }, [id, token]);
 
   function discardFields() {
     setSnapshot(null);
@@ -40,7 +45,7 @@ export function SinistroEditor({id, token, onConfirmed, onConflict, onUnavailabl
   }
 
   async function reload() {
-    if (busy) return;
+    if (busy || saveInFlight.current) return;
     const current = ++epoch.current;
     setBusy("read");
     setError(null);
@@ -66,7 +71,7 @@ export function SinistroEditor({id, token, onConfirmed, onConflict, onUnavailabl
   }
 
   function toggle() {
-    if (busy) return;
+    if (busy || saveInFlight.current) return;
     if (open) {
       epoch.current += 1;
       setOpen(false);
@@ -81,8 +86,9 @@ export function SinistroEditor({id, token, onConfirmed, onConflict, onUnavailabl
   async function save(event: FormEvent) {
     event.preventDefault();
     const normalized = reference.trim();
-    if (busy || !snapshot || !open ||
+    if (busy || saveInFlight.current || !snapshot || !open ||
         !normalized || normalized.length > 100 || !occurredOn) return;
+    saveInFlight.current = true;
     const expectedVersion = snapshot.version;
     const current = ++epoch.current;
     setBusy("save");
@@ -117,7 +123,10 @@ export function SinistroEditor({id, token, onConfirmed, onConflict, onUnavailabl
         setError("save");
       }
     } finally {
-      if (epoch.current === current) setBusy(null);
+      if (epoch.current === current) {
+        saveInFlight.current = false;
+        setBusy(null);
+      }
     }
   }
 
