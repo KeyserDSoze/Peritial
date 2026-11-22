@@ -1671,6 +1671,148 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
       .then(r=>r.json()) as {sinistroId:string}).sinistroId).toBe(ids[1]);
   });
 
+  test("PWA link, unlink and reparent Sinistro mutations are single-flight under synchronous double clicks", async ({page, request}) => {
+    test.setTimeout(120_000);
+    await page.goto("/");
+    await page.getByRole("button", {name:"Accedi"}).click();
+    await expect(page.locator("#username")).toBeVisible({timeout:30_000});
+    await page.locator("#username").fill("localuser");
+    await page.locator("#password").fill("local-only-user");
+    await page.locator("#kc-login").click();
+    await expect(page.getByRole("button", {name:"Esci"})).toBeVisible({timeout:30_000});
+    const token = await page.evaluate(() => {
+      const key = Object.keys(sessionStorage).find(x => x.startsWith("oidc.user:"));
+      return key ? (JSON.parse(sessionStorage.getItem(key) || "{}") as {access_token?:string}).access_token : undefined;
+    });
+    expect(token).toBeTruthy();
+    const root = "http://localhost:8080/api";
+    const headers = {Authorization:"Bearer " + token};
+    const stamp = Date.now() + "-" + Math.floor(Math.random() * 100000);
+    const searchPrefix = "UI-ONE-FLIGHT-" + stamp;
+    const sinistri: string[] = [];
+    for (const ref of [searchPrefix + "-A", searchPrefix + "-B"]) {
+      const result = await request.post(root + "/sinistri", {headers,
+        data:{externalReference:ref,occurredOn:"2026-11-18"}});
+      expect(result.status(),await result.text()).toBe(201);
+      sinistri.push((await result.json() as {id:string}).id);
+    }
+    const periziaRef = "UI-ONE-FLIGHT-P-" + stamp;
+    const perizia = await request.post(root + "/perizie",{headers,data:{reference:periziaRef}});
+    expect(perizia.status(),await perizia.text()).toBe(201);
+    const id = (await perizia.json() as {id:string}).id;
+    await page.getByRole("button",{name:"Aggiorna elenco"}).click();
+    const row = page.getByRole("list",{name:/^(Perizie|Appraisals)$/})
+      .locator("li").filter({hasText:periziaRef});
+    await expect(row).toBeVisible();
+    await row.getByRole("button",{name:"Sinistro della perizia"}).click();
+    await expect(row.getByText("Perizia senza sinistro")).toBeVisible();
+
+    async function choose(target: string) {
+      await row.getByRole("textbox",{name:"Cerca per riferimento sinistro"}).fill(searchPrefix);
+      await row.getByRole("button",{name:"Cerca sinistri"}).click();
+      const choice = row.getByRole("combobox",{name:"Seleziona sinistro"});
+      await expect(choice).toContainText(searchPrefix + "-B");
+      await choice.selectOption(target);
+    }
+
+    // Block the response so the first mutation remains in-flight while
+    // a second DOM click is dispatched in the same browser task.
+    let postCount = 0;
+    let postStarted!: () => void;
+    let releasePost!: () => void;
+    const postSeen = new Promise<void>(resolve => {postStarted = resolve;});
+    const postGate = new Promise<void>(resolve => {releasePost = resolve;});
+    const postPattern = "**/api/perizie/" + id + "/sinistro";
+    await page.route(postPattern, async route => {
+      if (route.request().method() !== "POST") return route.continue();
+      postCount += 1;
+      postStarted();
+      await postGate;
+      await route.fulfill({status:409,body:"Synthetic CAS conflict"});
+    });
+    await choose(sinistri[0]);
+    await row.getByRole("button",{name:"Collega sinistro",exact:true}).evaluate(el => {
+      (el as HTMLButtonElement).click();
+      (el as HTMLButtonElement).click();
+    });
+    await postSeen;
+    await page.waitForTimeout(200);
+    const observedPosts = postCount;
+    releasePost();
+    await expect(row.getByRole("alert")).toContainText("Ricarica il collegamento");
+    await page.unroute(postPattern);
+    await row.getByRole("button",{name:"Ricarica collegamento"}).click();
+    await expect(row.getByText("Perizia senza sinistro")).toBeVisible();
+
+    // Establish one real association so unlink and reparent are tested
+    // against a genuine signed PostgreSQL linkVersion.
+    const linked = await request.post(root + "/perizie/" + id + "/sinistro",
+      {headers,data:{sinistroId:sinistri[0],expectedLinkVersion:1}});
+    expect(linked.status(),await linked.text()).toBe(201);
+    await row.getByRole("button",{name:"Sinistro della perizia"}).click();
+    await row.getByRole("button",{name:"Sinistro della perizia"}).click();
+    await expect(row.getByText(searchPrefix + "-A",{exact:true})).toBeVisible();
+
+    let deleteCount = 0;
+    let deleteStarted!: () => void;
+    let releaseDelete!: () => void;
+    const deleteSeen = new Promise<void>(resolve => {deleteStarted = resolve;});
+    const deleteGate = new Promise<void>(resolve => {releaseDelete = resolve;});
+    const deletePattern = "**/api/perizie/" + id + "/sinistro?*";
+    await page.route(deletePattern, async route => {
+      if (route.request().method() !== "DELETE") return route.continue();
+      deleteCount += 1;
+      deleteStarted();
+      await deleteGate;
+      await route.fulfill({status:409,body:"Synthetic CAS conflict"});
+    });
+    await row.getByRole("button",{name:"Scollega sinistro"}).click();
+    await row.getByRole("button",{name:"Conferma scollegamento"}).evaluate(el => {
+      (el as HTMLButtonElement).click();
+      (el as HTMLButtonElement).click();
+    });
+    await deleteSeen;
+    await page.waitForTimeout(200);
+    const observedDeletes = deleteCount;
+    releaseDelete();
+    await expect(row.getByRole("alert")).toContainText("Ricarica il collegamento");
+    await page.unroute(deletePattern);
+    await row.getByRole("button",{name:"Ricarica collegamento"}).click();
+    await expect(row.getByText(searchPrefix + "-A",{exact:true})).toBeVisible();
+
+    let putCount = 0;
+    let putStarted!: () => void;
+    let releasePut!: () => void;
+    const putSeen = new Promise<void>(resolve => {putStarted = resolve;});
+    const putGate = new Promise<void>(resolve => {releasePut = resolve;});
+    await page.route(postPattern, async route => {
+      if (route.request().method() !== "PUT") return route.continue();
+      putCount += 1;
+      putStarted();
+      await putGate;
+      await route.fulfill({status:409,body:"Synthetic CAS conflict"});
+    });
+    await row.getByRole("button",{name:"Cambia sinistro collegato"}).click();
+    await choose(sinistri[1]);
+    await row.getByRole("button",{name:"Rivedi riassegnazione"}).click();
+    await row.getByRole("button",{name:"Conferma riassegnazione"}).evaluate(el => {
+      (el as HTMLButtonElement).click();
+      (el as HTMLButtonElement).click();
+    });
+    await putSeen;
+    await page.waitForTimeout(200);
+    const observedPuts = putCount;
+    releasePut();
+    await expect(row.getByRole("alert")).toContainText("Ricarica il collegamento");
+
+    expect(observedPosts,"link POST must be single-flight").toBe(1);
+    expect(observedDeletes,"unlink DELETE must be single-flight").toBe(1);
+    expect(observedPuts,"reparent PUT must be single-flight").toBe(1);
+    const relation = await request.get(root + "/perizie/" + id + "/sinistro",{headers});
+    expect(relation.status(),await relation.text()).toBe(200);
+    expect((await relation.json() as {sinistroId:string}).sinistroId).toBe(sinistri[0]);
+  });
+
   test("Perizia–Sinistro unlink requires signed expected association and commits via REST/MCP", async ({page, request}) => {
     test.setTimeout(120_000);
     await page.goto("/");
