@@ -144,9 +144,13 @@ export default function App() {
         const changedAfterFetch = new Set([...mutations.current].filter(
           ([id, version]) => version !== (revisionsAtStart.get(id) ?? 0)
         ).map(([id]) => id));
-        const incoming = new Set(data.map(item => item.id));
+        // The completed signed GET is authoritative for membership.
+        // Do not keep a case missing from it merely because it was visible
+        // before refresh: its visibility may have been revoked or removed.
+        // Retain only a mutation confirmed AFTER this GET began, because
+        // that result must not be overwritten by an older read.
         return [
-          ...current.filter(item => changedAfterFetch.has(item.id) || !incoming.has(item.id)),
+          ...current.filter(item => changedAfterFetch.has(item.id)),
           ...data.filter(item => !changedAfterFetch.has(item.id))
         ];
       });
