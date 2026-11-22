@@ -948,6 +948,91 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     expect(cursors).toEqual([null, "UI-SENTINEL", null]);
   });
 
+  test("Sinistri PWA single-flight for synchronous create and CAS editor submits", async ({page, request}) => {
+    await page.goto("/");
+    await page.getByRole("button", {name:"Accedi"}).click();
+    await expect(page.locator("#username")).toBeVisible({timeout:30_000});
+    await page.locator("#username").fill("localuser");
+    await page.locator("#password").fill("local-only-user");
+    await page.locator("#kc-login").click();
+    await expect(page.getByRole("button", {name:"Esci"})).toBeVisible({timeout:30_000});
+    await page.getByRole("button", {name:"Apri catalogo sinistri"}).click();
+    await expect(page.locator("#sinistro-create-ref")).toBeVisible();
+
+    let creates = 0;
+    let signalCreate!: () => void;
+    let unblockCreate!: () => void;
+    const createStarted = new Promise<void>(resolve => {signalCreate = resolve;});
+    const createGate = new Promise<void>(resolve => {unblockCreate = resolve;});
+    await page.route("**/api/sinistri", async route => {
+      if (route.request().method() !== "POST") return route.continue();
+      creates += 1;
+      signalCreate();
+      await createGate;
+      await route.fulfill({status:409, body:"Synthetic create conflict"});
+    });
+    await page.locator("#sinistro-create-ref").fill("SYNC-SIN-" + Date.now());
+    await page.locator("#sinistro-create-occurred").fill("2098-10-17");
+    await page.evaluate(() => {
+      const form = document.querySelector<HTMLInputElement>("#sinistro-create-ref")!.form!;
+      form.requestSubmit();
+      form.requestSubmit();
+    });
+    await createStarted;
+    await page.waitForTimeout(200);
+    const observedCreates = creates;
+    unblockCreate();
+    await expect(page.getByRole("button", {name:"Crea sinistro"})).toBeEnabled();
+    await page.unroute("**/api/sinistri");
+
+    // Real signed seed to exercise a CAS editor, but all *test* PUTs below
+    // are intercepted, so a double submission cannot corrupt the database.
+    const token = await page.evaluate(() => {
+      const key = Object.keys(sessionStorage).find(x => x.startsWith("oidc.user:"));
+      return key ? (JSON.parse(sessionStorage.getItem(key) || "{}") as {access_token?:string}).access_token : undefined;
+    });
+    expect(token).toBeTruthy();
+    const seed = "SYNC-EDIT-" + Date.now() + "-" + Math.floor(Math.random() * 100000);
+    const created = await request.post("http://localhost:8080/api/sinistri", {
+      headers:{Authorization:"Bearer " + token},
+      data:{externalReference:seed,occurredOn:"2098-11-18"}
+    });
+    expect(created.status(), await created.text()).toBe(201);
+    const id = (await created.json() as {id:string}).id;
+    await page.getByRole("button", {name:"Aggiorna sinistri"}).click();
+    const row = page.locator('[data-sinistro-id="' + id + '"]');
+    await expect(row.getByText(seed,{exact:true})).toBeVisible();
+    await row.getByRole("button",{name:"Modifica sinistro"}).click();
+    const editor = row.locator('input[id^="sinistro-edit-ref-"]');
+    await expect(editor).toHaveValue(seed);
+    await editor.fill(seed + "-ONE");
+
+    let updates = 0;
+    let signalUpdate!: () => void;
+    let unblockUpdate!: () => void;
+    const updateStarted = new Promise<void>(resolve => {signalUpdate = resolve;});
+    const updateGate = new Promise<void>(resolve => {unblockUpdate = resolve;});
+    await page.route("**/api/sinistri/" + id, async route => {
+      if (route.request().method() !== "PUT") return route.continue();
+      updates += 1;
+      signalUpdate();
+      await updateGate;
+      await route.fulfill({status:400,body:"Synthetic validation error"});
+    });
+    await editor.evaluate(input => {
+      const form = (input as HTMLInputElement).form!;
+      form.requestSubmit();
+      form.requestSubmit();
+    });
+    await updateStarted;
+    await page.waitForTimeout(200);
+    const observedUpdates = updates;
+    unblockUpdate();
+    await expect(row.getByRole("button",{name:"Salva modifiche sinistro"})).toBeEnabled();
+    expect(observedCreates, "create should send one POST per user action").toBe(1);
+    expect(observedUpdates, "CAS edit should send one PUT per user action").toBe(1);
+  });
+
   test("PWA edits Sinistri with authoritative expectedVersion, invalid input and external CAS conflict", async ({page, request}) => {
     test.setTimeout(120_000);
     await page.goto("/");
