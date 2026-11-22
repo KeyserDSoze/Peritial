@@ -81,6 +81,76 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     await expect(page.getByRole("button", {name: "Riprova"})).toHaveCount(0);
   });
 
+  test("PWA sends at most one top-level POST during synchronous duplicate and cross-form submissions", async ({page}) => {
+    await page.goto("/");
+    await page.getByRole("button", {name: "Accedi"}).click();
+    await expect(page.locator("#username")).toBeVisible({timeout: 30_000});
+    await page.locator("#username").fill("localuser");
+    await page.locator("#password").fill("local-only-user");
+    await page.locator("#kc-login").click();
+    await expect(page.getByRole("button", {name: "Esci"})).toBeVisible({timeout: 30_000});
+
+    let creates = 0;
+    let createStarted!: () => void;
+    const firstCreate = new Promise<void>(resolve => {createStarted = resolve;});
+    let releaseCreate!: () => void;
+    const createGate = new Promise<void>(resolve => {releaseCreate = resolve;});
+    await page.route("**/api/perizie", async route => {
+      if (route.request().method() !== "POST") return route.continue();
+      creates += 1;
+      createStarted();
+      await createGate;
+      await route.fulfill({status: 409, body: "Test duplicate gate"});
+    });
+    await page.locator("#reference").fill("SINGLE-FLIGHT-" + Date.now());
+    // HTML requestSubmit fires the submit handler even if React has
+    // already disabled its submit button. A state-only busy flag is
+    // insufficient before the next render; the lock must be synchronous.
+    await page.evaluate(() => {
+      const form = document.querySelector<HTMLInputElement>("#reference")!.form!;
+      form.requestSubmit();
+      form.requestSubmit();
+    });
+    await firstCreate;
+    await page.waitForTimeout(200);
+    expect(creates, "duplicate create must not dispatch a second POST").toBe(1);
+    releaseCreate();
+    await expect(page.getByRole("button", {name: "Crea", exact: true})).toBeEnabled();
+
+    let uploads = 0;
+    let uploadStarted!: () => void;
+    const firstUpload = new Promise<void>(resolve => {uploadStarted = resolve;});
+    let releaseUpload!: () => void;
+    const uploadGate = new Promise<void>(resolve => {releaseUpload = resolve;});
+    await page.route("**/api/files", async route => {
+      if (route.request().method() !== "POST") return route.continue();
+      uploads += 1;
+      uploadStarted();
+      await uploadGate;
+      await route.fulfill({status: 409, body: "Test duplicate gate"});
+    });
+    await page.locator("#file").setInputFiles({
+      name: "single-flight.pdf", mimeType: "application/pdf",
+      buffer: Buffer.from("%PDF-1.7\\n%%EOF\\n")
+    });
+    await page.evaluate(() => {
+      const upload = [...document.querySelectorAll("button")]
+        .find(button => button.textContent?.trim() === "Carica documento");
+      if (!upload) throw new Error("Upload button missing");
+      upload.click();
+      upload.click();
+      // Create and upload share one in-flight lock: a second form may not
+      // issue an independent POST while the document write is pending.
+      document.querySelector<HTMLInputElement>("#reference")!.form!.requestSubmit();
+    });
+    await firstUpload;
+    await page.waitForTimeout(200);
+    expect(uploads, "duplicate upload must not dispatch a second POST").toBe(1);
+    expect(creates, "create must not overlap an in-flight upload").toBe(1);
+    releaseUpload();
+    await expect(page.getByRole("button", {name: "Carica documento"})).toBeEnabled();
+  });
+
   test("API down while browser stays online hides cases and blocks writes until retry", async ({page}) => {
     await page.goto("/");
     await page.getByRole("button", {name: "Accedi"}).click();
