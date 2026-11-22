@@ -890,3 +890,46 @@ non dedotta da queste eccezioni interne.
 identità storica, staging e policy operativa.
 Nessun cambio al trigger SQL V012, a RLS, ai
 writer REST/MCP o alle migrazioni esistenti.
+
+## Contesa su idempotency key XML non ancora committata (ADR 0084, #24)
+
+Oltre al mutex transazionale V012 sulla coppia tenant/riferimento,
+la tabella `legacy_xml_import_keys` ha una chiave primaria
+`(tenant_id,subject_digest,key_digest)`. Due chiamate XML
+interne con **stesso attore e idempotency key ma riferimenti
+differenti** prendono mutex distinti: possono quindi bloccarsi
+nell'arbitraggio `INSERT ... ON CONFLICT DO NOTHING` quando
+la prima transazione non è ancora committata. Limitare soltanto
+il mutex non protegge quest'attesa.
+
+`PgLegacyXmlCaseImportStore` applica il medesimo
+`lock_timeout` massimo di **1500 ms** anche intorno
+alla sola prenotazione nel ledger, mantenendo qualunque
+timeout operatore più stretto. Ripristina il precedente
+valore transazionale **prima** dei controlli sul replay,
+del Sinistro e dell'audit. Se PostgreSQL restituisce
+`55P03` o `57014` durante l'arbitraggio e il token
+del client non è cancellato, espone l'eccezione
+**temporanea** `LegacyXmlImportBusyException`, non
+`LegacyXmlIdempotencyConflictException`. Il secondo
+tipo è riservato alla chiave già definitivamente associata
+a contenuto diverso. Non ci sono retry silenziosi.
+
+Test PostgreSQL reali con due pool app-role, FORCE RLS,
+una prenotazione ledger **non committata** (FK differita),
+riferimento libero e chiave identica:
+- scadenza SQL bounded prima di qualsiasi scrittura
+  osservabile della chiamata concorrente, anche con
+  `statement_timeout=350ms` imposto dall'operatore;
+- un altro tenant può impegnare la stessa chiave e
+  riferimento senza attendere;
+- rollback della prenotazione altrui, riuso della
+  stessa chiave, creazione singola e replay della
+  medesima pratica con un solo audit di successo.
+
+L'intervento non cambia le migrazioni V011/V012, il
+trigger condiviso con REST/MCP, né l'identity model
+legacy. Il commit XML rimane **interno**, senza
+endpoint o DI registrata. La #24 resta P0 aperta
+per caratterizzazione dell'identità, bulk load,
+deadlock e prove di produzione/staging.

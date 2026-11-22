@@ -95,23 +95,54 @@ public sealed class PgLegacyXmlCaseImportStore(NpgsqlDataSource dataSource)
             await restore.ExecuteNonQueryAsync(ct);
         }
 
-        // Insert the ledger proof FIRST. PostgreSQL's UNIQUE arbitration
-        // handles concurrent same-key attempts across different references,
-        // while the deferred FK allows inserting the new case afterward.
-        bool reserved;
-        await using (var insert = scope.Command(
-            "INSERT INTO legacy_xml_import_keys " +
-            "(tenant_id,subject_digest,key_digest,request_digest,sinistro_id) " +
-            "VALUES (@tenant,@subject,@key,@digest,@id) " +
-            "ON CONFLICT (tenant_id,subject_digest,key_digest) " +
-            "DO NOTHING RETURNING sinistro_id"))
+        // An independent importer can reserve the SAME (tenant, subject,
+        // idempotency key) on a DIFFERENT reference. Our V012 reference mutex
+        // is free in that case, but the ledger UNIQUE index can still block
+        // on its uncommitted transaction. Bound THIS second arbitration wait
+        // as well; never apply the extra timeout to ordinary REST/MCP writers
+        // or to the later audit/case SQL.
+        if (narrowedLockTimeout)
         {
+            await using var set = scope.Command(
+                "SELECT set_config('lock_timeout', @timeout, true)");
+            set.Parameters.AddWithValue("timeout", maxMutexWaitMs + "ms");
+            await set.ExecuteNonQueryAsync(ct);
+        }
+
+        // The deferred FK allows the new case to be inserted after its
+        // ledger reservation, within this same atomic transaction.
+        bool reserved;
+        try
+        {
+            await using var insert = scope.Command(
+                "INSERT INTO legacy_xml_import_keys " +
+                "(tenant_id,subject_digest,key_digest,request_digest,sinistro_id) " +
+                "VALUES (@tenant,@subject,@key,@digest,@id) " +
+                "ON CONFLICT (tenant_id,subject_digest,key_digest) " +
+                "DO NOTHING RETURNING sinistro_id");
             insert.Parameters.AddWithValue("tenant", tenant.Value);
             insert.Parameters.AddWithValue("subject", subjectDigest);
             insert.Parameters.AddWithValue("key", keyDigest);
             insert.Parameters.AddWithValue("digest", requestDigest);
             insert.Parameters.AddWithValue("id", sinistro.Id);
             reserved = await insert.ExecuteScalarAsync(ct) is not null;
+        }
+        catch (PostgresException ex) when (
+            !ct.IsCancellationRequested &&
+            (ex.SqlState == "55P03" || ex.SqlState == "57014"))
+        {
+            // Contended UNIQUE arbitration is transient, not proof of a
+            // different payload, subject or reference. Transaction rollback
+            // removes the temporary setting and any uncommitted state.
+            throw new LegacyXmlImportBusyException();
+        }
+        if (narrowedLockTimeout)
+        {
+            await using var restore = scope.Command(
+                "SELECT set_config('lock_timeout', @timeout, true)");
+            restore.Parameters.AddWithValue("timeout",
+                priorLockTimeoutMs == 0 ? "0" : priorLockTimeoutMs + "ms");
+            await restore.ExecuteNonQueryAsync(ct);
         }
 
         if (!reserved)

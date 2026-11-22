@@ -235,6 +235,111 @@ public sealed class SinistroPersistenceTests
         Assert.Equal(1L, (long)(await count.ExecuteScalarAsync())!);
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("-c statement_timeout=350ms")]
+    public async Task V011_competing_uncommitted_idempotency_key_on_another_reference_times_out_cleanly(
+        string? operatorOptions)
+    {
+        await using var db = await IsolatedDatabases.CreateAsync();
+        // The fixture's main pool has Max Pool Size=1. Use a genuinely
+        // independent app-role pool for the contender so it can run while
+        // the first connection owns an uncommitted UNIQUE-index entry.
+        var configured = new NpgsqlConnectionStringBuilder(db.App.ConnectionString)
+        { Password = "local-only-app" };
+        if (operatorOptions is not null) configured.Options = operatorOptions;
+        await using var contenderPool = NpgsqlDataSource.Create(configured.ConnectionString);
+        var importer = new PgLegacyXmlCaseImportStore(contenderPool);
+        var tenant = TenantId.From(Guid.NewGuid());
+        var otherTenant = TenantId.From(Guid.NewGuid());
+        const string subject = "concurrent-import-actor";
+        const string key = "ledger-wait-same-key-0001";
+        var reference = "LEDGER-WAIT-" + Guid.NewGuid().ToString("N");
+        var preview = new LegacyXmlPreviewDto("classic", reference,
+            new DateOnly(2026, 11, 22), null, 0);
+        var digest = System.Security.Cryptography.SHA256.HashData(
+            "ledger-wait-canonical-xml"u8);
+        var subjectDigest = System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes(subject));
+        var keyDigest = System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes(key));
+
+        // Reserve the same tenant/subject/key in a separate transaction,
+        // deliberately WITHOUT taking the reference's V012 advisory lock.
+        // Its nonexistent case ID is valid until deferred-FK COMMIT, which
+        // we never perform. This forces ON CONFLICT's UNIQUE arbitration,
+        // not the first mutex, to be the point of contention.
+        await using var holder = await db.App.OpenConnectionAsync();
+        await using var held = await holder.BeginTransactionAsync();
+        await using (var context = new NpgsqlCommand(
+            "SELECT set_config('peritial.tenant_id', @tenant, true)",
+            holder, held))
+        {
+            context.Parameters.AddWithValue("tenant", tenant.Value.ToString("D"));
+            await context.ExecuteNonQueryAsync();
+        }
+        await using (var reservation = new NpgsqlCommand(
+            "INSERT INTO legacy_xml_import_keys " +
+            "(tenant_id,subject_digest,key_digest,request_digest,sinistro_id) " +
+            "VALUES (@tenant,@subject,@key,@digest,@id)", holder, held))
+        {
+            reservation.Parameters.AddWithValue("tenant", tenant.Value);
+            reservation.Parameters.AddWithValue("subject", subjectDigest);
+            reservation.Parameters.AddWithValue("key", keyDigest);
+            reservation.Parameters.AddWithValue("digest", digest);
+            reservation.Parameters.AddWithValue("id", Guid.NewGuid());
+            Assert.Equal(1, await reservation.ExecuteNonQueryAsync());
+        }
+
+        using (var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(12)))
+        {
+            await Assert.ThrowsAsync<LegacyXmlImportBusyException>(() =>
+                importer.CommitAsync(tenant, subject, key, digest,
+                    preview, deadline.Token));
+        }
+
+        async Task<(long Cases, long Keys, long Audit)> Committed(TenantId scope)
+        {
+            await using var cmd = db.Admin.CreateCommand(
+                "SELECT " +
+                "(SELECT count(*) FROM sinistri WHERE tenant_id=@tenant " +
+                "AND external_reference=@reference), " +
+                "(SELECT count(*) FROM legacy_xml_import_keys WHERE tenant_id=@tenant), " +
+                "(SELECT count(*) FROM security_audit WHERE tenant_id=@tenant " +
+                "AND action='sinistro.import-xml' AND outcome='succeeded')");
+            cmd.Parameters.AddWithValue("tenant", scope.Value);
+            cmd.Parameters.AddWithValue("reference", reference);
+            await using var row = await cmd.ExecuteReaderAsync();
+            Assert.True(await row.ReadAsync());
+            return (row.GetInt64(0), row.GetInt64(1), row.GetInt64(2));
+        }
+
+        Assert.Equal((0L, 0L, 0L), await Committed(tenant));
+
+        // The same key and same reference in ANOTHER tenant must still work
+        // while the first tenant holds its uncommitted ledger reservation.
+        var independent = await importer.CommitAsync(
+            otherTenant, subject, key, digest, preview);
+        Assert.False(independent.Replayed);
+        Assert.Equal((1L, 1L, 1L), await Committed(otherTenant));
+        Assert.Equal((0L, 0L, 0L), await Committed(tenant));
+
+        await held.RollbackAsync();
+        await holder.CloseAsync();
+
+        // A transient busy response is not an idempotency reservation.
+        // The same signed tenant/subject/key/payload can be submitted again,
+        // create exactly once and replay without a second success audit.
+        var created = await importer.CommitAsync(tenant, subject, key, digest, preview);
+        var replay = await importer.CommitAsync(tenant, subject, key, digest, preview);
+        Assert.False(created.Replayed);
+        Assert.True(replay.Replayed);
+        Assert.Equal(created.SinistroId, replay.SinistroId);
+        Assert.NotEqual(independent.SinistroId, created.SinistroId);
+        Assert.Equal((1L, 1L, 1L), await Committed(tenant));
+        Assert.Equal((1L, 1L, 1L), await Committed(otherTenant));
+    }
+
     [Fact]
     public async Task V012_every_writer_denies_duplicate_of_imported_reference_but_keeps_legacy_duplicates()
     {
