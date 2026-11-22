@@ -148,7 +148,10 @@ export default function App() {
       setDataStatus("ready");
       setError("");
     }).catch(() => {
-      if (active) lockProtectedUi();
+      // An earlier failed GET cannot lock a view that has already been
+      // superseded by a newer authenticated refresh or document filter.
+      if (active && requestEpoch.current === epochAtStart &&
+          activeToken.current === token) lockProtectedUi();
     });
     return () => { active = false; };
   }, [token, t, online, refreshIndex, documentsPeriziaId]);
@@ -185,9 +188,9 @@ export default function App() {
   async function create(event:FormEvent) {
     event.preventDefault(); if(!token || !online || !canWrite ||
       dataStatus !== "ready" || !reference.trim()) return;
+    const epochAtStart = requestEpoch.current;
     setBusy(true); setError("");
     try {
-      const epochAtStart = requestEpoch.current;
       const item = await createPerizia(token,reference.trim());
       if (requestEpoch.current !== epochAtStart || activeToken.current !== token) return;
       mutations.current.set(item.id, (mutations.current.get(item.id) ?? 0) + 1);
@@ -195,6 +198,9 @@ export default function App() {
       setReference("");
     }
     catch (cause) {
+      // The POST may fail after a later signed GET already restored the UI.
+      // Only the current epoch may transition to the unavailable state.
+      if (requestEpoch.current !== epochAtStart || activeToken.current !== token) return;
       if (isApiUnavailable(cause)) lockProtectedUi();
       else setError(t("error"));
     } finally { setBusy(false); }
@@ -202,9 +208,9 @@ export default function App() {
   async function sendFile() {
     if(!token || !online || !canWrite || dataStatus !== "ready" || !upload ||
       (uploadPeriziaId !== "" && !items.some(item => item.id === uploadPeriziaId))) return;
+    const epochAtStart = requestEpoch.current;
     setBusy(true); setError("");
     try {
-      const epochAtStart = requestEpoch.current;
       await uploadDocument(token, upload, uploadPeriziaId || undefined);
       // Never replay an uncertain POST. Instead refresh both read-only
       // projections with the signed current tenant after a confirmed upload.
@@ -214,6 +220,9 @@ export default function App() {
       refreshPerizie();
     }
     catch (cause) {
+      // An obsolete upload failure must not invalidate an authenticated
+      // projection established after its request began; never auto-retry PUT.
+      if (requestEpoch.current !== epochAtStart || activeToken.current !== token) return;
       if (isApiUnavailable(cause)) lockProtectedUi();
       else setError(t("error"));
     } finally { setBusy(false); }
