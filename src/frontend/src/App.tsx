@@ -32,6 +32,11 @@ export default function App() {
   const [documentsPeriziaId, setDocumentsPeriziaId] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  // A ref is an immediate, shared lock for create and upload. React's busy
+  // state only disables controls after a render, so it cannot stop two
+  // synchronous requestSubmit()/click events from starting duplicate POSTs.
+  const mutationSequence = useRef(0);
+  const activeMutation = useRef<number | null>(null);
   const [dataStatus, setDataStatus] = useState<"loading" | "ready" | "unavailable">("loading");
   const [refreshIndex, setRefreshIndex] = useState(0);
   const token = auth.user?.access_token;
@@ -90,6 +95,10 @@ export default function App() {
     // A different signed-in identity must never inherit the previous tenant's
     // locally merged records, even for one render while the next GET is pending.
     if (activeToken.current !== token) {
+      // An old identity's pending write must not keep the next signed
+      // session locked or clear a new session's in-flight state on settle.
+      activeMutation.current = null;
+      setBusy(false);
       activeToken.current = token;
       requestEpoch.current += 1;
       mutations.current.clear();
@@ -104,6 +113,8 @@ export default function App() {
     // Never display locally retained tenant data while disconnected.
     // After reconnect the app must fetch new data using the current JWT.
     if (!token || !online) {
+      activeMutation.current = null;
+      setBusy(false);
       requestEpoch.current += 1;
       setItems([]);
       setDocuments([]);
@@ -187,7 +198,10 @@ export default function App() {
   }
   async function create(event:FormEvent) {
     event.preventDefault(); if(!token || !online || !canWrite ||
-      dataStatus !== "ready" || !reference.trim()) return;
+      dataStatus !== "ready" || !reference.trim() ||
+      activeMutation.current !== null) return;
+    const operation = ++mutationSequence.current;
+    activeMutation.current = operation;
     const epochAtStart = requestEpoch.current;
     setBusy(true); setError("");
     try {
@@ -203,11 +217,19 @@ export default function App() {
       if (requestEpoch.current !== epochAtStart || activeToken.current !== token) return;
       if (isApiUnavailable(cause)) lockProtectedUi();
       else setError(t("error"));
-    } finally { setBusy(false); }
+    } finally {
+      if (activeMutation.current === operation) {
+        activeMutation.current = null;
+        setBusy(false);
+      }
+    }
   }
   async function sendFile() {
     if(!token || !online || !canWrite || dataStatus !== "ready" || !upload ||
-      (uploadPeriziaId !== "" && !items.some(item => item.id === uploadPeriziaId))) return;
+      (uploadPeriziaId !== "" && !items.some(item => item.id === uploadPeriziaId)) ||
+      activeMutation.current !== null) return;
+    const operation = ++mutationSequence.current;
+    activeMutation.current = operation;
     const epochAtStart = requestEpoch.current;
     setBusy(true); setError("");
     try {
@@ -225,7 +247,12 @@ export default function App() {
       if (requestEpoch.current !== epochAtStart || activeToken.current !== token) return;
       if (isApiUnavailable(cause)) lockProtectedUi();
       else setError(t("error"));
-    } finally { setBusy(false); }
+    } finally {
+      if (activeMutation.current === operation) {
+        activeMutation.current = null;
+        setBusy(false);
+      }
+    }
   }
   return <div className="min-h-screen">
     <header className="border-b border-slate-200 dark:border-slate-800"><div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-4">
