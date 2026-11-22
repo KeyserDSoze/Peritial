@@ -38,6 +38,10 @@ export function PeriziaSinistroPicker({periziaId, periziaStatus, token, canWrite
   const [reparentedSuccess, setReparentedSuccess] = useState(false);
   const [error, setError] = useState<"conflict" | "error" | null>(null);
   const sequence = useRef(0);
+  // The busy state disables controls only after React renders. Guard every
+  // signed read/write synchronously so two events in one task never dispatch
+  // duplicate CAS link, unlink or reparent mutations.
+  const inFlight = useRef(false);
   // Match the backend's row-locked terminal-status predicate. The backend
   // remains authoritative; hiding the action is only a UX safeguard.
   const canReparent = canWrite &&
@@ -48,6 +52,8 @@ export function PeriziaSinistroPicker({periziaId, periziaStatus, token, canWrite
   useEffect(() => {
     if (!canReparent) {
       sequence.current += 1;
+      inFlight.current = false;
+      setBusy(null);
       setReparenting(false);
       setConfirmReparent(false);
       setSelectedId("");
@@ -58,7 +64,10 @@ export function PeriziaSinistroPicker({periziaId, periziaStatus, token, canWrite
 
   // A rotated identity or an unmounted perizia must not receive late tenant
   // search results or a previous request's resolved association.
-  useEffect(() => () => { sequence.current += 1; }, [periziaId, token]);
+  useEffect(() => () => {
+    sequence.current += 1;
+    inFlight.current = false;
+  }, [periziaId, token]);
 
   function resetSelection() {
     setPrefix("");
@@ -68,6 +77,8 @@ export function PeriziaSinistroPicker({periziaId, periziaStatus, token, canWrite
   }
 
   async function reloadAssociation() {
+    if (inFlight.current) return;
+    inFlight.current = true;
     const requestId = ++sequence.current;
     setBusy("read");
     setError(null);
@@ -97,12 +108,15 @@ export function PeriziaSinistroPicker({periziaId, periziaStatus, token, canWrite
         onUnavailable();
       else setError("error");
     } finally {
-      if (sequence.current === requestId) setBusy(null);
+      if (sequence.current === requestId) {
+        inFlight.current = false;
+        setBusy(null);
+      }
     }
   }
 
   function toggle() {
-    if (busy) return;
+    if (busy || inFlight.current) return;
     if (expanded) {
       sequence.current += 1;
       setExpanded(false);
@@ -123,9 +137,10 @@ export function PeriziaSinistroPicker({periziaId, periziaStatus, token, canWrite
 
   async function search(event: FormEvent) {
     event.preventDefault();
-    if (busy || association === null ||
+    if (busy || inFlight.current || association === null ||
         (association.sinistroId && !reparenting) ||
         prefix.trim().length < 2 || prefix.trim().length > 100) return;
+    inFlight.current = true;
     const requestId = ++sequence.current;
     setBusy("search");
     setError(null);
@@ -142,14 +157,18 @@ export function PeriziaSinistroPicker({periziaId, periziaStatus, token, canWrite
       if (isApiUnavailable(cause)) onUnavailable();
       else setError("error");
     } finally {
-      if (sequence.current === requestId) setBusy(null);
+      if (sequence.current === requestId) {
+        inFlight.current = false;
+        setBusy(null);
+      }
     }
   }
 
   async function link() {
-    if (busy || !canWrite || !hasRevision(association) ||
+    if (busy || inFlight.current || !canWrite || !hasRevision(association) ||
         association === null || association.sinistroId ||
         !selectedId || !results.some(item => item.id === selectedId)) return;
+    inFlight.current = true;
     const requestId = ++sequence.current;
     const selected = results.find(item => item.id === selectedId)!;
     setBusy("link");
@@ -184,15 +203,19 @@ export function PeriziaSinistroPicker({periziaId, periziaStatus, token, canWrite
         setError("conflict");
       } else setError("error");
     } finally {
-      if (sequence.current === requestId) setBusy(null);
+      if (sequence.current === requestId) {
+        inFlight.current = false;
+        setBusy(null);
+      }
     }
   }
 
   async function unlink() {
     // Do not auto-unlink or use a hidden/possibly stale association.
-    if (busy || !canWrite || !confirmUnlink || !hasRevision(association) ||
+    if (busy || inFlight.current || !canWrite || !confirmUnlink || !hasRevision(association) ||
         !association?.sinistroId) return;
     const observed = association.sinistroId;
+    inFlight.current = true;
     const requestId = ++sequence.current;
     setBusy("unlink");
     setError(null);
@@ -230,12 +253,15 @@ export function PeriziaSinistroPicker({periziaId, periziaStatus, token, canWrite
         setError("error");
       }
     } finally {
-      if (sequence.current === requestId) setBusy(null);
+      if (sequence.current === requestId) {
+        inFlight.current = false;
+        setBusy(null);
+      }
     }
   }
 
   function beginReparent() {
-    if (busy || !canReparent || !hasRevision(association) || !association?.sinistroId) return;
+    if (busy || inFlight.current || !canReparent || !hasRevision(association) || !association?.sinistroId) return;
     sequence.current += 1;
     setReparenting(true);
     setConfirmUnlink(false);
@@ -247,6 +273,7 @@ export function PeriziaSinistroPicker({periziaId, periziaStatus, token, canWrite
   }
 
   function cancelReparent() {
+    if (inFlight.current) return;
     sequence.current += 1;
     setReparenting(false);
     setConfirmReparent(false);
@@ -255,12 +282,13 @@ export function PeriziaSinistroPicker({periziaId, periziaStatus, token, canWrite
   }
 
   async function reparent() {
-    if (busy || !canReparent || !confirmReparent || !reparenting ||
+    if (busy || inFlight.current || !canReparent || !confirmReparent || !reparenting ||
         !hasRevision(association) || !association?.sinistroId || !selectedId ||
         selectedId === association.sinistroId ||
         !results.some(item => item.id === selectedId)) return;
     const expected = association.sinistroId;
     const target = selectedId;
+    inFlight.current = true;
     const requestId = ++sequence.current;
     setBusy("reparent");
     setError(null);
@@ -300,7 +328,10 @@ export function PeriziaSinistroPicker({periziaId, periziaStatus, token, canWrite
         setError("error");
       }
     } finally {
-      if (sequence.current === requestId) setBusy(null);
+      if (sequence.current === requestId) {
+        inFlight.current = false;
+        setBusy(null);
+      }
     }
   }
 
@@ -350,6 +381,7 @@ export function PeriziaSinistroPicker({periziaId, periziaStatus, token, canWrite
             <input id={"sinistro-prefix-" + periziaId} value={prefix} minLength={2} maxLength={100}
               autoComplete="off" disabled={busy !== null}
               onChange={event => {
+                if (inFlight.current) return;
                 // Input edits invalidate any candidate selection immediately.
                 sequence.current += 1;
                 setPrefix(event.target.value);
@@ -373,6 +405,7 @@ export function PeriziaSinistroPicker({periziaId, periziaStatus, token, canWrite
           <select id={"sinistro-choice-" + periziaId} value={selectedId}
             disabled={busy !== null}
             onChange={event => {
+              if (inFlight.current) return;
               setSelectedId(event.target.value);
               setConfirmReparent(false);
             }}
