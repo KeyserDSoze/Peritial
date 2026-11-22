@@ -5,6 +5,55 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
 
   test.setTimeout(90_000);
 
+  test("a stale failed create cannot invalidate a newer signed document refresh", async ({page}) => {
+    await page.goto("/");
+    await page.getByRole("button", {name: "Accedi"}).click();
+    await expect(page.locator("#username")).toBeVisible({timeout: 30_000});
+    await page.locator("#username").fill("localuser");
+    await page.locator("#password").fill("local-only-user");
+    await page.locator("#kc-login").click();
+    await expect(page.getByRole("button", {name: "Esci"})).toBeVisible({timeout: 30_000});
+
+    const seed = "STALE-CREATE-SEED-" + Date.now() + "-" + Math.round(Math.random() * 100000);
+    await page.locator("#reference").fill(seed);
+    await page.getByRole("button", {name: "Crea", exact: true}).click();
+    const row = page.locator("[data-perizia-id]").filter({hasText: seed});
+    await expect(row).toBeVisible();
+    const id = await row.getAttribute("data-perizia-id");
+    expect(id).toBeTruthy();
+
+    let requestStarted!: () => void;
+    const started = new Promise<void>(resolve => { requestStarted = resolve; });
+    let releaseResponse!: () => void;
+    const release = new Promise<void>(resolve => { releaseResponse = resolve; });
+    await page.route("**/api/perizie", async route => {
+      if (route.request().method() !== "POST") return route.continue();
+      requestStarted();
+      await release;
+      await route.fulfill({status: 503, body: "Simulated unavailable backend"});
+    });
+
+    await page.locator("#reference").fill("STALE-FAIL-" + Date.now());
+    await page.getByRole("button", {name: "Crea", exact: true}).click();
+    await started;
+    // The document filter is still usable while POST is in flight.
+    // Its authenticated GET supersedes the old request epoch.
+    await page.locator("#documents-perizia").selectOption(id!);
+    await expect(page.locator("#documents-perizia")).toHaveValue(id!);
+    await expect(page.getByRole("list", {name: /^(Perizie|Appraisals)$/}).getByText(seed, {exact: true})).toBeVisible();
+
+    const lateFailure = page.waitForResponse(r =>
+      r.url().endsWith("/api/perizie") && r.request().method() === "POST" && r.status() === 503);
+    releaseResponse();
+    await lateFailure;
+    // The old 503 must not erase records fetched by the newer signed GET.
+    // The existing active-503 test separately proves fail-closed behavior.
+    await expect(page.getByRole("button", {name: "Crea", exact: true})).toBeEnabled();
+    await expect(page.locator("#documents-perizia")).toHaveValue(id!);
+    await expect(page.getByRole("list", {name: /^(Perizie|Appraisals)$/}).getByText(seed, {exact: true})).toBeVisible();
+    await expect(page.getByRole("button", {name: "Riprova"})).toHaveCount(0);
+  });
+
   test("API down while browser stays online hides cases and blocks writes until retry", async ({page}) => {
     await page.goto("/");
     await page.getByRole("button", {name: "Accedi"}).click();
