@@ -10,7 +10,13 @@ public sealed class OidcReadinessProbeTests
     private const string Issuer = "http://issuer.test/realms/peritial";
     private const string Metadata = "http://metadata.test/realms/peritial/.well-known/openid-configuration";
     private const string Jwks = "http://issuer.test/realms/peritial/protocol/openid-connect/certs";
-    private const string PublicKeys = """{"keys":[{"kty":"RSA","kid":"signer-1","use":"sig","n":"AQAB","e":"AQAB"}]}""";
+    // Public-key shape only: no private key, no actual token/signature.
+    // A 2048-bit positive modulus and e=65537 match a plausible RS256 JWK.
+    private static readonly string RsaModulus = Convert.ToBase64String(
+        Enumerable.Repeat((byte)0xBD, 256).ToArray())
+        .TrimEnd('=').Replace('+', '-').Replace('/', '_');
+    private static readonly string PublicKeys =
+        $"""{"keys":[{"kty":"RSA","kid":"signer-1","use":"sig","alg":"RS256","n":"{{RsaModulus}}","e":"AQAB"}]}""";
 
     [Fact]
     public async Task Trusted_discovery_and_nonempty_signing_JWKS_are_ready()
@@ -77,6 +83,43 @@ public sealed class OidcReadinessProbeTests
             : Json(PublicKeys.Replace("\"use\":\"sig\"", "\"use\":\"enc\"")));
         using var probe = new OidcReadinessProbe(client, Issuer, Metadata, allowHttpForDevelopment: true);
         Assert.False(await probe.CheckAsync());
+    }
+
+    [Theory]
+    [InlineData("RSA-OAEP")]
+    [InlineData("RS1")]
+    [InlineData("ES256")]
+    public async Task Non_signature_or_incompatible_rsa_algorithms_fail_closed(string algorithm)
+    {
+        using var client = Client(req => req.RequestUri!.AbsoluteUri == Metadata
+            ? Json($"""{"issuer":"{{Issuer}}","jwks_uri":"{{Jwks}}"}""")
+            : Json(PublicKeys.Replace("\"RS256\"", "\"" + algorithm + "\"")));
+        using var probe = new OidcReadinessProbe(client, Issuer, Metadata, allowHttpForDevelopment: true);
+        Assert.False(await probe.CheckAsync());
+    }
+
+    [Fact]
+    public async Task Jwk_key_ops_without_verify_cannot_make_readiness_green()
+    {
+        var encryptOnly = PublicKeys.Replace("\"use\":\"sig\"",
+            "\"use\":\"sig\",\"key_ops\":[\"encrypt\"]");
+        using var client = Client(req => req.RequestUri!.AbsoluteUri == Metadata
+            ? Json($"""{"issuer":"{{Issuer}}","jwks_uri":"{{Jwks}}"}""")
+            : Json(encryptOnly));
+        using var probe = new OidcReadinessProbe(client, Issuer, Metadata, allowHttpForDevelopment: true);
+        Assert.False(await probe.CheckAsync());
+    }
+
+    [Fact]
+    public async Task At_least_one_well_formed_signing_key_is_enough_among_invalid_keys()
+    {
+        var json = PublicKeys.Replace("\"keys\":[", 
+            "\"keys\":[{\"kty\":\"RSA\",\"kid\":\"bad\",\"n\":\"AQAB\",\"e\":\"AQAB\"},");
+        using var client = Client(req => req.RequestUri!.AbsoluteUri == Metadata
+            ? Json($"""{"issuer":"{{Issuer}}","jwks_uri":"{{Jwks}}"}""")
+            : Json(json));
+        using var probe = new OidcReadinessProbe(client, Issuer, Metadata, allowHttpForDevelopment: true);
+        Assert.True(await probe.CheckAsync());
     }
 
     [Fact]
