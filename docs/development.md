@@ -1716,3 +1716,39 @@ creazione; ripristina il token PKCE writer verificando
 che i controlli riappaiano. Lo scambio di token è
 unicamente un meccanismo di test, **non** un flusso
 proposto per l'applicazione o per la produzione.
+
+## PWA: risposte workflow Perizia obsolete dopo refresh (ADR 0085, #13)
+
+`PeriziaWorkflow` protegge tutte le richieste asincrone
+`assign/advance/cancel` e `GET /api/perizie/{id}` con
+una revisione locale della richiesta, invalidata dal cleanup
+React su smontaggio del componente e da cambiamenti di
+Perizia, token o stato assegnazione. Il componente viene
+smontato durante un refresh autenticato, cambio identità,
+logout, API down e offline; una risposta del vecchio workflow
+non può più invocare `onUpdated` né
+`onUnavailable` nella nuova schermata.
+
+Un guard `inFlight` impedisce la doppia mutazione anche
+se due eventi arrivano prima che React disabiliti i pulsanti.
+Non sono introdotti retry, code offline, `localStorage`
+di Perizie, mutazioni ottimistiche o bypass degli scope
+firmati. Backend, controllo tenant e CAS PostgreSQL
+rimangono autoritativi. Il client che ha completato
+un'operazione dopo lo smontaggio richiede un nuovo
+GET esplicito per visualizzare lo stato reale.
+
+Regressione Playwright **con Keycloak e API reali** in
+`tests/frontend/authenticated.spec.ts`:
+una `POST /assign` tenuta in sospeso risponde 503
+**dopo** un nuovo GET verificato e non deve oscurare
+la vista attuale; un'altra POST trattenuta e poi
+realmente confermata non deve sovrascrivere il
+risultato dell'ultimo refresh, mentre il GET esplicito
+successivo mostra lo stato committato. Test su
+desktop e mobile della CI Compose.
+
+Rimangono da fare audit WCAG completo,
+focalizzazione tastiera nei nuovi verticali, E2E
+di rotazioni token multi-client e recovery PWA su
+release multiple. La #13 resta aperta.

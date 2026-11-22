@@ -76,6 +76,84 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     await expect(page.getByRole("list", {name: /^(Perizie|Appraisals)$/}).getByText(otherRef, {exact: true})).toHaveCount(0);
   });
 
+  test("workflow ignores delayed mutation replies after authenticated list refresh", async ({page}) => {
+    await page.goto("/");
+    await page.getByRole("button", {name: "Accedi"}).click();
+    await expect(page.locator("#username")).toBeVisible({timeout: 30_000});
+    await page.locator("#username").fill("localuser");
+    await page.locator("#password").fill("local-only-user");
+    await page.locator("#kc-login").click();
+    await expect(page.getByRole("button", {name: "Esci"})).toBeVisible({timeout: 30_000});
+
+    const reference = "UI-STALE-WORKFLOW-" + Date.now() + "-" + Math.round(Math.random() * 100000);
+    await page.locator("#reference").fill(reference);
+    await page.getByRole("button", {name: "Crea"}).click();
+    const row = page.getByRole("list", {name: /^(Perizie|Appraisals)$/})
+      .locator("li").filter({hasText: reference});
+    await expect(row.getByText("Registrata")).toBeVisible();
+
+    const assignPattern = "**/api/perizie/*/assign";
+    let releaseFailure: () => void = () => undefined;
+    let markFailureStarted: () => void = () => undefined;
+    const failureGate = new Promise<void>(resolve => {releaseFailure = resolve;});
+    const failureStarted = new Promise<void>(resolve => {markFailureStarted = resolve;});
+    await page.route(assignPattern, async route => {
+      markFailureStarted();
+      await failureGate;
+      await route.fulfill({status: 503, body: "Temporary service outage"});
+    });
+    await row.getByRole("textbox", {name: "Assegnatario " + reference}).fill("old-request");
+    await row.getByRole("button", {name: "Assegna"}).click();
+    await failureStarted;
+
+    // A fresh signed GET remounts the workflow while the old POST is
+    // still in flight. The former component cannot revoke the newly
+    // verified healthy view if its old 503 arrives after the refresh.
+    await page.getByRole("button", {name: "Aggiorna elenco"}).click();
+    await expect(row.getByText("Registrata")).toBeVisible();
+    const failedReply = page.waitForResponse(response =>
+      response.url().includes("/api/perizie/") &&
+      response.url().endsWith("/assign") && response.status() === 503);
+    releaseFailure();
+    await (await failedReply).finished();
+    await page.waitForTimeout(250);
+    await expect(page.getByRole("button", {name: "Riprova"})).toHaveCount(0);
+    await expect(row.getByText("Registrata")).toBeVisible();
+    await expect(row.getByRole("button", {name: "Assegna"})).toBeEnabled();
+    await page.unroute(assignPattern);
+
+    // A delayed genuine 200 is also from the old workflow, not a
+    // license to overwrite the new projection after an intervening
+    // authenticated refresh. The next explicit GET reconciles it.
+    let releaseSuccess: () => void = () => undefined;
+    let markSuccessStarted: () => void = () => undefined;
+    const successGate = new Promise<void>(resolve => {releaseSuccess = resolve;});
+    const successStarted = new Promise<void>(resolve => {markSuccessStarted = resolve;});
+    await page.route(assignPattern, async route => {
+      markSuccessStarted();
+      await successGate;
+      await route.continue();
+    });
+    await row.getByRole("textbox", {name: "Assegnatario " + reference}).fill("confirmed-writer");
+    await row.getByRole("button", {name: "Assegna"}).click();
+    await successStarted;
+    await page.getByRole("button", {name: "Aggiorna elenco"}).click();
+    await expect(row.getByText("Registrata")).toBeVisible();
+    const succeededReply = page.waitForResponse(response =>
+      response.url().includes("/api/perizie/") &&
+      response.url().endsWith("/assign") && response.status() === 200);
+    releaseSuccess();
+    await (await succeededReply).finished();
+    await page.waitForTimeout(250);
+    await expect(row.getByText("Registrata")).toBeVisible();
+    await expect(row.getByText("Assegnata", {exact: true})).toHaveCount(0);
+    await page.unroute(assignPattern);
+
+    await page.getByRole("button", {name: "Aggiorna elenco"}).click();
+    await expect(row.getByText("Assegnata", {exact: true})).toBeVisible();
+    await expect(row.getByText("confirmed-writer", {exact: true})).toBeVisible();
+  });
+
   test("a stale GET never restores protected rows after a concurrent failed mutation", async ({page}) => {
     await page.goto("/");
     await page.getByRole("button", {name: "Accedi"}).click();

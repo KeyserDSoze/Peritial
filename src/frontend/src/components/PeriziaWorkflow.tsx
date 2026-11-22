@@ -1,4 +1,4 @@
-import {useState, type FormEvent} from "react";
+import {useEffect, useRef, useState, type FormEvent} from "react";
 import {useTranslation} from "react-i18next";
 import {advancePerizia, assignPerizia, cancelPerizia, getPerizia, isApiUnavailable, type Perizia} from "../api";
 import {Button} from "./ui/button";
@@ -28,20 +28,45 @@ export function PeriziaWorkflow({item, token, canWrite, onUpdated, onUnavailable
   const [error, setError] = useState<"conflict" | "error" | null>(null);
   const next = nextStatus[item.status];
   const canCancel = cancellable.has(item.status);
+  // The parent intentionally unmounts this tenant-owned view during a
+  // refresh, auth rotation, offline transition or API failure. A response
+  // from the old workflow must never mutate the new signed projection or
+  // invoke onUnavailable() against a newly verified healthy session.
+  const requestEpoch = useRef(0);
+  const inFlight = useRef(false);
+  useEffect(() => {
+    setAssignee("");
+    setBusy(false);
+    setError(null);
+    setConfirmCancel(false);
+    return () => {
+      requestEpoch.current += 1;
+      inFlight.current = false;
+    };
+  }, [item.id, item.status, item.assignedTo, token]);
 
   async function mutate(operation: () => Promise<Perizia>) {
-    if (!canWrite) return; // Defensive UI check; Business still authorizes.
+    if (!canWrite || inFlight.current) return;
+    // No second POST before the first one is acknowledged, even if two
+    // click events arrive before React commits the disabled button.
+    const current = ++requestEpoch.current;
+    inFlight.current = true;
     setBusy(true);
     setError(null);
     try {
       const updated = await operation();
+      if (requestEpoch.current !== current) return;
       onUpdated(updated);
       setConfirmCancel(false);
     } catch (cause) {
+      if (requestEpoch.current !== current) return;
       if (isApiUnavailable(cause)) onUnavailable();
       else setError(cause instanceof Error && cause.message === "HTTP 409" ? "conflict" : "error");
     } finally {
-      setBusy(false);
+      if (requestEpoch.current === current) {
+        inFlight.current = false;
+        setBusy(false);
+      }
     }
   }
 
@@ -56,16 +81,25 @@ export function PeriziaWorkflow({item, token, canWrite, onUpdated, onUnavailable
   }
 
   async function reload() {
+    if (inFlight.current) return;
+    const current = ++requestEpoch.current;
+    inFlight.current = true;
     setBusy(true);
+    setError(null);
     try {
-      onUpdated(await getPerizia(token, item.id));
-      setError(null);
+      const fresh = await getPerizia(token, item.id);
+      if (requestEpoch.current !== current) return;
+      onUpdated(fresh);
       setConfirmCancel(false);
     } catch (cause) {
+      if (requestEpoch.current !== current) return;
       if (isApiUnavailable(cause)) onUnavailable();
       else setError("error");
     } finally {
-      setBusy(false);
+      if (requestEpoch.current === current) {
+        inFlight.current = false;
+        setBusy(false);
+      }
     }
   }
 
