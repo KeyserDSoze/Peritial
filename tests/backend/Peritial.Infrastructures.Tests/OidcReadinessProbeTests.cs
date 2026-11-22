@@ -16,7 +16,8 @@ public sealed class OidcReadinessProbeTests
         Enumerable.Repeat((byte)0xBD, 256).ToArray())
         .TrimEnd('=').Replace('+', '-').Replace('/', '_');
     private static readonly string PublicKeys =
-        $"""{"keys":[{"kty":"RSA","kid":"signer-1","use":"sig","alg":"RS256","n":"{{RsaModulus}}","e":"AQAB"}]}""";
+        "{\"keys\":[{\"kty\":\"RSA\",\"kid\":\"signer-1\",\"use\":\"sig\",\"alg\":\"RS256\",\"n\":\"" +
+        RsaModulus + "\",\"e\":\"AQAB\"}]}";
 
     [Fact]
     public async Task Trusted_discovery_and_nonempty_signing_JWKS_are_ready()
@@ -69,7 +70,7 @@ public sealed class OidcReadinessProbeTests
     public async Task Malformed_or_noncryptographic_jwk_material_is_not_ready(string jwks)
     {
         using var client = Client(req => req.RequestUri!.AbsoluteUri == Metadata
-            ? Json($"""{"issuer":"{{Issuer}}","jwks_uri":"{{Jwks}}"}""")
+            ? Json("{\"issuer\":\"" + Issuer + "\",\"jwks_uri\":\"" + Jwks + "\"}")
             : Json(jwks));
         using var probe = new OidcReadinessProbe(client, Issuer, Metadata, allowHttpForDevelopment: true);
         Assert.False(await probe.CheckAsync());
@@ -79,7 +80,7 @@ public sealed class OidcReadinessProbeTests
     public async Task Encryption_only_jwk_does_not_make_signing_ready()
     {
         using var client = Client(req => req.RequestUri!.AbsoluteUri == Metadata
-            ? Json($"""{"issuer":"{{Issuer}}","jwks_uri":"{{Jwks}}"}""")
+            ? Json("{\"issuer\":\"" + Issuer + "\",\"jwks_uri\":\"" + Jwks + "\"}")
             : Json(PublicKeys.Replace("\"use\":\"sig\"", "\"use\":\"enc\"")));
         using var probe = new OidcReadinessProbe(client, Issuer, Metadata, allowHttpForDevelopment: true);
         Assert.False(await probe.CheckAsync());
@@ -92,7 +93,7 @@ public sealed class OidcReadinessProbeTests
     public async Task Non_signature_or_incompatible_rsa_algorithms_fail_closed(string algorithm)
     {
         using var client = Client(req => req.RequestUri!.AbsoluteUri == Metadata
-            ? Json($"""{"issuer":"{{Issuer}}","jwks_uri":"{{Jwks}}"}""")
+            ? Json("{\"issuer\":\"" + Issuer + "\",\"jwks_uri\":\"" + Jwks + "\"}")
             : Json(PublicKeys.Replace("\"RS256\"", "\"" + algorithm + "\"")));
         using var probe = new OidcReadinessProbe(client, Issuer, Metadata, allowHttpForDevelopment: true);
         Assert.False(await probe.CheckAsync());
@@ -104,7 +105,7 @@ public sealed class OidcReadinessProbeTests
         var encryptOnly = PublicKeys.Replace("\"use\":\"sig\"",
             "\"use\":\"sig\",\"key_ops\":[\"encrypt\"]");
         using var client = Client(req => req.RequestUri!.AbsoluteUri == Metadata
-            ? Json($"""{"issuer":"{{Issuer}}","jwks_uri":"{{Jwks}}"}""")
+            ? Json("{\"issuer\":\"" + Issuer + "\",\"jwks_uri\":\"" + Jwks + "\"}")
             : Json(encryptOnly));
         using var probe = new OidcReadinessProbe(client, Issuer, Metadata, allowHttpForDevelopment: true);
         Assert.False(await probe.CheckAsync());
@@ -116,7 +117,7 @@ public sealed class OidcReadinessProbeTests
         var json = PublicKeys.Replace("\"keys\":[", 
             "\"keys\":[{\"kty\":\"RSA\",\"kid\":\"bad\",\"n\":\"AQAB\",\"e\":\"AQAB\"},");
         using var client = Client(req => req.RequestUri!.AbsoluteUri == Metadata
-            ? Json($"""{"issuer":"{{Issuer}}","jwks_uri":"{{Jwks}}"}""")
+            ? Json("{\"issuer\":\"" + Issuer + "\",\"jwks_uri\":\"" + Jwks + "\"}")
             : Json(json));
         using var probe = new OidcReadinessProbe(client, Issuer, Metadata, allowHttpForDevelopment: true);
         Assert.True(await probe.CheckAsync());
