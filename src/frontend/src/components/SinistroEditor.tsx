@@ -29,11 +29,15 @@ export function SinistroEditor({id, token, onConfirmed, onConflict, onUnavailabl
   const epoch = useRef(0);
   // A synchronous CAS guard, independent of React setBusy render timing.
   const saveInFlight = useRef(false);
+  // The signed GET that establishes an editable CAS snapshot must also be
+  // single-flight: state-only busy cannot block two clicks in one task.
+  const readInFlight = useRef(false);
 
   // A previous JWT, case, or component lifetime must not restore late data.
   useEffect(() => () => {
     epoch.current += 1;
     saveInFlight.current = false;
+    readInFlight.current = false;
   }, [id, token]);
 
   function discardFields() {
@@ -45,7 +49,8 @@ export function SinistroEditor({id, token, onConfirmed, onConflict, onUnavailabl
   }
 
   async function reload() {
-    if (busy || saveInFlight.current) return;
+    if (busy || saveInFlight.current || readInFlight.current) return;
+    readInFlight.current = true;
     const current = ++epoch.current;
     setBusy("read");
     setError(null);
@@ -66,12 +71,15 @@ export function SinistroEditor({id, token, onConfirmed, onConflict, onUnavailabl
         onUnavailable();
       else setError("read");
     } finally {
-      if (epoch.current === current) setBusy(null);
+      if (epoch.current === current) {
+        readInFlight.current = false;
+        setBusy(null);
+      }
     }
   }
 
   function toggle() {
-    if (busy || saveInFlight.current) return;
+    if (busy || saveInFlight.current || readInFlight.current) return;
     if (open) {
       epoch.current += 1;
       setOpen(false);
@@ -86,7 +94,7 @@ export function SinistroEditor({id, token, onConfirmed, onConflict, onUnavailabl
   async function save(event: FormEvent) {
     event.preventDefault();
     const normalized = reference.trim();
-    if (busy || saveInFlight.current || !snapshot || !open ||
+    if (busy || saveInFlight.current || readInFlight.current || !snapshot || !open ||
         !normalized || normalized.length > 100 || !occurredOn) return;
     saveInFlight.current = true;
     const expectedVersion = snapshot.version;
