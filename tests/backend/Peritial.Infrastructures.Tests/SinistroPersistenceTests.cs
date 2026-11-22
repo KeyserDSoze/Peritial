@@ -560,6 +560,10 @@ public sealed class SinistroPersistenceTests
         // Release and reuse the SAME idempotency key against an ordinary
         // app-role connection: the failure did not reserve any identity.
         await holding.CommitAsync();
+        // The disposable test fixture limits db.App to Max Pool Size=1.
+        // COMMIT releases the advisory lock but the open connection still
+        // occupies that one pool slot until explicitly returned.
+        await holder.CloseAsync();
         var normal = new PgLegacyXmlCaseImportStore(db.App);
         var created = await normal.CommitAsync(tenant, "signed-actor", key,
             digest, preview);
