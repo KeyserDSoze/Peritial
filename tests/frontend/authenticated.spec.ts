@@ -5,7 +5,7 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
 
   test.setTimeout(90_000);
 
-  test("a stale failed create cannot invalidate a newer signed document refresh", async ({page}) => {
+  test("stale failed create and upload cannot invalidate newer signed document refreshes", async ({page}) => {
     await page.goto("/");
     await page.getByRole("button", {name: "Accedi"}).click();
     await expect(page.locator("#username")).toBeVisible({timeout: 30_000});
@@ -50,6 +50,33 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     // The existing active-503 test separately proves fail-closed behavior.
     await expect(page.getByRole("button", {name: "Crea", exact: true})).toBeEnabled();
     await expect(page.locator("#documents-perizia")).toHaveValue(id!);
+    await expect(page.getByRole("list", {name: /^(Perizie|Appraisals)$/}).getByText(seed, {exact: true})).toBeVisible();
+    await expect(page.getByRole("button", {name: "Riprova"})).toHaveCount(0);
+    // Uploads share the same parent epoch: a late failed file POST must not
+    // invalidate a newer authenticated document projection either.
+    let uploadStarted!: () => void;
+    const uploading = new Promise<void>(resolve => { uploadStarted = resolve; });
+    let releaseUpload!: () => void;
+    const uploadGate = new Promise<void>(resolve => { releaseUpload = resolve; });
+    await page.route("**/api/files", async route => {
+      if (route.request().method() !== "POST") return route.continue();
+      uploadStarted();
+      await uploadGate;
+      await route.fulfill({status: 503, body: "Simulated unavailable backend"});
+    });
+    await page.locator("#file").setInputFiles({
+      name: "stale-upload.pdf", mimeType: "application/pdf",
+      buffer: Buffer.from("%PDF-1.4\\n")
+    });
+    await page.getByRole("button", {name: "Carica documento"}).click();
+    await uploading;
+    await page.locator("#documents-perizia").selectOption("");
+    await expect(page.locator("#documents-perizia")).toHaveValue("");
+    const lateUploadFailure = page.waitForResponse(r =>
+      r.url().endsWith("/api/files") && r.request().method() === "POST" && r.status() === 503);
+    releaseUpload();
+    await lateUploadFailure;
+    await expect(page.getByRole("button", {name: "Carica documento"})).toBeEnabled();
     await expect(page.getByRole("list", {name: /^(Perizie|Appraisals)$/}).getByText(seed, {exact: true})).toBeVisible();
     await expect(page.getByRole("button", {name: "Riprova"})).toHaveCount(0);
   });
