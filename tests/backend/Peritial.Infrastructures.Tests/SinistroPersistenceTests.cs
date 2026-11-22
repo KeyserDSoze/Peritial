@@ -468,6 +468,156 @@ public sealed class SinistroPersistenceTests
         Assert.Equal((1L, 1L, 1L), await Counts(tenant));
     }
 
+    [Theory]
+    [InlineData("lock_timeout=350ms", "55P03")]
+    [InlineData("statement_timeout=350ms", "57014")]
+    public async Task V012_operator_timeouts_map_only_mutex_wait_to_busy_without_ghost_import(
+        string startupOption, string expectedSqlState)
+    {
+        await using var db = await IsolatedDatabases.CreateAsync();
+        // The second app-role pool carries an actual PostgreSQL startup
+        // setting. It is not the fixture's admin role or a mocked exception.
+        await using var configuredPool = NpgsqlDataSource.Create(
+            new NpgsqlConnectionStringBuilder(db.App.ConnectionString)
+            {
+                Password = "local-only-app",
+                Options = "-c " + startupOption
+            }.ConnectionString);
+        var tenant = TenantId.From(Guid.NewGuid());
+        var reference = "SETTINGS-" + Guid.NewGuid().ToString("N");
+        var preview = new LegacyXmlPreviewDto("classic", reference,
+            new DateOnly(2026, 11, 22), null, 0);
+        var digest = System.Security.Cryptography.SHA256.HashData(
+            "postgres-operator-timeout"u8);
+        var key = "operator-timeout-" + Guid.NewGuid().ToString("N");
+        var mutexInput = tenant.Value.ToString("D") + "\n" + reference;
+
+        await using var holder = await db.App.OpenConnectionAsync();
+        await using var holding = await holder.BeginTransactionAsync();
+        await using (var lockCommand = new NpgsqlCommand(
+            "SELECT pg_advisory_xact_lock(hashtextextended(@input, 0))",
+            holder, holding))
+        {
+            lockCommand.Parameters.AddWithValue("input", mutexInput);
+            await lockCommand.ExecuteNonQueryAsync();
+        }
+
+        // Prove the actual wire-level SQLSTATE for this server configuration
+        // without relying on the import store's exception translation.
+        await using (var observer = await configuredPool.OpenConnectionAsync())
+        await using (var observation = await observer.BeginTransactionAsync())
+        {
+            await using var lockCommand = new NpgsqlCommand(
+                "SELECT pg_advisory_xact_lock(hashtextextended(@input, 0))",
+                observer, observation);
+            lockCommand.Parameters.AddWithValue("input", mutexInput);
+            using var observerDeadline =
+                new CancellationTokenSource(TimeSpan.FromSeconds(12));
+            var rawError = await Assert.ThrowsAsync<PostgresException>(
+                () => lockCommand.ExecuteNonQueryAsync(observerDeadline.Token));
+            Assert.Equal(expectedSqlState, rawError.SqlState);
+            await observation.RollbackAsync();
+        }
+
+        // Neither an operator's earlier statement_timeout nor an earlier
+        // lock_timeout should leak an unhandled database exception or
+        // misclassify the result as a real reference identity collision.
+        var importer = new PgLegacyXmlCaseImportStore(configuredPool);
+        using (var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(12)))
+        {
+            await Assert.ThrowsAsync<LegacyXmlImportBusyException>(() =>
+                importer.CommitAsync(tenant, "signed-actor", key,
+                    digest, preview, deadline.Token));
+        }
+        await using (var sql = db.Admin.CreateCommand(
+            "SELECT " +
+            "(SELECT count(*) FROM sinistri WHERE tenant_id=@tenant " +
+            "AND external_reference=@reference), " +
+            "(SELECT count(*) FROM legacy_xml_import_keys WHERE tenant_id=@tenant), " +
+            "(SELECT count(*) FROM security_audit WHERE tenant_id=@tenant " +
+            "AND action='sinistro.import-xml' AND outcome='succeeded')"))
+        {
+            sql.Parameters.AddWithValue("tenant", tenant.Value);
+            sql.Parameters.AddWithValue("reference", reference);
+            await using var row = await sql.ExecuteReaderAsync();
+            Assert.True(await row.ReadAsync());
+            Assert.Equal(0L, row.GetInt64(0));
+            Assert.Equal(0L, row.GetInt64(1));
+            Assert.Equal(0L, row.GetInt64(2));
+        }
+
+        // The aborted transaction does not poison/reconfigure the pool:
+        // a later connection must retain the original operator preference.
+        await using (var afterTimeout = await configuredPool.OpenConnectionAsync())
+        {
+            var setting = startupOption.Split('=')[0];
+            await using var check = new NpgsqlCommand(
+                "SELECT current_setting(@name)", afterTimeout);
+            check.Parameters.AddWithValue("name", setting);
+            Assert.Equal("350ms", (string)(await check.ExecuteScalarAsync())!);
+        }
+
+        // Release and reuse the SAME idempotency key against an ordinary
+        // app-role connection: the failure did not reserve any identity.
+        await holding.CommitAsync();
+        var normal = new PgLegacyXmlCaseImportStore(db.App);
+        var created = await normal.CommitAsync(tenant, "signed-actor", key,
+            digest, preview);
+        var replay = await normal.CommitAsync(tenant, "signed-actor", key,
+            digest, preview);
+        Assert.False(created.Replayed);
+        Assert.True(replay.Replayed);
+        Assert.Equal(created.SinistroId, replay.SinistroId);
+    }
+
+    [Fact]
+    public async Task V012_caller_cancellation_is_not_reinterpreted_as_mutex_busy()
+    {
+        await using var db = await IsolatedDatabases.CreateAsync();
+        var tenant = TenantId.From(Guid.NewGuid());
+        var reference = "CLIENT-CANCEL-" + Guid.NewGuid().ToString("N");
+        var preview = new LegacyXmlPreviewDto("classic", reference,
+            new DateOnly(2026, 11, 22), null, 0);
+        var digest = System.Security.Cryptography.SHA256.HashData("cancelled-by-client"u8);
+        const string key = "caller-cancel-key-0001";
+
+        await using var holder = await db.App.OpenConnectionAsync();
+        await using var holding = await holder.BeginTransactionAsync();
+        await using (var command = new NpgsqlCommand(
+            "SELECT pg_advisory_xact_lock(hashtextextended(@input, 0))",
+            holder, holding))
+        {
+            command.Parameters.AddWithValue("input",
+                tenant.Value.ToString("D") + "\n" + reference);
+            await command.ExecuteNonQueryAsync();
+        }
+        // The caller cancels substantially before our 1500 ms SQL lock
+        // timeout. In particular it must NOT receive retryable Busy.
+        using var caller = new CancellationTokenSource(TimeSpan.FromMilliseconds(500));
+        var error = await Record.ExceptionAsync(() =>
+            new PgLegacyXmlCaseImportStore(db.App).CommitAsync(
+                tenant, "signed-actor", key, digest, preview, caller.Token));
+        Assert.NotNull(error);
+        Assert.True(caller.IsCancellationRequested);
+        Assert.IsNotType<LegacyXmlImportBusyException>(error);
+
+        await holding.RollbackAsync();
+        await using var check = db.Admin.CreateCommand(
+            "SELECT " +
+            "(SELECT count(*) FROM legacy_xml_import_keys WHERE tenant_id=@tenant), " +
+            "(SELECT count(*) FROM sinistri WHERE tenant_id=@tenant " +
+            "AND external_reference=@reference), " +
+            "(SELECT count(*) FROM security_audit WHERE tenant_id=@tenant " +
+            "AND action='sinistro.import-xml' AND outcome='succeeded')");
+        check.Parameters.AddWithValue("tenant", tenant.Value);
+        check.Parameters.AddWithValue("reference", reference);
+        await using var result = await check.ExecuteReaderAsync();
+        Assert.True(await result.ReadAsync());
+        Assert.Equal(0L, result.GetInt64(0));
+        Assert.Equal(0L, result.GetInt64(1));
+        Assert.Equal(0L, result.GetInt64(2));
+    }
+
     [Fact]
     public async Task V011_failed_success_audit_rolls_back_both_case_and_ledger()
     {

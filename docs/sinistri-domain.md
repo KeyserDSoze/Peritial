@@ -844,3 +844,49 @@ staging, la caratterizzazione dell'identità
 storica, la contention da bulk import e i campi
 temporali non sono stati completati: issue
 #24, #25 e #10 restano aperte.
+
+## Timeout PostgreSQL del mutex XML: statement_timeout vs lock_timeout (ADR 0083, #24)
+
+La precedente ADR 0082 limita `pg_advisory_xact_lock`
+dell'import XML **interno** a 1500 ms, preservando un
+`lock_timeout` operativo più severo. Se però il DBA
+imposta un `statement_timeout` ancora più breve,
+PostgreSQL interrompe la SELECT con SQLSTATE **57014**
+anziché **55P03**. Questo non significa che sia stato
+scoperto un riferimento legacy duplicato.
+
+Solo durante la specifica attesa del mutex, e solo se
+`CancellationToken.IsCancellationRequested` è false,
+lo store riconosce entrambi i codici come
+`LegacyXmlImportBusyException`. Una cancellazione
+esplicita del chiamante non viene trasformata in errore
+di contesa, e non esistono retry automatici.
+La transazione fallita viene annullata prima di scrivere
+ledger, Sinistro o audit successo; il timeout
+di altre query resta governato dalla normale policy DB.
+
+Regressioni su PostgreSQL reale con pool applicativi
+indipendenti usano le opzioni di startup
+`-c lock_timeout=350ms` e
+`-c statement_timeout=350ms`: testano i SQLSTATE
+nativi rispettivi, la trasformazione in Busy,
+0 scritture residue, preservazione dei setting sul
+pool dopo il rollback, rilascio del mutex,
+riuso della stessa idempotency key e replay.
+Una prova distinta cancella il token del chiamante
+prima di 1500 ms e verifica che non diventi Busy,
+né lasci dati o audit.
+
+Anche `pg_cancel_backend` da amministrazione può
+produrre 57014: la classificazione qui significa
+soltanto **impossibilità temporanea di acquisire il
+mutex senza commit**, mai identità duplicata o
+autorizzazione a fare retry indiscriminati. Un
+eventuale endpoint/importer pubblico dovrà avere
+una policy esplicita di errore, retry e osservabilità,
+non dedotta da queste eccezioni interne.
+
+#24 resta aperta per carico e deadlock multi-reference,
+identità storica, staging e policy operativa.
+Nessun cambio al trigger SQL V012, a RLS, ai
+writer REST/MCP o alle migrazioni esistenti.

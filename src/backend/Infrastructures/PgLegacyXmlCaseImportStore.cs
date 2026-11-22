@@ -73,11 +73,17 @@ public sealed class PgLegacyXmlCaseImportStore(NpgsqlDataSource dataSource)
             guard.Parameters.AddWithValue("lock_input", lockInput);
             await guard.ExecuteNonQueryAsync(ct);
         }
-        catch (PostgresException ex) when (ex.SqlState == "55P03")
+        catch (PostgresException ex) when (
+            !ct.IsCancellationRequested &&
+            (ex.SqlState == "55P03" || ex.SqlState == "57014"))
         {
-            // LockNotAvailable is temporary contention, NOT evidence of a
-            // duplicate legacy identity. The aborted transaction rolls back
-            // before any ledger, Sinistro or success audit can be committed.
+            // SQLSTATE 55P03: lock_timeout; 57014: query_canceled, which
+            // PostgreSQL also emits when an operator-configured
+            // statement_timeout expires BEFORE our narrower lock_timeout.
+            // Only translate while awaiting this specific mutex, and never
+            // reinterpret a caller-requested cancellation as retryable.
+            // The failed transaction rolls back automatically; no import
+            // ledger, case or success audit has been written at this point.
             throw new LegacyXmlImportBusyException();
         }
         if (narrowedLockTimeout)
