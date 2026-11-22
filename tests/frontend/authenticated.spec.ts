@@ -81,6 +81,66 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     await expect(page.getByRole("button", {name: "Riprova"})).toHaveCount(0);
   });
 
+  test("PWA Sinistro editor opens with one signed GET under synchronous double click", async ({page, request}) => {
+    await page.goto("/");
+    await page.getByRole("button", {name:"Accedi"}).click();
+    await expect(page.locator("#username")).toBeVisible({timeout:30_000});
+    await page.locator("#username").fill("localuser");
+    await page.locator("#password").fill("local-only-user");
+    await page.locator("#kc-login").click();
+    await expect(page.getByRole("button",{name:"Esci"})).toBeVisible({timeout:30_000});
+    const token = await page.evaluate(() => {
+      const key = Object.keys(sessionStorage).find(x => x.startsWith("oidc.user:"));
+      return key ? (JSON.parse(sessionStorage.getItem(key) || "{}") as {access_token?:string}).access_token : undefined;
+    });
+    expect(token).toBeTruthy();
+
+    const reference = "EDITOR-READ-FLIGHT-" + Date.now() + "-" +
+      Math.round(Math.random() * 100000);
+    const created = await request.post("http://localhost:8080/api/sinistri", {
+      headers: {Authorization:"Bearer " + token},
+      data: {externalReference:reference, occurredOn:"2098-10-20"}
+    });
+    expect(created.status(),await created.text()).toBe(201);
+    const id = (await created.json() as {id:string}).id;
+
+    await page.getByRole("button",{name:"Apri catalogo sinistri"}).click();
+    await page.getByRole("button",{name:"Aggiorna sinistri"}).click();
+    const row = page.locator('[data-sinistro-id="' + id + '"]');
+    await expect(row.getByText(reference,{exact:true})).toBeVisible();
+
+    let reads = 0;
+    let signalFirstRead!: () => void;
+    let releaseReads!: () => void;
+    const firstRead = new Promise<void>(resolve => {signalFirstRead = resolve;});
+    const gate = new Promise<void>(resolve => {releaseReads = resolve;});
+    await page.route("**/api/sinistri/" + id, async route => {
+      if (route.request().method() !== "GET") return route.continue();
+      reads += 1;
+      signalFirstRead();
+      await gate;
+      await route.continue();
+    });
+    await row.getByRole("button",{name:"Modifica sinistro"}).evaluate(element => {
+      (element as HTMLButtonElement).click();
+      (element as HTMLButtonElement).click();
+    });
+    await firstRead;
+    await page.waitForTimeout(200);
+    const observedReads = reads;
+    releaseReads();
+    const form = row.locator('input[id^="sinistro-edit-ref-"]');
+    await expect(form).toHaveValue(reference);
+    await expect(row.getByText("Versione 1")).toBeVisible();
+    expect(observedReads,"opening one CAS editor must read its snapshot once").toBe(1);
+    await row.getByRole("button",{name:"Chiudi modifica sinistro"}).click();
+    await expect(form).toHaveCount(0);
+    await row.getByRole("button",{name:"Modifica sinistro"}).click();
+    await expect(form).toHaveValue(reference);
+    expect(reads).toBe(2);
+    await page.unroute("**/api/sinistri/" + id);
+  });
+
   test("PWA sends at most one top-level POST during synchronous duplicate and cross-form submissions", async ({page}) => {
     await page.goto("/");
     await page.getByRole("button", {name: "Accedi"}).click();
