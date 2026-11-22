@@ -41,12 +41,17 @@ export function SinistroCatalog({token, canWrite, onUnavailable}: Props) {
   // React busy state updates after render. This synchronous ref prevents
   // repeated requestSubmit() events from starting duplicate POSTs.
   const createInFlight = useRef(false);
+  // State-driven disabled controls do not stop two synchronous click events.
+  // Protect both initial reads and keyset continuations with one immediate
+  // lock; the matching epoch alone may release it on settlement.
+  const readInFlight = useRef(false);
 
   // When the parent unmounts this tenant view (logout, token rotation,
   // network failure, offline), no late REST result can restore its rows.
   useEffect(() => () => {
     epoch.current += 1;
     createInFlight.current = false;
+    readInFlight.current = false;
   }, [token]);
 
   async function fetchCatalog(
@@ -58,7 +63,8 @@ export function SinistroCatalog({token, canWrite, onUnavailable}: Props) {
   }
 
   async function load(filter: CatalogFilter | null = activeFilter.current) {
-    if (busy || createInFlight.current) return;
+    if (busy || createInFlight.current || readInFlight.current) return;
+    readInFlight.current = true;
     const current = ++epoch.current;
     setBusy("load");
     setError(null);
@@ -76,12 +82,16 @@ export function SinistroCatalog({token, canWrite, onUnavailable}: Props) {
       if (isApiUnavailable(cause)) onUnavailable();
       else setError("load");
     } finally {
-      if (epoch.current === current) setBusy(null);
+      if (epoch.current === current) {
+        readInFlight.current = false;
+        setBusy(null);
+      }
     }
   }
 
   async function loadMore() {
-    if (busy || createInFlight.current || !expanded || !nextCursor) return;
+    if (busy || createInFlight.current || readInFlight.current || !expanded || !nextCursor) return;
+    readInFlight.current = true;
     const filter = activeFilter.current;
     const current = ++epoch.current;
     setBusy("more");
@@ -101,12 +111,15 @@ export function SinistroCatalog({token, canWrite, onUnavailable}: Props) {
       if (isApiUnavailable(cause)) onUnavailable();
       else setError("load");
     } finally {
-      if (epoch.current === current) setBusy(null);
+      if (epoch.current === current) {
+        readInFlight.current = false;
+        setBusy(null);
+      }
     }
   }
 
   function toggle() {
-    if (busy || createInFlight.current) return;
+    if (busy || createInFlight.current || readInFlight.current) return;
     if (expanded) {
       epoch.current += 1;
       setExpanded(false);
@@ -130,7 +143,7 @@ export function SinistroCatalog({token, canWrite, onUnavailable}: Props) {
   function search(event: FormEvent) {
     event.preventDefault();
     const prefix = searchPrefix.trim();
-    if (!expanded || busy || createInFlight.current || prefix.length < 2 || prefix.length > 100 ||
+    if (!expanded || busy || createInFlight.current || readInFlight.current || prefix.length < 2 || prefix.length > 100 ||
         (searchFrom && searchTo && searchFrom > searchTo)) return;
     const filter = {prefix, from: searchFrom, to: searchTo};
     activeFilter.current = filter;
@@ -139,7 +152,7 @@ export function SinistroCatalog({token, canWrite, onUnavailable}: Props) {
   }
 
   function resetSearch() {
-    if (busy || createInFlight.current) return;
+    if (busy || createInFlight.current || readInFlight.current) return;
     activeFilter.current = null;
     setAppliedPrefix(null);
     setSearchPrefix("");
@@ -178,7 +191,7 @@ export function SinistroCatalog({token, canWrite, onUnavailable}: Props) {
   async function create(event: FormEvent) {
     event.preventDefault();
     const normalized = reference.trim();
-    if (!canWrite || busy || createInFlight.current || !expanded || normalized.length < 1 ||
+    if (!canWrite || busy || createInFlight.current || readInFlight.current || !expanded || normalized.length < 1 ||
         normalized.length > 100 || !occurredOn) return;
     createInFlight.current = true;
     const current = ++epoch.current;
