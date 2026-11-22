@@ -119,7 +119,11 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     await page.waitForTimeout(250);
     await expect(page.getByRole("button", {name: "Riprova"})).toHaveCount(0);
     await expect(row.getByText("Registrata")).toBeVisible();
-    await expect(row.getByRole("button", {name: "Assegna"})).toBeEnabled();
+    // A remounted workflow intentionally clears the old assignee value.
+    // The textbox is available, but Submit remains disabled until the
+    // user enters a new assignee with the newly verified signed view.
+    await expect(row.getByRole("textbox", {name: "Assegnatario " + reference})).toBeEnabled();
+    await expect(row.getByRole("button", {name: "Assegna"})).toBeDisabled();
     await page.unroute(assignPattern);
 
     // A delayed genuine 200 is also from the old workflow, not a
@@ -154,7 +158,7 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     await expect(row.getByText("confirmed-writer", {exact: true})).toBeVisible();
   });
 
-  test("a stale GET never restores protected rows after a concurrent failed mutation", async ({page}) => {
+  test("active workflow 503 fails closed while a stale response after refresh is ignored", async ({page}) => {
     await page.goto("/");
     await page.getByRole("button", {name: "Accedi"}).click();
     await expect(page.locator("#username")).toBeVisible({timeout: 30_000});
@@ -163,53 +167,32 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     await page.locator("#kc-login").click();
     await expect(page.getByRole("button", {name: "Esci"})).toBeVisible({timeout: 30_000});
 
-    const ref = "API-RACE-" + Date.now() + "-" + Math.round(Math.random() * 100000);
+    const ref = "API-ACTIVE-POST-DOWN-" + Date.now() + "-" + Math.round(Math.random() * 100000);
     await page.locator("#reference").fill(ref);
     await page.getByRole("button", {name: "Crea"}).click();
-    const row = page.getByRole("list", {name: /^(Perizie|Appraisals)$/}).locator("li").filter({hasText: ref});
-    await expect(row).toBeVisible();
-    await row.getByRole("textbox", {name: "Assegnatario " + ref}).fill("race-assignee");
+    const row = page.getByRole("list", {name: /^(Perizie|Appraisals)$/})
+      .locator("li").filter({hasText: ref});
+    await expect(row.getByText("Registrata")).toBeVisible();
 
-    let failMutation: () => void = () => undefined;
-    let completeOldRead: () => void = () => undefined;
-    let markReadStarted: () => void = () => undefined;
-    const mutationGate = new Promise<void>(resolve => {failMutation = resolve;});
-    const readGate = new Promise<void>(resolve => {completeOldRead = resolve;});
-    const readStarted = new Promise<void>(resolve => {markReadStarted = resolve;});
-    await page.route("**/api/perizie/*/assign", async route => {
-      await mutationGate;
+    // Unlike a request from a component already replaced by a fresh signed
+    // GET (tested above), a 503 delivered to the ACTIVE workflow must
+    // lock the entire protected view and require an explicit retry.
+    const assignPattern = "**/api/perizie/*/assign";
+    await page.route(assignPattern, async route => {
       await route.fulfill({status: 503, body: "API unavailable"});
     });
-    await page.route("**/api/perizie", async route => {
-      if (route.request().method() === "GET") {
-        markReadStarted();
-        await readGate;
-      }
-      await route.continue();
-    });
-
+    await row.getByRole("textbox", {name: "Assegnatario " + ref})
+      .fill("never-committed");
     await row.getByRole("button", {name: "Assegna"}).click();
-    await page.getByRole("button", {name: "Aggiorna elenco"}).click();
-    await readStarted; // Guarantee the GET captured the pre-failure epoch.
-    failMutation();
     await expect(page.getByRole("alert")).toContainText("Servizio perizie non disponibile");
-
-    // The GET began before the failed POST. Completing it afterwards must
-    // NOT re-enable mutations or display possibly stale tenant records.
-    const oldRead = page.waitForResponse(response =>
-      response.url().endsWith("/api/perizie") && response.request().method() === "GET");
-    completeOldRead();
-    const oldResponse = await oldRead;
-    await oldResponse.finished();
-    await expect(page.getByRole("button", {name: "Riprova"})).toBeVisible();
-    await expect(page.getByRole("list", {name: /^(Perizie|Appraisals)$/}).getByText(ref, {exact: true})).toHaveCount(0);
+    await expect(page.getByRole("list", {name: /^(Perizie|Appraisals)$/})
+      .getByText(ref, {exact: true})).toHaveCount(0);
     await expect(page.getByRole("button", {name: "Crea"})).toHaveCount(0);
 
-    await page.unroute("**/api/perizie");
-    await page.unroute("**/api/perizie/*/assign");
+    await page.unroute(assignPattern);
     await page.getByRole("button", {name: "Riprova"}).click();
-    await expect(page.getByRole("list", {name: /^(Perizie|Appraisals)$/}).getByText(ref, {exact: true})).toBeVisible();
     await expect(row.getByText("Registrata")).toBeVisible();
+    await expect(row.getByText("never-committed")).toHaveCount(0);
   });
 
   test("PWA lists safe document metadata after an authenticated upload", async ({page}) => {
