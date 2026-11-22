@@ -796,3 +796,51 @@ approvazione e prove di ripristino specifiche; nessun
 permesso di cancellazione va riattivato per aggirare
 questi controlli.
 [ADR 0047](../adr/0047-v008-revoke-perizia-delete.md).
+
+## Contesa del mutex dell'import XML interno V012 (ADR 0082, #24)
+
+La V012 fa acquisire a ogni `INSERT` e `UPDATE` su
+`sinistri` il mutex PostgreSQL
+`hashtextextended(tenant_id || newline || external_reference,0)`.
+Lo store XML **interno e non registrato in DI**
+acquisisce esplicitamente lo stesso lock prima di
+prenotare `legacy_xml_import_keys`. Né il trigger
+SQL né le UNIQUE legacy vengono modificati.
+
+Per impedire che l'import rimanga sospeso senza
+limiti dietro una transazione bloccata, lo store
+pone `lock_timeout` a **massimo 1500 ms** soltanto
+mentre acquisisce il mutex. Se il server ha un
+timeout più restrittivo, lo mantiene. Dopo
+acquisizione ripristina il precedente valore
+transazionale prima di qualsiasi altra query;
+il rollback della transazione pulisce in modo
+automatico il setting anche se la lock acquisition
+fallisce. SQLSTATE `55P03` durante questa sola
+operazione diventa `LegacyXmlImportBusyException`,
+un errore temporaneo **diverso** da
+`LegacyXmlReferenceConflictException` per
+riferimento realmente già presente. Nessun writer
+non-import è soggetto al timeout aggiuntivo.
+
+Il test PostgreSQL reale usa due pool distinti
+app-role FORCE RLS: la prima transazione tiene il
+mutex sulla coppia tenant/riferimento; l'import
+nella seconda fallisce con `Busy` senza chiave,
+Sinistro o audit di successo. Un import su altro
+tenant con riferimento identico continua senza
+bloccare; dopo il rilascio del mutex, la stessa
+chiave originariamente rifiutata crea un solo
+Sinistro e i replay successivi non duplicano.
+Il test ha una propria deadline di 12 secondi
+per rilevare anche regressioni che eliminassero
+il timeout del server.
+
+Il percorso di commit XML **rimane disabilitato
+pubblicamente**, senza REST, MCP, UI o schedulazioni.
+La gestione HTTP di un eventuale errore busy,
+la politica di retry autorizzato, la prova di
+staging, la caratterizzazione dell'identità
+storica, la contention da bulk import e i campi
+temporali non sono stati completati: issue
+#24, #25 e #10 restano aperte.

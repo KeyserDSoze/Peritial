@@ -44,11 +44,49 @@ public sealed class PgLegacyXmlCaseImportStore(NpgsqlDataSource dataSource)
         // Separate SHA and hashtextextended mutexes would not coordinate.
         var lockInput = tenant.Value.ToString("D") + "\n" + sinistro.ExternalReference;
         await using var scope = await TenantDbScope.OpenAsync(dataSource, tenant, ct);
-        await using (var guard = scope.Command(
-            "SELECT pg_advisory_xact_lock(hashtextextended(@lock_input, 0))"))
+
+        // V012 protects ALL writers with a database-side transaction mutex.
+        // The INTERNAL XML importer must not wait on that shared mutex
+        // indefinitely under bulk-load or stalled-transaction contention.
+        // Preserve a stricter operator lock_timeout; otherwise cap only this
+        // acquisition at 1500 ms, then restore the session's prior setting.
+        // pg_settings.setting for lock_timeout is expressed in milliseconds.
+        const int maxMutexWaitMs = 1500;
+        int priorLockTimeoutMs;
+        await using (var setting = scope.Command(
+            "SELECT setting::integer FROM pg_settings WHERE name='lock_timeout'"))
+            priorLockTimeoutMs = (int)(await setting.ExecuteScalarAsync(ct)
+                ?? throw new InvalidOperationException("PostgreSQL lock_timeout unavailable."));
+        bool narrowedLockTimeout = priorLockTimeoutMs == 0 ||
+            priorLockTimeoutMs > maxMutexWaitMs;
+        if (narrowedLockTimeout)
         {
+            await using var set = scope.Command(
+                "SELECT set_config('lock_timeout', @timeout, true)");
+            set.Parameters.AddWithValue("timeout", maxMutexWaitMs + "ms");
+            await set.ExecuteNonQueryAsync(ct);
+        }
+        try
+        {
+            await using var guard = scope.Command(
+                "SELECT pg_advisory_xact_lock(hashtextextended(@lock_input, 0))");
             guard.Parameters.AddWithValue("lock_input", lockInput);
             await guard.ExecuteNonQueryAsync(ct);
+        }
+        catch (PostgresException ex) when (ex.SqlState == "55P03")
+        {
+            // LockNotAvailable is temporary contention, NOT evidence of a
+            // duplicate legacy identity. The aborted transaction rolls back
+            // before any ledger, Sinistro or success audit can be committed.
+            throw new LegacyXmlImportBusyException();
+        }
+        if (narrowedLockTimeout)
+        {
+            await using var restore = scope.Command(
+                "SELECT set_config('lock_timeout', @timeout, true)");
+            restore.Parameters.AddWithValue("timeout",
+                priorLockTimeoutMs == 0 ? "0" : priorLockTimeoutMs + "ms");
+            await restore.ExecuteNonQueryAsync(ct);
         }
 
         // Insert the ledger proof FIRST. PostgreSQL's UNIQUE arbitration

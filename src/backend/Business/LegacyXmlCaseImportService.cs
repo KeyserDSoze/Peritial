@@ -32,6 +32,16 @@ public sealed class LegacyXmlReferenceConflictException()
 }
 
 /// <summary>
+/// The V012 tenant/reference mutex was busy beyond the bounded internal
+/// import window. No duplicate identity has been established: callers must
+/// not turn this into a reference conflict or silently retry a write.
+/// </summary>
+public sealed class LegacyXmlImportBusyException()
+    : Exception("XML import reference is temporarily busy; no commit was made.")
+{
+}
+
+/// <summary>
 /// Internal only. No REST/MCP route or DI registration until all case writer
 /// paths share a uniqueness/concurrency gate, and richer import is reviewed.
 /// </summary>

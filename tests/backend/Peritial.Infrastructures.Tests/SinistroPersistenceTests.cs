@@ -383,6 +383,92 @@ public sealed class SinistroPersistenceTests
     }
 
     [Fact]
+    public async Task V012_contended_import_mutex_times_out_without_ledger_audit_or_cross_tenant_block()
+    {
+        await using var db = await IsolatedDatabases.CreateAsync();
+        // Independent real PG pool: an advisory lock is per connection and
+        // would be reentrant if the import reused the holder session.
+        await using var otherPool = NpgsqlDataSource.Create(
+            new NpgsqlConnectionStringBuilder(db.App.ConnectionString)
+            { Password = "local-only-app" }.ConnectionString);
+        var importer = new PgLegacyXmlCaseImportStore(otherPool);
+        var tenant = TenantId.From(Guid.NewGuid());
+        var other = TenantId.From(Guid.NewGuid());
+        var reference = "LOCK-WAIT-" + Guid.NewGuid().ToString("N");
+        var preview = new LegacyXmlPreviewDto("classic", reference,
+            new DateOnly(2026, 11, 22), null, 0);
+        var digest = System.Security.Cryptography.SHA256.HashData("lock-wait-xml"u8);
+        const string key = "mutex-wait-key-000001";
+
+        async Task<(long Cases, long Proofs, long SuccessAudits)> Counts(TenantId actor)
+        {
+            await using var sql = db.Admin.CreateCommand(
+                "SELECT " +
+                "(SELECT count(*) FROM sinistri WHERE tenant_id=@tenant " +
+                "AND external_reference=@reference), " +
+                "(SELECT count(*) FROM legacy_xml_import_keys WHERE tenant_id=@tenant), " +
+                "(SELECT count(*) FROM security_audit WHERE tenant_id=@tenant " +
+                "AND action='sinistro.import-xml' AND outcome='succeeded')");
+            sql.Parameters.AddWithValue("tenant", actor.Value);
+            sql.Parameters.AddWithValue("reference", reference);
+            await using var row = await sql.ExecuteReaderAsync();
+            Assert.True(await row.ReadAsync());
+            return (row.GetInt64(0), row.GetInt64(1), row.GetInt64(2));
+        }
+
+        await using var holder = await db.App.OpenConnectionAsync();
+        await using var heldTransaction = await holder.BeginTransactionAsync();
+        await using (var mutex = new NpgsqlCommand(
+            "SELECT pg_advisory_xact_lock(hashtextextended(@input, 0))",
+            holder, heldTransaction))
+        {
+            mutex.Parameters.AddWithValue("input",
+                tenant.Value.ToString("D") + "\n" + reference);
+            await mutex.ExecuteNonQueryAsync();
+        }
+
+        // This must not stall indefinitely waiting for another process.
+        // A generous client-side deadline makes a missing timeout fail
+        // the test without hanging CI. The store raises a distinct busy
+        // outcome, never a false duplicate-reference diagnosis.
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(12));
+        await Assert.ThrowsAsync<LegacyXmlImportBusyException>(() =>
+            importer.CommitAsync(tenant, "signed-actor", key,
+                digest, preview, deadline.Token));
+        Assert.Equal((0L, 0L, 0L), await Counts(tenant));
+
+        // The lock is scoped by the signed tenant and exact reference.
+        // A different tenant with the same reference must still import.
+        var foreign = await importer.CommitAsync(other, "signed-actor",
+            "mutex-tenant-other-0001", digest, preview);
+        Assert.False(foreign.Replayed);
+        Assert.Equal((1L, 1L, 1L), await Counts(other));
+        Assert.Equal((0L, 0L, 0L), await Counts(tenant));
+
+        // After the holder releases its transaction, the very same key
+        // must be reusable: no ghost reservation or poisoned pool state.
+        await heldTransaction.CommitAsync();
+        var created = await importer.CommitAsync(tenant, "signed-actor", key,
+            digest, preview);
+        Assert.False(created.Replayed);
+        var replay = await importer.CommitAsync(tenant, "signed-actor", key,
+            digest, preview);
+        Assert.True(replay.Replayed);
+        Assert.Equal(created.SinistroId, replay.SinistroId);
+        Assert.NotEqual(foreign.SinistroId, created.SinistroId);
+        Assert.Equal((1L, 1L, 1L), await Counts(tenant));
+        Assert.Equal((1L, 1L, 1L), await Counts(other));
+
+        // A genuine duplicate AFTER import is a different, permanent
+        // reference conflict. It is never masked as transient mutex busy.
+        var duplicate = Sinistro.Create(tenant, reference, preview.OccurredOn);
+        await Assert.ThrowsAsync<LegacyXmlReferenceConflictException>(() =>
+            new PgSinistroRepository(otherPool).AddAuditedAsync(
+                duplicate, Event(tenant, duplicate.Id, "sinistro.create")));
+        Assert.Equal((1L, 1L, 1L), await Counts(tenant));
+    }
+
+    [Fact]
     public async Task V011_failed_success_audit_rolls_back_both_case_and_ledger()
     {
         await using var db = await IsolatedDatabases.CreateAsync();
