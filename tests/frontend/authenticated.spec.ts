@@ -1096,6 +1096,84 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     expect(await mcp.text()).not.toContain("tenantId");
   });
 
+  test("PWA Sinistri catalog page continuation and refresh are single-flight", async ({page}) => {
+    await page.goto("/");
+    await page.getByRole("button", {name:"Accedi"}).click();
+    await expect(page.locator("#username")).toBeVisible({timeout:30_000});
+    await page.locator("#username").fill("localuser");
+    await page.locator("#password").fill("local-only-user");
+    await page.locator("#kc-login").click();
+    await expect(page.getByRole("button",{name:"Esci"})).toBeVisible({timeout:30_000});
+
+    const item = (n: number) => ({
+      id: "00000000-0000-4000-8000-" + String(n).padStart(12,"0"),
+      externalReference: "SINGLE-READ-SIN-" + n, occurredOn:"2097-01-01",
+      reportedOn:null, createdAtUtc:"2026-11-22T18:00:00Z", version:1
+    });
+    let moreRequests = 0;
+    let refreshRequests = 0;
+    let phase: "initial" | "more" | "refresh" = "initial";
+    let markMore!: () => void;
+    let releaseMore!: () => void;
+    const moreStarted = new Promise<void>(resolve => {markMore = resolve;});
+    const moreGate = new Promise<void>(resolve => {releaseMore = resolve;});
+    let markRefresh!: () => void;
+    let releaseRefresh!: () => void;
+    const refreshStarted = new Promise<void>(resolve => {markRefresh = resolve;});
+    const refreshGate = new Promise<void>(resolve => {releaseRefresh = resolve;});
+    await page.route(/\/api\/sinistri\/page\?/, async route => {
+      const cursor = new URL(route.request().url()).searchParams.get("cursor");
+      if (cursor !== null) {
+        expect(cursor).toBe("single-read-cursor");
+        moreRequests += 1;
+        markMore();
+        await moreGate;
+        await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify({
+          items:[item(2)],nextCursor:null
+        })});
+      } else if (phase === "refresh") {
+        refreshRequests += 1;
+        markRefresh();
+        await refreshGate;
+        await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify({
+          items:[item(1)],nextCursor:"single-read-cursor"
+        })});
+      } else {
+        await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify({
+          items:[item(1)],nextCursor:"single-read-cursor"
+        })});
+      }
+    });
+    await page.getByRole("button",{name:"Apri catalogo sinistri"}).click();
+    const catalog = page.getByRole("region",{name:"Catalogo sinistri"});
+    await expect(catalog.getByText("SINGLE-READ-SIN-1",{exact:true})).toBeVisible();
+    phase = "more";
+    await catalog.getByRole("button",{name:"Carica altri sinistri"}).evaluate(element => {
+      (element as HTMLButtonElement).click();
+      (element as HTMLButtonElement).click();
+    });
+    await moreStarted;
+    await page.waitForTimeout(200);
+    const observedMore = moreRequests;
+    releaseMore();
+    await expect(catalog.getByText("SINGLE-READ-SIN-2",{exact:true})).toBeVisible();
+    await expect(catalog.getByRole("button",{name:"Carica altri sinistri"})).toHaveCount(0);
+
+    phase = "refresh";
+    await catalog.getByRole("button",{name:"Aggiorna sinistri"}).evaluate(element => {
+      (element as HTMLButtonElement).click();
+      (element as HTMLButtonElement).click();
+    });
+    await refreshStarted;
+    await page.waitForTimeout(200);
+    const observedRefresh = refreshRequests;
+    releaseRefresh();
+    await expect(catalog.getByText("SINGLE-READ-SIN-1",{exact:true})).toBeVisible();
+    await expect(catalog.getByText("SINGLE-READ-SIN-2",{exact:true})).toHaveCount(0);
+    expect(observedMore,"a cursor may be fetched only once").toBe(1);
+    expect(observedRefresh,"refresh should issue only one signed GET").toBe(1);
+  });
+
   test("PWA appends Sinistri pages without duplicate rows and refresh drops old cursor", async ({page}) => {
     await page.goto("/");
     await page.getByRole("button", {name:"Accedi"}).click();
