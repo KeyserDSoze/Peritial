@@ -304,6 +304,66 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     await expect(row.getByText("confirmed-writer", {exact: true})).toBeVisible();
   });
 
+  test("authenticated Perizie GET removes records omitted from current tenant projection", async ({page}) => {
+    await page.goto("/");
+    await page.getByRole("button", {name: "Accedi"}).click();
+    await expect(page.locator("#username")).toBeVisible({timeout: 30_000});
+    await page.locator("#username").fill("localuser");
+    await page.locator("#password").fill("local-only-user");
+    await page.locator("#kc-login").click();
+    await expect(page.getByRole("button", {name: "Esci"})).toBeVisible({timeout: 30_000});
+
+    const stamp = Date.now() + "-" + Math.round(Math.random() * 100000);
+    const removed = "AUTH-REVOKED-" + stamp;
+    const retained = "AUTH-RETAINED-" + stamp;
+    const cases = page.getByRole("list", {name: /^(Perizie|Appraisals)$/});
+    for (const reference of [removed, retained]) {
+      await page.locator("#reference").fill(reference);
+      await page.getByRole("button", {name: "Crea", exact: true}).click();
+      await expect(cases.getByText(reference, {exact: true})).toBeVisible();
+    }
+    const removedRow = cases.locator("li").filter({hasText: removed});
+    const id = await removedRow.getAttribute("data-perizia-id");
+    expect(id).toBeTruthy();
+
+    // Make both selectors reference the record before an authoritative read
+    // simulates a server-side narrowing of the signed tenant projection.
+    await page.locator("#upload-perizia").selectOption(id!);
+    await page.locator("#documents-perizia").selectOption(id!);
+    await expect(page.locator("#documents-perizia")).toHaveValue(id!);
+    await expect(removedRow).toBeVisible();
+
+    let filteredReads = 0;
+    await page.route("**/api/perizie", async route => {
+      if (route.request().method() !== "GET") return route.continue();
+      // Fetch through the real authenticated backend, then model a record
+      // no longer present in the server's current authorized list.
+      const upstream = await route.fetch();
+      expect(upstream.status()).toBe(200);
+      const all = await upstream.json() as Array<{id: string}>;
+      expect(all.some(item => item.id === id)).toBe(true);
+      filteredReads += 1;
+      await route.fulfill({response: upstream,
+        json: all.filter(item => item.id !== id)});
+    });
+    await page.getByRole("button", {name: "Aggiorna elenco" }).click();
+    await expect(page.getByRole("button", {name: "Crea", exact: true})).toBeEnabled();
+    await expect(cases.getByText(retained, {exact: true})).toBeVisible();
+    await expect(removedRow).toHaveCount(0);
+    await expect(page.locator("#upload-perizia")).toHaveValue("");
+    await expect(page.locator("#documents-perizia")).toHaveValue("");
+    await expect(page.locator('#upload-perizia option[value="' + id + '"]')).toHaveCount(0);
+    expect(filteredReads).toBeGreaterThan(0);
+    await expect(page.getByRole("button", {name: "Riprova"})).toHaveCount(0);
+
+    // Once the server includes it again, only a fresh successful signed
+    // GET can restore the record and make it selectable.
+    await page.unroute("**/api/perizie");
+    await page.getByRole("button", {name: "Aggiorna elenco" }).click();
+    await expect(cases.getByText(removed, {exact: true})).toBeVisible();
+    await expect(page.locator('#upload-perizia option[value="' + id + '"]')).toHaveCount(1);
+  });
+
   test("active workflow 503 fails closed while a stale response after refresh is ignored", async ({page}) => {
     await page.goto("/");
     await page.getByRole("button", {name: "Accedi"}).click();
