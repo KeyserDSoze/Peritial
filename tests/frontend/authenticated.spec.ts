@@ -603,6 +603,78 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     await expect(docs.locator("a,button")).toHaveCount(0);
   });
 
+  test("PWA ignores old document page when language refetches current signed catalog", async ({page}) => {
+    const entry = (id: string, name: string) => ({
+      id, periziaId: null, fileName: name, contentType:"application/pdf",
+      length:21, createdAtUtc:"2026-11-22T18:00:00Z"
+    });
+    let newProjection = false;
+    let oldPageStarted!: () => void;
+    let releaseOldPage!: () => void;
+    const oldStarted = new Promise<void>(resolve => {oldPageStarted = resolve;});
+    const oldGate = new Promise<void>(resolve => {releaseOldPage = resolve;});
+    let staleRequests = 0;
+    let currentRequests = 0;
+    await page.route("**/api/files/page?**", async route => {
+      const cursor = new URL(route.request().url()).searchParams.get("cursor");
+      if (!cursor) {
+        await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify({
+          items:[entry("00000000-0000-4000-8000-000000000201",
+            newProjection ? "new-projection-base.pdf" : "old-projection-base.pdf")],
+          nextCursor:newProjection ? "new-generation" : "old-generation"
+        })});
+      } else if (cursor === "old-generation") {
+        staleRequests += 1;
+        oldPageStarted();
+        await oldGate;
+        await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify({
+          items:[entry("00000000-0000-4000-8000-000000000202",
+            "never-restore-old-page.pdf")],nextCursor:null
+        })});
+      } else {
+        expect(cursor).toBe("new-generation");
+        currentRequests += 1;
+        await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify({
+          items:[entry("00000000-0000-4000-8000-000000000203",
+            "new-generation-page-two.pdf")],nextCursor:null
+        })});
+      }
+    });
+    await page.goto("/");
+    await page.getByRole("button",{name:"Accedi"}).click();
+    await expect(page.locator("#username")).toBeVisible({timeout:30_000});
+    await page.locator("#username").fill("localuser");
+    await page.locator("#password").fill("local-only-user");
+    await page.locator("#kc-login").click();
+    await expect(page.getByRole("button",{name:"Esci"})).toBeVisible({timeout:30_000});
+
+    const docs = page.getByRole("list",{name:/^(Documenti caricati|Uploaded documents)$/});
+    await expect(docs.getByText("old-projection-base.pdf")).toBeVisible();
+    await page.getByRole("button",{name:"Carica altri documenti"}).click();
+    await oldStarted;
+    newProjection = true;
+    await page.getByRole("button",{name:"Lingua"}).click();
+    await expect(page.locator("html")).toHaveAttribute("lang","en");
+    await expect(docs.getByText("new-projection-base.pdf")).toBeVisible();
+    await expect(docs.getByText("old-projection-base.pdf")).toHaveCount(0);
+
+    const staleReply = page.waitForResponse(response =>
+      new URL(response.url()).pathname === "/api/files/page" &&
+      new URL(response.url()).searchParams.get("cursor") === "old-generation");
+    releaseOldPage();
+    await (await staleReply).finished();
+    await page.waitForTimeout(200);
+    await expect(docs.getByText("never-restore-old-page.pdf")).toHaveCount(0);
+    await expect(docs.getByText("new-projection-base.pdf")).toBeVisible();
+    const more = page.getByRole("button",{name:"Load more documents"});
+    await expect(more).toBeEnabled();
+    await more.click();
+    await expect(docs.getByText("new-generation-page-two.pdf")).toBeVisible();
+    await expect(more).toHaveCount(0);
+    expect(staleRequests).toBe(1);
+    expect(currentRequests).toBe(1);
+  });
+
   test("PWA progressively loads document metadata and rejects stale continuation", async ({page}) => {
     const firstId = "00000000-0000-4000-8000-000000000101";
     const secondId = "00000000-0000-4000-8000-000000000102";
