@@ -55,6 +55,12 @@ obsolete le pagine aperte sul catalogo precedente.
   seconda pagina. La verifica esige **una sola GET**
   con quel cursore, un'append visibile e nessun
   link/URL di storage nei metadata.
+- Regressione complementare [`47a46430`](https://github.com/KeyserDSoze/Peritial/commit/47a4643059f78f72042ea7c1051076923a6c56a8):
+  una continuazione firmata resta in volo mentre il cambio
+  di lingua avvia un nuovo catalogo documenti; la vecchia
+  risposta 200 non può appendere metadata né invalidare
+  il nuovo cursore. Una continuation successiva carica solo
+  la seconda pagina della nuova proiezione.
 - Fix [`68891bcc`](https://github.com/KeyserDSoze/Peritial/commit/68891bcc756f492cd270458fc42b1f06f77c1bba):
   lock per operazione e generation fencing, senza
   alterare il contratto REST.
