@@ -19,6 +19,16 @@ export default function App() {
   const [documents, setDocuments] = useState<DocumentSummary[]>([]);
   const [documentsNextCursor, setDocumentsNextCursor] = useState<string | null>(null);
   const [documentsLoadingMore, setDocumentsLoadingMore] = useState(false);
+  // A cursor belongs to exactly one signed projection. React's state does not
+  // synchronously block two click events in the same task.
+  const documentsPageSequence = useRef(0);
+  const activeDocumentsPage = useRef<number | null>(null);
+  const documentsProjectionGeneration = useRef(0);
+  function cancelDocumentsContinuation() {
+    // An obsolete page must not release a newer request's lock.
+    activeDocumentsPage.current = null;
+    setDocumentsLoadingMore(false);
+  }
   // Each confirmed mutation increments a local revision. A GET started before
   // it must not overwrite that result; a later GET may refresh it normally.
   const mutations = useRef<Map<string, number>>(new Map());
@@ -53,7 +63,7 @@ export default function App() {
     setItems([]);
     setDocuments([]);
     setDocumentsNextCursor(null);
-    setDocumentsLoadingMore(false);
+    cancelDocumentsContinuation();
     setUploadPeriziaId("");
     setDocumentsPeriziaId("");
     setDataStatus("unavailable");
@@ -63,7 +73,7 @@ export default function App() {
     if (!online || !token) return;
     requestEpoch.current += 1;
     setDocumentsNextCursor(null);
-    setDocumentsLoadingMore(false);
+    cancelDocumentsContinuation();
     setDataStatus("loading");
     setRefreshIndex(value => value + 1);
   }
@@ -73,7 +83,7 @@ export default function App() {
     requestEpoch.current += 1;
     setDocuments([]);
     setDocumentsNextCursor(null);
-    setDocumentsLoadingMore(false);
+    cancelDocumentsContinuation();
     setDataStatus("loading");
     setDocumentsPeriziaId(periziaId);
   }
@@ -105,7 +115,7 @@ export default function App() {
       setItems([]);
       setDocuments([]);
       setDocumentsNextCursor(null);
-      setDocumentsLoadingMore(false);
+      cancelDocumentsContinuation();
       setUploadPeriziaId("");
       setDocumentsPeriziaId("");
       setVerifiedToken(null);
@@ -119,7 +129,7 @@ export default function App() {
       setItems([]);
       setDocuments([]);
       setDocumentsNextCursor(null);
-      setDocumentsLoadingMore(false);
+      cancelDocumentsContinuation();
       mutations.current.clear();
       setError("");
       setReference("");
@@ -132,6 +142,10 @@ export default function App() {
   useEffect(() => {
     if (!token || !online) return;
     let active = true;
+    // A new authenticated base-page read supersedes every old continuation,
+    // including a language-triggered refetch with an unchanged parent epoch.
+    documentsProjectionGeneration.current += 1;
+    cancelDocumentsContinuation();
     setDataStatus("loading");
     setDocumentsNextCursor(null);
     const epochAtStart = requestEpoch.current;
@@ -172,32 +186,40 @@ export default function App() {
   }, [token, t, online, refreshIndex, documentsPeriziaId]);
   async function loadMoreDocuments() {
     if (!token || !online || dataStatus !== "ready" || verifiedToken !== token ||
-        busy || documentsLoadingMore || !documentsNextCursor) return;
+        busy || documentsLoadingMore || activeDocumentsPage.current !== null ||
+        !documentsNextCursor) return;
+    // Claim the current cursor synchronously, before the first await.
+    const operation = ++documentsPageSequence.current;
+    activeDocumentsPage.current = operation;
     const epochAtStart = requestEpoch.current;
+    const projectionAtStart = documentsProjectionGeneration.current;
     const filter = documentsPeriziaId;
     const cursor = documentsNextCursor;
+    const stillCurrent = () =>
+      activeDocumentsPage.current === operation &&
+      documentsProjectionGeneration.current === projectionAtStart &&
+      requestEpoch.current === epochAtStart && activeToken.current === token;
     setDocumentsLoadingMore(true);
     setError("");
     try {
       const result = await pageDocuments(token, filter || undefined, cursor);
-      if (requestEpoch.current !== epochAtStart || activeToken.current !== token) return;
+      if (!stillCurrent()) return;
       setDocuments(previous => {
         const known = new Set(previous.map(item => item.id));
         return [...previous, ...result.items.filter(item => !known.has(item.id))];
       });
       setDocumentsNextCursor(result.nextCursor);
     } catch (cause) {
-      if (requestEpoch.current !== epochAtStart || activeToken.current !== token) return;
+      if (!stillCurrent()) return;
       if (isApiUnavailable(cause)) lockProtectedUi();
       else {
-        // A stale or invalid cursor cannot be trusted. Require a fresh
-        // authenticated read rather than showing a partial old result.
+        // An invalid cursor cannot be replayed: discard the partial page.
         setDocuments([]);
         setDocumentsNextCursor(null);
         setError(t("documentPageError"));
       }
     } finally {
-      if (requestEpoch.current === epochAtStart) setDocumentsLoadingMore(false);
+      if (activeDocumentsPage.current === operation) cancelDocumentsContinuation();
     }
   }
   async function create(event:FormEvent) {
