@@ -64,6 +64,11 @@ public sealed class DocumentDownloadService(
         catch (ArgumentException) { throw new DocumentContentUnavailableException(); }
         if (!string.Equals(location.StorageKey, expectedKey, StringComparison.Ordinal))
             throw new DocumentContentUnavailableException();
+        // Downloaded metadata may be stale or damaged even when a tenant
+        // lookup and UUID/key match succeeded. Fail before fetching bytes.
+        if (!UploadedDocumentValidation.IsSupportedContentType(
+                Path.GetExtension(item.FileName), item.ContentType))
+            throw new DocumentContentUnavailableException();
 
         byte[] content;
         try { content = await blobs.ReadAsync(expectedKey, item.Length, ct); }
@@ -71,6 +76,18 @@ public sealed class DocumentDownloadService(
         catch (Exception) { throw new DocumentContentUnavailableException(); }
         if (content.LongLength != item.Length)
             throw new DocumentContentUnavailableException();
+        // Equal length does not imply a valid object: reject wrong magic,
+        // malformed XML and invalid OPC ZIP from storage before the download
+        // success audit or any caller can serialize the bytes.
+        try
+        {
+            UploadedDocumentValidation.ValidateContent(
+                Path.GetExtension(item.FileName), content);
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidDataException or NotSupportedException)
+        {
+            throw new DocumentContentUnavailableException();
+        }
 
         // Audit is a hard admission gate. Do not return the bytes if the
         // append-only PostgreSQL record cannot be committed. This is an audit
