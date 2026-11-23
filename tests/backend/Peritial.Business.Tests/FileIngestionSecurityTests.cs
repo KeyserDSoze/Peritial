@@ -205,6 +205,75 @@ public sealed class FileIngestionSecurityTests
     }
 
     [Theory]
+    [InlineData("word/media/CON.bin")]
+    [InlineData("word/media/con.TXT")]
+    [InlineData("word/media/NUL")]
+    [InlineData("word/media/AUX.xml")]
+    [InlineData("word/media/PRN.jpg")]
+    [InlineData("word/media/COM1.bin")]
+    [InlineData("word/media/LPT9.bin")]
+    [InlineData("word/media/COM\u00B9.bin")]
+    [InlineData("word/media/CONIN$.dat")]
+    [InlineData("word/media/CONOUT$.dat")]
+    public async Task Docx_con_nome_zip_riservato_windows_e_rifiutato_prima_di_scanner_e_storage(
+        string memberName)
+    {
+        // Windows device names resolve differently from ordinary filenames
+        // even with extensions; future extraction must never consume them.
+        var scanner = new CountingScanner();
+        var (service, store, docs) = NewService(scanner: scanner);
+        var bytes = CreateDocx((memberName, new byte[] { 1, 2, 3 }));
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.IngestAsync("rapporto.docx", DocxMime,
+                new MemoryStream(bytes), bytes.Length));
+
+        Assert.Equal(0, scanner.Scans);
+        Assert.Equal(0, store.Uploads);
+        Assert.Empty(docs.Records);
+        Assert.Empty(docs.AuditEvents);
+    }
+
+    [Theory]
+    [InlineData("word/media/COM0.bin")]
+    [InlineData("word/media/LPT10.bin")]
+    [InlineData("word/media/consolidato.bin")]
+    [InlineData("word/media/normal-file.bin")]
+    public async Task Docx_con_nome_zip_non_riservato_rimane_ammesso(
+        string memberName)
+    {
+        var scanner = new CountingScanner();
+        var (service, store, docs) = NewService(scanner: scanner);
+        var bytes = CreateDocx((memberName, new byte[] { 1, 2, 3 }));
+        var saved = await service.IngestAsync("rapporto.docx", DocxMime,
+            new MemoryStream(bytes), bytes.Length);
+
+        Assert.Equal(bytes.Length, saved.Length);
+        Assert.Equal(1, scanner.Scans);
+        Assert.Equal(1, store.Uploads);
+        Assert.Single(docs.Records);
+    }
+
+    [Fact]
+    public async Task Docx_con_directory_zip_che_contiene_byte_e_rifiutato()
+    {
+        // A directory path carrying payload bytes is ambiguous for future
+        // ZIP consumers; it must not reach the scanner or permanent storage.
+        var scanner = new CountingScanner();
+        var (service, store, docs) = NewService(scanner: scanner);
+        var bytes = CreateDocx(("word/media/", new byte[] { 7, 8, 9 }));
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.IngestAsync("rapporto.docx", DocxMime,
+                new MemoryStream(bytes), bytes.Length));
+
+        Assert.Equal(0, scanner.Scans);
+        Assert.Equal(0, store.Uploads);
+        Assert.Empty(docs.Records);
+        Assert.Empty(docs.AuditEvents);
+    }
+
+    [Theory]
     [InlineData(0xA000)] // Unix symlink
     [InlineData(0x1000)] // Unix FIFO
     [InlineData(0x2000)] // Unix character device
