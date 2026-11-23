@@ -1183,3 +1183,18 @@ Non cambiano schema JSON, scope JWT, RLS, log o route pubbliche.
 L'indentazione tra elementi resta lecita e il commit XML
 non viene esposto. [ADR 0099]
 (../adr/0099-xml-control-whitespace-reference-source-gate.md).
+
+
+## DOCX con DTD nelle parti ZIP: fail-closed condiviso REST/MCP (#5)
+
+Il tool `ingest_file` e REST `POST /api/files` usano
+lo stesso controllo `UploadedDocumentValidation`: le entry
+`.xml` / `.rels` di un DOCX vengono parse sotto limiti
+di memoria con DTD proibite prima della chiamata a ClamAV,
+del PUT e dell'audit di successo. Una relazione OPC con
+una DTD viene rifiutata, non restituisce il contenuto o
+la URI originale e non crea un documento. Test OAuth
+Keycloak verificano 400 REST e `isError:true` MCP.
+Non si tratta di una validazione completa dello standard
+OOXML; le policy antivirus/quarantena rimangono obbligatorie.
+[ADR 0100](../adr/0100-docx-opc-xml-admission-before-malware-scan.md).

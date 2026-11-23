@@ -366,3 +366,27 @@ L'indentazione **fra elementi XML** rimane ammessa. [ADR 0099]
 La verifica automatica include CR, CRLF, LF e TAB e un test Keycloak
 REST/MCP con UUID candidato reale. L'import resta interno; #24/#25
 non sono chiuse e `death` rimane storico.
+
+
+## DOCX: validazione XML annidato prima di ClamAV e storage (ADR 0100, #5)
+
+Un DOCX può essere un archivio ZIP ben formato, con espansione limitata,
+ma includere XML o relazioni OPC (`.rels`) malformati o contenenti DTD
+ed entità esterne. In aggiunta ai limiti già presenti (1024 entry,
+25 MiB per parte, 64 MiB complessivi e ratio compressione), il
+validatore ora **analizza con `XmlReader` ogni parte `.xml` e `.rels`**
+(case-insensitive) dopo la decompressione effettiva, con DTD proibite,
+resolver nullo, documento XML completo e limiti di caratteri.
+Le parti XML sono bufferizzate **una alla volta** e soltanto dopo
+aver verificato i limiti reali d'espansione.
+
+Una parte malformata/DTD blocca l'upload **prima dello scanner, del
+PUT oggetti, dei metadati e dell'audit di successo**. Test Business
+RED/GREEN e test JWT Keycloak REST + MCP con DOCX sintetico e
+una `.rels` contenente una DTD verificano la protezione e l'assenza
+di dettagli XML nel messaggio di errore; un DOCX con XML ben
+formati resta ammesso. Questo non è un parser semantico OOXML,
+né elimina link esterni leciti o sostituisce ClamAV/quarantena.
+[ADR 0100](adr/0100-docx-opc-xml-admission-before-malware-scan.md).
+I gate di produzione #5 (quarantena, firme/alerting,
+scan reale Azure/on-prem, retention e antivirus) restano aperti.

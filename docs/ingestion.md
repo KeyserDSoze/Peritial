@@ -99,3 +99,33 @@ Le prenotazioni completate restano nel database fino a una policy esplicita di r
 `upload_intents.lease_expires_at_utc` è impostato da PostgreSQL a `now()+2 minuti` e aggiornato ogni 20 secondi durante PUT. Non è il timestamp della richiesta HTTP: il rinnovo è transazionale e tenant-scoped. La scrittura documenti/audit consuma l'intento **solo con lease valida**; una perdita del lease annulla il token di PUT e blocca il commit. Il worker di recovery agisce soltanto su intenti creati più di un'ora fa **e** con lease scaduta secondo PostgreSQL. Il ruolo `peritial_app` può aggiornare solo `lease_expires_at_utc`; non sono consentiti aggiornamenti indiscriminati alle colonne delle intenzioni.
 
 La CI testa lease, scadenze e concorrenza su PostgreSQL. Il test Compose SIGKILL interrompe l'API, prepara un orphan su S3/PG dopo l'arresto, riavvia l'API e verifica che il worker lo ripulisca con idempotency key liberata. Il nuovo test Compose (ADR 0014) intercetta invece un vero PUT firmato dell'API, inoltra i primi byte del corpo verso SeaweedFS, interrompe l'API con SIGKILL mentre la richiesta è bloccata, e verifica cleanup dopo restart. Restano multi-replica, outage database e fault injection su Azure Blob reale.
+
+
+## DOCX: XML annidato e relazioni OPC validati prima dell'upload (ADR 0100)
+
+Il controllo DOCX è applicato nella fase di ammissione dei
+byte a `FileIngestionService`, **prima** di chiamare ClamAV,
+lo storage e il repository PostgreSQL. I precedenti limiti ZIP
+(1024 entry, fino a 25 MiB espansi per parte, 64 MiB complessivi,
+compression ratio massimo 200 per parti ≥1 MiB) restano invariati.
+Dopo la verifica delle dimensioni reali decompresse, ogni entry il
+cui nome termina in `.xml` o `.rels` (case-insensitive) viene
+letta con un `XmlReader` che proibisce DTD, non risolve entità
+esterne e richiede documento completo XML con root. Il buffer
+delle parti XML è temporaneo, uno alla volta, e non contiene
+più dei byte permessi per la singola entry. Le altre entry
+continuano a essere decompresse con limite ma non interpretate.
+
+In caso di XML malformato o DTD, l'ingestione fallisce con
+`ArgumentException` senza echo di URL, XML o dati del documento
+nel messaggio verso REST/MCP; scanner, PUT e metadati non vengono
+avviati. Ciò non prova la semantica OOXML, la sicurezza di
+relazioni `TargetMode=External`, o che un documento valido sia
+pulito da malware. ClamAV fail-closed resta obbligatorio per
+file ammessi, la quarantena persistente resta da implementare (#5).
+Test Business coprono DTD in `word/header1.xml`, `.rels`,
+malformazione XML e maiuscole dell'estensione, più DOCX
+valido. La CI Compose verifica il comportamento HTTP 400 REST
+e `isError` MCP con JWT firmato e nessuna fuoriuscita
+del marker della URI esterna.
+[ADR 0100](../adr/0100-docx-opc-xml-admission-before-malware-scan.md).
