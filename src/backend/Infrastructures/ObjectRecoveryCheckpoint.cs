@@ -34,6 +34,17 @@ public static class ObjectRecoveryCheckpoint
             var (length, digest) = await HashObjectAsync(objects, bucket, row.StorageKey, ct);
             if (length != row.LengthBytes)
                 throw new InvalidOperationException("Object checkpoint failed: document length differs from PostgreSQL.");
+            // The archive's first capture must not legitimize an already
+            // substituted object. V013/V014 documents have an immutable
+            // PostgreSQL digest of the admitted bytes, independently of S3.
+            // Legacy NULL rows remain archivally recoverable but are not
+            // certified as originally admitted; download denies those rows.
+            if (row.ContentSha256 is not null &&
+                (row.ContentSha256.Length != 32 ||
+                 !CryptographicOperations.FixedTimeEquals(
+                     row.ContentSha256, Convert.FromHexString(digest))))
+                throw new InvalidOperationException(
+                    "Object checkpoint failed: persisted document digest differs from S3.");
             manifest.Add(new Document(
                 row.TenantId, row.DocumentId, row.StorageKey, row.LengthBytes, digest));
         }
@@ -84,13 +95,19 @@ public static class ObjectRecoveryCheckpoint
                 !string.Equals(current.StorageKey, saved.StorageKey, StringComparison.Ordinal) ||
                 current.LengthBytes != saved.LengthBytes ||
                 saved.Sha256?.Length != 64 ||
-                !saved.Sha256.All(c => c is >= '0' and <= '9' or >= 'a' and <= 'f'))
+                !saved.Sha256.All(c => c is >= '0' and <= '9' or >= 'a' and <= 'f') ||
+                (current.ContentSha256 is not null &&
+                 (current.ContentSha256.Length != 32 ||
+                  !CryptographicOperations.FixedTimeEquals(
+                      current.ContentSha256, Convert.FromHexString(saved.Sha256)))))
                 throw new InvalidOperationException(
                     "Restored document references or checkpoint manifest differ from PostgreSQL.");
         }
     }
 
-    private sealed record Metadata(Guid TenantId, Guid DocumentId, string StorageKey, long LengthBytes);
+    private sealed record Metadata(
+        Guid TenantId, Guid DocumentId, string StorageKey, long LengthBytes,
+        byte[]? ContentSha256);
 
     private static async Task<List<Metadata>> ReadAllMetadataAsync(
         NpgsqlDataSource administrator, CancellationToken ct)
@@ -134,7 +151,7 @@ public static class ObjectRecoveryCheckpoint
         var keys = new HashSet<string>(StringComparer.Ordinal);
         await using (var cmd = new NpgsqlCommand(
             """
-            SELECT tenant_id,id,storage_key,length_bytes
+            SELECT tenant_id,id,storage_key,length_bytes,content_sha256
               FROM documents ORDER BY tenant_id,id
             """, conn, tx))
         await using (var rows = await cmd.ExecuteReaderAsync(ct))
@@ -142,7 +159,8 @@ public static class ObjectRecoveryCheckpoint
             while (await rows.ReadAsync(ct))
             {
                 var item = new Metadata(
-                    rows.GetGuid(0), rows.GetGuid(1), rows.GetString(2), rows.GetInt64(3));
+                    rows.GetGuid(0), rows.GetGuid(1), rows.GetString(2), rows.GetInt64(3),
+                    rows.IsDBNull(4) ? null : rows.GetFieldValue<byte[]>(4));
                 if (string.IsNullOrWhiteSpace(item.StorageKey) || item.LengthBytes <= 0 ||
                     !keys.Add(item.StorageKey))
                     throw new InvalidOperationException(
