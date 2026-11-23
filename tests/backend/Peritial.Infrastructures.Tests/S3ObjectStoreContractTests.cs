@@ -51,6 +51,13 @@ public sealed class S3ObjectStoreContractTests
             using var saved = new MemoryStream();
             await read.ResponseStream.CopyToAsync(saved);
             Assert.Equal(content, saved.ToArray());
+            // Same private SDK credentials as ingestion. The application
+            // downloads only the exact PostgreSQL-declared byte count.
+            Assert.Equal(content, await store.ReadAsync(key, content.Length));
+            await Assert.ThrowsAsync<InvalidDataException>(() =>
+                store.ReadAsync(key, content.Length - 1));
+            await Assert.ThrowsAsync<InvalidDataException>(() =>
+                store.ReadAsync(key, content.Length + 1));
 
             await store.DeleteAsync(key);
             await store.DeleteAsync(key); // Missing object must be safe to delete.
