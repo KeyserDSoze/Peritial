@@ -17,7 +17,7 @@ public sealed class DocumentDownloadTests
     {
         public Dictionary<Guid, (TenantId Tenant, DocumentDownloadLocation Location)> Rows { get; } = [];
         public int Reads { get; private set; }
-        public Task<DocumentDownloadLocation?> FindAsync(
+        public Task<DocumentDownloadLocation?> FindForDownloadAsync(
             TenantId tenant, Guid documentId, CancellationToken ct = default)
         {
             Reads++;
