@@ -136,7 +136,7 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
       name: "stale-upload.pdf", mimeType: "application/pdf",
       buffer: Buffer.from("%PDF-1.4\\n")
     });
-    await page.getByRole("button", {name: "Carica documento"}).click();
+    await page.getByRole("button", {name: "Carica documento", exact: true}).click();
     await uploading;
     await page.locator("#documents-perizia").selectOption("");
     await expect(page.locator("#documents-perizia")).toHaveValue("");
@@ -144,7 +144,7 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
       r.url().endsWith("/api/files") && r.request().method() === "POST" && r.status() === 503);
     releaseUpload();
     await lateUploadFailure;
-    await expect(page.getByRole("button", {name: "Carica documento"})).toBeEnabled();
+    await expect(page.getByRole("button", {name: "Carica documento", exact: true})).toBeEnabled();
     await expect(page.getByRole("list", {name: /^(Perizie|Appraisals)$/}).getByText(seed, {exact: true})).toBeVisible();
     await expect(page.getByRole("button", {name: "Riprova"})).toHaveCount(0);
   });
@@ -276,7 +276,7 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     expect(uploads, "duplicate upload must not dispatch a second POST").toBe(1);
     expect(creates, "create must not overlap an in-flight upload").toBe(1);
     releaseUpload();
-    await expect(page.getByRole("button", {name: "Carica documento"})).toBeEnabled();
+    await expect(page.getByRole("button", {name: "Carica documento", exact: true})).toBeEnabled();
   });
 
   test("API down while browser stays online hides cases and blocks writes until retry", async ({page}) => {
@@ -304,7 +304,7 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     await expect(page.getByRole("alert")).toContainText("Servizio perizie non disponibile");
     await expect(page.getByRole("list", {name: /^(Perizie|Appraisals)$/}).getByText(ref, {exact: true})).toHaveCount(0);
     await expect(page.getByRole("button", {name: "Crea"})).toHaveCount(0);
-    await expect(page.getByRole("button", {name: "Carica documento"})).toHaveCount(0);
+    await expect(page.getByRole("button", {name: "Carica documento", exact: true})).toHaveCount(0);
     expect(await page.evaluate(() => navigator.onLine)).toBe(true);
 
     await page.unroute("**/api/perizie");
@@ -545,7 +545,7 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     });
     const upload = page.waitForResponse(response =>
       response.url().endsWith("/api/files") && response.request().method() === "POST");
-    await page.getByRole("button", {name: "Carica documento"}).click();
+    await page.getByRole("button", {name: "Carica documento", exact: true}).click();
     const response = await upload;
     expect(response.status(), await response.text()).toBe(201);
     const record = await response.json() as {id:string};
@@ -630,7 +630,7 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     });
     const upload = page.waitForResponse(response =>
       response.url().endsWith("/api/files") && response.request().method() === "POST");
-    await page.getByRole("button", {name: "Carica documento"}).click();
+    await page.getByRole("button", {name: "Carica documento", exact: true}).click();
     const uploaded = await upload;
     expect(uploaded.status(), await uploaded.text()).toBe(201);
     const record = await uploaded.json() as {periziaId: string | null};
@@ -671,7 +671,7 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
       await page.locator("#file").setInputFiles({name, mimeType: "application/pdf", buffer: pdf});
       const responsePromise = page.waitForResponse(response =>
         response.url().endsWith("/api/files") && response.request().method() === "POST");
-      await page.getByRole("button", {name: "Carica documento"}).click();
+      await page.getByRole("button", {name: "Carica documento", exact: true}).click();
       const response = await responsePromise;
       expect(response.status(), await response.text()).toBe(201);
       const list = page.getByRole("list", {name: "Documenti caricati"});
@@ -1749,7 +1749,7 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     await expect(row.getByText(reference,{exact:true})).toBeVisible({timeout:30_000});
     await expect(row.getByRole("button",{name:"Annulla"})).toBeVisible();
     await expect(row.getByRole("button",{name:"Assegna"})).toBeVisible();
-    await expect(page.getByRole("button",{name:"Carica documento"})).toBeVisible();
+    await expect(page.getByRole("button", {name: "Carica documento", exact: true})).toBeVisible();
 
     const oldStorage=await page.evaluate(()=>{
       const key=Object.keys(sessionStorage).find(k=>k.startsWith("oidc.user:"));
@@ -1776,7 +1776,7 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     await expect(row.getByText("Registrata",{exact:true})).toBeVisible();
     await expect(page.locator("#reference")).toHaveCount(0);
     await expect(page.getByRole("button",{name:"Crea",exact:true})).toHaveCount(0);
-    await expect(page.getByRole("button",{name:"Carica documento"})).toHaveCount(0);
+    await expect(page.getByRole("button", {name: "Carica documento", exact: true})).toHaveCount(0);
     await expect(page.locator("#file")).toHaveCount(0);
     await expect(page.locator("#upload-perizia")).toHaveCount(0);
     await expect(page.locator("#documents-perizia")).toBeVisible();
@@ -1800,7 +1800,7 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     await expect(row.getByText(reference,{exact:true})).toBeVisible({timeout:30_000});
     await expect(page.locator("#reference")).toBeVisible();
     await expect(page.getByRole("button",{name:"Crea",exact:true})).toBeEnabled();
-    await expect(page.getByRole("button",{name:"Carica documento"})).toBeVisible();
+    await expect(page.getByRole("button", {name: "Carica documento", exact: true})).toBeVisible();
     await expect(row.getByRole("button",{name:"Assegna"})).toBeVisible();
     await expect(row.getByRole("button",{name:"Annulla"})).toBeVisible();
   });
@@ -1897,7 +1897,7 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     await expect(page.getByRole("status")).toContainText("offline");
     await expect(page.getByRole("list", {name: /^(Perizie|Appraisals)$/}).getByText(reference)).toHaveCount(0);
     await expect(page.getByRole("button", {name: "Crea"})).toHaveCount(0);
-    await expect(page.getByRole("button", {name: "Carica documento"})).toHaveCount(0);
+    await expect(page.getByRole("button", {name: "Carica documento", exact: true})).toHaveCount(0);
 
     await context.setOffline(false);
     await expect(page.getByRole("status")).toHaveCount(0);
