@@ -12,16 +12,6 @@ public sealed class FileIngestionService(
     public const long MaxUploadBytes = 25 * 1024 * 1024;
     public const int MaxMcpBytes = 4 * 1024 * 1024;
 
-    private static readonly Dictionary<string, string[]> AllowedMimes = new(StringComparer.OrdinalIgnoreCase)
-    {
-        [".pdf"] = ["application/pdf"],
-        [".xml"] = ["application/xml", "text/xml"],
-        [".jpg"] = ["image/jpeg"],
-        [".jpeg"] = ["image/jpeg"],
-        [".png"] = ["image/png"],
-        [".docx"] = ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"]
-    };
-
     public async Task<DocumentDto> IngestAsync(
         string name, string contentType, Stream content, long size, Guid? periziaId = null,
         string? idempotencyKey = null, CancellationToken ct = default)
@@ -39,8 +29,7 @@ public sealed class FileIngestionService(
 
         var safeName = UploadedDocumentValidation.CanonicalFileName(name);
         var ext = Path.GetExtension(safeName);
-        if (!AllowedMimes.TryGetValue(ext, out var allowedMimes) ||
-            !allowedMimes.Contains(contentType, StringComparer.OrdinalIgnoreCase))
+        if (!UploadedDocumentValidation.IsSupportedContentType(ext, contentType))
             throw new ArgumentException("File extension and media type do not match.", nameof(contentType));
 
         // Authorization and ownership checks precede reading or writing the file.
