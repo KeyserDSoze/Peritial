@@ -346,3 +346,34 @@ I test positivi DOCX, XML, JPG e PNG confermano che il controllo non
 interrompe gli scaricamenti già ammessi.
 [ADR 0109](../adr/0109-download-mime-and-content-revalidation.md)
 e issue #11/#5 dettagliano prove e limiti.
+
+## SHA-256 privato del documento: V013 e download verificato (ADR 0110)
+
+La tranche V013 calcola SHA-256 sui byte già convalidati da ClamAV
+**prima** del PUT e registra il digest privato nella stessa transazione
+dei metadati, dell'audit `document.ingest/succeeded` e del risultato
+idempotente. Il catalogo REST/MCP e i DTO di download non riportano
+SHA-256 o chiavi storage.
+
+In download il servizio tenant-scoped rifiuta **prima** del GET ogni
+record storico senza digest a 32 byte. Dopo la lettura bounded e i
+controlli di struttura/MIME ADR 0109 verifica il digest dei byte
+in tempo costante; se non coincide, non restituisce il contenuto
+né registra `document.download/succeeded`. Sono coperte le
+sostituzioni con un altro PDF valido della **stessa lunghezza**.
+L'audit riuscito rimane la prova di preparazione pre-HTTP, non
+di avvenuta consegna al browser.
+
+**Rischio operativo V013:** i documenti caricati prima della nuova
+versione hanno `content_sha256=NULL` e diventano non scaricabili
+finché non vengono verificati/ri-scansionati con una procedura
+approvata. La migrazione non deriva hash da oggetti di origine non
+attestata. Eseguire inventario, backup e piano di backfill prima
+di un upgrade su dati reali. Il controllo DB vieta riscritture
+del digest e valori diversi da 32 byte, ma non blocca ancora tutti
+i nuovi INSERT raw con NULL; questa parte e i fault drill su
+S3/Azurite rimangono aperti nella
+[issue #27](https://github.com/KeyserDSoze/Peritial/issues/27).
+
+Riferimenti: [ADR 0110](../adr/0110-document-sha256-admission-and-verified-download.md)
+e [runbook migrazioni V013](database-migrations.md).
