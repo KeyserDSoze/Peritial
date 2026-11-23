@@ -105,7 +105,7 @@ public sealed class FileIngestionSecurityTests
     [InlineData("word/_rels/document.xml.rels", "%2f%2fattacker.example/private.xml")]
     [InlineData("word/_rels/document.xml.rels", "https%3a%2f%2fattacker.example/private.xml")]
     [InlineData("word/_rels/document.xml.rels", @"..\..\private.xml")]
-    [InlineData("word/_rels/document.xml.rels", "../media\private.xml")]
+    [InlineData("word/_rels/document.xml.rels", @"../media\private.xml")]
     [InlineData("word/_rels/document.xml.rels", "%252e%252e%252f%252e%252e%252fprivate.xml")]
     public async Task Docx_con_target_opc_che_esce_dal_pacchetto_o_decodifica_in_risorsa_esterna_e_rifiutato(
         string relsEntry, string target)
