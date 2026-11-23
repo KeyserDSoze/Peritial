@@ -86,6 +86,11 @@ internal static class UploadedDocumentValidation
                 throw new ArgumentException("DOCX contains too many ZIP entries.");
 
             var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            // An implicit directory is required by every nested member. A
+            // regular ZIP file may never claim that same path, regardless
+            // of entry order or whether a directory entry is explicit.
+            var filePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var directoryPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             long declaredTotal = 0;
             var hasContentTypes = false;
             var hasDocument = false;
@@ -119,11 +124,32 @@ internal static class UploadedDocumentValidation
                 if (string.IsNullOrWhiteSpace(name) || name.StartsWith('/') ||
                     name.Any(char.IsControl) ||
                     name.Contains('\\') || name.Contains(':') ||
-                    segments.Any(s => s is "." or "..") ||
+                    segments.Any(s => s is "." or ".." ||
+                        s.EndsWith('.') || s.EndsWith(' ')) ||
                     segments.SkipLast(1).Any(string.IsNullOrEmpty) ||
-                    (!name.EndsWith('/') && segments.Any(string.IsNullOrEmpty)) ||
+                    (!isDirectoryPath && segments.Any(string.IsNullOrEmpty)) ||
                     !names.Add(name.TrimEnd('/')))
                     throw new ArgumentException("Unsafe DOCX ZIP entry name.");
+
+                // Trailing dot/space segments are filesystem aliases on
+                // Windows; a file also cannot shadow an implicit directory.
+                // Check both entry orders, without extracting ZIP members.
+                var canonicalPath = name.TrimEnd('/');
+                if (!isDirectoryPath && directoryPaths.Contains(canonicalPath))
+                    throw new ArgumentException("Ambiguous DOCX ZIP file/directory path.");
+                for (var slash = canonicalPath.IndexOf('/');
+                     slash >= 0;
+                     slash = canonicalPath.IndexOf('/', slash + 1))
+                {
+                    var parent = canonicalPath[..slash];
+                    if (filePaths.Contains(parent))
+                        throw new ArgumentException("Ambiguous DOCX ZIP file/directory path.");
+                    directoryPaths.Add(parent);
+                }
+                if (isDirectoryPath)
+                    directoryPaths.Add(canonicalPath);
+                else
+                    filePaths.Add(canonicalPath);
 
                 if (entry.Length < 0 || entry.CompressedLength < 0 ||
                     entry.Length > MaxDocxPartBytes ||
