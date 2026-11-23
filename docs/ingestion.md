@@ -240,3 +240,26 @@ sintetico con relazione esterna; la [ADR 0105](../adr/0105-docx-opc-relationship
 contiene i commit e i link alla CI. Il gate non rende automaticamente
 sicura la successiva conversione OOXML, né sostituisce sandboxing,
 antivirus, policy di quarantena, approvazione e retention.
+
+
+## DOCX ZIP: collisioni Unicode NFC/NFD tra file e directory (ADR 0106)
+
+Durante l'ammissione DOCX la validazione confronta i nomi dei membri
+ZIP in forma Unicode canonica NFC, oltre che con confronto
+case-insensitive. Le collisioni fra entry composte/decomposte sono
+rifiutate, anche quando una entry è un file padre di un'altra o
+un alias di una directory esplicita. L'ordine dei member non cambia
+il verdetto; un singolo nome Unicode valido resta ammesso.
+
+È una protezione preventiva per downloader/converter/filesystem
+che potrebbero normalizzare gli stessi nomi in modo diverso.
+Il backend non estrae i membri e non rinomina i byte originali.
+REST/MCP condividono la stessa validazione Business:
+in caso di collisione la richiesta è bloccata prima di ClamAV,
+storage, metadati e audit del successo.
+
+I test RED/GREEN e il test Keycloak REST/MCP sono registrati
+nella [ADR 0106](../adr/0106-docx-zip-unicode-normalization-path-collisions.md)
+e nella issue #5. Il controllo NFC non sostituisce antivirus,
+conversione sandboxata, quarantena o valutazione di compatibilità
+con collazioni e filesystem specifici.
