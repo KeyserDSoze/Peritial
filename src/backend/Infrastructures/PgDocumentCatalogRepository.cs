@@ -97,14 +97,15 @@ public sealed class PgDocumentCatalogRepository(Npgsql.NpgsqlDataSource dataSour
         await using var scope = await TenantDbScope.OpenAsync(dataSource, tenant, ct);
         DocumentDownloadLocation? found = null;
         await using (var cmd = scope.Command(
-            "SELECT id, perizia_id, file_name, content_type, length_bytes, created_at_utc, storage_key " +
+            "SELECT id, perizia_id, file_name, content_type, length_bytes, created_at_utc, storage_key, content_sha256 " +
             "FROM documents WHERE tenant_id=@tenant AND id=@id"))
         {
             cmd.Parameters.AddWithValue("tenant", tenant.Value);
             cmd.Parameters.AddWithValue("id", documentId);
             await using var reader = await cmd.ExecuteReaderAsync(ct);
             if (await reader.ReadAsync(ct))
-                found = new DocumentDownloadLocation(Read(reader), reader.GetString(6));
+                found = new DocumentDownloadLocation(Read(reader), reader.GetString(6),
+                    reader.IsDBNull(7) ? null : reader.GetFieldValue<byte[]>(7));
         }
         await scope.CommitAsync(ct);
         return found;
