@@ -172,3 +172,24 @@ La prova Keycloak REST/MCP usa un DOCX ZIP sintetico con metadati Unix
 contraddittori e controlla HTTP 400 / `isError:true`. Questo non
 copre la semantica OOXML completa né elimina i gate produttivi #5.
 [ADR 0102](../adr/0102-docx-zip-entry-name-control-and-unix-type-consistency.md).
+
+
+## DOCX ZIP: collisioni file/directory e alias portabili (ADR 0103)
+
+Il validatore Business rifiuta ora anche i ZIP in cui un membro
+è contemporaneamente un file e il prefisso-directory di un altro,
+indipendentemente dall'ordine delle entry. Ogni segmento del nome
+ZIP non può terminare con punto o spazio ASCII, per evitare collisioni
+dovute a semantiche di estrazione diverse tra filesystem.
+Le normali directory ZIP esplicite con figli coerenti restano valide.
+
+I nuovi test Business coprono sei rifiuti prima di ClamAV, storage,
+metadata e audit successo, più l'accettazione di una directory
+regolare; la prova RED registra sei fallimenti attesi e il job
+backend GREEN è 408/408. Il test E2E Keycloak esegue REST multipart
+e MCP `ingest_file` con un DOCX ZIP contenente un nome che termina
+con punto e verifica il rifiuto senza esporre i byte del membro.
+La CI Compose terminale e i gate di produzione richiedono
+ancora attestazione; vedere [ADR 0103](../adr/0103-docx-zip-file-directory-shadowing-and-portable-paths.md)
+e issue #5. Il controllo non valida le relazioni OOXML, la
+sicurezza di converter esterni o gli aggiornamenti antivirus.
