@@ -20,7 +20,18 @@ internal static class UploadedDocumentValidation
         // Path.GetFileName on Linux does not consider Windows backslashes separators.
         var normalized = original.Replace('\\', '/');
         var safe = normalized[(normalized.LastIndexOf('/') + 1)..];
-        if (string.IsNullOrWhiteSpace(safe) || safe is "." or ".." || safe.Any(char.IsControl))
+        // The name is later persisted and used in Content-Disposition.
+        // On Windows these device names and punctuation may reference
+        // special resources rather than an ordinary file. Unicode bidi
+        // controls can also spoof the extension shown to a user.
+        if (string.IsNullOrWhiteSpace(safe) || safe is "." or ".." ||
+            safe.EndsWith('.') || safe.EndsWith(' ') ||
+            IsReservedWindowsDeviceName(safe) ||
+            safe.Any(c => char.IsControl(c) ||
+                c is ':' or '<' or '>' or '|' or '?' or '*' or '"' or
+                    '\u061C' or '\u200E' or '\u200F' or
+                    >= '\u202A' and <= '\u202E' or
+                    >= '\u2066' and <= '\u2069'))
             throw new ArgumentException("Invalid file name.", nameof(original));
         return safe;
     }
@@ -84,7 +95,7 @@ internal static class UploadedDocumentValidation
         // segment to protect downstream Windows viewers and extractors.
         // Superscript 1/2/3 are also recognized as COM/LPT digits by Windows.
         var dot = segment.IndexOf('.');
-        var stem = (dot < 0 ? segment : segment[..dot]).ToUpperInvariant();
+        var stem = (dot < 0 ? segment : segment[..dot]).TrimEnd(' ').ToUpperInvariant();
         if (stem is "CON" or "PRN" or "AUX" or "NUL" or "CONIN$" or "CONOUT$")
             return true;
         return stem.Length == 4 &&
