@@ -4,9 +4,11 @@
 
 ## A cosa serve
 
-Il comando `capture` costruisce un inventario ordinato dei documenti referenziati da `documents` in PostgreSQL, per **tutti i tenant**. Per ogni documento legge l'oggetto SeaweedFS S3, verifica che la dimensione reale sia uguale a `documents.length_bytes` e ne calcola SHA-256. Il manifest JSON versione 1 registra tenant UUID, documento UUID, chiave S3, dimensione e checksum. Se manca un blob, la dimensione differisce, una chiave globale è riutilizzata, l'utente DB può essere filtrato da FORCE RLS o esiste un upload/una chiave idempotente ancora in stato pending, l'operazione si interrompe.
+Il comando `capture` costruisce un inventario ordinato dei documenti referenziati da `documents` in PostgreSQL, per **tutti i tenant**. Per ogni documento legge l'oggetto SeaweedFS S3, verifica che la dimensione reale sia uguale a `documents.length_bytes`, ne calcola SHA-256 e, **quando il campo privato `documents.content_sha256` è presente**, impone che i due digest coincidano **già durante la prima acquisizione**, non soltanto durante la verifica di un manifest esistente. Il manifest JSON versione 1 registra tenant UUID, documento UUID, chiave S3, dimensione e checksum. Se manca un blob, la dimensione differisce, una chiave globale è riutilizzata, l'utente DB può essere filtrato da FORCE RLS o esiste un upload/una chiave idempotente ancora in stato pending, l'operazione si interrompe.
 
-`verify` confronta un manifest precedente con **tutti** i riferimenti del database destinazione e rilegge ogni blob S3 per confrontare dimensioni e SHA-256. Rifiuta differenze di cardinalità, tenant/ID/chiave/metadati, bytes alterati anche a dimensione invariata e manifest versionati diversamente. Il numero di documenti validati è l'unica informazione stampata: mai nomi, tenant, chiavi o dati.
+`verify` confronta un manifest precedente con **tutti** i riferimenti del database destinazione, incluso il digest privato del DB per i record V013/V014, e rilegge ogni blob S3 per confrontare dimensioni e SHA-256. La verifica dei metadati rifiuta un manifest ben formato il cui SHA-256 non corrisponda al digest DB prima di scrivere oggetti nel restore. Rifiuta differenze di cardinalità, tenant/ID/chiave/metadati, bytes alterati anche a dimensione invariata e manifest versionati diversamente. Il numero di documenti validati è l'unica informazione stampata: mai nomi, tenant, chiavi o dati.
+
+**Record legacy:** un documento precedente alla V013 può avere `content_sha256=NULL`. Il checkpoint ne conserva la possibilità di backup senza inventare un digest di ammissione: l'hash del manifest in quel caso attesta soltanto i byte **presenti al momento del capture**, non la provenienza da una scansione precedente. Il download applicativo rimane fail-closed per tali documenti. La policy di bonifica/approvazione e il backfill sono ancora aperti nella [issue #27](https://github.com/KeyserDSoze/Peritial/issues/27).
 
 **Importante:** non c'è una transazione comune tra S3 e PostgreSQL. Il lock `SHARE NOWAIT` su `documents` e i registri di upload limita corse durante l'inventario DB, ma è rilasciato prima della lettura dei blob. La conferma `WRITERS_STOPPED` **non rileva da sola** processi ancora attivi: l'operatore deve fermarli realmente. Il semplice manifest di `capture` continua a **non contenere** i byte degli oggetti. Per salvare i byte, usare `export`: la cartella di archive contiene un manifest distinto e i file binari. Il semplice checkpoint `capture` NON è autenticato. L'archive `export`/ `restore-objects` autentica ora il proprio manifest con **HMAC-SHA256** usando un segreto esterno; **non** è cifrato, non ha firma asimmetrica né garantisce uno snapshot atomico con PostgreSQL.
 
@@ -48,7 +50,8 @@ Solo dopo esito positivo controllare anche i record di audit, versioni schema, R
 La suite `ObjectRecoveryCheckpointContractTests` usa PostgreSQL + SeaweedFS reali in Compose, con schema DB e chiavi S3 isolati, e verifica:
 - manifest generato per **due tenant distinti** e validazione dei byte originali;
 - oggetto mancante rifiutato;
-- checksum diverso **a dimensione identica** rifiutato;
+- checksum diverso **a dimensione identica** rifiutato, anche quando la manomissione è avvenuta **prima** del primo `capture`;
+- digest di manifest formalmente corretto ma diverso da quello persistito in PostgreSQL rifiutato da `VerifyMetadataAsync`;
 - documento rimosso dal database rispetto al manifest rifiutato;
 - upload intent e chiave di idempotenza pendenti rifiutati;
 - riutilizzo della stessa chiave S3 tra tenant rifiutato;
