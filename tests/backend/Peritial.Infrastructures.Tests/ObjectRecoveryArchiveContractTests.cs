@@ -68,9 +68,9 @@ public sealed class ObjectRecoveryArchiveContractTests
                 await using var add = new NpgsqlCommand(
                     """
                     INSERT INTO documents(tenant_id,id,perizia_id,file_name,content_type,
-                                          length_bytes,storage_key,created_at_utc)
-                    VALUES (@tenant1,@id1,NULL,'first.pdf','application/pdf',@len1,@key1,now()),
-                           (@tenant2,@id2,NULL,'second.pdf','application/pdf',@len2,@key2,now())
+                                          length_bytes,storage_key,created_at_utc,content_sha256)
+                    VALUES (@tenant1,@id1,NULL,'first.pdf','application/pdf',@len1,@key1,now(),@sha1),
+                           (@tenant2,@id2,NULL,'second.pdf','application/pdf',@len2,@key2,now(),@sha2)
                     """, conn);
                 add.Parameters.AddWithValue("tenant1", tenantOne);
                 add.Parameters.AddWithValue("tenant2", tenantTwo);
@@ -80,6 +80,13 @@ public sealed class ObjectRecoveryArchiveContractTests
                 add.Parameters.AddWithValue("len2", (long)second.Length);
                 add.Parameters.AddWithValue("key1", keyOne);
                 add.Parameters.AddWithValue("key2", keyTwo);
+                // Both source and restore fixtures are newly inserted V014
+                // rows; use the exact SHA-256 of the corresponding S3 bytes.
+                // A missing digest must never be tolerated just for recovery.
+                add.Parameters.Add("sha1", NpgsqlTypes.NpgsqlDbType.Bytea).Value =
+                    SHA256.HashData(first);
+                add.Parameters.Add("sha2", NpgsqlTypes.NpgsqlDbType.Bytea).Value =
+                    SHA256.HashData(second);
                 await add.ExecuteNonQueryAsync();
             }
 
