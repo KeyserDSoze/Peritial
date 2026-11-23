@@ -110,7 +110,8 @@ public sealed class UploadLeaseTests
                 "UPDATE upload_intents SET lease_expires_at_utc=now()-interval '1 minute' " +
                 "WHERE tenant_id=@tenant AND document_id=@id", tenant.Value, id);
             var doc = new DocumentRecord(id, tenant, null, "proof.pdf",
-                "application/pdf", 12, key, DateTime.UtcNow);
+                "application/pdf", 12, key, DateTime.UtcNow,
+                ContentSha256: DocumentDigest.Compute("%PDF-1.7"u8));
             var audit = new SecurityAuditEvent(Guid.NewGuid(), tenant, "actor",
                 "document.ingest", "succeeded", id, DateTime.UtcNow);
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
