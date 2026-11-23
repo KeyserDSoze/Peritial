@@ -50,9 +50,10 @@ public sealed class DocumentDownloadTests
     }
 
     private static DocumentDownloadLocation Add(Catalog repo, TenantId tenant,
-        Guid id, long? length = null, string? storageKey = null)
+        Guid id, long? length = null, string? storageKey = null,
+        string fileName = "signed.pdf")
     {
-        var name = "signed.pdf";
+        var name = fileName;
         var key = storageKey ?? DocumentKeys.For(tenant, id, name);
         var bytes = "%PDF-1.7\nTest\n"u8.ToArray();
         var location = new DocumentDownloadLocation(
@@ -137,6 +138,21 @@ public sealed class DocumentDownloadTests
         var service = new DocumentDownloadService(new Actor(tenant), repo, blobs, audit);
         await Assert.ThrowsAsync<DocumentContentUnavailableException>(() => service.ReadAsync(id));
         await Assert.ThrowsAsync<DocumentContentUnavailableException>(() => service.ReadAsync(bigId));
+        Assert.Equal(0, blobs.Reads);
+        Assert.Empty(audit.Events);
+    }
+
+    [Fact]
+    public async Task Noncanonical_persisted_file_name_is_not_a_download_header()
+    {
+        var tenant = TenantId.From(Guid.NewGuid());
+        var id = Guid.NewGuid();
+        var catalog = new Catalog();
+        Add(catalog, tenant, id, fileName:"../untrusted.pdf");
+        var blobs = new Blobs();
+        var audit = new Audit();
+        var service = new DocumentDownloadService(new Actor(tenant), catalog, blobs, audit);
+        await Assert.ThrowsAsync<DocumentContentUnavailableException>(() => service.ReadAsync(id));
         Assert.Equal(0, blobs.Reads);
         Assert.Empty(audit.Events);
     }
