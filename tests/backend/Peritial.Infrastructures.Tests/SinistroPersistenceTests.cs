@@ -279,6 +279,49 @@ public sealed class SinistroPersistenceTests
     }
 
     [Fact]
+    public async Task V011_replay_rejects_mismatched_case_facts_even_with_same_digest_and_key()
+    {
+        await using var db = await IsolatedDatabases.CreateAsync();
+        var tenant = TenantId.From(Guid.NewGuid());
+        var valid = new LegacyXmlPreviewDto("classic",
+            "XML-REPLAY-FACTS-" + Guid.NewGuid().ToString("N"),
+            new DateOnly(2026, 11, 23), new DateOnly(2026, 11, 24), 0);
+        var digest = System.Security.Cryptography.SHA256.HashData("original-case-source"u8);
+        var repo = new PgLegacyXmlCaseImportStore(db.App);
+        const string key = "replay-facts-key-000001";
+        var first = await repo.CommitAsync(tenant, "signed-internal-actor", key, digest, valid);
+        Assert.False(first.Replayed);
+
+        // A caller can forge the DTO while retaining a previously bound
+        // digest. The ledger proves the bytes, but the returned snapshot must
+        // ALSO agree with the persisted canonical case facts.
+        foreach (var changed in new[]
+        {
+            valid with { ExternalReference = valid.ExternalReference + "-DIFFERENT" },
+            valid with { OccurredOn = valid.OccurredOn.AddDays(1) },
+            valid with { ReportedOn = null }
+        })
+            await Assert.ThrowsAsync<LegacyXmlIdempotencyConflictException>(() =>
+                repo.CommitAsync(tenant, "signed-internal-actor", key, digest, changed));
+
+        var replay = await repo.CommitAsync(tenant, "signed-internal-actor", key, digest, valid);
+        Assert.True(replay.Replayed);
+        Assert.Equal(first.SinistroId, replay.SinistroId);
+
+        await using var counts = db.Admin.CreateCommand(
+            "SELECT (SELECT count(*) FROM sinistri WHERE tenant_id=@tenant), " +
+            "(SELECT count(*) FROM legacy_xml_import_keys WHERE tenant_id=@tenant), " +
+            "(SELECT count(*) FROM security_audit WHERE tenant_id=@tenant " +
+            "AND action='sinistro.import-xml' AND outcome='succeeded')");
+        counts.Parameters.AddWithValue("tenant", tenant.Value);
+        await using var reader = await counts.ExecuteReaderAsync();
+        Assert.True(await reader.ReadAsync());
+        Assert.Equal(1L, reader.GetInt64(0));
+        Assert.Equal(1L, reader.GetInt64(1));
+        Assert.Equal(1L, reader.GetInt64(2));
+    }
+
+    [Fact]
     public async Task V011_two_simultaneous_imports_for_one_reference_allow_only_one_commit()
     {
         await using var db = await IsolatedDatabases.CreateAsync();
