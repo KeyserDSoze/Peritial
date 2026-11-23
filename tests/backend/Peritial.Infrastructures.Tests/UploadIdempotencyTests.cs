@@ -57,7 +57,8 @@ public sealed class UploadIdempotencyTests
         Assert.Equal(UploadIdempotencyState.Acquired, acquired.State);
         await new PgUploadIntentLedger(db.App).RecordAsync(tenant, id, key);
         var record = new DocumentRecord(id, tenant, null, "evidence.pdf",
-            "application/pdf", 20, key, DateTime.UtcNow, RequiresIdempotency: true);
+            "application/pdf", 20, key, DateTime.UtcNow,
+            RequiresIdempotency: true, ContentSha256: DocumentDigest.Compute("%PDF-1.7"u8));
         await new PgDocumentRepository(db.App).AddAuditedAsync(record,
             new SecurityAuditEvent(Guid.NewGuid(), tenant, "actor-A",
                 "document.ingest", "succeeded", id, DateTime.UtcNow));
