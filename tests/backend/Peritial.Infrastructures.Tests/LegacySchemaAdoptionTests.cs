@@ -15,7 +15,7 @@ public sealed class LegacySchemaAdoptionTests
     {
         await InSchemaAsync(async db =>
         {
-            await SchemaBootstrap.ApplyDevelopmentSchemaAsync(db);
+            await SchemaBootstrap.ApplyDevelopmentSchemaAsync(db, includeDocumentDigest: false);
             var tenant = Guid.NewGuid();
             var id = Guid.NewGuid();
             await using (var conn = await db.OpenConnectionAsync())
@@ -31,7 +31,7 @@ public sealed class LegacySchemaAdoptionTests
             // Ordinary 'apply' must continue rejecting unjournaled schemas.
             await Assert.ThrowsAsync<InvalidOperationException>(() => SchemaMigrator.ApplyAsync(db));
 
-            Assert.Equal(11, await SchemaMigrator.AdoptLegacyAsync(db));
+            Assert.Equal(12, await SchemaMigrator.AdoptLegacyAsync(db));
             Assert.Equal(0, await SchemaMigrator.ApplyAsync(db));
             await Assert.ThrowsAsync<InvalidOperationException>(() => SchemaMigrator.AdoptLegacyAsync(db));
 
@@ -62,7 +62,7 @@ public sealed class LegacySchemaAdoptionTests
     {
         await InSchemaAsync(async db =>
         {
-            await SchemaBootstrap.ApplyDevelopmentSchemaAsync(db);
+            await SchemaBootstrap.ApplyDevelopmentSchemaAsync(db, includeDocumentDigest: false);
             await using (var conn = await db.OpenConnectionAsync())
             await using (var edit = new NpgsqlCommand(alteration, conn))
                 await edit.ExecuteNonQueryAsync();
@@ -97,7 +97,7 @@ public sealed class LegacySchemaAdoptionTests
     {
         await InSchemaAsync(async db =>
         {
-            await SchemaBootstrap.ApplyDevelopmentSchemaAsync(db);
+            await SchemaBootstrap.ApplyDevelopmentSchemaAsync(db, includeDocumentDigest: false);
             var tenant = Guid.NewGuid();
             var documentId = Guid.NewGuid();
             await using (var conn = await db.OpenConnectionAsync())
@@ -115,7 +115,7 @@ public sealed class LegacySchemaAdoptionTests
             await Assert.ThrowsAsync<InvalidOperationException>(() => SchemaMigrator.AdoptLegacyAsync(db));
             await Assert.ThrowsAsync<InvalidOperationException>(() => SchemaMigrator.ApplyAsync(db));
 
-            Assert.Equal(11, await SchemaMigrator.AdoptPreLeaseLegacyAsync(db));
+            Assert.Equal(12, await SchemaMigrator.AdoptPreLeaseLegacyAsync(db));
             Assert.Equal(0, await SchemaMigrator.ApplyAsync(db));
             await Assert.ThrowsAsync<InvalidOperationException>(() => SchemaMigrator.AdoptPreLeaseLegacyAsync(db));
 
@@ -144,7 +144,7 @@ public sealed class LegacySchemaAdoptionTests
     {
         await InSchemaAsync(async db =>
         {
-            await SchemaBootstrap.ApplyDevelopmentSchemaAsync(db);
+            await SchemaBootstrap.ApplyDevelopmentSchemaAsync(db, includeDocumentDigest: false);
             await using (var conn = await db.OpenConnectionAsync())
             await using (var alter = new NpgsqlCommand(
                 "ALTER TABLE upload_intents DROP COLUMN lease_expires_at_utc; " + additionalDrift, conn))
@@ -168,7 +168,7 @@ public sealed class LegacySchemaAdoptionTests
     {
         await InSchemaAsync(async db =>
         {
-            await SchemaBootstrap.ApplyDevelopmentSchemaAsync(db);
+            await SchemaBootstrap.ApplyDevelopmentSchemaAsync(db, includeDocumentDigest: false);
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 SchemaMigrator.AdoptPreLeaseLegacyAsync(db));
             await using (var conn = await db.OpenConnectionAsync())
@@ -229,7 +229,7 @@ public sealed class LegacySchemaAdoptionTests
                 insert.Parameters.AddWithValue("id", doc);
                 await insert.ExecuteNonQueryAsync();
             }
-            Assert.Equal(11, await SchemaMigrator.AdoptPreLeaseLegacyAsync(db));
+            Assert.Equal(12, await SchemaMigrator.AdoptPreLeaseLegacyAsync(db));
             await using var verify = await db.OpenConnectionAsync();
             await using var check = new NpgsqlCommand(
                 "SELECT (SELECT count(*) FROM schema_migrations)=13 " +
