@@ -165,13 +165,14 @@ di `NumeroSinistro`, con `LIMIT 2` e senza scegliere
 un duplicato arbitrario. Il risultato è
 `{preview,status,existingSinistroId}`:
 
-- `new`: nessun riferimento presente;
+- `new`: nessun riferimento presente **e XML minimale senza dati non mappati**;
 - `existing`: un solo Sinistro e data evento compatibile
   (data denuncia verificata solo se inclusa nell'XML),
   **solo se l'XML contiene esclusivamente i tre campi base**;
-- `review-required`: un singolo riferimento con date compatibili,
-  ma l'XML contiene dati di compagnia, polizza, persona,
-  allegati, attributi o altri elementi non ancora riconciliati.
+- `review-required`: XML con dati non mappabili (compagnia,
+  polizza, persone, allegati, timestamp o forme XML non canoniche)
+  **anche quando non esiste alcun riferimento**; oppure un singolo
+  riferimento con date compatibili e identità estesa non verificabile.
   Nessun UUID candidato è restituito;
 - `conflict`: un solo riferimento ma date incompatibili;
 - `ambiguous`: più di un Sinistro con lo stesso riferimento.

@@ -400,7 +400,7 @@ test.describe("Versioned MCP result JSON allowlist", () => {
           hasUnmappedBusinessData:true
         });
         if (name === "plan_legacy_xml") {
-          expect(result.status).toBe("new");
+          expect(result.status).toBe("review-required");
           expect(result.existingSinistroId ?? null).toBeNull();
         }
         const visible = JSON.stringify(actual);
@@ -1737,7 +1737,7 @@ test.describe("Versioned MCP result JSON allowlist", () => {
           hasUnmappedBusinessData:true
         });
         if(item.name==="plan_legacy_xml"){
-          expect(actual.status).toBe("new");
+          expect(actual.status).toBe("review-required");
           expect(actual.existingSinistroId??null).toBeNull();
         }
         const serialized=JSON.stringify(actual);

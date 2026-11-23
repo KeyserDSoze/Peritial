@@ -992,3 +992,27 @@ anno del sinistro o componente di chiave import senza campioni reali,
 policy approvata e vincoli DB comprovati.
 Vedi [ADR 0097](../adr/0097-legacy-yearlyid-is-upload-sequence-not-xml-identity.md).
 La #24 resta P0 aperta; nessun codice su `death` è stato modificato.
+
+
+## Piano XML senza candidato e dati non mappabili (ADR 0098, #24/#10/#25)
+
+Il piano REST/MCP distingue la **mancanza di un riferimento**
+dall'**ammissibilità dell'XML alla creazione**. Prima il planner
+restituiva `new` ogni volta che la ricerca tenant-scoped esatta
+(`LIMIT 2`) non trovava un candidato, persino per XML
+`HasUnmappedBusinessData=true`. Ora `new` richiede anche un
+XML minimale/canonico; zero candidati con compagnia, polizza,
+timestamp, attributi, allegati o altra forma sorgente non
+rappresentabile producono `review-required` senza UUID.
+
+Gli esiti con un candidato (date compatibili/incompatibili)
+e con più candidati mantengono precedenza e significato:
+`existing` solo per XML minimale con date compatibili,
+`review-required` per identità estesa ignota,
+`conflict` per date discordanti e `ambiguous` per duplicati.
+La preview non rivela PII e nessun esito costituisce
+autorizzazione a importare. Test Business e Keycloak REST/MCP
+e contratti MCP verificano la parità.
+[ADR 0098](../adr/0098-xml-zero-match-unmapped-review-gate.md).
+V011/V012 restano invariati, import commit ancora interno,
+#24 e #10 aperte e `death` intatto.

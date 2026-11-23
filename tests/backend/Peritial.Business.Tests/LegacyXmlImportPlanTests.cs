@@ -122,11 +122,42 @@ public sealed class LegacyXmlImportPlanTests
         Assert.Equal(id, simple.ExistingSinistroId);
 
         lookup.Clear();
-        // No candidate remains "new", still with a conspicuous warning flag.
+        // Without a matching reference, rich XML still cannot be safely
+        // created while company/policy/person fields remain unmapped.
         var noMatch = await svc.PlanAsync(rich);
-        Assert.Equal("new", noMatch.Status);
+        Assert.Equal("review-required", noMatch.Status);
         Assert.True(noMatch.Preview.HasUnmappedBusinessData);
         Assert.Null(noMatch.ExistingSinistroId);
+    }
+
+    [Theory]
+    [InlineData("<Polizza><Numero>PRIVATE-POLICY</Numero></Polizza>", "2026-11-17")]
+    [InlineData("<allegati><it.autosoftws.AllegatoRecord><Nome>PRIVATE.pdf</Nome></it.autosoftws.AllegatoRecord></allegati>", "2026-11-17")]
+    [InlineData("<!--PRIVATE-COMMENT-->", "2026-11-17")]
+    [InlineData("", "2026-11-17 00:00:00")]
+    [InlineData("<Extra attribute='PRIVATE-ATTRIBUTE'/>", "2026-11-17")]
+    public async Task Unmapped_xml_without_candidates_requires_review_not_new(
+        string additionalXml, string occurred)
+    {
+        var actor = new Actor(true);
+        var lookup = new SpyLookup();
+        var xml = Encoding.UTF8.GetBytes(
+            "<it.autosoftws.ReIncaricoRecord>" +
+            "<NumeroSinistro>UNMATCHED-REF</NumeroSinistro>" +
+            "<DataOraSinistro>" + occurred + "</DataOraSinistro>" +
+            additionalXml + "</it.autosoftws.ReIncaricoRecord>");
+        var plan = await new LegacyXmlImportPlanService(actor,
+            new LegacyXmlPreviewService(actor), lookup).PlanAsync(xml);
+
+        Assert.Equal("review-required", plan.Status);
+        Assert.True(plan.Preview.HasUnmappedBusinessData);
+        Assert.Equal("UNMATCHED-REF", plan.Preview.ExternalReference);
+        Assert.Null(plan.ExistingSinistroId);
+        Assert.Equal(1, lookup.Calls);
+        Assert.Equal(2, lookup.LastLimit);
+        var visible = System.Text.Json.JsonSerializer.Serialize(plan);
+        Assert.DoesNotContain("PRIVATE", visible);
+        Assert.DoesNotContain("00:00:00", visible);
     }
 
     [Theory]

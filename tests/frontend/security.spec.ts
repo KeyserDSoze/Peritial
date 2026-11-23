@@ -404,10 +404,28 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
       return await response.json() as Plan;
     }
     const first = await plan();
-    expect(first.status).toBe("new");
+    expect(first.status).toBe("review-required");
     expect(first.existingSinistroId).toBeNull();
     expect(first.preview.externalReference).toBe(ref);
     expect(first.preview.hasUnmappedBusinessData).toBe(true);
+
+    // An XML with unmapped insurer/person information must not be advised
+    // as "new" merely because this tenant has no exact reference yet.
+    const firstMcp = await request.post(api + "/mcp", {
+      headers:mcpHeaders(writer),data:{jsonrpc:"2.0",id:1395,method:"tools/call",
+        params:{name:"plan_legacy_xml",arguments:{xml}}}
+    });
+    expect(firstMcp.ok(), await firstMcp.text()).toBeTruthy();
+    expect(await firstMcp.text()).toContain("review-required");
+    expect(await firstMcp.text()).not.toContain("PRIVATE-INSURED");
+    expect(await firstMcp.text()).not.toContain('"isError":true');
+
+    const minimalNoMatch = xml.replace(
+      "      <Contraente><Nome>PRIVATE-INSURED</Nome></Contraente>", "");
+    expect(await plan(minimalNoMatch)).toMatchObject({
+      status:"new", existingSinistroId:null,
+      preview:{hasUnmappedBusinessData:false}
+    });
     const created = await request.post(api + "/api/sinistri", {
       headers: {Authorization: "Bearer " + writer},
       data: {externalReference:ref, occurredOn:"2026-11-17", reportedOn:"2026-11-18"}

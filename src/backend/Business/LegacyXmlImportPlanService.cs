@@ -54,7 +54,14 @@ public sealed class LegacyXmlImportPlanService(
             context.TenantId, parsed.ExternalReference, 2, ct);
 
         if (matches.Count == 0)
-            return new LegacyXmlImportPlanDto(parsed, "new", null);
+        {
+            // Missing reference is not permission to discard data that the
+            // current Sinistro aggregate cannot persist. Fail closed on
+            // rich XML (including timestamp and lexical normalization) even
+            // though no candidate was found in this tenant.
+            return new LegacyXmlImportPlanDto(parsed,
+                parsed.HasUnmappedBusinessData ? "review-required" : "new", null);
+        }
         if (matches.Count > 1)
             return new LegacyXmlImportPlanDto(parsed, "ambiguous", null);
 

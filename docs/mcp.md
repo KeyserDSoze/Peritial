@@ -497,10 +497,14 @@ ID/date nel **tenant dell'attore** per riferimento
 Restituisce `{preview,status,existingSinistroId}`.
 Gli stati possibili sono `new`, `existing`,
 `review-required`, `conflict`, `ambiguous`.
-`review-required` indica che esiste un solo
-riferimento a date compatibili, ma l'XML contiene
-dati non ancora mappabili alla identità storica
-compagnia/polizza/anno; **nessun UUID è restituito**.
+`review-required` indica che l'XML contiene dati non mappabili
+nel modello attuale (compagnia/polizza, timestamp, allegati,
+metadati o rappresentazioni XML non canoniche), **anche con zero
+candidati esatti**; vale anche per un solo candidato con date
+compatibili ma identità estesa non verificata. **Nessun UUID è
+restituito**. `new` è ammesso soltanto senza candidati e con
+XML minimale (`hasUnmappedBusinessData=false`); nemmeno
+`new` autorizza un import.
 La presenza di altri campi viene comunicata solo
 dal booleano `preview.hasUnmappedBusinessData`,
 mai tramite nomi o dati assicurativi.
