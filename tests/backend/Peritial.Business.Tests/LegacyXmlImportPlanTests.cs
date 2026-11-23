@@ -186,6 +186,45 @@ public sealed class LegacyXmlImportPlanTests
             System.Text.Json.JsonSerializer.Serialize(plan));
     }
 
+    [Theory]
+    [InlineData("\r")]
+    [InlineData("\r\n")]
+    [InlineData("\n")]
+    [InlineData("\t")]
+    public async Task Normalized_control_in_reference_cannot_return_matched_case_id(
+        string sourceSeparator)
+    {
+        var actor = new Actor(true);
+        var lookup = new SpyLookup();
+        var reference = "CTRL\nCASE";
+        var id = Guid.NewGuid();
+        lookup.Add(actor.TenantId, reference, id,
+            new DateOnly(2026, 11, 17), new DateOnly(2026, 11, 18));
+
+        // For tab, the canonical decoded text is different; register an
+        // exact candidate for each transformed reference in the same tenant.
+        var expected = sourceSeparator == "\t" ? "CTRL\tCASE" : reference;
+        if (expected != reference)
+            lookup.Add(actor.TenantId, expected, id,
+                new DateOnly(2026, 11, 17), new DateOnly(2026, 11, 18));
+        var xml = Encoding.UTF8.GetBytes(
+            "<it.autosoftws.ReIncaricoRecord>" +
+            "<NumeroSinistro>CTRL" + sourceSeparator + "CASE</NumeroSinistro>" +
+            "<DataOraSinistro>2026-11-17</DataOraSinistro>" +
+            "<DataIncarico>2026-11-18</DataIncarico>" +
+            "</it.autosoftws.ReIncaricoRecord>");
+
+        var plan = await new LegacyXmlImportPlanService(actor,
+            new LegacyXmlPreviewService(actor), lookup).PlanAsync(xml);
+        Assert.True(plan.Preview.HasUnmappedBusinessData);
+        Assert.Equal(expected, plan.Preview.ExternalReference);
+        Assert.Equal("review-required", plan.Status);
+        Assert.Null(plan.ExistingSinistroId);
+        Assert.DoesNotContain(id.ToString(),
+            System.Text.Json.JsonSerializer.Serialize(plan));
+        Assert.Equal(expected, lookup.LastReference);
+    }
+
     [Fact]
     public async Task Whitespace_normalized_reference_must_not_claim_existing_identity()
     {

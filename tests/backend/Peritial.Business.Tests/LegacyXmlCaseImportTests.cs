@@ -121,6 +121,26 @@ public sealed class LegacyXmlCaseImportTests
     }
 
     [Theory]
+    [InlineData("\r")]
+    [InlineData("\r\n")]
+    [InlineData("\n")]
+    [InlineData("\t")]
+    public async Task Case_only_commit_rejects_control_normalized_xml_reference(
+        string sourceSeparator)
+    {
+        var actor = new Actor(true);
+        var store = new Store();
+        var service = new LegacyXmlCaseImportService(
+            actor, new LegacyXmlPreviewService(actor), store);
+        var xml = Xml(reference: "IMP" + sourceSeparator + "001");
+        var preview = new LegacyXmlPreviewService(actor).Preview(xml);
+        Assert.True(preview.HasUnmappedBusinessData);
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.CommitAsync(xml, "control-whitespace-key-0001"));
+        Assert.Equal(0, store.Calls);
+    }
+
+    [Theory]
     [InlineData("<NumeroSinistro><![CDATA[IMP-001]]></NumeroSinistro>", "<NumeroSinistro>IMP-001</NumeroSinistro>")]
     [InlineData("<NumeroSinistro>IMP&#45;001</NumeroSinistro>", "<NumeroSinistro>IMP-001</NumeroSinistro>")]
     [InlineData("<DataOraSinistro><![CDATA[2026-11-19]]></DataOraSinistro>", "<DataOraSinistro>2026-11-19</DataOraSinistro>")]

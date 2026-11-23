@@ -156,6 +156,28 @@ public sealed class LegacyXmlPreviewTests
     }
 
     [Theory]
+    [InlineData("REF\rPART", "REF\nPART")]
+    [InlineData("REF\r\nPART", "REF\nPART")]
+    [InlineData("REF\nPART", "REF\nPART")]
+    [InlineData("REF\tPART", "REF\tPART")]
+    public void Embedded_control_whitespace_in_xml_reference_requires_source_review(
+        string sourceReference, string normalizedReference)
+    {
+        // XML 1.0 normalizes CR/CRLF to LF. Even a previously persisted
+        // reference matching the decoded value is not evidence of matching
+        // source identity. Preserve advisory preview, forbid case-only commit.
+        var xml = Encoding.UTF8.GetBytes(
+            "<it.autosoftws.ReIncaricoRecord>" +
+            "<NumeroSinistro>" + sourceReference + "</NumeroSinistro>" +
+            "<DataOraSinistro>2026-11-19</DataOraSinistro>" +
+            "</it.autosoftws.ReIncaricoRecord>");
+        var result = Service.Preview(xml);
+        Assert.Equal(normalizedReference, result.ExternalReference);
+        Assert.True(result.HasUnmappedBusinessData);
+        Assert.Throws<ArgumentException>(() => Service.PreviewCaseOnly(xml));
+    }
+
+    [Theory]
     [InlineData("<NumeroSinistro><![CDATA[ENTITY-REF]]></NumeroSinistro>", "ENTITY-REF")]
     [InlineData("<NumeroSinistro>ENTITY&#45;REF</NumeroSinistro>", "ENTITY-REF")]
     [InlineData("<NumeroSinistro>ENT<![CDATA[ITY]]>-REF</NumeroSinistro>", "ENTITY-REF")]
