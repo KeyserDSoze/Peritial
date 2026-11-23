@@ -2749,6 +2749,52 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     expect(await trailingDotMcp.text()).toContain('"isError":true');
     expect(await trailingDotMcp.text()).not.toContain("../../private-file");
 
+    // A Windows-reserved DOS device name must be rejected even when the
+    // central-directory member is a normal Unix file (not a symlink).
+    // Rename the same eight filename bytes in both ZIP headers, preserving
+    // archive lengths and CRCs; this would otherwise be an admissible DOCX.
+    const reservedDeviceDocx = Buffer.from(symlinkDocx);
+    const deviceSourceName = Buffer.from("word/media/link.bin");
+    const deviceLocalOffset = reservedDeviceDocx.indexOf(deviceSourceName);
+    const deviceCentralOffset = reservedDeviceDocx.lastIndexOf(deviceSourceName);
+    expect(deviceLocalOffset).toBeGreaterThanOrEqual(0);
+    expect(deviceCentralOffset).toBeGreaterThan(deviceLocalOffset);
+    expect(reservedDeviceDocx.readUInt32LE(deviceCentralOffset - 46)).toBe(0x02014b50);
+    Buffer.from("COM1.bin").copy(reservedDeviceDocx,
+      deviceLocalOffset + Buffer.byteLength("word/media/"));
+    Buffer.from("COM1.bin").copy(reservedDeviceDocx,
+      deviceCentralOffset + Buffer.byteLength("word/media/"));
+    reservedDeviceDocx.writeUInt16LE(0x81a4, deviceCentralOffset - 46 + 40);
+
+    const reservedDeviceRest = await request.post("http://localhost:8080/api/files", {
+      headers: {Authorization: "Bearer " + accessToken},
+      multipart: {file: {
+        name: "reserved-device.docx",
+        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        buffer: reservedDeviceDocx
+      }}
+    });
+    expect(reservedDeviceRest.status(), await reservedDeviceRest.text()).toBe(400);
+    expect(await reservedDeviceRest.text()).not.toContain("../../private-file");
+
+    const reservedDeviceMcp = await request.post("http://localhost:8080/mcp", {
+      headers: {
+        Authorization: "Bearer " + accessToken,
+        Accept: "application/json,text/event-stream",
+        "Content-Type": "application/json"
+      },
+      data: {jsonrpc: "2.0", id: 53, method: "tools/call", params: {
+        name: "ingest_file", arguments: {
+          fileName: "reserved-device.docx",
+          contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          base64: reservedDeviceDocx.toString("base64")
+        }
+      }}
+    });
+    expect(reservedDeviceMcp.ok(), await reservedDeviceMcp.text()).toBeTruthy();
+    expect(await reservedDeviceMcp.text()).toContain('"isError":true');
+    expect(await reservedDeviceMcp.text()).not.toContain("../../private-file");
+
     // Safe EICAR test string is an entire stored file inside a minimal DOCX ZIP.
     // Appending it to a synthetic PDF is NOT reliable: ClamAV's PDF decoder
     // can legitimately skip bytes not referenced by the PDF structure.
