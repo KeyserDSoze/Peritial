@@ -99,11 +99,19 @@ public sealed class LegacyXmlPreviewService(ITenantContext context)
         };
         // ReadDirectScalar intentionally trims for an advisory preview, but
         // trimming an XML reference/date is not an identity-preserving import.
+        // XML 1.0 also normalizes CR and CRLF inside text nodes to LF. A
+        // source reference such as "AB<CR>CD" may therefore match a stored
+        // "AB<LF>CD" even though the original lexical identity differs.
+        // Flag control characters in all approved scalars (including TAB/LF
+        // within NumeroSinistro) so the advisory planner never returns an
+        // existing UUID and the internal case-only writer cannot commit it.
+        // Formatting whitespace BETWEEN XML elements is not affected.
         // Even an explicitly empty <DataIncarico/> differs from a missing
         // source element: both would otherwise silently become null.
         var normalizedSourceScalar = root.Elements().Any(e =>
             allowed.Contains(e.Name) &&
             (e.Value != e.Value.Trim() ||
+             e.Value.Any(char.IsControl) ||
              (e.Name == "DataIncarico" && e.Value.Length == 0)));
         var unmapped = root.DescendantsAndSelf().Any(e => e.HasAttributes) ||
             root.Elements().Any(e => !allowed.Contains(e.Name) || e.HasElements) ||
