@@ -377,3 +377,25 @@ S3/Azurite rimangono aperti nella
 
 Riferimenti: [ADR 0110](../adr/0110-document-sha256-admission-and-verified-download.md)
 e [runbook migrazioni V013](database-migrations.md).
+
+## V014 — gate SQL per digest SHA-256 di ogni nuovo documento
+
+
+Oltre al controllo applicativo ADR 0110, la
+[ADR 0111](../adr/0111-v014-document-sha256-required-for-new-sql-writes.md)
+definisce una difesa PostgreSQL contro insert SQL diretti senza
+checksum: `CHECK (content_sha256 IS NOT NULL) NOT VALID`
+dal journal V014. La clausola `NOT VALID` **non esenta nuovi
+upload** dal CHECK: preserva soltanto i documenti storici con
+`NULL`, che restano non scaricabili fino a verifica e
+backfill approvati. Non presumere di aver bonificato il legacy
+né di poter validare globalmente la constraint in produzione.
+
+I test sotto il ruolo applicativo FORCE RLS verificano che un
+INSERT senza SHA fallisca con SQLSTATE 23514 senza creare
+metadata/audit né perdere l'intent; un retry con il digest
+registrato può completare il commit atomico. Le fixture di
+recovery e tenant isolation inseriscono SHA sintetici validi
+soltanto quando simulano metadata di un nuovo documento.
+La policy di ClamAV, quarantena, retention e il controllo reale
+del blob rimangono aspetti separati delle issue #5 e #27.
