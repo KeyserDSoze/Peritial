@@ -14,6 +14,23 @@ public sealed class FileIngestionSecurityTests
     private const string DocxMime =
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
+    [Fact]
+    public async Task Admitted_document_carries_digest_of_exact_scanned_bytes_for_atomic_commit()
+    {
+        var scanner = new CountingScanner();
+        var (service, store, docs) = NewService(scanner: scanner);
+        var saved = await service.IngestAsync("proof.pdf", "application/pdf",
+            new MemoryStream(Pdf), Pdf.Length);
+        var persisted = Assert.Single(docs.Records);
+
+        Assert.Equal(saved.Id, persisted.Id);
+        Assert.Equal(DocumentDigest.Size, persisted.ContentSha256?.Length);
+        Assert.Equal(DocumentDigest.Compute(Pdf), persisted.ContentSha256);
+        Assert.Equal(1, scanner.Scans);
+        Assert.Equal(1, store.Uploads);
+        Assert.Equal("succeeded", Assert.Single(docs.AuditEvents).Outcome);
+    }
+
     [Theory]
     [InlineData("word/comments.xml", "<comments><broken></comments>")]
     [InlineData("word/_rels/document.xml.rels", "<Relationships><Relationship>")]
