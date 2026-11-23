@@ -140,6 +140,17 @@ public sealed class RealDocumentDigestDownloadContractTests
         }
         finally
         {
+            // This is a shared disposable Compose database. Never leave a
+            // dangling PostgreSQL reference after deleting its S3/Azure
+            // object: later offline checkpoint and archive tests enumerate
+            // every documents row and would correctly reject the orphan.
+            await using (var cleanup = admin.CreateCommand(
+                "DELETE FROM documents WHERE tenant_id=@tenant AND id=@id"))
+            {
+                cleanup.Parameters.AddWithValue("tenant", tenant.Value);
+                cleanup.Parameters.AddWithValue("id", id);
+                await cleanup.ExecuteNonQueryAsync();
+            }
             await writer.DeleteAsync(storageKey);
         }
     }
