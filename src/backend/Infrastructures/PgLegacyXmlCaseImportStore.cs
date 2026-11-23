@@ -28,7 +28,12 @@ public sealed class PgLegacyXmlCaseImportStore(NpgsqlDataSource dataSource)
             key.Any(c => !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
                 (c >= '0' && c <= '9') || c is '-' or '_' or ':' or '.')))
             throw new ArgumentException("Invalid XML import idempotency key.");
+        // The Business preflight rejects rich/unmapped source data, but the
+        // infrastructure port must also fail closed if another internal
+        // adapter calls it directly. Never silently persist a partial case,
+        // including on an otherwise valid idempotent replay.
         if (preview is null || preview.AttachmentCount != 0 ||
+            preview.HasUnmappedBusinessData ||
             preview.Format is not ("classic" or "accertatore"))
             throw new ArgumentException("Only case-only XML facts can be imported.");
         // This validates the normalized reference and date in the domain layer.
@@ -165,14 +170,26 @@ public sealed class PgLegacyXmlCaseImportStore(NpgsqlDataSource dataSource)
             if (!CryptographicOperations.FixedTimeEquals(previousDigest, requestDigest))
                 throw new LegacyXmlIdempotencyConflictException();
 
-            // The deferred FK prevents deletion while a proof is recorded.
-            // This SELECT also ensures RLS still resolves the original row.
-            await using (var exists = scope.Command(
-                "SELECT 1 FROM sinistri WHERE tenant_id=@tenant AND id=@id"))
+            // The deferred FK prevents deletion while the ledger proof
+            // exists. A matching digest by itself is insufficient at this
+            // internal port: verify that the stored case's canonical facts
+            // still agree with the preview, rather than replaying an
+            // unrelated UUID for an accidentally reused/forged DTO.
+            await using (var existing = scope.Command(
+                "SELECT external_reference, occurred_on, reported_on " +
+                "FROM sinistri WHERE tenant_id=@tenant AND id=@id"))
             {
-                exists.Parameters.AddWithValue("tenant", tenant.Value);
-                exists.Parameters.AddWithValue("id", existingId);
-                if (await exists.ExecuteScalarAsync(ct) is null)
+                existing.Parameters.AddWithValue("tenant", tenant.Value);
+                existing.Parameters.AddWithValue("id", existingId);
+                await using var row = await existing.ExecuteReaderAsync(ct);
+                if (!await row.ReadAsync(ct))
+                    throw new LegacyXmlIdempotencyConflictException();
+                var reported = row.IsDBNull(2)
+                    ? (DateOnly?)null : row.GetFieldValue<DateOnly>(2);
+                if (!string.Equals(row.GetString(0), sinistro.ExternalReference,
+                        StringComparison.Ordinal) ||
+                    row.GetFieldValue<DateOnly>(1) != sinistro.OccurredOn ||
+                    reported != sinistro.ReportedOn)
                     throw new LegacyXmlIdempotencyConflictException();
             }
             await scope.CommitAsync(ct);
