@@ -933,3 +933,40 @@ legacy. Il commit XML rimane **interno**, senza
 endpoint o DI registrata. La #24 resta P0 aperta
 per caratterizzazione dell'identità, bulk load,
 deadlock e prove di produzione/staging.
+
+
+## Gate interno addizionale V011: dati XML non mappati e replay coerente (ADR 0096, #24/#10/#21)
+
+La preview Classic/Accertatore e il servizio Business rifiutano già un
+commit *case-only* quando il sorgente contiene timestamp, anagrafiche,
+allegati, metadata o normalizzazioni che il modello Sinistro non conserva.
+Ora **anche** lo store PostgreSQL interno
+`PgLegacyXmlCaseImportStore.CommitAsync` richiede che
+`HasUnmappedBusinessData=false` e `AttachmentCount=0`: un adapter
+interno che passi direttamente un DTO contrassegnato come incompleto non
+può creare Sinistro, ledger o audit di successo, neppure tramite replay.
+Il rifiuto precede qualsiasi apertura di transazione PostgreSQL.
+
+Su un replay con stessa chiave e SHA-256, lo store non si ferma alla
+presenza dell'UUID nel tenant: legge esclusivamente
+`external_reference, occurred_on, reported_on` dal Sinistro legato al
+ledger sotto FORCE RLS e confronta i tre valori **esattamente** con la
+preview canonica. Un mismatch (anche null vs data) genera
+`LegacyXmlIdempotencyConflictException` senza audit di successo o
+nuova mutazione. Identità tenant/subject/key e idempotenza preesistenti
+rimangono invariate. Nessuna logica fuzzy o selezione arbitraria fra
+duplicati storici viene introdotta.
+
+I test PostgreSQL reali esercitano due formati di origine, nuova
+importazione marcata come non mappata, replay marcato non sicuro,
+riferimento/data evento/data denuncia diversi con stesso key/digest,
+replay genuino e conteggi di Sinistri/ledger/audit. Vedere
+[ADR 0096](../adr/0096-xml-internal-store-admission-replay-facts.md).
+
+**Limitazione essenziale:** il flag è un dato del DTO interno, non una
+certificazione crittografica del file XML. Non deve essere inventato da
+un caller; soltanto il parser di preflight deve derivarlo dal sorgente.
+Il commit V011 resta **NON pubblicato** e non registrato in DI. La #24
+rimane P0 aperta per identità storica composita, validazione con dati
+reali e controlli di carico/staging/retention. V011/V012 e i checksum
+delle migrazioni rimangono immutati; `death` non è toccato.
