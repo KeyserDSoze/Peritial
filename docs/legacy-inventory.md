@@ -17,3 +17,14 @@ Esame statico dei progetti Expertiser.* sul commit death `35b043e6f6392bde3e45fa
 | Sicurezza | Admin, Contributor, Reader | modello nuovo basato su OAuth scope/role e tenant |
 
 Nota: il legacy contiene vari `NotImplementedException`; la loro presenza non costituisce un requisito di compatibilità.
+
+
+### Nota identità import legacy — 23 novembre 2026
+
+La caratterizzazione statica [ADR 0097](../adr/0097-legacy-yearlyid-is-upload-sequence-not-xml-identity.md)
+mostra che `YearlyId` era un progressivo assegnato tramite `UploadDate`
+e una guardia **in-process**, non una chiave sorgente XML. Il manager
+storico cercava per solo `ExternalId` e poteva generare duplicati
+al crescere della data evento. Sono evidenze del codice, **non**
+una policy verificata su dati SQL Server di produzione: mantenere
+l'import pubblico bloccato (#24/#10) fino alla caratterizzazione.

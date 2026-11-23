@@ -970,3 +970,25 @@ Il commit V011 resta **NON pubblicato** e non registrato in DI. La #24
 rimane P0 aperta per identità storica composita, validazione con dati
 reali e controlli di carico/staging/retention. V011/V012 e i checksum
 delle migrazioni rimangono immutati; `death` non è toccato.
+
+
+## Evidenza statica YearlyId dal legacy (ADR 0097, #24)
+
+La lettura **solo a scopo storico** di `death` (commit
+`35b043e6f6392bde3e45faa9d326a842914771d5`) chiarisce che `YearlyId` era
+attribuito nel `QueryManager.InsertAccidentAsync` come sequenza
+incrementale da pratiche con `UploadDate >= 1 gennaio` dell'anno
+di caricamento. Il filtro non ha limite superiore ed il lock
+`TrafficLight` è statico in-process: **non** è dimostrata
+un'identità univoca di Sinistro né una sequenza SQL globale per anno.
+`ImportManager` cercava per solo `ExternalId` e creava una seconda
+pratica sul match con data evento precedente: questo non va portato
+come policy di deduplica o corretto con una UNIQUE indiscriminata.
+`TableExpertise.ConcreteId` concatena il progressivo con altre
+informazioni per presentazione, non deriva direttamente dall'XML.
+
+La decisione resta **fail closed**: `YearlyId` non sarà usato come
+anno del sinistro o componente di chiave import senza campioni reali,
+policy approvata e vincoli DB comprovati.
+Vedi [ADR 0097](../adr/0097-legacy-yearlyid-is-upload-sequence-not-xml-identity.md).
+La #24 resta P0 aperta; nessun codice su `death` è stato modificato.
