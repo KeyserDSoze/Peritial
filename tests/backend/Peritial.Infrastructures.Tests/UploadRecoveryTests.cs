@@ -166,7 +166,8 @@ public sealed class UploadRecoveryTests
     }
 
     private static DocumentRecord Record(TenantId tenant, Guid id, string key) =>
-        new(id, tenant, null, "proof.pdf", "application/pdf", 10, key, DateTime.UtcNow);
+        new(id, tenant, null, "proof.pdf", "application/pdf", 10, key, DateTime.UtcNow,
+            ContentSha256: DocumentDigest.Compute("%PDF-1.7"u8));
 
     private static SecurityAuditEvent Event(TenantId tenant, Guid id) =>
         new(Guid.NewGuid(), tenant, "signed-subject", "document.ingest", "succeeded", id, DateTime.UtcNow);
