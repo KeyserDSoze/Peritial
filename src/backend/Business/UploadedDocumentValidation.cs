@@ -154,7 +154,15 @@ internal static class UploadedDocumentValidation
                     throw new ArgumentException("DOCX relationship escapes the package.");
             }
             else if (segment.Length != 0 && segment != ".")
+            {
+                // Even an absent ZIP member can be referenced by a .rels
+                // target. A future Windows consumer may bind it to a DOS
+                // device or normalize trailing dot/space into another name.
+                if (IsReservedWindowsDeviceName(segment) ||
+                    segment.EndsWith('.') || segment.EndsWith(' '))
+                    throw new ArgumentException("Unsafe DOCX relationship target.");
                 depth++;
+            }
         }
     }
 
