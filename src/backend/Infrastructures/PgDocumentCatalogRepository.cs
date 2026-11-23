@@ -91,7 +91,7 @@ public sealed class PgDocumentCatalogRepository(Npgsql.NpgsqlDataSource dataSour
     /// tenant and document UUID inside a transaction using FORCE RLS.
     /// Do not add this field to the public metadata projection.
     /// </summary>
-    public async Task<DocumentDownloadLocation?> FindAsync(
+    public async Task<DocumentDownloadLocation?> FindForDownloadAsync(
         TenantId tenant, Guid documentId, CancellationToken ct = default)
     {
         await using var scope = await TenantDbScope.OpenAsync(dataSource, tenant, ct);
