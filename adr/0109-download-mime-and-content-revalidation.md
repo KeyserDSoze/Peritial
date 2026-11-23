@@ -75,6 +75,8 @@ la chiave storage, il controllo idempotenza o il branch storico.
   Attestare l'esito terminale backend e Compose sul commit
   finale prima di affermare che la regressione è chiusa.
 
+- Controprove ulteriori per file già ammessi: [81bd3c2](https://github.com/KeyserDSoze/Peritial/commit/81bd3c285a9ea6beb245d9d65ca0a02dadf2f7bd), [CI #45206490282](https://github.com/KeyserDSoze/Peritial/actions/runs/45206490282): job backend **503/503 PASS** (23 Domain, 279 Business, 201 Infrastructure), download DOCX/ZIP, JPEG, PNG e XML ancora validi. Compose terminale da attestare.
+
 ## Limiti e follow-up
 
 La validazione di tipo è **un controllo strutturale**, non
@@ -82,7 +84,8 @@ una garanzia di integrità crittografica o provenienza.
 Un altro file PDF/XML/DOCX valido e della stessa lunghezza
 può ancora sostituire l'oggetto. Per coprire questo scenario
 servono hash/checksum immutabili per oggetto con provenienza
-e verifica in download, versione/retention/legal hold, più
+e verifica in download (tracciati nella [issue #27](https://github.com/KeyserDSoze/Peritial/issues/27)),
+versione/retention/legal hold, più
 scansione/re-scan e quarantena durevole secondo #5/#11.
 Il parser PDF verifica attualmente la signature, non la
 conformità semantica o una firma digitale. La consegna
