@@ -289,3 +289,30 @@ DOCX ZIP con TargetMode Internal e un path ../../ fuori dalla radice.
 [ADR 0107](../adr/0107-docx-opc-relationship-target-package-boundaries.md)
 e issue #5 riportano commit, CI e limiti; non è una validazione
 semantica completa dei documenti o dei converter esterni.
+
+## Nomi documenti portabili per ingestione e download (ADR 0108)
+
+La validazione del nome documento opera sul basename, dopo aver
+normalizzato slash/backslash dei percorsi provenienti da client Windows.
+Nomi DOS riservati (CON, NUL, PRN, AUX, COM1–COM9, LPT1–LPT9,
+CONIN$, CONOUT$, inclusi estensioni e numeri in apice), i caratteri
+Windows non portabili (due punti, pipe, punto interrogativo,
+asterisco, virgolette, minore/maggiore) e controlli Unicode bidi
+che possono mascherare l'estensione non sono ammessi.
+I nomi comuni internazionalizzati restano validi.
+
+Il controllo si applica prima della scansione e del PUT su object
+storage, metadati e audit successo. La lettura download ricontrolla
+la stessa policy sui record legacy prima del fetch blob e del ritorno
+dell'intestazione Content-Disposition. Un nome non canonico comporta
+errore generico senza leakage del nome o del contenuto.
+REST e MCP condividono il layer Business.
+
+I test Business comprendono nomi invalidi, controprove valide e
+download legacy negati prima di leggere il blob. I test con JWT
+Keycloak verificano upload multipart REST e MCP ingest_file su nomi
+DOS, NTFS alternate streams e Unicode bidi. La
+[ADR 0108](../adr/0108-upload-and-download-portable-filename-admission.md)
+e le issue #5/#11 riportano le prove e gli esiti CI.
+Non è sostitutivo di quarantena, retention, antivirus e converter
+sandboxati.
