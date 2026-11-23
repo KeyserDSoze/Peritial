@@ -111,3 +111,46 @@ abilita alcuna migrazione automatica in produzione. Gli ambienti
 persistenti restano sottoposti a backup e migrator esplicito.
 Full-stack [CI #45212051268](https://github.com/KeyserDSoze/Peritial/actions/runs/45212051268)
 da attestare fino a terminale; non chiamare verde in anticipo.
+
+
+## SeaweedFS e Azurite: sostituzione reale a lunghezza invariata
+
+La prima tranche V013/V014 verificava la sostituzione di un PDF
+di lunghezza identica contro il `DocumentDownloadService` con
+blob reader simulato. La [CI #45215521980](https://github.com/KeyserDSoze/Peritial/actions/runs/45215521980)
+ha confermato **8/9 job verdi** ma Compose **fallito**: il
+contratto `ObjectRecoveryCheckpointContractTests` inseriva due
+nuovi documenti direttamente in PostgreSQL senza SHA-256, ormai
+vietato dalla migration V014. La fixture è stata corretta in
+[10347f3](https://github.com/KeyserDSoze/Peritial/commit/10347f3060ce42333ff93327601385291e873402)
+usando il digest del contenuto PDF originale (non un hash fittizio).
+
+Il nuovo
+[RealDocumentDigestDownloadContractTests](https://github.com/KeyserDSoze/Peritial/blob/main/tests/backend/Peritial.Infrastructures.Tests/RealDocumentDigestDownloadContractTests.cs)
+(provenienza: [commit 2182981](https://github.com/KeyserDSoze/Peritial/commit/21829813ee9bfcfebba9703655e4b99e0f67e34f))
+esercita **due provider veri** nella Compose usa-e-getta:
+SeaweedFS tramite `MinioObjectStore` e Azurite tramite
+`AzureBlobObjectStore`. Ogni prova:
+
+1. scrive metadata con digest SHA-256 persistito nel database vero;
+2. verifica il lookup con `peritial_app` e FORCE RLS
+   (un tenant estraneo non può leggere il documento);
+3. scarica il PDF originale e verifica un solo audit succeeded;
+4. sovrascrive lo **stesso** blob con un altro PDF valido, stessa
+   lunghezza e MIME, ma SHA-256 diverso;
+5. richiede un download e attende il rifiuto generico, **nessun
+   secondo audit succeeded** e nessuna chiave storage nel messaggio;
+6. ripristina i byte originari, verifica download positivo e secondo
+   audit succeeded. I blob del test vengono eliminati.
+
+Il workflow
+[commit d7b5fb9](https://github.com/KeyserDSoze/Peritial/commit/d7b5fb9cd307514b04325caeeb477a5c635f2439)
+aggiunge le nuove prove al passo Compose di verifica dei veri
+provider S3/Azurite, senza saltare le prove esistenti. L'esito
+full-stack va attestato con terminale della pipeline successiva:
+non presumere che il solo compile backend certifichi S3/Azurite.
+
+Restano aperti i fault drill COMMIT/PUT ACK, provenienza
+crittografica indipendente del database, policy approvata per
+`NULL` legacy e verifica reale Azure/on-prem; gli emulatori
+Compose non costituiscono certificazione cloud.
