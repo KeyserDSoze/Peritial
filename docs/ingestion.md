@@ -129,3 +129,30 @@ valido. La CI Compose verifica il comportamento HTTP 400 REST
 e `isError` MCP con JWT firmato e nessuna fuoriuscita
 del marker della URI esterna.
 [ADR 0100](../adr/0100-docx-opc-xml-admission-before-malware-scan.md).
+
+
+## DOCX: blocco di symlink, FIFO, socket e device in entry ZIP (ADR 0101)
+
+Dopo i controlli di percorso e budget DOCX, il validatore
+esamina gli `ExternalAttributes` presenti per ogni entry
+del central directory ZIP. Nei bit Unix del tipo file
+(accennati dai 16 bit alti) ammette solo un file regolare
+(`0x8000`), una directory (`0x4000`) o l'assenza di
+informazione sul tipo (`0`, tipica di alcuni ZIP Windows).
+Tipi speciali `0xA000` symlink, `0x1000` FIFO,
+`0x2000` char device, `0x6000` block device,
+`0xC000` socket e qualsiasi altro tipo Unix inatteso
+vengono rifiutati **prima** di scanner, blob e metadata.
+L'archivio non è estratto e la protezione serve anche per
+futuri converter/renderer che potrebbero farlo.
+
+I test in `FileIngestionSecurityTests` creano ZIP reali
+marcando le entry con mode Unix nella directory centrale,
+provano cinque rifiuti senza alcuna scan/PUT/DB e
+l'accettazione di un file normale. Il test OAuth Keycloak
+esercita le route REST multipart e MCP base64 con lo stesso
+DOCX sintetico symlink: HTTP 400 / `isError:true`, senza
+rivelare il target del link. Restano non verificati
+l'interpretazione di tutti i formati ZIP, i link esterni OOXML
+e gli scenari produttivi; i requisiti di #5 non sono conclusi.
+[ADR 0101](../adr/0101-docx-zip-unix-special-entry-admission.md).

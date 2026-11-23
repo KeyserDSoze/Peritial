@@ -390,3 +390,24 @@ né elimina link esterni leciti o sostituisce ClamAV/quarantena.
 [ADR 0100](adr/0100-docx-opc-xml-admission-before-malware-scan.md).
 I gate di produzione #5 (quarantena, firme/alerting,
 scan reale Azure/on-prem, retention e antivirus) restano aperti.
+
+
+## DOCX ZIP: membri Unix non regolari (ADR 0101, #5)
+
+Un archivio DOCX può dichiarare tramite gli attributi della
+directory centrale ZIP che una entry è un **symlink, FIFO, socket
+o device Unix**, pur avendo un nome apparentemente innocuo.
+Il controllo di ammissione ora rifiuta tali entry prima di
+ClamAV, storage e metadati: dai bit di tipo Unix sono ammessi
+file regolari (0100000), directory (0040000) o tipo non
+specificato/ZIP Windows. Non vengono eseguite estrazioni.
+La policy vale per tutte le parti dell'archivio, comprese
+quelle non XML e gli allegati.
+
+Test Business RED verificano 5 tipi speciali; test positivo
+con file Unix regolare e JWT Keycloak REST/MCP con DOCX
+contenente symlink verificano la compatibilità e la negazione.
+La protezione riguarda **solo metadati di tipo dichiarato**,
+non certifica tutti i ZIP e non sostituisce la scansione
+antivirus, la quarantena e la gestione di active content.
+[ADR 0101](adr/0101-docx-zip-unix-special-entry-admission.md).

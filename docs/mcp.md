@@ -1198,3 +1198,18 @@ Keycloak verificano 400 REST e `isError:true` MCP.
 Non si tratta di una validazione completa dello standard
 OOXML; le policy antivirus/quarantena rimangono obbligatorie.
 [ADR 0100](../adr/0100-docx-opc-xml-admission-before-malware-scan.md).
+
+
+## DOCX ZIP Unix special entries — import fail-closed (ADR 0101)
+
+`ingest_file` MCP e `POST /api/files` REST condividono
+la validazione del tipo Unix dichiarato in ogni entry ZIP
+DOCX. Symlink, FIFO, device e socket non sono ammessi;
+file regolari, directory o tipi non specificati restano
+possibili. In caso di rifiuto non avviene scan/PUT/DB:
+REST risponde 400, MCP restituisce `isError:true`
+senza riportare il contenuto del link.
+La verifica con JWT Keycloak è in CI Compose; non cambia
+il contratto MCP e la policy non equivale a sanitizzazione
+completa del DOCX.
+[ADR 0101](../adr/0101-docx-zip-unix-special-entry-admission.md).
