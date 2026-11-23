@@ -95,6 +95,18 @@ internal static class UploadedDocumentValidation
                 // must be offered traversal, absolute, ambiguous or duplicate
                 // (on Windows) paths from an uploaded document.
                 var name = entry.FullName;
+                // ZIP central-directory external attributes can describe
+                // Unix symlinks, FIFOs, sockets and device nodes rather than
+                // ordinary files. We do not extract entries today, but
+                // accepting special entries would make later OOXML parsing
+                // or extraction unsafe. For Unix mode bits, permit only
+                // regular files (0100000), directories (0040000) or absent
+                // type metadata (older/Windows ZIP writers).
+                // Mask from unsigned bits: ExternalAttributes is an int and
+                // the high 16 bits carry the Unix mode where present.
+                var unixType = ((uint)entry.ExternalAttributes >> 16) & 0xF000u;
+                if (unixType != 0 && unixType != 0x8000u && unixType != 0x4000u)
+                    throw new ArgumentException("Unsupported DOCX ZIP entry type.");
                 var segments = name.Split('/');
                 if (string.IsNullOrWhiteSpace(name) || name.StartsWith('/') ||
                     name.Contains('\\') || name.Contains(':') ||
