@@ -92,6 +92,12 @@ public sealed class ObjectRecoveryArchiveContractTests
 
             await PutAsync(original, bucket, keyOne, first);
             await PutAsync(original, bucket, keyTwo, second);
+            var documentBudget = first.LongLength + second.LongLength;
+            var refused = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                ObjectRecoveryArchive.ExportAsync(sourceDb, original, bucket, archive,
+                    signingKey, maxTotalBytes: documentBudget - 1));
+            Assert.Contains("budget", refused.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.False(Directory.Exists(archive)); // no private staging created
             var exported = await ObjectRecoveryArchive.ExportAsync(sourceDb, original, bucket, archive, signingKey);
             Assert.Equal(2, exported.Checkpoint.Documents.Count);
             Assert.Equal(1, exported.ArchiveVersion);
@@ -99,6 +105,16 @@ public sealed class ObjectRecoveryArchiveContractTests
             Assert.True(File.Exists(authenticationPath));
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 ObjectRecoveryArchive.ExportAsync(sourceDb, original, bucket, archive, signingKey));
+
+            // A valid HMAC and matching PostgreSQL metadata cannot bypass
+            // an operator's smaller restore capacity budget. No S3 PUTs.
+            var restoreRefusal = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                ObjectRecoveryArchive.ImportAsync(destDb, restored, bucket, archive,
+                    signingKey, maxTotalBytes: documentBudget - 1));
+            Assert.Contains("budget", restoreRefusal.Message, StringComparison.OrdinalIgnoreCase);
+            var refusedInventory = await restored.ListObjectsV2Async(
+                new ListObjectsV2Request { BucketName = bucket });
+            Assert.True(refusedInventory.S3Objects is null || refusedInventory.S3Objects.Count == 0);
 
             var blob0 = Path.Combine(archive, "objects", "00000000.blob");
             var bytes = await File.ReadAllBytesAsync(blob0);
