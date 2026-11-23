@@ -138,6 +138,73 @@ public sealed class FileIngestionSecurityTests
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Docx_con_file_che_oscura_una_directory_implicitamente_richiesta_e_rifiutato(
+        bool childFirst)
+    {
+        // Either ZIP entry order is invalid: a path cannot simultaneously
+        // name a regular file and be an ancestor directory for another entry.
+        var scanner = new CountingScanner();
+        var (service, store, docs) = NewService(scanner: scanner);
+        var parent = ("word/media/collision.bin", new byte[] { 1, 2 });
+        var child = ("word/media/collision.bin/payload.dat", new byte[] { 3 });
+        var bytes = childFirst ? CreateDocx(child, parent) : CreateDocx(parent, child);
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.IngestAsync("rapporto.docx", DocxMime,
+                new MemoryStream(bytes), bytes.Length));
+
+        Assert.Equal(0, scanner.Scans);
+        Assert.Equal(0, store.Uploads);
+        Assert.Empty(docs.Records);
+        Assert.Empty(docs.AuditEvents);
+    }
+
+    [Theory]
+    [InlineData("word/media/ambiguous./part.bin")]
+    [InlineData("word/media/ambiguous /part.bin")]
+    [InlineData("word/media/ambiguous.bin.")]
+    [InlineData("word/media/ambiguous.bin ")]
+    public async Task Docx_con_segmento_zip_che_finirebbe_in_punto_o_spazio_e_rifiutato(
+        string unsafeEntryName)
+    {
+        // Some downstream extractors/filesystems trim these suffixes,
+        // potentially shadowing a different OOXML member.
+        var scanner = new CountingScanner();
+        var (service, store, docs) = NewService(scanner: scanner);
+        var bytes = CreateDocx((unsafeEntryName, new byte[] { 1, 2, 3 }));
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.IngestAsync("rapporto.docx", DocxMime,
+                new MemoryStream(bytes), bytes.Length));
+
+        Assert.Equal(0, scanner.Scans);
+        Assert.Equal(0, store.Uploads);
+        Assert.Empty(docs.Records);
+        Assert.Empty(docs.AuditEvents);
+    }
+
+    [Fact]
+    public async Task Docx_con_directory_zip_esplicita_e_figlio_regolare_e_ammesso()
+    {
+        // A normal explicit directory is not a collision with its own child.
+        var scanner = new CountingScanner();
+        var (service, store, docs) = NewService(scanner: scanner);
+        var bytes = CreateDocx(
+            ("word/media/", Array.Empty<byte>()),
+            ("word/media/image.bin", new byte[] { 1, 2, 3 }));
+
+        var saved = await service.IngestAsync("rapporto.docx", DocxMime,
+            new MemoryStream(bytes), bytes.Length);
+
+        Assert.Equal(bytes.Length, saved.Length);
+        Assert.Equal(1, scanner.Scans);
+        Assert.Equal(1, store.Uploads);
+        Assert.Single(docs.Records);
+    }
+
+    [Theory]
     [InlineData(0xA000)] // Unix symlink
     [InlineData(0x1000)] // Unix FIFO
     [InlineData(0x2000)] // Unix character device
