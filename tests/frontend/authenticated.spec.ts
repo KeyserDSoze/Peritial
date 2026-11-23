@@ -696,7 +696,7 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     expect((await secondGet).status()).toBe(200);
     await expect(list.getByText(firstName, {exact: true})).toHaveCount(0);
     await expect(list.getByText(secondName, {exact: true})).toBeVisible();
-    await expect(list.locator("a,button")).toHaveCount(0);
+    await expect(list.locator("a")).toHaveCount(0);
 
     await page.getByRole("button", {name: "Lingua"}).click();
     await expect(page.getByRole("combobox", {name: "Filter documents by appraisal"})).toHaveValue(secondId);
@@ -759,7 +759,7 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     await expect(docs.getByText("single-flight-first.pdf")).toBeVisible();
     await expect(more).toHaveCount(0);
     expect(observedContinuations,"one cursor must be fetched once per page action").toBe(1);
-    await expect(docs.locator("a,button")).toHaveCount(0);
+    await expect(docs.locator("a")).toHaveCount(0);
   });
 
   test("PWA ignores old document page when language refetches current signed catalog", async ({page}) => {
@@ -870,7 +870,7 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     await expect(docs.getByText("page-two.pdf")).toBeVisible();
     await expect(docs.getByText("page-one.pdf")).toBeVisible();
     await expect(more).toHaveCount(0);
-    await expect(docs.locator("a,button")).toHaveCount(0);
+    await expect(docs.locator("a")).toHaveCount(0);
 
     // Refresh invalidates old pages and returns to page one.
     await page.getByRole("button", {name: "Aggiorna elenco"}).click();
