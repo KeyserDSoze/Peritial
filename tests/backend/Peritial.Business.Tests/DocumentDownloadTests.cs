@@ -251,6 +251,66 @@ public sealed class DocumentDownloadTests
     }
 
     [Fact]
+    public async Task Previously_admitted_docx_can_still_be_downloaded_after_zip_revalidation()
+    {
+        using var stream = new MemoryStream();
+        using (var archive = new System.IO.Compression.ZipArchive(
+                   stream, System.IO.Compression.ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var (name, xml) in new[]
+            {
+                ("[Content_Types].xml", "<Types/>"),
+                ("word/document.xml", "<document><body/></document>")
+            })
+            {
+                var member = archive.CreateEntry(name);
+                using var writer = new StreamWriter(member.Open());
+                writer.Write(xml);
+            }
+        }
+        var bytes = stream.ToArray();
+        var tenant = TenantId.From(Guid.NewGuid());
+        var id = Guid.NewGuid();
+        var catalog = new Catalog();
+        Add(catalog, tenant, id, fileName: "safe.docx",
+            contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            length: bytes.LongLength);
+        var blobs = new Blobs { Bytes = bytes };
+        var audit = new Audit();
+        var service = new DocumentDownloadService(new Actor(tenant), catalog, blobs, audit);
+
+        var downloaded = await service.ReadAsync(id);
+        Assert.Equal(bytes, downloaded.Bytes);
+        Assert.Equal("safe.docx", downloaded.FileName);
+        Assert.Equal("application/octet-stream", downloaded.ContentType);
+        Assert.Equal("succeeded", Assert.Single(audit.Events).Outcome);
+    }
+
+    [Fact]
+    public async Task Previously_admitted_jpeg_and_png_still_download_after_signature_checks()
+    {
+        var tenant = TenantId.From(Guid.NewGuid());
+        foreach (var (fileName, mime, bytes) in new[]
+        {
+            ("photo.jpg", "image/jpeg", new byte[] { 0xFF, 0xD8, 0xFF, 0, 1, 2 }),
+            ("photo.png", "image/png", new byte[] { 137, 80, 78, 71, 13, 10, 26, 10, 0 })
+        })
+        {
+            var id = Guid.NewGuid();
+            var catalog = new Catalog();
+            Add(catalog, tenant, id, fileName: fileName,
+                contentType: mime, length: bytes.LongLength);
+            var blobs = new Blobs { Bytes = bytes };
+            var audit = new Audit();
+            var service = new DocumentDownloadService(new Actor(tenant), catalog, blobs, audit);
+            var downloaded = await service.ReadAsync(id);
+            Assert.Equal(bytes, downloaded.Bytes);
+            Assert.Equal(fileName, downloaded.FileName);
+            Assert.Equal("succeeded", Assert.Single(audit.Events).Outcome);
+        }
+    }
+
+    [Fact]
     public async Task Mismatched_storage_length_or_failed_audit_never_returns_bytes()
     {
         var tenant = TenantId.From(Guid.NewGuid());
