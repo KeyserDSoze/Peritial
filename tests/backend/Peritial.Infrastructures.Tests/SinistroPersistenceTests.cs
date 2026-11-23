@@ -209,6 +209,75 @@ public sealed class SinistroPersistenceTests
         Assert.Equal(32, digests.GetInt32(2));
     }
 
+    [Theory]
+    [InlineData("classic")]
+    [InlineData("accertatore")]
+    public async Task V011_store_rejects_unmapped_preview_before_ledger_case_or_audit(string format)
+    {
+        await using var db = await IsolatedDatabases.CreateAsync();
+        var tenant = TenantId.From(Guid.NewGuid());
+        var reference = "XML-UNMAPPED-" + Guid.NewGuid().ToString("N");
+        var parsed = new LegacyXmlPreviewDto(format, reference,
+            new DateOnly(2026, 11, 23), null, 0, HasUnmappedBusinessData: true);
+        var digest = System.Security.Cryptography.SHA256.HashData(
+            "rich-legacy-source-with-unmapped-fields"u8);
+        var repo = new PgLegacyXmlCaseImportStore(db.App);
+
+        // Exercise the infrastructure port directly: Business currently
+        // rejects this preview, but a second internal adapter must not
+        // bypass the no-loss gate when persisting legacy source facts.
+        await Assert.ThrowsAsync<ArgumentException>(() => repo.CommitAsync(
+            tenant, "signed-internal-actor", "unmapped-source-key-0001", digest, parsed));
+
+        await using var counts = db.Admin.CreateCommand(
+            "SELECT (SELECT count(*) FROM sinistri WHERE tenant_id=@tenant), " +
+            "(SELECT count(*) FROM legacy_xml_import_keys WHERE tenant_id=@tenant), " +
+            "(SELECT count(*) FROM security_audit WHERE tenant_id=@tenant " +
+            "AND action='sinistro.import-xml' AND outcome='succeeded')");
+        counts.Parameters.AddWithValue("tenant", tenant.Value);
+        await using var reader = await counts.ExecuteReaderAsync();
+        Assert.True(await reader.ReadAsync());
+        Assert.Equal(0L, reader.GetInt64(0));
+        Assert.Equal(0L, reader.GetInt64(1));
+        Assert.Equal(0L, reader.GetInt64(2));
+    }
+
+    [Fact]
+    public async Task V011_existing_key_replay_cannot_ignore_unmapped_source_flag()
+    {
+        await using var db = await IsolatedDatabases.CreateAsync();
+        var tenant = TenantId.From(Guid.NewGuid());
+        var valid = new LegacyXmlPreviewDto("classic",
+            "XML-REPLAY-GATE-" + Guid.NewGuid().ToString("N"),
+            new DateOnly(2026, 11, 23), null, 0);
+        var digest = System.Security.Cryptography.SHA256.HashData("original-canonical-xml"u8);
+        var repo = new PgLegacyXmlCaseImportStore(db.App);
+        const string key = "unmapped-replay-gate-0001";
+        var first = await repo.CommitAsync(tenant, "signed-internal-actor", key, digest, valid);
+        Assert.False(first.Replayed);
+
+        // The same key and digest do not excuse an unsafe later DTO.
+        // Validate the preview BEFORE the replay lookup can return the ID.
+        await Assert.ThrowsAsync<ArgumentException>(() => repo.CommitAsync(
+            tenant, "signed-internal-actor", key, digest,
+            valid with { HasUnmappedBusinessData = true }));
+
+        var replay = await repo.CommitAsync(tenant, "signed-internal-actor", key, digest, valid);
+        Assert.True(replay.Replayed);
+        Assert.Equal(first.SinistroId, replay.SinistroId);
+        await using var counts = db.Admin.CreateCommand(
+            "SELECT (SELECT count(*) FROM sinistri WHERE tenant_id=@tenant), " +
+            "(SELECT count(*) FROM legacy_xml_import_keys WHERE tenant_id=@tenant), " +
+            "(SELECT count(*) FROM security_audit WHERE tenant_id=@tenant " +
+            "AND action='sinistro.import-xml' AND outcome='succeeded')");
+        counts.Parameters.AddWithValue("tenant", tenant.Value);
+        await using var reader = await counts.ExecuteReaderAsync();
+        Assert.True(await reader.ReadAsync());
+        Assert.Equal(1L, reader.GetInt64(0));
+        Assert.Equal(1L, reader.GetInt64(1));
+        Assert.Equal(1L, reader.GetInt64(2));
+    }
+
     [Fact]
     public async Task V011_two_simultaneous_imports_for_one_reference_allow_only_one_commit()
     {
