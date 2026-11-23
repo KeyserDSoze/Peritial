@@ -25,6 +25,27 @@ public static class SchemaBootstrap
             await acquire.ExecuteNonQueryAsync(ct);
         await using (var command = new NpgsqlCommand(sql, connection, transaction))
             await command.ExecuteNonQueryAsync(ct);
+
+        // The legacy V001 bootstrap is used only by isolated xUnit databases.
+        // Keep its DDL equivalent to the latest migrated download contract,
+        // without modifying the versioned baseline or replaying V013 twice.
+        bool hasDigest;
+        await using (var check = new NpgsqlCommand(
+            "SELECT EXISTS (SELECT 1 FROM information_schema.columns " +
+            "WHERE table_schema=current_schema() AND table_name='documents' " +
+            "AND column_name='content_sha256')", connection, transaction))
+            hasDigest = (bool)(await check.ExecuteScalarAsync(ct))!;
+        if (!hasDigest)
+        {
+            var migrationName = assembly.GetManifestResourceNames().Single(n =>
+                n.EndsWith("V013__documents_content_sha256_integrity.sql", StringComparison.Ordinal));
+            await using var migrationStream = assembly.GetManifestResourceStream(migrationName)
+                ?? throw new InvalidOperationException("Embedded V013 migration missing.");
+            using var migrationReader = new StreamReader(migrationStream);
+            var migrationSql = await migrationReader.ReadToEndAsync(ct);
+            await using var migrationCommand = new NpgsqlCommand(migrationSql, connection, transaction);
+            await migrationCommand.ExecuteNonQueryAsync(ct);
+        }
         await transaction.CommitAsync(ct);
     }
 }
