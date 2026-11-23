@@ -193,3 +193,25 @@ La CI Compose terminale e i gate di produzione richiedono
 ancora attestazione; vedere [ADR 0103](../adr/0103-docx-zip-file-directory-shadowing-and-portable-paths.md)
 e issue #5. Il controllo non valida le relazioni OOXML, la
 sicurezza di converter esterni o gli aggiornamenti antivirus.
+
+## DOCX ZIP: nomi dispositivi Windows e directory senza payload (ADR 0104)
+
+La validazione condivisa per REST/MCP rifiuta in **ogni segmento ZIP**
+nomi riservati Windows `CON`, `PRN`, `AUX`, `NUL`,
+`CONIN$`, `CONOUT$`, `COM1`–`COM9` e `LPT1`–`LPT9`,
+anche con estensioni e indipendentemente da maiuscole/minuscole.
+Sono considerati anche gli apici numerici ¹/²/³ per `COM`/`LPT`.
+Restano valide stringhe distinte (`COM0`, `LPT10`,
+`consolidato`). Le directory ZIP esplicite (suffisso `/`)
+devono avere lunghezza decompresa dichiarata pari a zero e
+la seconda passata continua a misurare i byte effettivi.
+
+Una violazione produce HTTP 400 REST o errore nel tool MCP
+**prima** di antivirus, storage, intenti e audit successo.
+I test Business comprendono nomi di dispositivo e directory
+con dati, più controprove ammesse. Il test Keycloak REST/MCP
+impiega una entry ZIP regolare chiamata `COM1.bin`.
+I controlli non sostituiscono ClamAV, policy di quarantena,
+retention, rate limiting o convalida semantica OOXML.
+[ADR 0104](../adr/0104-docx-zip-windows-device-names-and-directory-payloads.md)
+e issue #5 riportano esiti e limiti.
