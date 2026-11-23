@@ -58,7 +58,8 @@ public sealed class DocumentDownloadTests
         var bytes = "%PDF-1.7\nTest\n"u8.ToArray();
         var location = new DocumentDownloadLocation(
             new DocumentSummaryDto(id, null, name, contentType,
-                length ?? bytes.Length, DateTime.UtcNow), key);
+                length ?? bytes.Length, DateTime.UtcNow), key,
+            System.Security.Cryptography.SHA256.HashData(bytes));
         repo.Rows[id] = (tenant, location);
         return location;
     }
@@ -308,6 +309,62 @@ public sealed class DocumentDownloadTests
             Assert.Equal(fileName, downloaded.FileName);
             Assert.Equal("succeeded", Assert.Single(audit.Events).Outcome);
         }
+    }
+
+
+    [Fact]
+    public async Task Equal_length_valid_pdf_substitution_fails_sha256_without_success_audit()
+    {
+        var original = "%PDF-1.7\\nTest\\n"u8.ToArray();
+        var substitute = "%PDF-1.7\\nFail\\n"u8.ToArray();
+        Assert.Equal(original.Length, substitute.Length);
+        var tenant = TenantId.From(Guid.NewGuid());
+        var id = Guid.NewGuid();
+        var repo = new Catalog();
+        Add(repo, tenant, id);
+        var blobs = new Blobs { Bytes = substitute };
+        var audit = new Audit();
+        var service = new DocumentDownloadService(new Actor(tenant), repo, blobs, audit);
+
+        await Assert.ThrowsAsync<DocumentContentUnavailableException>(() => service.ReadAsync(id));
+        Assert.Equal(1, blobs.Reads);
+        Assert.Empty(audit.Events);
+    }
+
+    [Fact]
+    public async Task Missing_legacy_digest_denied_before_blob_read_or_success_audit()
+    {
+        var tenant = TenantId.From(Guid.NewGuid());
+        var id = Guid.NewGuid();
+        var repo = new Catalog();
+        Add(repo, tenant, id);
+        var row = repo.Rows[id];
+        repo.Rows[id] = (tenant, row.Location with { ContentSha256 = null });
+        var blobs = new Blobs();
+        var audit = new Audit();
+        var service = new DocumentDownloadService(new Actor(tenant), repo, blobs, audit);
+
+        await Assert.ThrowsAsync<DocumentContentUnavailableException>(() => service.ReadAsync(id));
+        Assert.Equal(0, blobs.Reads);
+        Assert.Empty(audit.Events);
+    }
+
+    [Fact]
+    public async Task Incorrect_digest_size_denied_before_blob_fetch()
+    {
+        var tenant = TenantId.From(Guid.NewGuid());
+        var id = Guid.NewGuid();
+        var repo = new Catalog();
+        Add(repo, tenant, id);
+        var row = repo.Rows[id];
+        repo.Rows[id] = (tenant, row.Location with { ContentSha256 = new byte[31] });
+        var blobs = new Blobs();
+        var audit = new Audit();
+        var service = new DocumentDownloadService(new Actor(tenant), repo, blobs, audit);
+
+        await Assert.ThrowsAsync<DocumentContentUnavailableException>(() => service.ReadAsync(id));
+        Assert.Equal(0, blobs.Reads);
+        Assert.Empty(audit.Events);
     }
 
     [Fact]
