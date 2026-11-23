@@ -4,11 +4,12 @@ using Peritial.Domains;
 namespace Peritial.Infrastructures;
 
 /// <summary>
-/// Explicit projection: never SELECT * or retrieve storage_key. The signed
-/// tenant is established per transaction and FORCE RLS enforces it again.
+/// Public list/get/page projections never retrieve storage_key. A separate
+/// download-only method returns the key to a private Business service after
+/// tenant-scoped SQL under FORCE RLS; it is never serialized to a client.
 /// </summary>
 public sealed class PgDocumentCatalogRepository(Npgsql.NpgsqlDataSource dataSource)
-    : IDocumentCatalogRepository
+    : IDocumentCatalogRepository, IDocumentDownloadRepository
 {
     public async Task<IReadOnlyList<DocumentSummaryDto>> ListAsync(
         TenantId tenant, Guid? periziaId, int limit, CancellationToken ct = default)
@@ -83,6 +84,30 @@ public sealed class PgDocumentCatalogRepository(Npgsql.NpgsqlDataSource dataSour
         }
         await scope.CommitAsync(ct);
         return result;
+    }
+
+    /// <summary>
+    /// The only read of storage_key for a download. All rows are resolved by
+    /// tenant and document UUID inside a transaction using FORCE RLS.
+    /// Do not add this field to the public metadata projection.
+    /// </summary>
+    public async Task<DocumentDownloadLocation?> FindAsync(
+        TenantId tenant, Guid documentId, CancellationToken ct = default)
+    {
+        await using var scope = await TenantDbScope.OpenAsync(dataSource, tenant, ct);
+        DocumentDownloadLocation? found = null;
+        await using (var cmd = scope.Command(
+            "SELECT id, perizia_id, file_name, content_type, length_bytes, created_at_utc, storage_key " +
+            "FROM documents WHERE tenant_id=@tenant AND id=@id"))
+        {
+            cmd.Parameters.AddWithValue("tenant", tenant.Value);
+            cmd.Parameters.AddWithValue("id", documentId);
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            if (await reader.ReadAsync(ct))
+                found = new DocumentDownloadLocation(Read(reader), reader.GetString(6));
+        }
+        await scope.CommitAsync(ct);
+        return found;
     }
 
     private static DocumentSummaryDto Read(Npgsql.NpgsqlDataReader row) => new(
