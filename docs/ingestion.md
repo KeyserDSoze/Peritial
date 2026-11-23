@@ -263,3 +263,29 @@ nella [ADR 0106](../adr/0106-docx-zip-unicode-normalization-path-collisions.md)
 e nella issue #5. Il controllo NFC non sostituisce antivirus,
 conversione sandboxata, quarantena o valutazione di compatibilità
 con collazioni e filesystem specifici.
+
+
+## DOCX OPC: percorsi relativi limitati alla radice ZIP (ADR 0107)
+
+Le relazioni interne delle parti .rels non possono usare target che
+escano dal pacchetto ZIP: il validatore effettua la decodifica URI
+percent-encoded una sola volta, blocca doppie codifiche ambigue,
+schemi/UNC, backslash e attraversamenti con segmenti parent che
+supererebbero la radice dell'OPC. Il conteggio dei segmenti parte
+dalla directory della parte sorgente, non dalla directory _rels;
+un target con slash singola iniziale parte dalla radice del pacchetto.
+
+Anche i target che nominano dispositivi Windows (NUL, CON, COM1,
+LPT9 e varianti con estensione) o terminano con punto/spazio sono
+rifiutati, anche se non esiste una corrispondente entry ZIP.
+Percorsi leciti relativi, con percent-encoded space, radicati
+nel pacchetto o frammenti interni restano ammessi. Non viene
+effettuata estrazione, fetch di URL o accesso al filesystem.
+
+Una relazione non sicura provoca il rifiuto REST HTTP 400 / MCP
+isError:true prima dello scanner, object store, metadati e audit
+successo, senza esporre il target. Il test E2E Keycloak usa un
+DOCX ZIP con TargetMode Internal e un path ../../ fuori dalla radice.
+[ADR 0107](../adr/0107-docx-opc-relationship-target-package-boundaries.md)
+e issue #5 riportano commit, CI e limiti; non è una validazione
+semantica completa dei documenti o dei converter esterni.
