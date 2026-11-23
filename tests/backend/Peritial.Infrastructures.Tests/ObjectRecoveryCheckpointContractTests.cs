@@ -128,6 +128,15 @@ public sealed class ObjectRecoveryCheckpointContractTests
 
             await PutAsync(storage, bucket, key, original);
             await PutAsync(storage, bucket, secondKey, original);
+
+            // The first checkpoint must NOT bless already substituted S3
+            // bytes. The ZIP/PDF may still be valid and the length equal,
+            // but PostgreSQL holds the SHA-256 from the admitted upload.
+            await PutAsync(storage, bucket, key, tampered);
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                ObjectRecoveryCheckpoint.CaptureAsync(db, storage, bucket));
+            await PutAsync(storage, bucket, key, original);
+
             var checkpoint = await ObjectRecoveryCheckpoint.CaptureAsync(db, storage, bucket);
             Assert.Equal(1, checkpoint.FormatVersion);
             Assert.Equal(2, checkpoint.Documents.Count);
