@@ -347,3 +347,22 @@ conservano i limiti dichiarati. Una variazione
 del valore `limit` non passa il gate neppure
 se il parametro rimane opzionale. [ADR 0060]
 (adr/0060-mcp-v1-1-full-parameter-contract.md).
+
+
+### Riferimenti XML con CR/CRLF, tab o newline interni (ADR 0099, #24/#25)
+
+Il parser XML 1.0 normalizza i ritorni a capo CR e CRLF **nei valori
+scalari**, non soltanto tra i tag: per esempio `NumeroSinistro`
+con CR interno è decodificato con LF. Un match con un riferimento
+PostgreSQL contenente LF non prova che il riferimento *sorgente*
+fosse identico. La preview continua a fornire il valore decodificato,
+ma imposta `hasUnmappedBusinessData=true` per caratteri di controllo
+interni nei campi scalari ammessi. Il piano REST/MCP emette
+`review-required`, senza UUID, anche se numero/date trovano un
+candidato unico. Il commit XML case-only interno rifiuta questi dati
+prima dello store; nessun payload o valore aggiuntivo è esposto.
+L'indentazione **fra elementi XML** rimane ammessa. [ADR 0099]
+(adr/0099-xml-control-whitespace-reference-source-gate.md).
+La verifica automatica include CR, CRLF, LF e TAB e un test Keycloak
+REST/MCP con UUID candidato reale. L'import resta interno; #24/#25
+non sono chiuse e `death` rimane storico.

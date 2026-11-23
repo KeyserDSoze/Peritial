@@ -1167,3 +1167,19 @@ localhost; la PWA continua con Authorization Code
 Compatibilità di client esterni, registrazione OAuth
 dinamica/resource indicators e deploy Entra reale
 restano aperti nelle issue #12/#4.
+
+
+## Riferimenti XML con newline interni: no match silenzioso (ADR 0099)
+
+XML 1.0 converte CR e CRLF all'interno di
+`NumeroSinistro` in LF prima che LINQ-to-XML legga il testo.
+La preview `preview_legacy_xml` restituisce ancora il riferimento
+decodificato, ma segnala `hasUnmappedBusinessData=true` anche
+per newline o tab interni al riferimento e agli altri scalari
+previsti. Il piano `plan_legacy_xml` (e REST) risponde
+`review-required` **senza UUID**, anche quando il valore
+decodificato coincide con una pratica tenant-scoped esistente.
+Non cambiano schema JSON, scope JWT, RLS, log o route pubbliche.
+L'indentazione tra elementi resta lecita e il commit XML
+non viene esposto. [ADR 0099]
+(../adr/0099-xml-control-whitespace-reference-source-gate.md).

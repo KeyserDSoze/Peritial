@@ -1016,3 +1016,30 @@ e contratti MCP verificano la parità.
 [ADR 0098](../adr/0098-xml-zero-match-unmapped-review-gate.md).
 V011/V012 restano invariati, import commit ancora interno,
 #24 e #10 aperte e `death` intatto.
+
+
+## Newline e controlli nei riferimenti XML: fedeltà della fonte (ADR 0099)
+
+Nel parsing XML 1.0 un CR o CRLF all'interno del contenuto
+di `NumeroSinistro` diventa LF. Prima il parser confrontava
+solo `Trim()` con il valore decodificato e considerava il
+riferimento interno come canonico: un import poteva così
+restituire nel piano un UUID con riferimento **decodificato**
+uguale, ma rappresentazione sorgente differente. La nuova
+regola segnala la presenza di caratteri `char.IsControl`
+negli scalari `NumeroSinistro`, `DataOraSinistro`,
+`DataIncarico`: `HasUnmappedBusinessData=true`.
+La preview mantiene i soli campi già pubblici, senza esporre
+markup, source bytes o PII addizionali; il planner non
+restituisce UUID e il commit XML interno blocca a monte
+prima del DB. L'indentazione/testo bianco **tra** i tag
+non viene penalizzato.
+
+Test RED PostgreSQL-independent sul parser, piano con
+un candidato esatto e commit interno (CR, CRLF, LF, TAB),
+seguiti da Keycloak E2E REST/MCP con un candidato reale
+contenente LF. Si tratta di una difesa sulla fedeltà della
+fonte, **non** di una identity key composta validata, né
+un permesso di import. V011/V012 e `death` immutati;
+#24/#25 restano aperte. [ADR 0099]
+(../adr/0099-xml-control-whitespace-reference-source-gate.md).
