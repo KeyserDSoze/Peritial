@@ -11,13 +11,13 @@ public sealed class SchemaMigrationTests
     {
         await WithIsolatedSchemaAsync(async db =>
         {
-            Assert.Equal(13, await SchemaMigrator.ApplyAsync(db));
+            Assert.Equal(14, await SchemaMigrator.ApplyAsync(db));
             Assert.Equal(0, await SchemaMigrator.ApplyAsync(db));
 
             await using var conn = await db.OpenConnectionAsync();
             await using (var query = new NpgsqlCommand(
-                "SELECT count(*) FROM schema_migrations WHERE version IN (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13)", conn))
-                Assert.Equal(13L, (long)(await query.ExecuteScalarAsync())!);
+                "SELECT count(*) FROM schema_migrations WHERE version IN (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14)", conn))
+                Assert.Equal(14L, (long)(await query.ExecuteScalarAsync())!);
             await using (var index = new NpgsqlCommand(
                 "SELECT to_regclass('ix_security_audit_tenant_action_time') IS NOT NULL", conn))
                 Assert.True((bool)(await index.ExecuteScalarAsync())!);
@@ -87,7 +87,7 @@ public sealed class SchemaMigrationTests
             }
             await tx.CommitAsync();
             await conn.CloseAsync();
-            Assert.Equal(8,await SchemaMigrator.ApplyAsync(db));
+            Assert.Equal(9,await SchemaMigrator.ApplyAsync(db));
             Assert.Equal(0,await SchemaMigrator.ApplyAsync(db));
             await using var verify = await db.OpenConnectionAsync();
             await using(var record = new NpgsqlCommand(
@@ -105,8 +105,8 @@ public sealed class SchemaMigrationTests
                 "SELECT count(*) FROM perizia_sinistro_history",verify);
             Assert.Equal(0L,(long)(await history.ExecuteScalarAsync())!);
             await using var journalCount = new NpgsqlCommand(
-                "SELECT count(*) FROM schema_migrations WHERE version BETWEEN 1 AND 13",verify);
-            Assert.Equal(13L,(long)(await journalCount.ExecuteScalarAsync())!);
+                "SELECT count(*) FROM schema_migrations WHERE version BETWEEN 1 AND 14",verify);
+            Assert.Equal(14L,(long)(await journalCount.ExecuteScalarAsync())!);
         });
     }
 
@@ -191,11 +191,11 @@ public sealed class SchemaMigrationTests
     }
 
     [Fact]
-    public async Task V013_document_digest_accepts_legacy_null_but_enforces_length_and_immutability()
+    public async Task V013_document_digest_enforces_length_and_immutability()
     {
         await WithIsolatedSchemaAsync(async db =>
         {
-            Assert.Equal(13, await SchemaMigrator.ApplyAsync(db));
+            Assert.Equal(14, await SchemaMigrator.ApplyAsync(db));
             Assert.Equal(0, await SchemaMigrator.ApplyAsync(db));
             await using var conn = await db.OpenConnectionAsync();
 
@@ -239,19 +239,6 @@ public sealed class SchemaMigrationTests
                 var ex = await Assert.ThrowsAsync<PostgresException>(() => shortDigest.ExecuteNonQueryAsync());
                 Assert.Equal("23514", ex.SqlState);
             }
-            // A previous release may have rows without digests. The migration
-            // never invents a hash; the Business download path denies NULL.
-            await using (var legacy = new NpgsqlCommand(
-                "INSERT INTO documents (tenant_id,id,file_name,content_type,length_bytes,storage_key,created_at_utc) " +
-                "VALUES (@tenant,@id,'old.pdf','application/pdf',5,@key,now())",
-                conn))
-            {
-                var legacyId = Guid.NewGuid();
-                legacy.Parameters.AddWithValue("tenant", tenant);
-                legacy.Parameters.AddWithValue("id", legacyId);
-                legacy.Parameters.AddWithValue("key", tenant.ToString("N") + "/" + legacyId.ToString("N") + ".pdf");
-                Assert.Equal(1, await legacy.ExecuteNonQueryAsync());
-            }
         });
     }
 
@@ -260,7 +247,7 @@ public sealed class SchemaMigrationTests
     {
         await WithIsolatedSchemaAsync(async db =>
         {
-            Assert.Equal(13, await SchemaMigrator.ApplyAsync(db));
+            Assert.Equal(14, await SchemaMigrator.ApplyAsync(db));
             Assert.Equal(0, await SchemaMigrator.ApplyAsync(db));
 
             await using var conn = await db.OpenConnectionAsync();
@@ -324,7 +311,7 @@ public sealed class SchemaMigrationTests
     {
         await WithIsolatedSchemaAsync(async db =>
         {
-            Assert.Equal(13, await SchemaMigrator.ApplyAsync(db));
+            Assert.Equal(14, await SchemaMigrator.ApplyAsync(db));
             Assert.Equal(0, await SchemaMigrator.ApplyAsync(db));
             await using var conn = await db.OpenConnectionAsync();
             await using var check = new NpgsqlCommand(
@@ -340,7 +327,7 @@ public sealed class SchemaMigrationTests
             Assert.True((bool)(await privilege.ExecuteScalarAsync())!);
             await using var journal = new NpgsqlCommand(
                 "SELECT count(*) FROM schema_migrations", conn);
-            Assert.Equal(13L, (long)(await journal.ExecuteScalarAsync())!);
+            Assert.Equal(14L, (long)(await journal.ExecuteScalarAsync())!);
         });
     }
 
@@ -349,7 +336,7 @@ public sealed class SchemaMigrationTests
     {
         await WithIsolatedSchemaAsync(async db =>
         {
-            Assert.Equal(13, await SchemaMigrator.ApplyAsync(db));
+            Assert.Equal(14, await SchemaMigrator.ApplyAsync(db));
             await using var conn = await db.OpenConnectionAsync();
             await using (var check = new NpgsqlCommand(
                 "SELECT NOT p.prosecdef AND t.tgenabled='O' " +
@@ -364,7 +351,8 @@ public sealed class SchemaMigrationTests
             await using (var rewind = new NpgsqlCommand(
                 "DROP TRIGGER trg_guard_imported_sinistro_reference ON sinistri; " +
                 "DROP FUNCTION guard_imported_sinistro_reference(); " +
-                "DELETE FROM schema_migrations WHERE version IN (12,13); " +
+                "ALTER TABLE documents DROP CONSTRAINT ck_documents_sha256_required_new; " +
+                "DELETE FROM schema_migrations WHERE version IN (12,13,14); " +
                 "DROP TRIGGER trg_reject_document_digest_rewrite ON documents; " +
                 "DROP FUNCTION reject_document_digest_rewrite(); " +
                 "ALTER TABLE documents DROP CONSTRAINT ck_documents_content_sha256_length; " +
@@ -431,11 +419,11 @@ public sealed class SchemaMigrationTests
         {
             var results = await Task.WhenAll(
                 SchemaMigrator.ApplyAsync(db), SchemaMigrator.ApplyAsync(db));
-            Assert.Equal(13, results.Sum());
+            Assert.Equal(14, results.Sum());
             await using var conn = await db.OpenConnectionAsync();
             await using var cmd = new NpgsqlCommand(
                 "SELECT count(*) FROM schema_migrations", conn);
-            Assert.Equal(13L, (long)(await cmd.ExecuteScalarAsync())!);
+            Assert.Equal(14L, (long)(await cmd.ExecuteScalarAsync())!);
         });
     }
 
