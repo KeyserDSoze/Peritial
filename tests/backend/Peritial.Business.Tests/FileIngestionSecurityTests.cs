@@ -38,6 +38,61 @@ public sealed class FileIngestionSecurityTests
         Assert.Empty(docs.AuditEvents);
     }
 
+    [Theory]
+    [InlineData("External", "https://attacker.example/remote.png")]
+    [InlineData("external", "file:///etc/passwd")]
+    [InlineData("EXTERNAL", "../media/image.png")]
+    [InlineData("Bogus", "../media/image.png")]
+    [InlineData(null, "https://attacker.example/remote.png")]
+    [InlineData("Internal", "file:///etc/passwd")]
+    [InlineData("Internal", "//attacker.example/remote.png")]
+    [InlineData("Internal", @"\\server\share\secret.png")]
+    [InlineData(null, "urn:example:external")]
+    public async Task Docx_con_relazione_opc_esterna_o_non_ammessa_e_rifiutato_prima_della_scansione(
+        string? mode, string target)
+    {
+        // Well-formed OPC relationship metadata can still instruct a future
+        // document renderer to fetch remote resources or local files.
+        // XML attribute entities must be resolved by XmlReader before checking.
+        var scanner = new CountingScanner();
+        var (service, store, docs) = NewService(scanner: scanner);
+        var modeAttribute = mode is null ? "" : $" TargetMode=\"{mode}\"";
+        var xml = $"<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">" +
+            $"<Relationship Id=\"rId1\" Type=\"urn:testing\" Target=\"{target}\"{modeAttribute}/></Relationships>";
+        var bytes = CreateDocx(("word/_rels/document.xml.rels", Encoding.UTF8.GetBytes(xml)));
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.IngestAsync("rapport.docx", DocxMime,
+                new MemoryStream(bytes), bytes.Length));
+
+        Assert.Equal(0, scanner.Scans);
+        Assert.Equal(0, store.Uploads);
+        Assert.Empty(docs.Records);
+        Assert.Empty(docs.AuditEvents);
+    }
+
+    [Theory]
+    [InlineData(null, "../media/image.png")]
+    [InlineData("Internal", "/word/media/image.png")]
+    [InlineData("Internal", "../styles.xml#format")]
+    public async Task Docx_con_relazione_opc_interna_rimane_ammesso(
+        string? mode, string target)
+    {
+        var scanner = new CountingScanner();
+        var (service, store, docs) = NewService(scanner: scanner);
+        var modeAttribute = mode is null ? "" : $" TargetMode=\"{mode}\"";
+        var xml = $"<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">" +
+            $"<Relationship Id=\"rId1\" Type=\"urn:testing\" Target=\"{target}\"{modeAttribute}/></Relationships>";
+        var bytes = CreateDocx(("word/_rels/document.xml.rels", Encoding.UTF8.GetBytes(xml)));
+
+        var saved = await service.IngestAsync("rapport.docx", DocxMime,
+            new MemoryStream(bytes), bytes.Length);
+        Assert.Equal(bytes.Length, saved.Length);
+        Assert.Equal(1, scanner.Scans);
+        Assert.Equal(1, store.Uploads);
+        Assert.Single(docs.Records);
+    }
+
     [Fact]
     public async Task Docx_con_parti_xml_e_relazioni_ben_formate_resta_ammesso()
     {
