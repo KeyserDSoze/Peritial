@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Text;
 using System.Xml;
 
 namespace Peritial.Business;
@@ -172,6 +173,11 @@ internal static class UploadedDocumentValidation
                 if ((unixType == 0x4000u && !isDirectoryPath) ||
                     (unixType == 0x8000u && isDirectoryPath))
                     throw new ArgumentException("Inconsistent DOCX ZIP entry type.");
+                // Some filesystems normalize canonically equivalent Unicode
+                // spellings to the same name (NFC vs decomposed). Reuse the
+                // canonical path for both duplicate detection and the
+                // implicit file/directory tree, without rewriting ZIP bytes.
+                var canonicalPath = name.TrimEnd('/').Normalize(NormalizationForm.FormC);
                 var segments = name.Split('/');
                 if (string.IsNullOrWhiteSpace(name) || name.StartsWith('/') ||
                     name.Any(char.IsControl) ||
@@ -181,7 +187,7 @@ internal static class UploadedDocumentValidation
                         IsReservedWindowsDeviceName(s)) ||
                     segments.SkipLast(1).Any(string.IsNullOrEmpty) ||
                     (!isDirectoryPath && segments.Any(string.IsNullOrEmpty)) ||
-                    !names.Add(name.TrimEnd('/')))
+                    !names.Add(canonicalPath))
                     throw new ArgumentException("Unsafe DOCX ZIP entry name.");
 
                 // A directory entry with actual content is ambiguous: some
@@ -193,7 +199,6 @@ internal static class UploadedDocumentValidation
                 // Trailing dot/space segments are filesystem aliases on
                 // Windows; a file also cannot shadow an implicit directory.
                 // Check both entry orders, without extracting ZIP members.
-                var canonicalPath = name.TrimEnd('/');
                 if (!isDirectoryPath && directoryPaths.Contains(canonicalPath))
                     throw new ArgumentException("Ambiguous DOCX ZIP file/directory path.");
                 for (var slash = canonicalPath.IndexOf('/');
