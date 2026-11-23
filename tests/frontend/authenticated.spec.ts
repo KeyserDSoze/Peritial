@@ -2667,6 +2667,45 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     expect(await badLinkMcp.text()).toContain('"isError":true');
     expect(await badLinkMcp.text()).not.toContain("../../private-file");
 
+    // The same archive, now declared as a Unix directory on a .bin filename,
+    // must fail before ClamAV/storage in both authenticated public transports.
+    // Only central-directory mode bits change; ZIP member bytes and CRCs do not.
+    const falseDirectoryDocx = Buffer.from(symlinkDocx);
+    const zipNameOffset = falseDirectoryDocx.lastIndexOf(Buffer.from("word/media/link.bin"));
+    expect(zipNameOffset).toBeGreaterThan(46);
+    const centralHeaderOffset = zipNameOffset - 46;
+    expect(falseDirectoryDocx.readUInt32LE(centralHeaderOffset)).toBe(0x02014b50);
+    falseDirectoryDocx.writeUInt16LE(0x41ed, centralHeaderOffset + 40);
+
+    const falseDirectoryRest = await request.post("http://localhost:8080/api/files", {
+      headers: { Authorization: "Bearer " + accessToken },
+      multipart: { file: {
+        name: "ambiguous-unix-type.docx",
+        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        buffer: falseDirectoryDocx
+      }}
+    });
+    expect(falseDirectoryRest.status(), await falseDirectoryRest.text()).toBe(400);
+    expect(await falseDirectoryRest.text()).not.toContain("../../private-file");
+
+    const falseDirectoryMcp = await request.post("http://localhost:8080/mcp", {
+      headers: {
+        Authorization: "Bearer " + accessToken,
+        Accept: "application/json,text/event-stream",
+        "Content-Type": "application/json"
+      },
+      data: {jsonrpc: "2.0", id: 51, method: "tools/call", params: {
+        name: "ingest_file", arguments: {
+          fileName: "ambiguous-unix-type.docx",
+          contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          base64: falseDirectoryDocx.toString("base64")
+        }
+      }}
+    });
+    expect(falseDirectoryMcp.ok(), await falseDirectoryMcp.text()).toBeTruthy();
+    expect(await falseDirectoryMcp.text()).toContain('"isError":true');
+    expect(await falseDirectoryMcp.text()).not.toContain("../../private-file");
+
     // Safe EICAR test string is an entire stored file inside a minimal DOCX ZIP.
     // Appending it to a synthetic PDF is NOT reliable: ClamAV's PDF decoder
     // can legitimately skip bytes not referenced by the PDF structure.
