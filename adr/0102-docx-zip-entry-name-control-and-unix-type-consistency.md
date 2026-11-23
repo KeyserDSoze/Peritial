@@ -46,6 +46,11 @@ nome controllato viene usato per creare un path nel filesystem.
   zero scanner, zero PUT, zero metadata e zero audit di successo.
 - Fix `221d6ce7ab9d41d8865bfa98ab346078a50a0f41`:
   verifica nome senza controlli e confronto path/tipo Unix.
+- E2E OAuth Keycloak `99610c54ca452cbef16ba699874570b71d6fd5ff`:
+  REST multipart e tool MCP `ingest_file` rifiutano una entry
+  `word/media/link.bin` marcata directory Unix nel central directory;
+  il test accerta HTTP 400, `isError:true` e nessuna disclosure del
+  target. Non cambia il contenuto compresso né i CRC.
 - I test preesistenti continuano a coprire symlink, device, FIFO,
   socket, normali file Unix e DOCX minimo valido.
 - CI test-first e CI fix:
