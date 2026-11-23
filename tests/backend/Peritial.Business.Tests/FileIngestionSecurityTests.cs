@@ -137,6 +137,62 @@ public sealed class FileIngestionSecurityTests
         Assert.Empty(docs.Records);
     }
 
+    [Theory]
+    [InlineData(0xA000)] // Unix symlink
+    [InlineData(0x1000)] // Unix FIFO
+    [InlineData(0x2000)] // Unix character device
+    [InlineData(0x6000)] // Unix block device
+    [InlineData(0xC000)] // Unix socket
+    public async Task Docx_con_entry_unix_non_regolare_viene_bloccato_prima_di_scanner_e_storage(
+        int unixFileType)
+    {
+        var scanner = new CountingScanner();
+        var (service, store, docs) = NewService(scanner: scanner);
+        var bytes = DocxWithUnixEntry(unixFileType);
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.IngestAsync("rapporto.docx", DocxMime,
+                new MemoryStream(bytes), bytes.Length));
+
+        Assert.Equal(0, scanner.Scans);
+        Assert.Equal(0, store.Uploads);
+        Assert.Empty(docs.Records);
+        Assert.Empty(docs.AuditEvents);
+    }
+
+    [Fact]
+    public async Task Docx_con_normale_entry_unix_regolare_rimane_ammesso()
+    {
+        var scanner = new CountingScanner();
+        var (service, store, docs) = NewService(scanner: scanner);
+        var bytes = DocxWithUnixEntry(0x8000); // regular file, mode 0777
+        var saved = await service.IngestAsync("rapporto.docx", DocxMime,
+            new MemoryStream(bytes), bytes.Length);
+
+        Assert.Equal(bytes.Length, saved.Length);
+        Assert.Equal(1, scanner.Scans);
+        Assert.Equal(1, store.Uploads);
+        Assert.Single(docs.Records);
+    }
+
+    private static byte[] DocxWithUnixEntry(int unixFileType)
+    {
+        // Create a real ZIP with standard OOXML parts, then mark one member
+        // with Unix mode bits in central-directory ExternalAttributes.
+        var original = CreateDocx(("word/media/embedded.bin", "../../outside"u8.ToArray()));
+        using var output = new MemoryStream();
+        output.Write(original);
+        output.Position = 0;
+        using (var archive = new System.IO.Compression.ZipArchive(output,
+            System.IO.Compression.ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var member = archive.GetEntry("word/media/embedded.bin")
+                ?? throw new InvalidOperationException("Missing test member.");
+            member.ExternalAttributes = unchecked((int)(((uint)(unixFileType | 0x1FF)) << 16));
+        }
+        return output.ToArray();
+    }
+
     private static byte[] CreateDocx(params (string Name, byte[] Bytes)[] additional)
     {
         using var output = new MemoryStream();
