@@ -380,6 +380,62 @@ test.describe("OAuth/MCP negative authorization and RFC 9728 discovery", () => {
       .some(item => item.externalReference === ref)).toBe(false);
   });
 
+  test("legacy XML CR normalization cannot reveal an existing case UUID via REST or MCP", async ({request}) => {
+    const writer = await tokenFor(request, "peritial-test-write");
+    const unique = "XML-CONTROL-" + Date.now() + "-" + Math.floor(Math.random() * 100000);
+    // XML 1.0 CR-in-text is decoded to LF; the canonical stored reference
+    // matches the decoded value, not the original reference in the file.
+    const storedReference = unique + "\nSECOND";
+    const sourceReference = unique + "\rSECOND";
+    const created = await request.post(api + "/api/sinistri", {
+      headers:{Authorization:"Bearer " + writer},
+      data:{externalReference:storedReference, occurredOn:"2026-11-17",
+        reportedOn:"2026-11-18"}
+    });
+    expect(created.status(), await created.text()).toBe(201);
+    const id = (await created.json() as {id:string}).id;
+    const xml = "<it.autosoftws.ReIncaricoRecord>" +
+      "<NumeroSinistro>" + sourceReference + "</NumeroSinistro>" +
+      "<DataOraSinistro>2026-11-17</DataOraSinistro>" +
+      "<DataIncarico>2026-11-18</DataIncarico>" +
+      "</it.autosoftws.ReIncaricoRecord>";
+
+    const rest = await request.post(api + "/api/imports/xml/plan", {
+      headers:{Authorization:"Bearer " + writer, "Content-Type":"application/xml"},
+      data:xml
+    });
+    expect(rest.status(), await rest.text()).toBe(200);
+    expect(rest.headers()["cache-control"]).toContain("no-store");
+    const plan = await rest.json() as {
+      status:string; existingSinistroId:string|null;
+      preview:{externalReference:string; hasUnmappedBusinessData:boolean}
+    };
+    expect(plan.preview.externalReference).toBe(storedReference);
+    expect(plan.preview.hasUnmappedBusinessData).toBe(true);
+    expect(plan.status).toBe("review-required");
+    expect(plan.existingSinistroId).toBeNull();
+    expect(JSON.stringify(plan)).not.toContain(id);
+
+    const mcp = await request.post(api + "/mcp", {
+      headers:mcpHeaders(writer),
+      data:{jsonrpc:"2.0",id:1432,method:"tools/call",
+        params:{name:"plan_legacy_xml",arguments:{xml}}}
+    });
+    const response = await mcp.text();
+    expect(mcp.ok(), response).toBeTruthy();
+    expect(response).toContain("review-required");
+    expect(response).toContain("hasUnmappedBusinessData");
+    expect(response).not.toContain(id);
+    expect(response).not.toContain('"isError":true');
+    // Read-only XML planning must not change the original case.
+    const unchanged = await request.get(api + "/api/sinistri/" + id, {
+      headers:{Authorization:"Bearer " + writer}
+    });
+    expect(unchanged.status(), await unchanged.text()).toBe(200);
+    expect((await unchanged.json() as {externalReference:string}).externalReference)
+      .toBe(storedReference);
+  });
+
   test("legacy XML reconciliation never picks an ambiguous duplicate or mutates a case", async ({request}) => {
     const writer = await tokenFor(request, "peritial-test-write");
     const reader = await tokenFor(request, "peritial-test-readonly");
