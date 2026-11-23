@@ -700,6 +700,59 @@ public sealed class FileIngestionSecurityTests
         Assert.Equal(2, docs.Records.Count);
     }
 
+    [Theory]
+    [InlineData("CON.pdf")]
+    [InlineData("nul.pdf")]
+    [InlineData("AUX.PDF")]
+    [InlineData("PRN.pdf")]
+    [InlineData("COM1.pdf")]
+    [InlineData("LPT9.pdf")]
+    [InlineData("CONIN$.pdf")]
+    [InlineData("conout$.pdf")]
+    [InlineData("COM\u00B9.pdf")]
+    [InlineData("invoice:alternate.pdf")]
+    [InlineData("invo|ce.pdf")]
+    [InlineData("invoice?.pdf")]
+    [InlineData("invoice*.pdf")]
+    [InlineData("invoice\"draft.pdf")]
+    [InlineData("invoice<draft>.pdf")]
+    [InlineData("invoice\u202Efdp.pdf")]
+    [InlineData("invoice\u2066.pdf")]
+    public async Task Nome_file_insicuro_non_arriva_a_scanner_metadata_storage_o_download(
+        string fileName)
+    {
+        // Filename is persisted for REST/MCP catalogs and Content-Disposition
+        // on download. Canonicalize it before processing any file bytes.
+        var scanner = new CountingScanner();
+        var (service, store, docs) = NewService(scanner: scanner);
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.IngestAsync(fileName, "application/pdf",
+                new MemoryStream(Pdf), Pdf.Length));
+
+        Assert.Equal(0, scanner.Scans);
+        Assert.Equal(0, store.Uploads);
+        Assert.Empty(docs.Records);
+        Assert.Empty(docs.AuditEvents);
+    }
+
+    [Theory]
+    [InlineData("consolidato.pdf")]
+    [InlineData("COM0.pdf")]
+    [InlineData("LPT10.pdf")]
+    [InlineData("résumé.pdf")]
+    public async Task Nome_file_portabile_rimane_ammesso(string fileName)
+    {
+        var scanner = new CountingScanner();
+        var (service, store, docs) = NewService(scanner: scanner);
+        var saved = await service.IngestAsync(fileName, "application/pdf",
+            new MemoryStream(Pdf), Pdf.Length);
+
+        Assert.Equal(fileName, saved.FileName);
+        Assert.Equal(1, scanner.Scans);
+        Assert.Equal(1, store.Uploads);
+        Assert.Equal(fileName, Assert.Single(docs.Records).FileName);
+    }
+
     [Fact]
     public async Task Nome_windows_non_diventa_percorso_in_storage_o_metadata()
     {
