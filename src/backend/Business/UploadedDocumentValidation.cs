@@ -36,6 +36,30 @@ internal static class UploadedDocumentValidation
         return safe;
     }
 
+    /// <summary>
+    /// The persisted MIME must agree with the admitted file extension on
+    /// both upload and download. Never trust an object-store content type
+    /// or a stale database MIME for a protected attachment.
+    /// </summary>
+    public static bool IsSupportedContentType(string extension, string? contentType) =>
+        extension.ToLowerInvariant() switch
+        {
+            ".pdf" => string.Equals(contentType, "application/pdf",
+                StringComparison.OrdinalIgnoreCase),
+            ".xml" => string.Equals(contentType, "application/xml",
+                          StringComparison.OrdinalIgnoreCase) ||
+                      string.Equals(contentType, "text/xml",
+                          StringComparison.OrdinalIgnoreCase),
+            ".jpg" or ".jpeg" => string.Equals(contentType, "image/jpeg",
+                StringComparison.OrdinalIgnoreCase),
+            ".png" => string.Equals(contentType, "image/png",
+                StringComparison.OrdinalIgnoreCase),
+            ".docx" => string.Equals(contentType,
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                StringComparison.OrdinalIgnoreCase),
+            _ => false
+        };
+
     public static void ValidateContent(string extension, ReadOnlySpan<byte> content)
     {
         var validSignature = extension.ToLowerInvariant() switch
