@@ -197,6 +197,97 @@ public sealed class FileIngestionSecurityTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public async Task Docx_con_due_member_zip_unicode_equivalenti_normalizzati_e_rifiutato(
+        bool decomposedFirst)
+    {
+        // Same filename after Unicode NFC despite distinct original ZIP
+        // name bytes. Windows/Mac filesystems and converters can alias them.
+        var scanner = new CountingScanner();
+        var (service, store, docs) = NewService(scanner: scanner);
+        var composed = ("word/media/r\u00E9sum\u00E9.bin", new byte[] { 1 });
+        var decomposed = ("word/media/re\u0301sume\u0301.bin", new byte[] { 2 });
+        var bytes = decomposedFirst
+            ? CreateDocx(decomposed, composed)
+            : CreateDocx(composed, decomposed);
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.IngestAsync("report.docx", DocxMime,
+                new MemoryStream(bytes), bytes.Length));
+
+        Assert.Equal(0, scanner.Scans);
+        Assert.Equal(0, store.Uploads);
+        Assert.Empty(docs.Records);
+        Assert.Empty(docs.AuditEvents);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Docx_con_file_parent_e_directory_child_equivalenti_unicode_e_rifiutato(
+        bool childFirst)
+    {
+        // Normalize the entire package path before checking whether a
+        // regular file shadows an implicit directory.
+        var scanner = new CountingScanner();
+        var (service, store, docs) = NewService(scanner: scanner);
+        var parent = ("word/media/caf\u00E9", new byte[] { 1 });
+        var child = ("word/media/cafe\u0301/payload.bin", new byte[] { 2 });
+        var bytes = childFirst
+            ? CreateDocx(child, parent)
+            : CreateDocx(parent, child);
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.IngestAsync("report.docx", DocxMime,
+                new MemoryStream(bytes), bytes.Length));
+
+        Assert.Equal(0, scanner.Scans);
+        Assert.Equal(0, store.Uploads);
+        Assert.Empty(docs.Records);
+        Assert.Empty(docs.AuditEvents);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Docx_con_directory_esplicita_e_file_omonimo_unicode_e_rifiutato(
+        bool fileFirst)
+    {
+        // A directory entry and a regular file must never be aliases,
+        // regardless of composition and entry order.
+        var scanner = new CountingScanner();
+        var (service, store, docs) = NewService(scanner: scanner);
+        var directory = ("word/media/caf\u00E9/", Array.Empty<byte>());
+        var file = ("word/media/cafe\u0301", new byte[] { 1 });
+        var bytes = fileFirst ? CreateDocx(file, directory) : CreateDocx(directory, file);
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.IngestAsync("report.docx", DocxMime,
+                new MemoryStream(bytes), bytes.Length));
+
+        Assert.Equal(0, scanner.Scans);
+        Assert.Equal(0, store.Uploads);
+        Assert.Empty(docs.Records);
+        Assert.Empty(docs.AuditEvents);
+    }
+
+    [Fact]
+    public async Task Docx_con_un_unico_nome_unicode_decomposto_rimane_ammesso()
+    {
+        var scanner = new CountingScanner();
+        var (service, store, docs) = NewService(scanner: scanner);
+        var bytes = CreateDocx(("word/media/cafe\u0301.bin", new byte[] { 1, 2 }));
+        var result = await service.IngestAsync("report.docx", DocxMime,
+            new MemoryStream(bytes), bytes.Length);
+
+        Assert.Equal(bytes.Length, result.Length);
+        Assert.Equal(1, scanner.Scans);
+        Assert.Equal(1, store.Uploads);
+        Assert.Single(docs.Records);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public async Task Docx_con_file_che_oscura_una_directory_implicitamente_richiesta_e_rifiutato(
         bool childFirst)
     {
