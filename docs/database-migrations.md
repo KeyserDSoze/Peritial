@@ -426,3 +426,30 @@ verifica il lookup privato FORCE RLS e assenza dal DTO pubblico;
 `DocumentAtomicAuditTests` mantiene la transazione di commit.
 Monitorare CI backend e Compose dell'ultimo HEAD senza
 considerare un solo job verde come attestazione end-to-end.
+
+## V014 — SHA-256 obbligatorio sui nuovi INSERT (legacy non validati)
+
+
+La [ADR 0111](../adr/0111-v014-document-sha256-required-for-new-sql-writes.md)
+aggiunge la migrazione **V014** nel journal: 14 script con SHA-256
+forward-only. Lo script non modifica V001–V013 e non popola
+`documents.content_sha256` per i file storici.
+
+`ck_documents_sha256_required_new` è un CHECK
+`(content_sha256 IS NOT NULL) NOT VALID`. PostgreSQL lo applica
+a **ogni nuovo INSERT e UPDATE**, inclusi quelli SQL diretti sotto
+`peritial_app`, senza scansionare/riscrivere i documenti legacy
+che mantengono `NULL`. Il CHECK V013 conferma che i digest nuovi
+sono di 32 byte. Il trigger di immutabilità V013 e FORCE RLS
+rimangono attivi. Non lanciare `VALIDATE CONSTRAINT` su un
+database con record legacy null; un futuro backfill richiede
+revisione, scansione, approvazione e procedure separate.
+
+**Rollout:** backup completo e inventario `content_sha256 IS NULL`
+prima dell'upgrade, fermo writer durante il migrator privilegiato,
+verifica journal a 14 e delle policy/ACL, controllo dei download
+legacy fail-closed. La fixture CI Compose applica V014
+separatamente solo al database effimero: NON è una migrazione
+automatica della produzione. La CI `database-recovery` esercita
+dump/restore su nuovo PostgreSQL, il checksum persistito e
+l'adozione dei vecchi schemi mantenendo il digest NULL.
