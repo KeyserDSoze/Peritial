@@ -40,12 +40,14 @@ senza editare gli script V001–V012. Il bootstrap V001 dei soli
 test crea anche V013 a meno che si stia testando l'adozione
 strettamente equivalente del legacy.
 
-**Limite noto:** il vincolo SQL consente ancora nuovi INSERT con
-NULL via un writer raw privilegiato; l'invariante obbligatorio
-per gli upload di produzione è oggi imposto dal repository
-`AddAuditedAsync`. Il gate di enforcement per ogni possibile
-writer SQL e i processi di backfill/approvazione legacy restano
-tracciati e **non completati** in #27.
+**Evoluzione V014 (ADR 0111):** dopo questa prima tranche il
+database applica `CHECK (content_sha256 IS NOT NULL) NOT VALID`
+anche agli INSERT SQL diretti, senza riscrivere il legacy.
+L'invariante per nuovi documenti è quindi difeso sia dal repository
+`AddAuditedAsync` sia da PostgreSQL. Restano non completati
+il processo approvato di backfill/ri-scansione dei record storici
+`NULL`, la provenienza indipendente degli hash e i gate reali
+Azure/on-prem (#27).
 
 ### Download
 
