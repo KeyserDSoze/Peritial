@@ -154,7 +154,7 @@ SELECT
       AND audit_id='a1a1a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1')=1
  AND (SELECT count(*) FROM upload_intents)=1
  AND (SELECT count(*) FROM upload_request_keys WHERE status='completed')=1
- AND (SELECT count(*) FROM schema_migrations)=13
+ AND (SELECT count(*) FROM schema_migrations)=14
  AND to_regclass('ix_documents_tenant_created_id') IS NOT NULL
  AND to_regclass('ix_documents_tenant_perizia_created_id') IS NOT NULL
  AND to_regclass('legacy_xml_import_keys') IS NOT NULL
