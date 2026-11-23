@@ -93,39 +93,68 @@ internal static class UploadedDocumentValidation
                "123456789\u00B9\u00B2\u00B3".Contains(stem[3]);
     }
 
-    private static void ValidateOpcRelationship(XmlReader reader)
+    private static void ValidateOpcRelationship(XmlReader reader, string relationshipsPartName)
     {
         if (reader.NodeType != XmlNodeType.Element ||
             !reader.LocalName.Equals("Relationship", StringComparison.OrdinalIgnoreCase))
             return;
 
-        // OOXML relations marked External can make document viewers load
-        // attacker-controlled network or local resources. Reject unknown
-        // modes too: only an internal link is supported at admission.
+        // A later OOXML renderer may follow a relation outside the ZIP.
+        // Both unknown and explicitly external modes fail closed.
         var mode = reader.GetAttribute("TargetMode");
         if (mode is not null &&
             !string.Equals(mode, "Internal", StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException("Unsupported external DOCX relationship.");
 
-        // A malicious/incorrect package can omit TargetMode=External while
-        // still supplying an absolute URL, file URI or UNC/network path.
-        // XmlReader has already decoded XML attributes before this check.
         var target = reader.GetAttribute("Target")?.Trim();
-        if (!string.IsNullOrEmpty(target))
+        if (string.IsNullOrEmpty(target))
+            return;
+
+        // XmlReader decodes XML entities; URI percent escapes must also be
+        // interpreted before validating the eventual target. Reject nested
+        // escaping, UNC paths and URI schemes without resolving anything.
+        var unescaped = Uri.UnescapeDataString(target);
+        var packageRootPath = unescaped.StartsWith("/", StringComparison.Ordinal) &&
+            !unescaped.StartsWith("//", StringComparison.Ordinal);
+        var delimiter = unescaped.IndexOfAny(['?', '#']);
+        var path = delimiter < 0 ? unescaped : unescaped[..delimiter];
+        if (unescaped.Contains('%') || unescaped.Contains('\\') ||
+            unescaped.Any(char.IsControl) ||
+            unescaped.StartsWith("//", StringComparison.Ordinal) ||
+            path.Contains(':') ||
+            (!packageRootPath && Uri.TryCreate(unescaped, UriKind.Absolute, out _)))
+            throw new ArgumentException("Unsupported external DOCX relationship.");
+
+        // OPC relationship targets are resolved against the *source part*,
+        // not the .rels part itself. Example: word/_rels/document.xml.rels
+        // belongs to word/document.xml, whose directory depth is one.
+        // Package-root paths (/word/...) instead begin at depth zero.
+        var relsDir = relationshipsPartName.LastIndexOf("/_rels/",
+            StringComparison.OrdinalIgnoreCase);
+        string sourceDirectory;
+        if (relsDir >= 0)
+            sourceDirectory = relationshipsPartName[..relsDir];
+        else if (relationshipsPartName.StartsWith("_rels/",
+                     StringComparison.OrdinalIgnoreCase))
+            sourceDirectory = "";
+        else
         {
-            // An OPC package-root path (/word/media/...) is an internal
-            // reference. Uri.TryCreate may still classify it as an absolute
-            // file URI; allow this single-slash form, but never //host or
-            // UNC references. Normalizing whitespace also blocks disguised
-            // schemes that later readers might trim implicitly.
-            var isPackageRootPath = target.StartsWith("/", StringComparison.Ordinal) &&
-                !target.StartsWith("//", StringComparison.Ordinal) &&
-                !target.StartsWith("/\\", StringComparison.Ordinal);
-            if (target.StartsWith("//", StringComparison.Ordinal) ||
-                target.StartsWith("/\\", StringComparison.Ordinal) ||
-                target.StartsWith(@"\\", StringComparison.Ordinal) ||
-                (!isPackageRootPath && Uri.TryCreate(target, UriKind.Absolute, out _)))
-                throw new ArgumentException("Unsupported external DOCX relationship.");
+            var slash = relationshipsPartName.LastIndexOf('/');
+            sourceDirectory = slash < 0 ? "" : relationshipsPartName[..slash];
+        }
+
+        var depth = packageRootPath || sourceDirectory.Length == 0
+            ? 0
+            : 1 + sourceDirectory.Count(c => c == '/');
+        foreach (var segment in path.Split('/'))
+        {
+            if (segment == "..")
+            {
+                if (--depth < 0)
+                    throw new ArgumentException("DOCX relationship escapes the package.");
+            }
+            else if (segment.Length != 0 && segment != ".")
+                depth++;
         }
     }
 
@@ -281,7 +310,7 @@ internal static class UploadedDocumentValidation
                     do
                     {
                         if (isRelationshipsPart)
-                            ValidateOpcRelationship(reader);
+                            ValidateOpcRelationship(reader, entry.FullName);
                     }
                     while (reader.Read());
                 }
