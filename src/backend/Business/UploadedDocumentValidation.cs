@@ -109,12 +109,23 @@ internal static class UploadedDocumentValidation
         // A malicious/incorrect package can omit TargetMode=External while
         // still supplying an absolute URL, file URI or UNC/network path.
         // XmlReader has already decoded XML attributes before this check.
-        var target = reader.GetAttribute("Target");
-        if (target is not null &&
-            (target.StartsWith("//", StringComparison.Ordinal) ||
-             target.StartsWith(@"\\", StringComparison.Ordinal) ||
-             Uri.TryCreate(target, UriKind.Absolute, out _)))
-            throw new ArgumentException("Unsupported external DOCX relationship.");
+        var target = reader.GetAttribute("Target")?.Trim();
+        if (!string.IsNullOrEmpty(target))
+        {
+            // An OPC package-root path (/word/media/...) is an internal
+            // reference. Uri.TryCreate may still classify it as an absolute
+            // file URI; allow this single-slash form, but never //host or
+            // UNC references. Normalizing whitespace also blocks disguised
+            // schemes that later readers might trim implicitly.
+            var isPackageRootPath = target.StartsWith("/", StringComparison.Ordinal) &&
+                !target.StartsWith("//", StringComparison.Ordinal) &&
+                !target.StartsWith("/\\", StringComparison.Ordinal);
+            if (target.StartsWith("//", StringComparison.Ordinal) ||
+                target.StartsWith("/\\", StringComparison.Ordinal) ||
+                target.StartsWith(@"\\", StringComparison.Ordinal) ||
+                (!isPackageRootPath && Uri.TryCreate(target, UriKind.Absolute, out _)))
+                throw new ArgumentException("Unsupported external DOCX relationship.");
+        }
     }
 
     private static void ValidateDocx(ReadOnlySpan<byte> data)
