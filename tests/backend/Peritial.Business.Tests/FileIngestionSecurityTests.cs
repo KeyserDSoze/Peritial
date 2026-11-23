@@ -14,6 +14,49 @@ public sealed class FileIngestionSecurityTests
     private const string DocxMime =
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
+    [Theory]
+    [InlineData("word/comments.xml", "<comments><broken></comments>")]
+    [InlineData("word/_rels/document.xml.rels", "<Relationships><Relationship>")]
+    [InlineData("word/header1.xml", "<!DOCTYPE x [<!ENTITY file SYSTEM 'file:///etc/passwd'>]><x>&file;</x>")]
+    [InlineData("word/styles.XML", "<!DOCTYPE x SYSTEM 'https://invalid.example/xxe'><x/>")]
+    public async Task Docx_con_parte_xml_malformata_o_dtd_non_raggiunge_scanner_ne_storage(
+        string partName, string xml)
+    {
+        // Valid ZIP metadata and a normal word/document.xml are insufficient
+        // if a secondary OOXML part can carry malformed or external XML.
+        var scanner = new CountingScanner();
+        var (service, store, docs) = NewService(scanner: scanner);
+        var bytes = CreateDocx((partName, Encoding.UTF8.GetBytes(xml)));
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.IngestAsync("rapporto.docx", DocxMime,
+                new MemoryStream(bytes), bytes.Length));
+
+        Assert.Equal(0, scanner.Scans);
+        Assert.Equal(0, store.Uploads);
+        Assert.Empty(docs.Records);
+        Assert.Empty(docs.AuditEvents);
+    }
+
+    [Fact]
+    public async Task Docx_con_parti_xml_e_relazioni_ben_formate_resta_ammesso()
+    {
+        var scanner = new CountingScanner();
+        var (service, store, docs) = NewService(scanner: scanner);
+        var bytes = CreateDocx(
+            ("word/styles.xml", "<styles><style/></styles>"u8.ToArray()),
+            ("word/_rels/document.xml.rels",
+                "<Relationships><Relationship/></Relationships>"u8.ToArray()),
+            ("word/media/photo.bin", new byte[] { 1, 2, 3 }));
+        var saved = await service.IngestAsync("rapporto.docx", DocxMime,
+            new MemoryStream(bytes), bytes.Length);
+
+        Assert.Equal(bytes.Length, saved.Length);
+        Assert.Equal(1, scanner.Scans);
+        Assert.Equal(1, store.Uploads);
+        Assert.Single(docs.Records);
+    }
+
     [Fact]
     public async Task Docx_valido_rimane_ammesso_dopo_i_controlli_anti_zip_bomb()
     {
