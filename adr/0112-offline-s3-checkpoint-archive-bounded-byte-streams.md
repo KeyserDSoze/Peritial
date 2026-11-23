@@ -73,3 +73,34 @@ dell'ammissione storica. Prima del recovery produttivo servono
 finestra con writer arrestati, capacity planning per il set
 intero, protezione dell'archive, restore su nuova destinazione
 e test di rollback/failover Azure/on-prem. #6 e #27 restano aperte.
+
+## Test unitari sul numero di byte letti
+
+La sola controprova SeaweedFS del rifiuto finale non dimostra che
+lo stream sia realmente bounded: anche il codice precedente
+rifiutava il blob oversized *dopo averlo letto interamente*.
+
+La routine è ora condivisa in
+[`ObjectRecoveryBoundedHash`](../src/backend/Infrastructures/ObjectRecoveryBoundedHash.cs)
+fra checkpoint e archive; resta `internal`, resa testabile
+solo dall'assembly xUnit con `InternalsVisibleTo`.
+I nuovi test
+[`ObjectRecoveryBoundedHashTests`](../tests/backend/Peritial.Infrastructures.Tests/ObjectRecoveryBoundedHashTests.cs)
+impiegano uno stream che conteggia i byte effettivamente
+consegnati. Su un input da un milione di byte con lunghezza
+autorizzata 65 553, devono risultare **esattamente 65 554 byte
+letti** e nessun byte in eccesso scritto nell'archivio. Altre
+prove coprono digest e copia identici per il corpo giusto,
+troncamento fail-closed e dimensioni non positive negate
+prima di accedere allo stream.
+
+- [Helper 67602df](https://github.com/KeyserDSoze/Peritial/commit/67602df4b1c8babc4bd71ca546cb8d1cb0f374a0)
+- [Checkpoint 81bf656](https://github.com/KeyserDSoze/Peritial/commit/81bf656657ea7eb1abb70318ebd61fefaf5ac084)
+- [Archive 20d6e16](https://github.com/KeyserDSoze/Peritial/commit/20d6e16c50a3546b668e35a2b9a603e21548e703)
+- [Test cc2c9c8](https://github.com/KeyserDSoze/Peritial/commit/cc2c9c85d704c80167ddcd98bf4a81afa553f1a8)
+
+La CI full-stack per il nuovo test è
+[#45224385697](https://github.com/KeyserDSoze/Peritial/actions/runs/45224385697):
+**esito terminale da attestare** prima di considerare la modifica
+completamente convalidata. Restano invariati i limiti sul budget
+cumulativo del set di backup e sulle istanze produttive.
