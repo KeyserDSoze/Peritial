@@ -369,11 +369,11 @@ versione hanno `content_sha256=NULL` e diventano non scaricabili
 finché non vengono verificati/ri-scansionati con una procedura
 approvata. La migrazione non deriva hash da oggetti di origine non
 attestata. Eseguire inventario, backup e piano di backfill prima
-di un upgrade su dati reali. Il controllo DB vieta riscritture
-del digest e valori diversi da 32 byte, ma non blocca ancora tutti
-i nuovi INSERT raw con NULL; questa parte e i fault drill su
-S3/Azurite rimangono aperti nella
-[issue #27](https://github.com/KeyserDSoze/Peritial/issues/27).
+di un upgrade su dati reali. I vincoli V013/V014 vietano riscritture del digest, digest
+di lunghezza diversa da 32 byte e nuovi INSERT SQL con NULL
+(anche via writer diretto). Il recupero dei record legacy NULL,
+la provenienza dei dati e i fault drill di produzione rimangono
+aperti nella [issue #27](https://github.com/KeyserDSoze/Peritial/issues/27).
 
 Riferimenti: [ADR 0110](../adr/0110-document-sha256-admission-and-verified-download.md)
 e [runbook migrazioni V013](database-migrations.md).
