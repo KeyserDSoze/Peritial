@@ -31,7 +31,7 @@ public static class ObjectRecoveryCheckpoint
         var manifest = new List<Document>(documents.Count);
         foreach (var row in documents)
         {
-            var (length, digest) = await HashObjectAsync(objects, bucket, row.StorageKey, ct);
+            var (length, digest) = await HashObjectAsync(objects, bucket, row.StorageKey, row.LengthBytes, ct);
             if (length != row.LengthBytes)
                 throw new InvalidOperationException("Object checkpoint failed: document length differs from PostgreSQL.");
             // The archive's first capture must not legitimize an already
@@ -63,7 +63,7 @@ public static class ObjectRecoveryCheckpoint
         await VerifyMetadataAsync(administrator, checkpoint, ct);
         foreach (var saved in checkpoint.Documents)
         {
-            var (length, hash) = await HashObjectAsync(objects, bucket, saved.StorageKey, ct);
+            var (length, hash) = await HashObjectAsync(objects, bucket, saved.StorageKey, saved.LengthBytes, ct);
             if (length != saved.LengthBytes || !string.Equals(hash, saved.Sha256, StringComparison.Ordinal))
                 throw new InvalidOperationException(
                     "S3 object integrity mismatch: restored bytes do not match checkpoint.");
@@ -173,10 +173,11 @@ public static class ObjectRecoveryCheckpoint
     }
 
     private static async Task<(long Length, string Sha256)> HashObjectAsync(
-        IAmazonS3 storage, string bucket, string key, CancellationToken ct)
+        IAmazonS3 storage, string bucket, string key, long expectedLength,
+        CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(bucket))
-            throw new InvalidOperationException("Checkpoint bucket is required.");
+        if (string.IsNullOrWhiteSpace(bucket) || expectedLength <= 0)
+            throw new InvalidOperationException("Checkpoint bucket and positive length are required.");
         try
         {
             using var response = await storage.GetObjectAsync(new GetObjectRequest
@@ -187,12 +188,27 @@ public static class ObjectRecoveryCheckpoint
             using var digest = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
             var buffer = new byte[65536];
             long length = 0;
-            int read;
-            while ((read = await response.ResponseStream.ReadAsync(buffer, ct)) > 0)
+            // Never download or hash an unbounded S3 object: the committed
+            // PostgreSQL length is the maximum allowed body. Read at most
+            // one byte beyond that limit to detect an appended payload;
+            // even a malicious streaming response cannot exhaust disk/RAM.
+            while (true)
             {
-                length = checked(length + read);
+                var remaining = expectedLength - length;
+                var readLimit = (int)(remaining >= buffer.Length
+                    ? buffer.Length : remaining + 1);
+                var read = await response.ResponseStream.ReadAsync(
+                    buffer.AsMemory(0, readLimit), ct);
+                if (read == 0) break;
+                if (read > remaining)
+                    throw new InvalidOperationException(
+                        "Object checkpoint failed: S3 object exceeds PostgreSQL length.");
+                length += read;
                 digest.AppendData(buffer, 0, read);
             }
+            if (length != expectedLength)
+                throw new InvalidOperationException(
+                    "Object checkpoint failed: S3 object is shorter than PostgreSQL length.");
             return (length, Convert.ToHexString(digest.GetHashAndReset()).ToLowerInvariant());
         }
         catch (AmazonS3Exception ex) when (ex.StatusCode == HttpStatusCode.NotFound)
