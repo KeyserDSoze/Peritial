@@ -62,7 +62,7 @@ public sealed class SinistroPersistenceTests
             Assert.True((bool)(await role.ExecuteScalarAsync())!);
         await using (var versions = new NpgsqlCommand(
             "SELECT array_agg(version ORDER BY version) FROM schema_migrations", conn))
-            Assert.Equal(new[] {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}, (int[])(await versions.ExecuteScalarAsync())!);
+            Assert.Equal(new[] {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13}, (int[])(await versions.ExecuteScalarAsync())!);
     }
 
     [Fact]
