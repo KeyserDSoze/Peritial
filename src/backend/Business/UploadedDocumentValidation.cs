@@ -107,8 +107,17 @@ internal static class UploadedDocumentValidation
                 var unixType = ((uint)entry.ExternalAttributes >> 16) & 0xF000u;
                 if (unixType != 0 && unixType != 0x8000u && unixType != 0x4000u)
                     throw new ArgumentException("Unsupported DOCX ZIP entry type.");
+                // A ZIP entry explicitly marked as a Unix directory must be a
+                // directory path, and a regular file must not masquerade as
+                // one. Reject ambiguous metadata before any decompression,
+                // scanning, or downstream document processing.
+                var isDirectoryPath = name.EndsWith('/');
+                if ((unixType == 0x4000u && !isDirectoryPath) ||
+                    (unixType == 0x8000u && isDirectoryPath))
+                    throw new ArgumentException("Inconsistent DOCX ZIP entry type.");
                 var segments = name.Split('/');
                 if (string.IsNullOrWhiteSpace(name) || name.StartsWith('/') ||
+                    name.Any(char.IsControl) ||
                     name.Contains('\\') || name.Contains(':') ||
                     segments.Any(s => s is "." or "..") ||
                     segments.SkipLast(1).Any(string.IsNullOrEmpty) ||
