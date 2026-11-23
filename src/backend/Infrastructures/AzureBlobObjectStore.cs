@@ -6,7 +6,7 @@ using Peritial.Business;
 
 namespace Peritial.Infrastructures;
 
-public sealed class AzureBlobObjectStore : IObjectStore
+public sealed class AzureBlobObjectStore : IObjectStore, IDocumentBlobReader
 {
     private readonly BlobContainerClient _container;
 
@@ -30,6 +30,16 @@ public sealed class AzureBlobObjectStore : IObjectStore
         {
             HttpHeaders = new BlobHttpHeaders { ContentType = contentType }
         }, ct);
+    }
+
+    public async Task<byte[]> ReadAsync(string key, long expectedLength, CancellationToken ct = default)
+    {
+        // No public blob URL or SAS is returned. Azure downloads are read
+        // into bounded memory and verified against PostgreSQL byte length.
+        var response = await _container.GetBlobClient(key).DownloadStreamingAsync(
+            cancellationToken: ct);
+        await using var stream = response.Value.Content;
+        return await BoundedDocumentRead.ReadExactAsync(stream, expectedLength, ct);
     }
 
     public async Task DeleteAsync(string key, CancellationToken ct = default)
