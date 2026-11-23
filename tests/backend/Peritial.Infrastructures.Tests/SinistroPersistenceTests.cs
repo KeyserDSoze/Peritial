@@ -62,7 +62,7 @@ public sealed class SinistroPersistenceTests
             Assert.True((bool)(await role.ExecuteScalarAsync())!);
         await using (var versions = new NpgsqlCommand(
             "SELECT array_agg(version ORDER BY version) FROM schema_migrations", conn))
-            Assert.Equal(new[] {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13}, (int[])(await versions.ExecuteScalarAsync())!);
+            Assert.Equal(new[] {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14}, (int[])(await versions.ExecuteScalarAsync())!);
     }
 
     [Fact]
@@ -1288,7 +1288,8 @@ public sealed class SinistroPersistenceTests
         // Test-only insertion seam: production ingestion uses AddAuditedAsync.
         await documents.AddAsync(new DocumentRecord(
             documentId, tenant, perizia.Id, "original.pdf", "application/pdf",
-            8, originalKey, DateTime.UtcNow));
+            8, originalKey, DateTime.UtcNow,
+            ContentSha256: DocumentDigest.Compute("%PDF-1.7"u8)));
 
         await using (var grants = db.Admin.CreateCommand(
             "SELECT has_table_privilege('peritial_app','documents','SELECT') " +
@@ -1670,7 +1671,7 @@ public sealed class SinistroPersistenceTests
                     await command.ExecuteNonQueryAsync();
                 admin = NpgsqlDataSource.Create(new NpgsqlConnectionStringBuilder(cs)
                 { SearchPath = schema }.ConnectionString);
-                Assert.Equal(13, await SchemaMigrator.ApplyAsync(admin));
+                Assert.Equal(14, await SchemaMigrator.ApplyAsync(admin));
                 await TestDbRoleProvisioner.ConfigureAsync(admin);
                 await using (var conn = await root.OpenConnectionAsync())
                 await using (var grant = new NpgsqlCommand(
