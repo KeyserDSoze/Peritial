@@ -122,6 +122,15 @@ public sealed class ObjectRecoveryCheckpointContractTests
             await using (var clear = new NpgsqlCommand("DELETE FROM upload_request_keys", conn))
                 await clear.ExecuteNonQueryAsync();
 
+            // Quota is cumulative across BOTH tenant documents. Reject
+            // before the first S3 GET: referenced objects are still missing.
+            // This must fail for the configured quota, not for missing S3.
+            var quota = original.LongLength * 2 - 1;
+            var quotaFailure = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                ObjectRecoveryCheckpoint.CaptureAsync(
+                    db, storage, bucket, maxTotalBytes: quota));
+            Assert.Contains("budget", quotaFailure.Message, StringComparison.OrdinalIgnoreCase);
+
             // Referenced object missing: fail, do not report a recoverable point.
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 ObjectRecoveryCheckpoint.CaptureAsync(db, storage, bucket));
