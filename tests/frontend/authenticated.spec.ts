@@ -2706,6 +2706,49 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     expect(await falseDirectoryMcp.text()).toContain('"isError":true');
     expect(await falseDirectoryMcp.text()).not.toContain("../../private-file");
 
+    // ZIP member names are independent of CRCs: change the last character
+    // in BOTH local and central filenames, and declare a normal Unix file.
+    // Without the new name gate this would be a syntactically valid ZIP.
+    const trailingDotDocx = Buffer.from(falseDirectoryDocx);
+    const originalMemberName = Buffer.from("word/media/link.bin");
+    const localMemberIndex = trailingDotDocx.indexOf(originalMemberName);
+    const centralMemberIndex = trailingDotDocx.lastIndexOf(originalMemberName);
+    expect(localMemberIndex).toBeGreaterThanOrEqual(0);
+    expect(centralMemberIndex).toBeGreaterThan(localMemberIndex);
+    expect(trailingDotDocx.readUInt32LE(centralMemberIndex - 46)).toBe(0x02014b50);
+    trailingDotDocx[localMemberIndex + originalMemberName.length - 1] = 46;
+    trailingDotDocx[centralMemberIndex + originalMemberName.length - 1] = 46;
+    trailingDotDocx.writeUInt16LE(0x81a4, centralMemberIndex - 46 + 40);
+
+    const trailingDotRest = await request.post("http://localhost:8080/api/files", {
+      headers: { Authorization: "Bearer " + accessToken },
+      multipart: {file: {
+        name: "ambiguous-zip-name.docx",
+        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        buffer: trailingDotDocx
+      }}
+    });
+    expect(trailingDotRest.status(), await trailingDotRest.text()).toBe(400);
+    expect(await trailingDotRest.text()).not.toContain("../../private-file");
+
+    const trailingDotMcp = await request.post("http://localhost:8080/mcp", {
+      headers: {
+        Authorization: "Bearer " + accessToken,
+        Accept: "application/json,text/event-stream",
+        "Content-Type": "application/json"
+      },
+      data: {jsonrpc: "2.0", id: 52, method: "tools/call", params: {
+        name: "ingest_file", arguments: {
+          fileName: "ambiguous-zip-name.docx",
+          contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          base64: trailingDotDocx.toString("base64")
+        }
+      }}
+    });
+    expect(trailingDotMcp.ok(), await trailingDotMcp.text()).toBeTruthy();
+    expect(await trailingDotMcp.text()).toContain('"isError":true');
+    expect(await trailingDotMcp.text()).not.toContain("../../private-file");
+
     // Safe EICAR test string is an entire stored file inside a minimal DOCX ZIP.
     // Appending it to a synthetic PDF is NOT reliable: ClamAV's PDF decoder
     // can legitimately skip bytes not referenced by the PDF structure.
