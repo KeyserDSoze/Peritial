@@ -76,6 +76,22 @@ internal static class UploadedDocumentValidation
     private const long MaxDocxExpandedBytes = 64L * 1024 * 1024;
     private const long MaxDocxCompressionRatio = 200;
 
+    private static bool IsReservedWindowsDeviceName(string segment)
+    {
+        // These names bind to DOS devices on Windows (also with extensions),
+        // not ordinary filesystem entries. Reject them in ANY ZIP path
+        // segment to protect downstream Windows viewers and extractors.
+        // Superscript 1/2/3 are also recognized as COM/LPT digits by Windows.
+        var dot = segment.IndexOf('.');
+        var stem = (dot < 0 ? segment : segment[..dot]).ToUpperInvariant();
+        if (stem is "CON" or "PRN" or "AUX" or "NUL" or "CONIN$" or "CONOUT$")
+            return true;
+        return stem.Length == 4 &&
+               (stem.StartsWith("COM", StringComparison.Ordinal) ||
+                stem.StartsWith("LPT", StringComparison.Ordinal)) &&
+               "123456789\u00B9\u00B2\u00B3".Contains(stem[3]);
+    }
+
     private static void ValidateDocx(ReadOnlySpan<byte> data)
     {
         try
@@ -125,11 +141,18 @@ internal static class UploadedDocumentValidation
                     name.Any(char.IsControl) ||
                     name.Contains('\\') || name.Contains(':') ||
                     segments.Any(s => s is "." or ".." ||
-                        s.EndsWith('.') || s.EndsWith(' ')) ||
+                        s.EndsWith('.') || s.EndsWith(' ') ||
+                        IsReservedWindowsDeviceName(s)) ||
                     segments.SkipLast(1).Any(string.IsNullOrEmpty) ||
                     (!isDirectoryPath && segments.Any(string.IsNullOrEmpty)) ||
                     !names.Add(name.TrimEnd('/')))
                     throw new ArgumentException("Unsafe DOCX ZIP entry name.");
+
+                // A directory entry with actual content is ambiguous: some
+                // ZIP consumers ignore its bytes while others materialize
+                // them. Reject the payload before scanning or storage.
+                if (isDirectoryPath && entry.Length != 0)
+                    throw new ArgumentException("DOCX ZIP directory cannot contain data.");
 
                 // Trailing dot/space segments are filesystem aliases on
                 // Windows; a file also cannot shadow an implicit directory.
