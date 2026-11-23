@@ -81,6 +81,9 @@ public sealed class DocumentCatalogRepositoryTests
         Assert.NotNull(locator);
         Assert.Equal(latest.StorageKey, locator.StorageKey);
         Assert.Equal(latest.Id, locator.Document.Id);
+        Assert.Equal(latest.ContentSha256, locator.ContentSha256);
+        Assert.DoesNotContain("ContentSha256",
+            System.Text.Json.JsonSerializer.Serialize(locator.Document));
         Assert.Null(await repo.FindForDownloadAsync(tenantB, latest.Id));
         Assert.Null(await repo.FindForDownloadAsync(tenantA, foreign.Id));
         Assert.Null(await repo.FindForDownloadAsync(tenantA, Guid.NewGuid()));
@@ -101,6 +104,7 @@ public sealed class DocumentCatalogRepositoryTests
     {
         var id = Guid.NewGuid();
         return new DocumentRecord(id, tenant, periziaId, "read-test.pdf",
-            "application/pdf", 42, tenant.Value.ToString("N") + "/" + id.ToString("N") + ".pdf", date);
+            "application/pdf", 42, tenant.Value.ToString("N") + "/" + id.ToString("N") + ".pdf",
+            date, ContentSha256: DocumentDigest.Compute("CATALOG-TEST"u8));
     }
 }
