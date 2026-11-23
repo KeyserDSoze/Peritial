@@ -5,7 +5,9 @@ namespace Peritial.Infrastructures;
 /// <summary>Opt-in local bootstrap only; production requires an explicit migration step.</summary>
 public static class SchemaBootstrap
 {
-    public static async Task ApplyDevelopmentSchemaAsync(NpgsqlDataSource dataSource, CancellationToken ct = default)
+    public static async Task ApplyDevelopmentSchemaAsync(
+        NpgsqlDataSource dataSource, CancellationToken ct = default,
+        bool includeDocumentDigest = true)
     {
         var assembly = typeof(SchemaBootstrap).Assembly;
         var resource = assembly.GetManifestResourceNames().Single(n =>
@@ -35,7 +37,7 @@ public static class SchemaBootstrap
             "WHERE table_schema=current_schema() AND table_name='documents' " +
             "AND column_name='content_sha256')", connection, transaction))
             hasDigest = (bool)(await check.ExecuteScalarAsync(ct))!;
-        if (!hasDigest)
+        if (includeDocumentDigest && !hasDigest)
         {
             var migrationName = assembly.GetManifestResourceNames().Single(n =>
                 n.EndsWith("V013__documents_content_sha256_integrity.sql", StringComparison.Ordinal));
