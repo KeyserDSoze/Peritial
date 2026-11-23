@@ -54,7 +54,13 @@ public sealed class DocumentDownloadService(
         // The user may choose only the UUID; never accept a blob path or
         // tenant selector from HTTP/MCP.
         string expectedKey;
-        try { expectedKey = DocumentKeys.For(actor.TenantId, id, item.FileName); }
+        try
+        {
+            if (!string.Equals(UploadedDocumentValidation.CanonicalFileName(item.FileName),
+                item.FileName, StringComparison.Ordinal))
+                throw new DocumentContentUnavailableException();
+            expectedKey = DocumentKeys.For(actor.TenantId, id, item.FileName);
+        }
         catch (ArgumentException) { throw new DocumentContentUnavailableException(); }
         if (!string.Equals(location.StorageKey, expectedKey, StringComparison.Ordinal))
             throw new DocumentContentUnavailableException();
