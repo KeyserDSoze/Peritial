@@ -110,6 +110,72 @@ public sealed class SchemaMigrationTests
         });
     }
 
+
+    [Fact]
+    public async Task V013_document_digest_accepts_legacy_null_but_enforces_length_and_immutability()
+    {
+        await WithIsolatedSchemaAsync(async db =>
+        {
+            Assert.Equal(13, await SchemaMigrator.ApplyAsync(db));
+            Assert.Equal(0, await SchemaMigrator.ApplyAsync(db));
+            await using var conn = await db.OpenConnectionAsync();
+
+            var tenant = Guid.NewGuid();
+            var id = Guid.NewGuid();
+            await using (var insert = new NpgsqlCommand(
+                "INSERT INTO documents (tenant_id,id,file_name,content_type,length_bytes,storage_key,created_at_utc,content_sha256) " +
+                "VALUES (@tenant,@id,'v013.pdf','application/pdf',5,@key,now(),decode(repeat('ab',32),'hex'))",
+                conn))
+            {
+                insert.Parameters.AddWithValue("tenant", tenant);
+                insert.Parameters.AddWithValue("id", id);
+                insert.Parameters.AddWithValue("key", tenant.ToString("N") + "/" + id.ToString("N") + ".pdf");
+                Assert.Equal(1, await insert.ExecuteNonQueryAsync());
+            }
+            await using (var read = new NpgsqlCommand(
+                "SELECT encode(content_sha256,'hex') FROM documents WHERE tenant_id=@tenant AND id=@id", conn))
+            {
+                read.Parameters.AddWithValue("tenant", tenant);
+                read.Parameters.AddWithValue("id", id);
+                Assert.Equal(new string('a', 0) + string.Concat(Enumerable.Repeat("ab", 32)),
+                    (string?)await read.ExecuteScalarAsync());
+            }
+            await using (var mutate = new NpgsqlCommand(
+                "UPDATE documents SET content_sha256=decode(repeat('cd',32),'hex') WHERE tenant_id=@tenant AND id=@id", conn))
+            {
+                mutate.Parameters.AddWithValue("tenant", tenant);
+                mutate.Parameters.AddWithValue("id", id);
+                var ex = await Assert.ThrowsAsync<PostgresException>(() => mutate.ExecuteNonQueryAsync());
+                Assert.Equal("23514", ex.SqlState);
+            }
+            var secondId = Guid.NewGuid();
+            await using (var shortDigest = new NpgsqlCommand(
+                "INSERT INTO documents (tenant_id,id,file_name,content_type,length_bytes,storage_key,created_at_utc,content_sha256) " +
+                "VALUES (@tenant,@id,'bad.pdf','application/pdf',5,@key,now(),decode(repeat('ab',31),'hex'))",
+                conn))
+            {
+                shortDigest.Parameters.AddWithValue("tenant", tenant);
+                shortDigest.Parameters.AddWithValue("id", secondId);
+                shortDigest.Parameters.AddWithValue("key", tenant.ToString("N") + "/" + secondId.ToString("N") + ".pdf");
+                var ex = await Assert.ThrowsAsync<PostgresException>(() => shortDigest.ExecuteNonQueryAsync());
+                Assert.Equal("23514", ex.SqlState);
+            }
+            // A previous release may have rows without digests. The migration
+            // never invents a hash; the Business download path denies NULL.
+            await using (var legacy = new NpgsqlCommand(
+                "INSERT INTO documents (tenant_id,id,file_name,content_type,length_bytes,storage_key,created_at_utc) " +
+                "VALUES (@tenant,@id,'old.pdf','application/pdf',5,@key,now())",
+                conn))
+            {
+                var legacyId = Guid.NewGuid();
+                legacy.Parameters.AddWithValue("tenant", tenant);
+                legacy.Parameters.AddWithValue("id", legacyId);
+                legacy.Parameters.AddWithValue("key", tenant.ToString("N") + "/" + legacyId.ToString("N") + ".pdf");
+                Assert.Equal(1, await legacy.ExecuteNonQueryAsync());
+            }
+        });
+    }
+
     [Fact]
     public async Task V010_document_keyset_indexes_support_global_and_perizia_scoped_seek()
     {
