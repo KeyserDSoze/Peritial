@@ -6,7 +6,8 @@ namespace Peritial.Business;
 /// Internal storage locator returned only after a tenant-scoped PostgreSQL
 /// lookup; never serialized by REST/MCP. The public result has no storage key.
 /// </summary>
-public sealed record DocumentDownloadLocation(DocumentSummaryDto Document, string StorageKey);
+public sealed record DocumentDownloadLocation(
+    DocumentSummaryDto Document, string StorageKey, byte[]? ContentSha256 = null);
 
 public interface IDocumentDownloadRepository
 {
@@ -69,6 +70,10 @@ public sealed class DocumentDownloadService(
         if (!UploadedDocumentValidation.IsSupportedContentType(
                 Path.GetExtension(item.FileName), item.ContentType))
             throw new DocumentContentUnavailableException();
+        // Documents inserted before checksum rollout remain null until
+        // explicitly verified/backfilled: never invent a hash at download.
+        if (location.ContentSha256 is not { Length: DocumentDigest.Size })
+            throw new DocumentContentUnavailableException();
 
         byte[] content;
         try { content = await blobs.ReadAsync(expectedKey, item.Length, ct); }
@@ -88,6 +93,12 @@ public sealed class DocumentDownloadService(
         {
             throw new DocumentContentUnavailableException();
         }
+
+        // A substituted document can have an equally valid signature and
+        // exactly the same byte count. Compare the persisted SHA-256 before
+        // recording success or releasing the blob to REST.
+        if (!DocumentDigest.Matches(location.ContentSha256, content))
+            throw new DocumentContentUnavailableException();
 
         // Audit is a hard admission gate. Do not return the bytes if the
         // append-only PostgreSQL record cannot be committed. This is an audit
