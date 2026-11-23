@@ -97,9 +97,10 @@ record o oggetti. Ingestione e catalogo mantengono rispettivamente
 privilegi e nega SQL non auditato; la CI Compose effimera
 applica V003→V009, mentre le installazioni reali richiedono
 il migrator amministrativo esplicito e backup verificato.
-Restano aperti ciclo vita metadata, retention, download
-PWA/MCP e pieno rollout controllato, quarantena e recovery in produzione;
-la prima route REST autenticata di sola lettura è in ADR 0094.
+Restano aperti ciclo vita metadata, retention, trasporto byte MCP e
+pieno rollout controllato, quarantena e recovery in produzione;
+la route REST autenticata è in ADR 0094, mentre la PWA offre un
+download Bearer in memoria delimitato e annullabile (ADR 0095).
 [ADR 0048](adr/0048-v009-immutable-document-metadata-privileges.md).
 
 ## Catalogo documenti paginato (ADR 0049, #11/#12/#13)
@@ -113,8 +114,9 @@ pagine soltanto su richiesta e svuota i dati su cambio JWT,
 filtro, offline o errore. `GET /api/files`/`list_documents`
 restano retrocompatibili. Il cursore non è un token di accesso
 né uno snapshot; la paginazione ADR 0049 è solo metadata.
-Il download REST delimitato è stato aggiunto successivamente
-(ADR 0094), senza alterare quei cursori. DELETE resta escluso.
+Il download REST delimitato (ADR 0094) e la sua UI PWA (ADR 0095)
+non alterano i cursori dei metadati; sono richieste GET separate,
+autenticate e mai cacheate offline. DELETE resta escluso.
 [ADR 0049](adr/0049-document-catalog-keyset-pages.md).
 
 ## V010: indici ordinati per il catalogo documenti (#11/#6)

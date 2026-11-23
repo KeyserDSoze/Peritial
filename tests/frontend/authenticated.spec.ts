@@ -586,6 +586,15 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     await expect(button).toBeEnabled();
     await page.unroute(url);
 
+    // Even a 200 with short bytes cannot create an unverified local file.
+    await page.route(url, route => route.fulfill({
+      status:200, contentType:"application/octet-stream", body:"broken"
+    }));
+    await button.click();
+    await expect(page.getByRole("alert")).toContainText("Impossibile scaricare il documento");
+    await expect(button).toBeEnabled();
+    await page.unroute(url);
+
     await page.getByRole("button", {name: "Aggiorna elenco"}).click();
     await expect(documentList.getByText(name, {exact: true})).toBeVisible();
     await expect(row.getByRole("button", {name: "Scarica documento: " + name})).toBeEnabled();

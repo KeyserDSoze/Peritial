@@ -17,7 +17,7 @@ Esporre le funzionalità tramite Model Context Protocol (SDK ufficiale .NET, HTT
 | Capability | Tool | Fase |
 |---|---|---|
 | Perizie | list_perizie, get_perizia, create_perizia, assign_perizia, advance_perizia, cancel_perizia | lettura scoped e mutazioni REST/MCP con audit atomico e CAS (#9/#12) |
-| Documenti | list_documents, get_document (soli metadata), ingest_file (base64 limitato); REST multipart | catalogo metadata tenant-scoped + ingestion; **download byte REST** `GET /api/files/{id}/download` (non MCP), UI/report/versioni ancora aperti (#5/#11/#12) |
+| Documenti | list_documents, get_document (soli metadata), ingest_file (base64 limitato); REST multipart | catalogo metadata tenant-scoped + ingestion; **download byte REST** `GET /api/files/{id}/download` (non MCP), report/versioni e UX complete ancora aperti (#5/#11/#12) |
 | Sinistri e collegamenti perizie | list_sinistri, search_sinistri, get_sinistro, create_sinistro, update_sinistro, link_perizia_sinistro, list_perizie_for_sinistro, get_perizia_sinistro, unlink_perizia_sinistro | list/search/read/create/update Sinistri; link/unlink esplicito con FK tenant-scoped e audit atomico, senza reparent atomico/CRUD Sinistri UI completo (#7/#9/#12/#13) |
 | Anagrafiche, import XML, report, messaggi, contabilità, KPI | tool dedicati per ciascun use case | iterazioni successive |
 
@@ -187,9 +187,9 @@ query passa per `TenantDbScope` con FORCE RLS PostgreSQL.
 - La sola lettura metadata non genera audit di *mutazione riuscita*.
   I tool MCP restano **solo metadata**: nessuna chiave storage, URL
   privato o blob di documento è restituito tramite MCP.
-  Il download REST separato è descritto sotto; interfaccia PWA, download
-  binario MCP, retention/delete, versioni, cartelle, indici e report
-  rimangono aperti nelle issue #5/#11/#12.
+  Il download REST separato è descritto sotto e il suo pulsante PWA
+  è implementato in ADR 0095. Trasporto binario MCP, retention/delete,
+  versioni, cartelle, indici e report restano aperti (#5/#11/#12).
 
 I test Business coprono read-only e write-only, filtro, cap,
 not-found e scope negato; PostgreSQL reale verifica tenant diversi,
@@ -229,8 +229,9 @@ Risposta REST: `Content-Disposition: attachment`, MIME forzato
 Non si esegue la scansione ClamAV a ogni GET: i file scaricabili
 sono stati ammessi dopo scanner **prima** dell'upload, ma non
 esiste ancora quarantena/riscan persistente. Nessuna policy di
-rate limiting distribuito, app PWA o trasporto binario MCP è
-inclusa in questa tranche. La prova in CI copre OAuth Keycloak,
+rate limiting distribuito o trasporto binario MCP è inclusa.
+La PWA usa il download REST con JWT in header, singola richiesta
+per scheda e Blob bounded: ADR 0095. La prova in CI copre OAuth Keycloak,
 byte reali S3, tenant incrociati, denial e catalogo MCP metadata,
 oltre ai contratti Azure Blob Azurite; non equivale a una release
 Azure/Entra conforme. Vedere [ADR 0094](../adr/0094-tenant-scoped-audited-document-download.md).

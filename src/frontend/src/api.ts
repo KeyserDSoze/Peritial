@@ -160,6 +160,7 @@ export async function downloadDocument(token: string, id: string,
   const reader = response.body.getReader();
   const bytes = new Uint8Array(expectedLength);
   let length = 0;
+  let completed = false;
   try {
     while (true) {
       const {done, value} = await reader.read();
@@ -169,10 +170,12 @@ export async function downloadDocument(token: string, id: string,
       bytes.set(value, length);
       length += value.byteLength;
     }
+    if (length !== expectedLength) throw new Error("Document length mismatch");
+    completed = true;
   } finally {
-    if (length !== expectedLength) await reader.cancel().catch(() => {});
+    // Including an extra chunk after the exact budget: drop the HTTP body.
+    if (!completed) await reader.cancel().catch(() => {});
     reader.releaseLock();
   }
-  if (length !== expectedLength) throw new Error("Document length mismatch");
   return new Blob([bytes], {type: "application/octet-stream"});
 }

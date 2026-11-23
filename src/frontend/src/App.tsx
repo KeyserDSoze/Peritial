@@ -62,6 +62,10 @@ export default function App() {
   const [dataStatus, setDataStatus] = useState<"loading" | "ready" | "unavailable">("loading");
   const [refreshIndex, setRefreshIndex] = useState(0);
   const token = auth.user?.access_token;
+  // Updated at render time, before effects: reject bytes if a silent token
+  // rotation/offline transition happened while fetch was still resolving.
+  const latestSession = useRef({token, online});
+  latestSession.current = {token, online};
   // UI hints only: REST/MCP enforce the real signed JWT scope. A
   // read-only identity must not be offered any write action in the PWA.
   // Do not infer write access merely from "authenticated" or "online".
@@ -252,7 +256,8 @@ export default function App() {
       activeDocumentDownload.current === operation &&
       requestEpoch.current === epochAtStart &&
       documentsProjectionGeneration.current === projectionAtStart &&
-      activeToken.current === token && online;
+      activeToken.current === token && latestSession.current.token === token &&
+      latestSession.current.online;
     setDownloadingDocumentId(doc.id);
     setError("");
     try {

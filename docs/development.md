@@ -106,16 +106,20 @@ ancora ETag/If-Match pubblico, idempotenza completa degli altri tool,
 prova di race multi-replica o di commit-ACK incerto, UI di storico,
 notifiche o parità con le regole del legacy. #9 e #21 restano aperte.
 
-## Lista documenti in PWA — solo metadati, niente download (#11/#13)
+## Lista documenti in PWA — metadati paginati e download OAuth (#11/#13)
 
 La PWA in `App.tsx` ora mostra nel riquadro upload
 i **primi 50 documenti del tenant** (`GET /api/files/page?limit=50`), con successive pagine richiedibili manualmente
 con nome del file, tipo MIME, dimensione in byte e data.
-I contenuti sono renderizzati come testo React: non vengono
-inseriti link a storage, presigned URL, pulsanti download o
-anteprime; le azioni rimangono limitate all'ingestion già
-autorizzata. Il microcopy esplicita che sono **solo
-metadati** e che il download non è ancora supportato.
+I metadati sono renderizzati come testo React e non contengono
+URL di storage, link presigned o anteprime. Ogni riga ha il
+pulsante di download, che emette una GET REST con JWT in header,
+mai nel link o nella query; l'audit pre-invio avviene nel backend.
+Il download è disponibile solo online, una richiesta per scheda,
+con un budget di 25 MiB e controllo di lunghezza/MIME prima di
+creare il Blob e avviare il salvataggio. Refresh, cambio filtro,
+logout/offline e aggiornamento di JWT invalidano la lettura
+precedente e non mettono file o richieste in coda.
 Le etichette sono disponibili in italiano e inglese.
 
 Il form di upload permette inoltre di scegliere **facoltativamente** una perizia
@@ -168,16 +172,16 @@ a un cambio token/epoch non possono riattivare
 le azioni.
 
 `tests/frontend/authenticated.spec.ts` usa
-Keycloak, ClamAV e SeaweedFS reali: carica un PDF
-ammesso tramite il form, richiede la visualizzazione
-del solo nome/dimensione e l'assenza di link o
-pulsanti di download, quindi prova il refresh
-della lista. Mancano ancora indici e benchmark del seek a
-grande scala, la ricerca avanzata, il download autorizzato,
-cartelle e versioning documentale (issue #11)
+Keycloak, ClamAV e SeaweedFS reali: carica un PDF ammesso,
+verifica catalogo senza link cloud, scarica via GET Bearer il
+Blob con nome e byte esatti, prova doppio click senza richieste
+multiple e blocca risposta 200 con byte difformi.
+Mancano benchmark del seek a grande scala, ricerca avanzata,
+policy distribuite di rate/retention, cartelle e versioning
+(issue #11)
 e le altre sezioni PWA (issue #13).
 
-## Catalogo documenti: metadata tenant-scoped senza download (#11/#12)
+## Catalogo documenti: proiezione metadata distinta dal download (#11/#12)
 
 La nuova read model `DocumentSummaryDto` contiene solo
 `id`, `periziaId`, `fileName`, `contentType`,
