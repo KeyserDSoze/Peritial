@@ -5,6 +5,73 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
 
   test.setTimeout(90_000);
 
+  test("REST document download is tenant-scoped, private, audited and byte-exact", async ({request}) => {
+    test.setTimeout(120_000);
+    const grant = async (clientId:string) => {
+      const reply = await request.post(
+        "http://localhost:8081/realms/peritial/protocol/openid-connect/token", {
+          form:{grant_type:"password",client_id:clientId,
+            username:"localuser",password:"local-only-user"}
+        });
+      expect(reply.status(),await reply.text()).toBe(200);
+      return (await reply.json() as {access_token:string}).access_token;
+    };
+    const [writer,reader,foreign,withoutScope] = await Promise.all([
+      grant("peritial-test-write"),
+      grant("peritial-test-readonly"),
+      grant("peritial-test-write-tenant-b"),
+      grant("peritial-test-no-scope")
+    ]);
+    const base = "http://localhost:8080/api/files";
+    const bytes = Buffer.from("%PDF-1.7\\n1 0 obj\\n<<>>\\nendobj\\n%%EOF\\n");
+    const name = "private-" + Date.now() + "-" + Math.round(Math.random()*100000) + ".pdf";
+    const posted = await request.post(base, {
+      headers:{Authorization:"Bearer " + writer},
+      multipart:{file:{name,mimeType:"application/pdf",buffer:bytes}}
+    });
+    expect(posted.status(),await posted.text()).toBe(201);
+    const id = (await posted.json() as {id:string}).id;
+    const url = base + "/" + id + "/download";
+
+    const received = await request.get(url,{headers:{Authorization:"Bearer " + reader}});
+    expect(received.status(),await received.text()).toBe(200);
+    expect(Buffer.from(await received.body())).toEqual(bytes);
+    expect(received.headers()["content-type"]).toContain("application/octet-stream");
+    expect(received.headers()["content-disposition"]).toContain("attachment");
+    expect(received.headers()["content-disposition"]).toContain(name);
+    expect(received.headers()["cache-control"]).toContain("no-store");
+    expect(received.headers()["x-content-type-options"]).toBe("nosniff");
+    expect(received.headers()["content-security-policy"]).toBe("sandbox");
+    expect(received.headers()["content-range"]).toBeUndefined();
+    expect(received.headers()["accept-ranges"]).toBeUndefined();
+    expect(await received.text()).not.toContain("storage_key");
+
+    const foreignResult = await request.get(url,{headers:{Authorization:"Bearer " + foreign}});
+    expect(foreignResult.status()).toBe(404);
+    const missingResult = await request.get(base + "/" + crypto.randomUUID() + "/download",
+      {headers:{Authorization:"Bearer " + reader}});
+    expect(missingResult.status()).toBe(404);
+    expect(await foreignResult.text()).toBe(await missingResult.text());
+    expect((await request.get(url)).status()).toBe(401);
+    expect((await request.get(url,{headers:{Authorization:"Bearer " + withoutScope}})).status()).toBe(403);
+
+    // Existing MCP tools remain strictly metadata-only: no object keys,
+    // bytes, cloud links or automatically shared signed download URL.
+    const metadata = await request.post("http://localhost:8080/mcp",{
+      headers:{Authorization:"Bearer " + reader,Accept:"application/json,text/event-stream",
+        "Content-Type":"application/json"},
+      data:{jsonrpc:"2.0",id:782,method:"tools/call",
+        params:{name:"get_document",arguments:{id}}}
+    });
+    expect(metadata.status(),await metadata.text()).toBe(200);
+    const metadataText = await metadata.text();
+    expect(metadataText).toContain(id);
+    expect(metadataText).not.toContain("storage_key");
+    expect(metadataText).not.toContain("storageKey");
+    expect(metadataText).not.toContain(bytes.toString("base64"));
+    expect(metadataText).not.toContain("/download");
+  });
+
   test("stale failed create and upload cannot invalidate newer signed document refreshes", async ({page}) => {
     await page.goto("/");
     await page.getByRole("button", {name: "Accedi"}).click();
