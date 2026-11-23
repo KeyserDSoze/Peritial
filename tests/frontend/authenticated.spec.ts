@@ -2597,6 +2597,42 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     });
     expect(changedProof.status(), await changedProof.text()).toBe(409);
 
+    // A ZIP with valid central directory and valid main document can carry
+    // an external-entity DTD in a secondary OPC .rels XML part. Reject it
+    // at admission, before ClamAV/storage, through REST and MCP alike.
+    // Synthetic fixture: [Content_Types].xml + word/document.xml +
+    // word/_rels/document.xml.rels (DTD, PRIVATE-XXE-REL marker).
+    const unsafeRelsDocx = Buffer.from(
+      "UEsDBBQAAAAIADZed13HHBc8CgAAAAgAAAATAAAAW0NvbnRlbnRfVHlwZXNdLnhtbLMJqSxILda3AwBQSwMEFAAAAAgANl53XV9b0UwNAAAACwAAABEAAAB3b3JkL2RvY3VtZW50LnhtbLNJyU8uzU3NK9G3AwBQSwMEFAAAAAgANl53XTtyO5xaAAAAcwAAABwAAAB3b3JkL19yZWxzL2RvY3VtZW50LnhtbC5yZWxzs1F08XcOiQxwVQhKzUksyczPK87ILChWiLZRdPUL8QyJVMjITElJzVMIjgwOcfVVUE/LzEm10tfXDwjyDHMMcdWNiHDVDXL1UbeLtbNBMcJODaLT2kYfVRwAUEsBAhQDFAAAAAgANl53XcccFzwKAAAACAAAABMAAAAAAAAAAAAAAIABAAAAAFtDb250ZW50X1R5cGVzXS54bWxQSwECFAMUAAAACAA2XnddX1vRTA0AAAALAAAAEQAAAAAAAAAAAAAAgAE7AAAAd29yZC9kb2N1bWVudC54bWxQSwECFAMUAAAACAA2XnddO3I7nFoAAABzAAAAHAAAAAAAAAAAAAAAgAF3AAAAd29yZC9fcmVscy9kb2N1bWVudC54bWwucmVsc1BLBQYAAAAAAwADAMoAAAALAQAAAAA=", "base64");
+    const badRelsRest = await request.post("http://localhost:8080/api/files", {
+      headers: { Authorization: "Bearer " + accessToken },
+      multipart: { file: {
+        name: "bad-relationships.docx",
+        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        buffer: unsafeRelsDocx
+      }}
+    });
+    expect(badRelsRest.status(), await badRelsRest.text()).toBe(400);
+    expect(await badRelsRest.text()).not.toContain("PRIVATE-XXE-REL");
+
+    const badRelsMcp = await request.post("http://localhost:8080/mcp", {
+      headers: {
+        Authorization: "Bearer " + accessToken,
+        Accept: "application/json,text/event-stream",
+        "Content-Type": "application/json"
+      },
+      data: {jsonrpc: "2.0", id: 49, method: "tools/call", params: {
+        name: "ingest_file", arguments: {
+          fileName: "bad-relationships.docx",
+          contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          base64: unsafeRelsDocx.toString("base64")
+        }
+      }}
+    });
+    expect(badRelsMcp.ok(), await badRelsMcp.text()).toBeTruthy();
+    expect(await badRelsMcp.text()).toContain('"isError":true');
+    expect(await badRelsMcp.text()).not.toContain("PRIVATE-XXE-REL");
+
     // Safe EICAR test string is an entire stored file inside a minimal DOCX ZIP.
     // Appending it to a synthetic PDF is NOT reliable: ClamAV's PDF decoder
     // can legitimately skip bytes not referenced by the PDF structure.
