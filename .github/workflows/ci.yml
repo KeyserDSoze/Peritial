@@ -106,10 +106,10 @@ jobs:
             sleep 2
           done
           test "$ready" = "1"
-      - name: Provision V003–V013 only for disposable Compose E2E
+      - name: Provision V003–V014 only for disposable Compose E2E
         run: |
           # The Compose demo still boots the historical unjournaled V001 schema.
-          # Apply additive V003-V013 ONLY inside this disposable CI
+          # Apply additive V003-V014 ONLY inside this disposable CI
           # database. Do not simulate a journal or silently mutate prod volumes.
           # Real versioned deployments use the explicit privileged migrator.
           docker compose -f docker/compose.yml exec -T postgres \
@@ -152,6 +152,12 @@ jobs:
             psql -X -U peritial -d peritial -v ON_ERROR_STOP=1 \
             --single-transaction -f /dev/stdin \
             < scripts/db/migrations/V013__documents_content_sha256_integrity.sql
+          # V014 enforces SHA-256 for all new SQL document rows while leaving
+          # historical NULL records untouched. Apply it to Compose E2E too.
+          docker compose -f docker/compose.yml exec -T postgres \
+            psql -X -U peritial -d peritial -v ON_ERROR_STOP=1 \
+            --single-transaction -f /dev/stdin \
+            < scripts/db/migrations/V014__documents_require_sha256_new_writes.sql
       - name: Seed isolated V012 imported-reference fixture for signed REST/MCP E2E
         run: |
           # Test-only fixture: it is NOT a migration, not used in deployments,
