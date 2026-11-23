@@ -195,7 +195,7 @@ jobs:
             -e PERITIAL_TEST_AZURITE_ENDPOINT=http://azurite:10000/devstoreaccount1 \
             -e PERITIAL_TEST_CLAMD_HOST=clamav \
             tests dotnet test tests/backend/Peritial.Infrastructures.Tests/Peritial.Infrastructures.Tests.csproj \
-            --filter "FullyQualifiedName~ObjectStoreContractTests|FullyQualifiedName~ClamdScannerContractTests|FullyQualifiedName~ObjectRecoveryCheckpointContractTests|FullyQualifiedName~StorageReadinessProbeTests" \
+            --filter "FullyQualifiedName~ObjectStoreContractTests|FullyQualifiedName~RealDocumentDigestDownloadContractTests|FullyQualifiedName~ClamdScannerContractTests|FullyQualifiedName~ObjectRecoveryCheckpointContractTests|FullyQualifiedName~StorageReadinessProbeTests" \
             --logger "console;verbosity=normal"
       - name: Verify archive export/restore on independent PostgreSQL and SeaweedFS servers
         run: |
