@@ -92,6 +92,31 @@ internal static class UploadedDocumentValidation
                "123456789\u00B9\u00B2\u00B3".Contains(stem[3]);
     }
 
+    private static void ValidateOpcRelationship(XmlReader reader)
+    {
+        if (reader.NodeType != XmlNodeType.Element ||
+            !reader.LocalName.Equals("Relationship", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        // OOXML relations marked External can make document viewers load
+        // attacker-controlled network or local resources. Reject unknown
+        // modes too: only an internal link is supported at admission.
+        var mode = reader.GetAttribute("TargetMode");
+        if (mode is not null &&
+            !string.Equals(mode, "Internal", StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException("Unsupported external DOCX relationship.");
+
+        // A malicious/incorrect package can omit TargetMode=External while
+        // still supplying an absolute URL, file URI or UNC/network path.
+        // XmlReader has already decoded XML attributes before this check.
+        var target = reader.GetAttribute("Target");
+        if (target is not null &&
+            (target.StartsWith("//", StringComparison.Ordinal) ||
+             target.StartsWith(@"\\", StringComparison.Ordinal) ||
+             Uri.TryCreate(target, UriKind.Absolute, out _)))
+            throw new ArgumentException("Unsupported external DOCX relationship.");
+    }
+
     private static void ValidateDocx(ReadOnlySpan<byte> data)
     {
         try
@@ -203,9 +228,10 @@ internal static class UploadedDocumentValidation
                 // header alone is not a guarantee that its XML is safe for
                 // a downstream document processor. Buffer only XML parts,
                 // after bounding their real inflated size, and reject DTDs.
+                var isRelationshipsPart = entry.FullName.EndsWith(".rels",
+                    StringComparison.OrdinalIgnoreCase);
                 var xmlPart = entry.FullName.EndsWith(".xml",
-                        StringComparison.OrdinalIgnoreCase) ||
-                    entry.FullName.EndsWith(".rels", StringComparison.OrdinalIgnoreCase);
+                        StringComparison.OrdinalIgnoreCase) || isRelationshipsPart;
                 using var inflatedXml = xmlPart
                     ? new MemoryStream((int)Math.Min(entry.Length, 1024 * 1024))
                     : null;
@@ -236,7 +262,12 @@ internal static class UploadedDocumentValidation
                     });
                     if (reader.MoveToContent() != XmlNodeType.Element)
                         throw new ArgumentException("DOCX XML part requires a root element.");
-                    while (reader.Read()) { }
+                    do
+                    {
+                        if (isRelationshipsPart)
+                            ValidateOpcRelationship(reader);
+                    }
+                    while (reader.Read());
                 }
             }
         }
