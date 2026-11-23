@@ -96,3 +96,18 @@ quarantena, legal hold o provenance immutabile dello storage.
   Azure/on-prem; test release finali.
 
 La issue #27 resta **aperta** fino ai criteri completi.
+
+## Fixture CI Compose V013
+
+La fixture Compose locale era intenzionalmente su V001 non
+versionata con provision CI esplicita V003–V012. Con l'introduzione
+della colonna di digest, **i test full-stack non possono fare upload
+senza V013**. Il workflow
+[69698d9](https://github.com/KeyserDSoze/Peritial/commit/69698d9fd36aa97210778309e7a76e8dc087eb16)
+aggiunge V013 con `psql --single-transaction -f /dev/stdin`
+prima del test con JWT Keycloak e della fixture import V012,
+**solo** nel database effimero Compose. Non crea un journal e non
+abilita alcuna migrazione automatica in produzione. Gli ambienti
+persistenti restano sottoposti a backup e migrator esplicito.
+Full-stack [CI #45212051268](https://github.com/KeyserDSoze/Peritial/actions/runs/45212051268)
+da attestare fino a terminale; non chiamare verde in anticipo.
