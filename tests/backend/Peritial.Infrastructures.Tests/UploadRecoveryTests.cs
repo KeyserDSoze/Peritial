@@ -108,8 +108,8 @@ public sealed class UploadRecoveryTests
         // Simulate an interrupted migration or lost-ACK state with a committed
         // metadata record AND a residual pending upload intent.
         await using (var cmd = db.Admin.CreateCommand(
-            "INSERT INTO documents (tenant_id,id,perizia_id,file_name,content_type,length_bytes,storage_key,created_at_utc) " +
-            "VALUES (@tenant,@id,NULL,'proof.pdf','application/pdf',10,@key,now())"))
+            "INSERT INTO documents (tenant_id,id,perizia_id,file_name,content_type,length_bytes,storage_key,created_at_utc,content_sha256) " +
+            "VALUES (@tenant,@id,NULL,'proof.pdf','application/pdf',10,@key,now(),decode(repeat('ab',32),'hex'))"))
         {
             cmd.Parameters.AddWithValue("tenant", tenant.Value);
             cmd.Parameters.AddWithValue("id", documentId);
