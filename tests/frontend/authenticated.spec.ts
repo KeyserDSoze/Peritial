@@ -2631,6 +2631,39 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     expect(await externalRelMcp.text()).toContain('"isError":true');
     expect(await externalRelMcp.text()).not.toContain("PRIVATE-EXTERNAL-REL");
 
+    // Valid DOCX ZIP, well-formed .rels and TargetMode="Internal", but the
+    // relative target climbs past the package root when resolved against
+    // word/document.xml. Reject before scanner/storage on both transports.
+    const escapingRelationshipDocx = Buffer.from("UEsDBBQAAAAIAMR2d13HHBc8CgAAAAgAAAATAAAAW0NvbnRlbnRfVHlwZXNdLnhtbLMJqSxILda3AwBQSwMEFAAAAAgAxHZ3XV9b0UwNAAAACwAAABEAAAB3b3JkL2RvY3VtZW50LnhtbLNJyU8uzU3NK9G3AwBQSwMEFAAAAAgAxHZ3XaoE/+6aAAAAzQAAABwAAAB3b3JkL19yZWxzL2RvY3VtZW50LnhtbC5yZWxzVY7BCoMwEER/RXJv1vbQgxhBioccimKl96DbKNVNSLbQ/n1zKViYy7yBx5Q9roYXR3FefMze20pRiZnZFwBxnHEzUTqPlJaHC5vhVIMFb8ansQinPD9D2DtEVe6dmZ6UCHo6imz4eFTiFahgjLyQTcgEi3x1Uxo0MQYy648qISWkdL2+10Nz6Nt2ODS3S901Mr0RUJXw9776AlBLAQIUAxQAAAAIAMR2d13HHBc8CgAAAAgAAAATAAAAAAAAAAAAAACAAQAAAABbQ29udGVudF9UeXBlc10ueG1sUEsBAhQDFAAAAAgAxHZ3XV9b0UwNAAAACwAAABEAAAAAAAAAAAAAAIABOwAAAHdvcmQvZG9jdW1lbnQueG1sUEsBAhQDFAAAAAgAxHZ3XaoE/+6aAAAAzQAAABwAAAAAAAAAAAAAAIABdwAAAHdvcmQvX3JlbHMvZG9jdW1lbnQueG1sLnJlbHNQSwUGAAAAAAMAAwDKAAAASwEAAAAA", "base64");
+    const escapingRelRest = await request.post("http://localhost:8080/api/files", {
+      headers: {Authorization: "Bearer " + accessToken},
+      multipart: {file: {
+        name: "escaping-relationship.docx",
+        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        buffer: escapingRelationshipDocx
+      }}
+    });
+    expect(escapingRelRest.status(), await escapingRelRest.text()).toBe(400);
+    expect(await escapingRelRest.text()).not.toContain("PRIVATE-ROOT-ESCAPE");
+
+    const escapingRelMcp = await request.post("http://localhost:8080/mcp", {
+      headers: {
+        Authorization: "Bearer " + accessToken,
+        Accept: "application/json,text/event-stream",
+        "Content-Type": "application/json"
+      },
+      data: {jsonrpc: "2.0", id: 56, method: "tools/call", params: {
+        name: "ingest_file", arguments: {
+          fileName: "escaping-relationship.docx",
+          contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          base64: escapingRelationshipDocx.toString("base64")
+        }
+      }}
+    });
+    expect(escapingRelMcp.ok(), await escapingRelMcp.text()).toBeTruthy();
+    expect(await escapingRelMcp.text()).toContain('"isError":true');
+    expect(await escapingRelMcp.text()).not.toContain("PRIVATE-ROOT-ESCAPE");
+
     // A ZIP with valid central directory and valid main document can carry
     // an external-entity DTD in a secondary OPC .rels XML part. Reject it
     // at admission, before ClamAV/storage, through REST and MCP alike.
