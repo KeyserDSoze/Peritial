@@ -52,6 +52,13 @@ public sealed class AzureBlobObjectStoreContractTests
             using var downloaded = new MemoryStream();
             await blob.DownloadToAsync(downloaded);
             Assert.Equal(bytes, downloaded.ToArray());
+            // Never return provider URLs/SAS; bounded byte read succeeds
+            // only when metadata length matches stored blob bytes.
+            Assert.Equal(bytes, await store.ReadAsync(key, bytes.Length));
+            await Assert.ThrowsAsync<InvalidDataException>(() =>
+                store.ReadAsync(key, bytes.Length - 1));
+            await Assert.ThrowsAsync<InvalidDataException>(() =>
+                store.ReadAsync(key, bytes.Length + 1));
 
             await store.DeleteAsync(key);
             await store.DeleteAsync(key); // Deleting already absent blob must succeed.
