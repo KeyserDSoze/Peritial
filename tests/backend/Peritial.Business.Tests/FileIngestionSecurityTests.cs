@@ -48,6 +48,8 @@ public sealed class FileIngestionSecurityTests
     [InlineData("Internal", "//attacker.example/remote.png")]
     [InlineData("Internal", @"\\server\share\secret.png")]
     [InlineData(null, "urn:example:external")]
+    [InlineData("Internal", " https://attacker.example/remote.png ")]
+    [InlineData(null, "https&#58;//attacker.example/remote.png")]
     public async Task Docx_con_relazione_opc_esterna_o_non_ammessa_e_rifiutato_prima_della_scansione(
         string? mode, string target)
     {
