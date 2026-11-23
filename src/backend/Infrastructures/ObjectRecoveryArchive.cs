@@ -275,34 +275,8 @@ public static class ObjectRecoveryArchive
         return options;
     }
 
-    private static async Task<(long Length, string Sha256)> CopyHashAsync(
-        Stream input, Stream output, long expectedLength, CancellationToken ct)
-    {
-        if (expectedLength <= 0)
-            throw new InvalidOperationException("Archive requires a positive PostgreSQL document length.");
-        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        var buffer = new byte[65536];
-        long length = 0;
-        // Prevent an oversized or swapped S3 stream from filling private
-        // tmpfs before the equality check at the end of the export. The
-        // archive reader also uses this bound against post-check TOCTOU.
-        while (true)
-        {
-            var remaining = expectedLength - length;
-            var readLimit = (int)(remaining >= buffer.Length
-                ? buffer.Length : remaining + 1);
-            var read = await input.ReadAsync(buffer.AsMemory(0, readLimit), ct);
-            if (read == 0) break;
-            if (read > remaining)
-                throw new InvalidOperationException(
-                    "Archive source exceeds the committed document length.");
-            length += read;
-            hash.AppendData(buffer, 0, read);
-            await output.WriteAsync(buffer.AsMemory(0, read), ct);
-        }
-        if (length != expectedLength)
-            throw new InvalidOperationException(
-                "Archive source is shorter than the committed document length.");
-        return (length, Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant());
-    }
+    private static Task<(long Length, string Sha256)> CopyHashAsync(
+        Stream input, Stream output, long expectedLength, CancellationToken ct) =>
+        ObjectRecoveryBoundedHash.CopyHashAsync(input, output, expectedLength, ct);
+
 }
