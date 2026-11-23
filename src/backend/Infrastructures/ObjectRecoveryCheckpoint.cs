@@ -185,31 +185,10 @@ public static class ObjectRecoveryCheckpoint
                 BucketName = bucket,
                 Key = key
             }, ct);
-            using var digest = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-            var buffer = new byte[65536];
-            long length = 0;
-            // Never download or hash an unbounded S3 object: the committed
-            // PostgreSQL length is the maximum allowed body. Read at most
-            // one byte beyond that limit to detect an appended payload;
-            // even a malicious streaming response cannot exhaust disk/RAM.
-            while (true)
-            {
-                var remaining = expectedLength - length;
-                var readLimit = (int)(remaining >= buffer.Length
-                    ? buffer.Length : remaining + 1);
-                var read = await response.ResponseStream.ReadAsync(
-                    buffer.AsMemory(0, readLimit), ct);
-                if (read == 0) break;
-                if (read > remaining)
-                    throw new InvalidOperationException(
-                        "Object checkpoint failed: S3 object exceeds PostgreSQL length.");
-                length += read;
-                digest.AppendData(buffer, 0, read);
-            }
-            if (length != expectedLength)
-                throw new InvalidOperationException(
-                    "Object checkpoint failed: S3 object is shorter than PostgreSQL length.");
-            return (length, Convert.ToHexString(digest.GetHashAndReset()).ToLowerInvariant());
+            // The shared stream helper enforces the same one-extra-byte
+            // limit as archive export, without buffering the entire object.
+            return await ObjectRecoveryBoundedHash.CopyHashAsync(
+                response.ResponseStream, Stream.Null, expectedLength, ct);
         }
         catch (AmazonS3Exception ex) when (ex.StatusCode == HttpStatusCode.NotFound)
         {
