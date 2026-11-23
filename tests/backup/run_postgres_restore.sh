@@ -48,10 +48,12 @@ UPDATE perizie SET sinistro_id='12121212-1212-1212-1212-121212121212',
   sinistro_link_version=2
  WHERE tenant_id='11111111-1111-1111-1111-111111111111'
    AND id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
-INSERT INTO documents(tenant_id,id,perizia_id,file_name,content_type,length_bytes,storage_key,created_at_utc)
+-- Deterministic synthetic 32-byte digest tests PostgreSQL durability, NOT
+-- the identity of a real blob (S3 bytes are outside this PG-only drill).
+INSERT INTO documents(tenant_id,id,perizia_id,file_name,content_type,length_bytes,storage_key,created_at_utc,content_sha256)
  VALUES('11111111-1111-1111-1111-111111111111','cccccccc-cccc-cccc-cccc-cccccccccccc',
  'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','fixture.pdf','application/pdf',8,
- '11111111/cccccccc.pdf',now());
+ '11111111/cccccccc.pdf',now(),decode(repeat('ab',32),'hex'));
 INSERT INTO security_audit(tenant_id,id,subject,action,outcome,resource_id,occurred_at_utc) VALUES
  ('11111111-1111-1111-1111-111111111111','dddddddd-dddd-dddd-dddd-dddddddddddd','test-actor','document.ingest','succeeded','cccccccc-cccc-cccc-cccc-cccccccccccc',now()),
  ('22222222-2222-2222-2222-222222222222','eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee','test-actor','perizia.create','denied',NULL,now()),
@@ -124,6 +126,10 @@ SELECT
  (SELECT count(*) FROM perizie)=2
  AND (SELECT count(DISTINCT tenant_id) FROM perizie)=2
  AND (SELECT count(*) FROM documents)=1
+ -- V013 digest is private metadata that must survive backup and restore.
+ AND (SELECT encode(content_sha256,'hex') FROM documents
+      WHERE tenant_id='11111111-1111-1111-1111-111111111111'
+        AND id='cccccccc-cccc-cccc-cccc-cccccccccccc')=repeat('ab',32)
  AND (SELECT count(*) FROM sinistri
       WHERE tenant_id='11111111-1111-1111-1111-111111111111'
         AND id='12121212-1212-1212-1212-121212121212'
@@ -148,7 +154,7 @@ SELECT
       AND audit_id='a1a1a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1')=1
  AND (SELECT count(*) FROM upload_intents)=1
  AND (SELECT count(*) FROM upload_request_keys WHERE status='completed')=1
- AND (SELECT count(*) FROM schema_migrations)=12
+ AND (SELECT count(*) FROM schema_migrations)=13
  AND to_regclass('ix_documents_tenant_created_id') IS NOT NULL
  AND to_regclass('ix_documents_tenant_perizia_created_id') IS NOT NULL
  AND to_regclass('legacy_xml_import_keys') IS NOT NULL
