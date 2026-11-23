@@ -48,6 +48,30 @@ public static class SchemaBootstrap
             await using var migrationCommand = new NpgsqlCommand(migrationSql, connection, transaction);
             await migrationCommand.ExecuteNonQueryAsync(ct);
         }
+        // V014 enforces a checksum for every NEW row, while its NOT VALID
+        // constraint leaves preexisting V001–V013 legacy NULL rows intact.
+        // This bootstrap runs ONLY in isolated integration tests; production
+        // continues to require the reviewed privileged migrator.
+        if (includeDocumentDigest)
+        {
+            bool hasGate;
+            await using (var gate = new NpgsqlCommand(
+                "SELECT EXISTS(SELECT 1 FROM pg_constraint WHERE " +
+                "conrelid=to_regclass('documents') AND conname='ck_documents_sha256_required_new')",
+                connection, transaction))
+                hasGate = (bool)(await gate.ExecuteScalarAsync(ct))!;
+            if (!hasGate)
+            {
+                var migrationName = assembly.GetManifestResourceNames().Single(n =>
+                    n.EndsWith("V014__documents_require_sha256_new_writes.sql", StringComparison.Ordinal));
+                await using var migrationStream = assembly.GetManifestResourceStream(migrationName)
+                    ?? throw new InvalidOperationException("Embedded V014 migration missing.");
+                using var migrationReader = new StreamReader(migrationStream);
+                var migrationSql = await migrationReader.ReadToEndAsync(ct);
+                await using var migrationCommand = new NpgsqlCommand(migrationSql, connection, transaction);
+                await migrationCommand.ExecuteNonQueryAsync(ct);
+            }
+        }
         await transaction.CommitAsync(ct);
     }
 }
