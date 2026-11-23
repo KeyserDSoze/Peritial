@@ -102,7 +102,10 @@ result="$(docker exec "$name" psql -X -qAt -v ON_ERROR_STOP=1 -U peritial -d per
         AND storage_key='22222222/legacy-pending.pdf'
         AND lease_expires_at_utc > created_at_utc)=1
    AND to_regclass('ix_upload_intents_lease') IS NOT NULL
-   AND (SELECT count(*) FROM schema_migrations)=12
+   AND (SELECT count(*) FROM schema_migrations)=13
+   -- A V001 document has no admitted checksum: migration must not forge one.
+   AND (SELECT count(*) FROM documents
+        WHERE file_name='legacy.pdf' AND content_sha256 IS NULL)=1
    AND to_regclass('ix_documents_tenant_created_id') IS NOT NULL
    AND to_regclass('ix_documents_tenant_perizia_created_id') IS NOT NULL
    AND to_regclass('legacy_xml_import_keys') IS NOT NULL
