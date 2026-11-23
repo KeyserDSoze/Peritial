@@ -2633,6 +2633,40 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     expect(await badRelsMcp.text()).toContain('"isError":true');
     expect(await badRelsMcp.text()).not.toContain("PRIVATE-XXE-REL");
 
+    // Central directory can mark a ZIP entry as a Unix symlink even when
+    // its name is a harmless-looking OOXML member. No such entry may reach
+    // a future document extractor or the permanent document store.
+    // Synthetic DOCX contains a symlink at word/media/link.bin.
+    const symlinkDocx = Buffer.from("UEsDBBQAAAAIACtgd13HHBc8CgAAAAgAAAATAAAAW0NvbnRlbnRfVHlwZXNdLnhtbLMJqSxILda3AwBQSwMEFAAAAAgAK2B3XV9b0UwNAAAACwAAABEAAAB3b3JkL2RvY3VtZW50LnhtbLNJyU8uzU3NK9G3AwBQSwMEFAAAAAgAAAAhAMIR/8YUAAAAEgAAABMAAAB3b3JkL21lZGlhL2xpbmsuYmlu09PT19PTLyjKLEssSdVNy8xJBQBQSwECFAMUAAAACAArYHddxxwXPAoAAAAIAAAAEwAAAAAAAAAAAAAAgAEAAAAAW0NvbnRlbnRfVHlwZXNdLnhtbFBLAQIUAxQAAAAIACtgd11fW9FMDQAAAAsAAAARAAAAAAAAAAAAAACAATsAAAB3b3JkL2RvY3VtZW50LnhtbFBLAQIUAxQAAAAIAAAAIQDCEf/GFAAAABIAAAATAAAAAAAAAAAAAAD/oXcAAAB3b3JkL21lZGlhL2xpbmsuYmluUEsFBgAAAAADAAMAwQAAALwAAAAAAA==", "base64");
+    const badLinkRest = await request.post("http://localhost:8080/api/files", {
+      headers: { Authorization: "Bearer " + accessToken },
+      multipart: {file: {
+        name: "symlink.docx",
+        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        buffer: symlinkDocx
+      }}
+    });
+    expect(badLinkRest.status(), await badLinkRest.text()).toBe(400);
+    expect(await badLinkRest.text()).not.toContain("../../private-file");
+
+    const badLinkMcp = await request.post("http://localhost:8080/mcp", {
+      headers: {
+        Authorization: "Bearer " + accessToken,
+        Accept: "application/json,text/event-stream",
+        "Content-Type": "application/json"
+      },
+      data: {jsonrpc: "2.0", id: 50, method: "tools/call", params: {
+        name: "ingest_file", arguments: {
+          fileName: "symlink.docx",
+          contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          base64: symlinkDocx.toString("base64")
+        }
+      }}
+    });
+    expect(badLinkMcp.ok(), await badLinkMcp.text()).toBeTruthy();
+    expect(await badLinkMcp.text()).toContain('"isError":true');
+    expect(await badLinkMcp.text()).not.toContain("../../private-file");
+
     // Safe EICAR test string is an entire stored file inside a minimal DOCX ZIP.
     // Appending it to a synthetic PDF is NOT reliable: ClamAV's PDF decoder
     // can legitimately skip bytes not referenced by the PDF structure.
