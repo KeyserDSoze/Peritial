@@ -51,13 +51,13 @@ public sealed class DocumentDownloadTests
 
     private static DocumentDownloadLocation Add(Catalog repo, TenantId tenant,
         Guid id, long? length = null, string? storageKey = null,
-        string fileName = "signed.pdf")
+        string fileName = "signed.pdf", string contentType = "application/pdf")
     {
         var name = fileName;
         var key = storageKey ?? DocumentKeys.For(tenant, id, name);
         var bytes = "%PDF-1.7\nTest\n"u8.ToArray();
         var location = new DocumentDownloadLocation(
-            new DocumentSummaryDto(id, null, name, "application/pdf",
+            new DocumentSummaryDto(id, null, name, contentType,
                 length ?? bytes.Length, DateTime.UtcNow), key);
         repo.Rows[id] = (tenant, location);
         return location;
@@ -181,6 +181,73 @@ public sealed class DocumentDownloadTests
             () => service.ReadAsync(id));
         Assert.Equal(0, blobs.Reads);
         Assert.Empty(audit.Events);
+    }
+
+
+    [Theory]
+    [InlineData("signed.pdf", "image/png")]
+    [InlineData("signed.pdf", "application/octet-stream")]
+    [InlineData("signed.pdf", "text/html")]
+    [InlineData("signed.xml", "application/pdf")]
+    public async Task Persisted_mime_extension_mismatch_fails_before_blob_read_or_audit(
+        string fileName, string storedMime)
+    {
+        var tenant = TenantId.From(Guid.NewGuid());
+        var id = Guid.NewGuid();
+        var catalog = new Catalog();
+        Add(catalog, tenant, id, fileName: fileName, contentType: storedMime);
+        var blobs = new Blobs();
+        var audit = new Audit();
+        var service = new DocumentDownloadService(new Actor(tenant), catalog, blobs, audit);
+
+        await Assert.ThrowsAsync<DocumentContentUnavailableException>(() => service.ReadAsync(id));
+        Assert.Equal(0, blobs.Reads);
+        Assert.Empty(audit.Events);
+    }
+
+    [Theory]
+    [InlineData("signed.pdf", "application/pdf", "NOT-A-PDF")]
+    [InlineData("signed.xml", "application/xml", "<a><b></a>")]
+    [InlineData("signed.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "PK\\u0003\\u0004not-a-zip")]
+    public async Task Stored_bytes_that_fail_content_validation_are_not_downloaded_or_success_audited(
+        string fileName, string contentType, string storedBytes)
+    {
+        // Same length as PostgreSQL metadata: a byte-length check alone
+        // cannot detect a substituted blob or a truncated XML/ZIP object.
+        var bytes = System.Text.Encoding.UTF8.GetBytes(storedBytes);
+        var tenant = TenantId.From(Guid.NewGuid());
+        var id = Guid.NewGuid();
+        var catalog = new Catalog();
+        Add(catalog, tenant, id, fileName: fileName,
+            contentType: contentType, length: bytes.LongLength);
+        var blobs = new Blobs { Bytes = bytes };
+        var audit = new Audit();
+        var service = new DocumentDownloadService(new Actor(tenant), catalog, blobs, audit);
+
+        await Assert.ThrowsAsync<DocumentContentUnavailableException>(() => service.ReadAsync(id));
+        Assert.Equal(1, blobs.Reads);
+        Assert.Empty(audit.Events);
+    }
+
+    [Theory]
+    [InlineData("application/xml")]
+    [InlineData("text/xml")]
+    public async Task Well_formed_xml_download_remains_valid_under_content_verification(string contentType)
+    {
+        var bytes = "<?xml version=\"1.0\"?><document/>"u8.ToArray();
+        var tenant = TenantId.From(Guid.NewGuid());
+        var id = Guid.NewGuid();
+        var catalog = new Catalog();
+        Add(catalog, tenant, id, fileName: "report.xml", contentType: contentType,
+            length: bytes.LongLength);
+        var blobs = new Blobs { Bytes = bytes };
+        var audit = new Audit();
+        var service = new DocumentDownloadService(new Actor(tenant), catalog, blobs, audit);
+
+        var result = await service.ReadAsync(id);
+        Assert.Equal(bytes, result.Bytes);
+        Assert.Equal("application/octet-stream", result.ContentType);
+        Assert.Equal("succeeded", Assert.Single(audit.Events).Outcome);
     }
 
     [Fact]
