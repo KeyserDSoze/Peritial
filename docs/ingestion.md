@@ -316,3 +316,29 @@ DOS, NTFS alternate streams e Unicode bidi. La
 e le issue #5/#11 riportano le prove e gli esiti CI.
 Non è sostitutivo di quarantena, retention, antivirus e converter
 sandboxati.
+
+
+## Controlli in download sui metadati MIME e sui byte (ADR 0109)
+
+Il download autorizzato non considera sufficienti la sola chiave storage
+tenant-scoped e la lunghezza del blob: valida anche la coppia MIME
+persistito/estensione **prima** della lettura object-store.
+Dopo la lettura bounded, controlla la signature dei byte e applica
+gli stessi parser sicuri dell'ingestione per XML e DOCX
+(DTD/XXE, budget ZIP, relazioni OPC). Una incoerenza restituisce
+un errore generico senza emettere alcun contenuto e senza registrare
+l'audit di download riuscito. Il Content-Type della risposta
+resta application/octet-stream.
+
+La policy MIME ammessa è unica per upload e download, quindi non
+possono divergere per errore di manutenzione. I test verificano MIME
+non coerenti negati **prima** di leggere il blob e contenuti alterati
+a lunghezza invariata negati prima di restituirli, oltre a XML validi
+che continuano a poter essere scaricati.
+
+Non è un digest crittografico: un diverso file valido di uguale
+lunghezza può sfuggire alla verifica. Rimangono necessari checksum
+persistiti, versioning/retention/legal hold, quarantena e gestione
+delle firme antivirus prima del rilascio produttivo.
+[ADR 0109](../adr/0109-download-mime-and-content-revalidation.md)
+e issue #11/#5 dettagliano prove e limiti.
