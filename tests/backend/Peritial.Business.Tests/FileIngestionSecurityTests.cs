@@ -95,6 +95,66 @@ public sealed class FileIngestionSecurityTests
         Assert.Single(docs.Records);
     }
 
+    [Theory]
+    [InlineData("word/_rels/document.xml.rels", "../../private.xml")]
+    [InlineData("word/_rels/document.xml.rels", "../%2e%2e/private.xml")]
+    [InlineData("word/_rels/document.xml.rels", "%2e%2e%2f%2e%2e%2fprivate.xml")]
+    [InlineData("word/_rels/document.xml.rels", "/../../private.xml")]
+    [InlineData("_rels/.rels", "../private.xml")]
+    [InlineData("word/sub/_rels/part.xml.rels", "../../../private.xml")]
+    [InlineData("word/_rels/document.xml.rels", "%2f%2fattacker.example/private.xml")]
+    [InlineData("word/_rels/document.xml.rels", "https%3a%2f%2fattacker.example/private.xml")]
+    [InlineData("word/_rels/document.xml.rels", @"..\..\private.xml")]
+    [InlineData("word/_rels/document.xml.rels", "../media\private.xml")]
+    [InlineData("word/_rels/document.xml.rels", "%252e%252e%252f%252e%252e%252fprivate.xml")]
+    public async Task Docx_con_target_opc_che_esce_dal_pacchetto_o_decodifica_in_risorsa_esterna_e_rifiutato(
+        string relsEntry, string target)
+    {
+        // A relationship declared "Internal" must not escape the ZIP
+        // package or turn into a network/file reference after percent decode.
+        var scanner = new CountingScanner();
+        var (service, store, docs) = NewService(scanner: scanner);
+        var xml = "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">" +
+            "<Relationship Id=\"rId1\" Type=\"urn:testing\" TargetMode=\"Internal\" Target=\"" +
+            target + "\"/></Relationships>";
+        var bytes = CreateDocx((relsEntry, Encoding.UTF8.GetBytes(xml)));
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.IngestAsync("rapport.docx", DocxMime,
+                new MemoryStream(bytes), bytes.Length));
+        Assert.Equal(0, scanner.Scans);
+        Assert.Equal(0, store.Uploads);
+        Assert.Empty(docs.Records);
+        Assert.Empty(docs.AuditEvents);
+    }
+
+    [Theory]
+    [InlineData("word/_rels/document.xml.rels", "../media/image.png")]
+    [InlineData("word/_rels/document.xml.rels", "../media/my%20image.png")]
+    [InlineData("word/_rels/document.xml.rels", "/word/media/image.png")]
+    [InlineData("word/sub/_rels/part.xml.rels", "../../media/image.png")]
+    [InlineData("_rels/.rels", "word/document.xml")]
+    [InlineData("word/_rels/document.xml.rels", "#bookmark")]
+    public async Task Docx_con_target_opc_che_restano_nella_radice_del_pacchetto_e_ammesso(
+        string relsEntry, string target)
+    {
+        // Package-root and relative paths remain valid; an OPC relationship
+        // does not have to reference a member that is present at admission.
+        var scanner = new CountingScanner();
+        var (service, store, docs) = NewService(scanner: scanner);
+        var xml = "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">" +
+            "<Relationship Id=\"rId1\" Type=\"urn:testing\" TargetMode=\"Internal\" Target=\"" +
+            target + "\"/></Relationships>";
+        var bytes = CreateDocx((relsEntry, Encoding.UTF8.GetBytes(xml)));
+
+        var saved = await service.IngestAsync("rapport.docx", DocxMime,
+            new MemoryStream(bytes), bytes.Length);
+        Assert.Equal(bytes.Length, saved.Length);
+        Assert.Equal(1, scanner.Scans);
+        Assert.Equal(1, store.Uploads);
+        Assert.Single(docs.Records);
+    }
+
     [Fact]
     public async Task Docx_con_parti_xml_e_relazioni_ben_formate_resta_ammesso()
     {
