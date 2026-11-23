@@ -33,9 +33,18 @@ l'invio. Il successo dell'audit significa **autorizzazione e byte pronti**
 prima della risposta HTTP, non prova che il client abbia ricevuto
 interamente il corpo.
 
-Restano aperti: rate limiting e budget globale di memoria con molti
-download simultanei, governance retention/erasure/quarantena/riscan,
-esecuzione real Azure/Entra e link PWA per scaricare con il Bearer JWT.
+La PWA ora offre il pulsante di download per ciascun documento presente
+nella proiezione autenticata: richiede il JWT via fetch (mai in URL), una
+sola richiesta per volta per scheda, massimo 25 MiB in memoria, verifica
+MIME e lunghezza effettiva, annulla download su logout/offline/filtro
+o refresh e non offre alcun link verso S3/Azure. Il browser salva un
+Blob locale temporaneo; l'audit document.download/succeeded resta una
+prova di preparazione del corpo, non della consegna completa al browser.
+
+Restano aperti: rate limiting **server-side**, budget aggregato di memoria
+tra schede/client e repliche, governance retention/erasure/quarantena/riscan,
+verifica reale Azure/Entra, privacy dei file scaricati dall'utente e
+policy di revoca durante una risposta già autorizzata.
 MCP continua a fornire soltanto metadata. Vedere
 [ADR 0094](../adr/0094-tenant-scoped-audited-document-download.md),
 `DocumentDownloadTests`, `DocumentCatalogRepositoryTests`,

@@ -3,7 +3,7 @@ import { useAuth } from "react-oidc-context";
 import { useTranslation } from "react-i18next";
 import { FileUp, Moon, Sun, ShieldCheck } from "lucide-react";
 import { Button } from "./components/ui/button";
-import { createPerizia, isApiUnavailable, pageDocuments, listPerizie, uploadDocument, type DocumentSummary, type Perizia } from "./api";
+import { createPerizia, downloadDocument, isApiUnavailable, pageDocuments, listPerizie, uploadDocument, type DocumentSummary, type Perizia } from "./api";
 import { PeriziaWorkflow } from "./components/PeriziaWorkflow";
 import {PeriziaSinistroPicker} from "./components/PeriziaSinistroPicker";
 import {SinistroCatalog} from "./components/SinistroCatalog";
@@ -19,6 +19,18 @@ export default function App() {
   const [documents, setDocuments] = useState<DocumentSummary[]>([]);
   const [documentsNextCursor, setDocumentsNextCursor] = useState<string | null>(null);
   const [documentsLoadingMore, setDocumentsLoadingMore] = useState(false);
+  const [downloadingDocumentId, setDownloadingDocumentId] = useState<string | null>(null);
+  // A single active buffered download bounds concurrent browser memory usage.
+  const activeDocumentDownload = useRef<{
+    id: string; token: string; controller: AbortController
+  } | null>(null);
+  function cancelDocumentDownload() {
+    const current = activeDocumentDownload.current;
+    activeDocumentDownload.current = null;
+    current?.controller.abort();
+    setDownloadingDocumentId(null);
+  }
+  useEffect(() => () => { activeDocumentDownload.current?.controller.abort(); }, []);
   // A cursor belongs to exactly one signed projection. React's state does not
   // synchronously block two click events in the same task.
   const documentsPageSequence = useRef(0);
@@ -55,6 +67,7 @@ export default function App() {
   // Do not infer write access merely from "authenticated" or "online".
   const canWrite = Boolean(auth.user?.scope?.split(/\s+/).includes("peritial.write"));
   function lockProtectedUi() {
+    cancelDocumentDownload();
     // Never retain a potentially stale tenant record after REST, auth or
     // network failure. Invalidate any pre-existing GET that may finish late.
     requestEpoch.current += 1;
@@ -71,6 +84,7 @@ export default function App() {
   }
   function refreshPerizie() {
     if (!online || !token) return;
+    cancelDocumentDownload();
     requestEpoch.current += 1;
     setDocumentsNextCursor(null);
     cancelDocumentsContinuation();
@@ -78,6 +92,7 @@ export default function App() {
     setRefreshIndex(value => value + 1);
   }
   function changeDocumentFilter(periziaId: string) {
+    cancelDocumentDownload();
     // Do not render an old tenant-scoped projection for the new filter, even
     // if the previous GET resolves just before React runs effect cleanup.
     requestEpoch.current += 1;
@@ -105,6 +120,7 @@ export default function App() {
     // A different signed-in identity must never inherit the previous tenant's
     // locally merged records, even for one render while the next GET is pending.
     if (activeToken.current !== token) {
+      cancelDocumentDownload();
       // An old identity's pending write must not keep the next signed
       // session locked or clear a new session's in-flight state on settle.
       activeMutation.current = null;
@@ -123,6 +139,7 @@ export default function App() {
     // Never display locally retained tenant data while disconnected.
     // After reconnect the app must fetch new data using the current JWT.
     if (!token || !online) {
+      cancelDocumentDownload();
       activeMutation.current = null;
       setBusy(false);
       requestEpoch.current += 1;
@@ -142,6 +159,7 @@ export default function App() {
   useEffect(() => {
     if (!token || !online) return;
     let active = true;
+    cancelDocumentDownload();
     // A new authenticated base-page read supersedes every old continuation,
     // including a language-triggered refetch with an unchanged parent epoch.
     documentsProjectionGeneration.current += 1;
@@ -220,6 +238,47 @@ export default function App() {
       }
     } finally {
       if (activeDocumentsPage.current === operation) cancelDocumentsContinuation();
+    }
+  }
+  async function saveDocument(doc: DocumentSummary) {
+    if (!token || !online || dataStatus !== "ready" || verifiedToken !== token ||
+        busy || activeDocumentDownload.current !== null ||
+        !documents.some(item => item.id === doc.id)) return;
+    const operation = {id: doc.id, token, controller: new AbortController()};
+    activeDocumentDownload.current = operation; // synchronous single-flight lock
+    const epochAtStart = requestEpoch.current;
+    const projectionAtStart = documentsProjectionGeneration.current;
+    const stillCurrent = () =>
+      activeDocumentDownload.current === operation &&
+      requestEpoch.current === epochAtStart &&
+      documentsProjectionGeneration.current === projectionAtStart &&
+      activeToken.current === token && online;
+    setDownloadingDocumentId(doc.id);
+    setError("");
+    try {
+      const content = await downloadDocument(token, doc.id, doc.length, operation.controller.signal);
+      if (!stillCurrent()) return; // no file from an obsolete tenant/session/filter
+      const objectUrl = URL.createObjectURL(content);
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = doc.fileName; // server-canonicalized file name
+      anchor.hidden = true;
+      document.body.appendChild(anchor);
+      try { anchor.click(); }
+      finally {
+        anchor.remove();
+        // Give browsers time to start the download before releasing the URL.
+        window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+      }
+    } catch (cause) {
+      if (!stillCurrent() || operation.controller.signal.aborted) return;
+      if (isApiUnavailable(cause)) lockProtectedUi();
+      else setError(t("documentDownloadError"));
+    } finally {
+      if (activeDocumentDownload.current === operation) {
+        activeDocumentDownload.current = null;
+        setDownloadingDocumentId(null);
+      }
     }
   }
   async function create(event:FormEvent) {
@@ -352,7 +411,7 @@ export default function App() {
                 <option value="">{t("allDocuments")}</option>
                 {items.map(item => <option key={item.id} value={item.id}>{item.reference}</option>)}
               </select>
-              <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">{t("metadataOnly")}</p>
+              <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">{t("documentAccessHint")}</p>
               {documents.length === 0 ? <p className="text-sm text-slate-500">{t("noDocuments")}</p> :
                 <ul aria-label={t("savedDocuments")} className="divide-y divide-slate-200 dark:divide-slate-700">
                   {documents.map(doc => <li key={doc.id} className="py-3">
@@ -364,6 +423,13 @@ export default function App() {
                       {doc.contentType} · {doc.length} {t("bytes")} ·
                       {" "}{new Date(doc.createdAtUtc).toLocaleDateString(i18n.language === "en" ? "en-GB" : "it-IT")}
                     </p>
+                    <Button type="button" variant="outline"
+                      aria-label={t("downloadDocument") + ": " + doc.fileName}
+                      disabled={busy || downloadingDocumentId !== null || !online || documentsLoadingMore}
+                      onClick={() => void saveDocument(doc)}
+                      className="mt-2">
+                      {downloadingDocumentId === doc.id ? t("downloadingDocument") : t("downloadDocument")}
+                    </Button>
                   </li>)}
                 </ul>}
                {documentsNextCursor && <Button type="button" variant="outline"

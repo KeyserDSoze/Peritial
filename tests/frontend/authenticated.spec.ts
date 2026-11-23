@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 
 test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
   test.skip(!process.env.E2E_FULL_STACK, "Richiede la stack completa con Keycloak e PostgreSQL");
@@ -547,17 +548,47 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     await page.getByRole("button", {name: "Carica documento"}).click();
     const response = await upload;
     expect(response.status(), await response.text()).toBe(201);
+    const record = await response.json() as {id:string};
 
     const documentList = page.getByRole("list", {name: "Documenti caricati"});
     await expect(documentList.getByText(name, {exact: true})).toBeVisible();
     const row = documentList.locator("li").filter({hasText: name});
     await expect(row).toContainText(String(pdf.length));
-    // The PWA exposes metadata only: no download, object-storage link or bytes.
-    await expect(row.locator("a,button")).toHaveCount(0);
+    const button = row.getByRole("button", {name: "Scarica documento: " + name});
+    await expect(button).toBeEnabled();
+    await expect(row.locator("a")).toHaveCount(0); // no raw S3/SAS link
+    const url = "**/api/files/" + record.id + "/download";
+    let reads = 0;
+    let signed = false;
+    let started!: () => void;
+    const requestStarted = new Promise<void>(resolve => {started = resolve;});
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => {release = resolve;});
+    await page.route(url, async route => {
+      reads++;
+      signed = route.request().headers()["authorization"]?.startsWith("Bearer ") === true;
+      started();
+      await gate;
+      await route.continue();
+    });
+    const downloadPromise = page.waitForEvent("download");
+    await button.evaluate(element => {
+      (element as HTMLButtonElement).click();
+      (element as HTMLButtonElement).click(); // only one authenticated read
+    });
+    await requestStarted;
+    expect(reads).toBe(1);
+    expect(signed).toBe(true);
+    release();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toBe(name);
+    expect(await readFile((await download.path())!)).toEqual(pdf);
+    await expect(button).toBeEnabled();
+    await page.unroute(url);
 
     await page.getByRole("button", {name: "Aggiorna elenco"}).click();
     await expect(documentList.getByText(name, {exact: true})).toBeVisible();
-    await expect(row.locator("a,button")).toHaveCount(0);
+    await expect(row.getByRole("button", {name: "Scarica documento: " + name})).toBeEnabled();
   });
 
   test("PWA collega un upload alla perizia scelta senza esporre chiavi storage", async ({page}) => {
@@ -599,7 +630,8 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     const docs = page.getByRole("list", {name: "Documenti caricati"});
     const row = docs.locator("li").filter({hasText: name});
     await expect(row).toContainText(reference);
-    await expect(row.locator("a,button")).toHaveCount(0);
+    await expect(row.locator("a")).toHaveCount(0);
+    await expect(row.getByRole("button", {name: "Scarica documento: " + name})).toBeEnabled();
   });
 
   test("PWA filtra i documenti per perizia tramite GET tenant-scoped e non riusa la lista precedente", async ({page}) => {

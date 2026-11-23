@@ -137,3 +137,42 @@ export async function uploadDocument(token:string, file:File, periziaId?:string)
   const body = new FormData(); body.append("file",file); if(periziaId) body.append("periziaId",periziaId);
   return request<DocumentRecord>("/files",token,{method:"POST",body});
 }
+
+// Download is a separate, bounded binary read. Never put Bearer credentials in
+// an <a href>, query string, object storage URL or service-worker cache.
+// Reject redirects, incorrect MIME and a mismatched body before making a Blob.
+export async function downloadDocument(token: string, id: string,
+  expectedLength: number, signal: AbortSignal): Promise<Blob> {
+  if (!Number.isSafeInteger(expectedLength) || expectedLength <= 0 ||
+      expectedLength > 25 * 1024 * 1024)
+    throw new Error("Invalid document length");
+  const response = await fetch(base + "/files/" + encodeURIComponent(id) + "/download", {
+    headers: {Authorization: "Bearer " + token},
+    method: "GET", cache: "no-store", credentials: "omit", redirect: "error", signal
+  });
+  if (!response.ok) throw new Error("HTTP " + response.status);
+  if (response.headers.get("content-type")?.split(";")[0].trim().toLowerCase() !==
+      "application/octet-stream") throw new Error("Unexpected document content type");
+  const declared = response.headers.get("content-length");
+  if (declared !== null && Number(declared) !== expectedLength)
+    throw new Error("Document length mismatch");
+  if (!response.body) throw new Error("Missing document response body");
+  const reader = response.body.getReader();
+  const bytes = new Uint8Array(expectedLength);
+  let length = 0;
+  try {
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      if (value.byteLength > expectedLength - length)
+        throw new Error("Document exceeds declared size");
+      bytes.set(value, length);
+      length += value.byteLength;
+    }
+  } finally {
+    if (length !== expectedLength) await reader.cancel().catch(() => {});
+    reader.releaseLock();
+  }
+  if (length !== expectedLength) throw new Error("Document length mismatch");
+  return new Blob([bytes], {type: "application/octet-stream"});
+}
