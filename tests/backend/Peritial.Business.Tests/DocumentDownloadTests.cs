@@ -51,7 +51,8 @@ public sealed class DocumentDownloadTests
 
     private static DocumentDownloadLocation Add(Catalog repo, TenantId tenant,
         Guid id, long? length = null, string? storageKey = null,
-        string fileName = "signed.pdf", string contentType = "application/pdf")
+        string fileName = "signed.pdf", string contentType = "application/pdf",
+        byte[]? contentSha256 = null)
     {
         var name = fileName;
         var key = storageKey ?? DocumentKeys.For(tenant, id, name);
@@ -59,7 +60,7 @@ public sealed class DocumentDownloadTests
         var location = new DocumentDownloadLocation(
             new DocumentSummaryDto(id, null, name, contentType,
                 length ?? bytes.Length, DateTime.UtcNow), key,
-            System.Security.Cryptography.SHA256.HashData(bytes));
+            contentSha256 ?? System.Security.Cryptography.SHA256.HashData(bytes));
         repo.Rows[id] = (tenant, location);
         return location;
     }
@@ -220,7 +221,8 @@ public sealed class DocumentDownloadTests
         var id = Guid.NewGuid();
         var catalog = new Catalog();
         Add(catalog, tenant, id, fileName: fileName,
-            contentType: contentType, length: bytes.LongLength);
+            contentType: contentType, length: bytes.LongLength,
+            contentSha256: System.Security.Cryptography.SHA256.HashData(bytes));
         var blobs = new Blobs { Bytes = bytes };
         var audit = new Audit();
         var service = new DocumentDownloadService(new Actor(tenant), catalog, blobs, audit);
@@ -240,7 +242,8 @@ public sealed class DocumentDownloadTests
         var id = Guid.NewGuid();
         var catalog = new Catalog();
         Add(catalog, tenant, id, fileName: "report.xml", contentType: contentType,
-            length: bytes.LongLength);
+            length: bytes.LongLength,
+            contentSha256: System.Security.Cryptography.SHA256.HashData(bytes));
         var blobs = new Blobs { Bytes = bytes };
         var audit = new Audit();
         var service = new DocumentDownloadService(new Actor(tenant), catalog, blobs, audit);
@@ -275,7 +278,8 @@ public sealed class DocumentDownloadTests
         var catalog = new Catalog();
         Add(catalog, tenant, id, fileName: "safe.docx",
             contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            length: bytes.LongLength);
+            length: bytes.LongLength,
+            contentSha256: System.Security.Cryptography.SHA256.HashData(bytes));
         var blobs = new Blobs { Bytes = bytes };
         var audit = new Audit();
         var service = new DocumentDownloadService(new Actor(tenant), catalog, blobs, audit);
@@ -300,7 +304,8 @@ public sealed class DocumentDownloadTests
             var id = Guid.NewGuid();
             var catalog = new Catalog();
             Add(catalog, tenant, id, fileName: fileName,
-                contentType: mime, length: bytes.LongLength);
+                contentType: mime, length: bytes.LongLength,
+                contentSha256: System.Security.Cryptography.SHA256.HashData(bytes));
             var blobs = new Blobs { Bytes = bytes };
             var audit = new Audit();
             var service = new DocumentDownloadService(new Actor(tenant), catalog, blobs, audit);
