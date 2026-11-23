@@ -36,6 +36,18 @@ try
     var secret = Required("PERITIAL_CHECKPOINT_S3_SECRET_KEY");
     var pg = Required("PERITIAL_CHECKPOINT_POSTGRES");
 
+    // An aggregate S3 backup has a larger capacity footprint than a single
+    // document. Operators must explicitly authorize bigger recovery windows;
+    // malformed, zero or negative values never mean "unlimited".
+    var budgetText = Environment.GetEnvironmentVariable("PERITIAL_RECOVERY_MAX_TOTAL_BYTES");
+    var maxTotalBytes = budgetText is null
+        ? ObjectRecoveryBudget.DefaultMaxTotalBytes
+        : long.TryParse(budgetText, System.Globalization.NumberStyles.None,
+            System.Globalization.CultureInfo.InvariantCulture, out var configuredBudget) &&
+          configuredBudget > 0
+            ? configuredBudget
+            : throw new InvalidOperationException("Invalid offline recovery byte budget.");
+
     using var s3 = new AmazonS3Client(
         new BasicAWSCredentials(access, secret),
         new AmazonS3Config { ServiceURL = endpoint, ForcePathStyle = true });
@@ -48,7 +60,7 @@ try
         try
         {
             var manifest = await ObjectRecoveryArchive.ExportAsync(
-                db, s3, bucket, archive, signingKey);
+                db, s3, bucket, archive, signingKey, maxTotalBytes: maxTotalBytes);
             Console.WriteLine($"Object archive exported: {manifest.Checkpoint.Documents.Count} S3 blobs. Secure and preserve the directory.");
         }
         finally
@@ -65,7 +77,7 @@ try
         try
         {
             var imported = await ObjectRecoveryArchive.ImportAsync(
-                db, s3, bucket, archive, signingKey);
+                db, s3, bucket, archive, signingKey, maxTotalBytes: maxTotalBytes);
             Console.WriteLine($"Object archive restored and verified: {imported} S3 blobs.");
         }
         finally
@@ -78,7 +90,8 @@ try
         if (File.Exists(checkpointFile))
             throw new InvalidOperationException("Refusing to overwrite existing checkpoint.");
 
-        var manifest = await ObjectRecoveryCheckpoint.CaptureAsync(db, s3, bucket);
+        var manifest = await ObjectRecoveryCheckpoint.CaptureAsync(
+            db, s3, bucket, maxTotalBytes: maxTotalBytes);
         var partialFile = checkpointFile + ".part-" + Guid.NewGuid().ToString("N");
         try
         {
@@ -125,7 +138,8 @@ try
             checkpointFile, FileMode.Open, FileAccess.Read, FileShare.Read);
         var manifest = await JsonSerializer.DeserializeAsync<ObjectRecoveryCheckpoint.Manifest>(input)
             ?? throw new InvalidOperationException("Malformed checkpoint manifest.");
-        await ObjectRecoveryCheckpoint.VerifyAsync(db, s3, bucket, manifest);
+        await ObjectRecoveryCheckpoint.VerifyAsync(
+            db, s3, bucket, manifest, maxTotalBytes: maxTotalBytes);
         Console.WriteLine($"Checkpoint verified: {manifest.Documents.Count} database references and object digests.");
     }
     return 0;
