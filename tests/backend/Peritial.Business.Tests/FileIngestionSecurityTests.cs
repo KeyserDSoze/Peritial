@@ -160,6 +160,47 @@ public sealed class FileIngestionSecurityTests
         Assert.Empty(docs.AuditEvents);
     }
 
+    [Theory]
+    [InlineData(9)]  // tab
+    [InlineData(10)] // newline
+    [InlineData(13)] // carriage return
+    public async Task Docx_con_caratteri_di_controllo_nel_nome_zip_non_raggiunge_scanner_o_storage(
+        int controlCode)
+    {
+        var scanner = new CountingScanner();
+        var (service, store, docs) = NewService(scanner: scanner);
+        var unsafeName = "word/media/unsafe" + (char)controlCode + "part.bin";
+        var bytes = CreateDocx((unsafeName, new byte[] { 1, 2, 3 }));
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.IngestAsync("rapporto.docx", DocxMime,
+                new MemoryStream(bytes), bytes.Length));
+
+        Assert.Equal(0, scanner.Scans);
+        Assert.Equal(0, store.Uploads);
+        Assert.Empty(docs.Records);
+        Assert.Empty(docs.AuditEvents);
+    }
+
+    [Fact]
+    public async Task Docx_con_tipo_unix_directory_su_un_file_e_rifiutato()
+    {
+        // A .bin path declared as a Unix directory is ambiguous for
+        // downstream ZIP extractors, even though no extraction occurs here.
+        var scanner = new CountingScanner();
+        var (service, store, docs) = NewService(scanner: scanner);
+        var bytes = DocxWithUnixEntry(0x4000);
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.IngestAsync("rapporto.docx", DocxMime,
+                new MemoryStream(bytes), bytes.Length));
+
+        Assert.Equal(0, scanner.Scans);
+        Assert.Equal(0, store.Uploads);
+        Assert.Empty(docs.Records);
+        Assert.Empty(docs.AuditEvents);
+    }
+
     [Fact]
     public async Task Docx_con_normale_entry_unix_regolare_rimane_ammesso()
     {
