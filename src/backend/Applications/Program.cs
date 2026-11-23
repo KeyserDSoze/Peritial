@@ -123,7 +123,9 @@ builder.Services.AddScoped<ISinistroRepository, PgSinistroRepository>();
 builder.Services.AddScoped<IPeriziaSinistroLinkRepository, PgPeriziaSinistroLinkRepository>();
 builder.Services.AddScoped<IDocumentRepository, PgDocumentRepository>();
 builder.Services.AddScoped<IDocumentCatalogRepository, PgDocumentCatalogRepository>();
+builder.Services.AddScoped<IDocumentDownloadRepository, PgDocumentCatalogRepository>();
 builder.Services.AddScoped<DocumentCatalogService>();
+builder.Services.AddScoped<DocumentDownloadService>();
 builder.Services.AddScoped<IUploadIntentLedger, PgUploadIntentLedger>();
 builder.Services.AddScoped<IUploadIdempotencyStore, PgUploadIdempotencyStore>();
 builder.Services.AddScoped<ISecurityAuditTrail, PgSecurityAuditTrail>();
@@ -188,6 +190,10 @@ if (string.Equals(builder.Configuration["Storage:Provider"], "Azure", StringComp
     builder.Services.AddSingleton<IObjectStore, AzureBlobObjectStore>();
 else
     builder.Services.AddSingleton<IObjectStore, MinioObjectStore>();
+// Reuse exactly the same private store configured for ingestion, not a
+// second client with different tenant/credential boundaries.
+builder.Services.AddSingleton<IDocumentBlobReader>(sp =>
+    (IDocumentBlobReader)sp.GetRequiredService<IObjectStore>());
 
 // Pin the dual-era, stateless HTTP boundary explicitly. The MCP C# SDK 2.0
 // serves modern 2026-07-28 requests with per-request _meta while keeping the
@@ -223,6 +229,7 @@ app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
         LegacyXmlReferenceConflictException => StatusCodes.Status409Conflict,
         UploadLeaseExpiredException => StatusCodes.Status503ServiceUnavailable,
         MalwareScannerUnavailableException => StatusCodes.Status503ServiceUnavailable,
+        DocumentContentUnavailableException => StatusCodes.Status503ServiceUnavailable,
         InvalidDataException => StatusCodes.Status413PayloadTooLarge,
         // Minimal API JSON binding rejects malformed bodies before a service
         // is invoked. Preserve its 400 instead of disguising user input as 500.
@@ -426,6 +433,19 @@ api.MapGet("/files", (Guid? periziaId, int? limit, DocumentCatalogService servic
     service.ListAsync(periziaId, limit ?? 50, ct)).RequireAuthorization("peritial.read");
 api.MapGet("/files/{id:guid}", (Guid id, DocumentCatalogService service, CancellationToken ct) =>
     service.GetAsync(id, ct)).RequireAuthorization("peritial.read");
+
+// Private audited document bytes; a signed tenant-scoped database lookup
+// always precedes object access. Never redirect to S3/Azure or expose a SAS.
+// Force download rather than inline rendering of potentially active content.
+api.MapGet("/files/{id:guid}/download", async (Guid id,
+    DocumentDownloadService service, HttpContext http, CancellationToken ct) =>
+{
+    var file = await service.ReadAsync(id, ct);
+    http.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    http.Response.Headers["Content-Security-Policy"] = "sandbox";
+    return Results.File(file.Bytes, contentType: file.ContentType,
+        fileDownloadName: file.FileName, enableRangeProcessing: false);
+}).RequireAuthorization("peritial.read");
 
 api.MapPost("/files", async (HttpRequest request, FileIngestionService service, CancellationToken ct) =>
 {
