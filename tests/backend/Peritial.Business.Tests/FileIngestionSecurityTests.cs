@@ -222,7 +222,11 @@ public sealed class FileIngestionSecurityTests
         // even with extensions; future extraction must never consume them.
         var scanner = new CountingScanner();
         var (service, store, docs) = NewService(scanner: scanner);
-        var bytes = CreateDocx((memberName, new byte[] { 1, 2, 3 }));
+        // XML-named members must also contain valid XML, otherwise the
+        // pre-existing XML parser would reject them for the wrong reason.
+        var partBytes = memberName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)
+            ? "<valid/>"u8.ToArray() : new byte[] { 1, 2, 3 };
+        var bytes = CreateDocx((memberName, partBytes));
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
             service.IngestAsync("rapporto.docx", DocxMime,
