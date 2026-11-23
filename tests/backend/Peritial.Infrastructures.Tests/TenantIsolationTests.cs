@@ -93,7 +93,8 @@ public sealed class TenantIsolationTests
         await new PgPeriziaRepository(admin).AddAsync(perizia);
         var documentId = Guid.NewGuid();
         await new PgDocumentRepository(admin).AddAsync(new(
-            documentId, b, perizia.Id, "doc.pdf", "application/pdf", 5, $"{b.Value:N}/{documentId:N}.pdf", DateTime.UtcNow));
+            documentId, b, perizia.Id, "doc.pdf", "application/pdf", 5, $"{b.Value:N}/{documentId:N}.pdf",
+            DateTime.UtcNow, ContentSha256: Peritial.Business.DocumentDigest.Compute("%PDF-"u8)));
 
         await using var app = CreateAppDataSource();
         await using var conn = await app.OpenConnectionAsync();
@@ -115,8 +116,8 @@ public sealed class TenantIsolationTests
         await using var tx2 = await conn.BeginTransactionAsync();
         await SetTenantAsync(conn, tx2, a);
         await using var wrongInsert = new NpgsqlCommand(
-            "INSERT INTO documents (tenant_id,id,perizia_id,file_name,content_type,length_bytes,storage_key,created_at_utc) " +
-            "VALUES (@tenant,@id,@perizia,'doc.pdf','application/pdf',5,@key,now())", conn, tx2);
+            "INSERT INTO documents (tenant_id,id,perizia_id,file_name,content_type,length_bytes,storage_key,created_at_utc,content_sha256) " +
+            "VALUES (@tenant,@id,@perizia,'doc.pdf','application/pdf',5,@key,now(),decode(repeat('ab',32),'hex'))", conn, tx2);
         wrongInsert.Parameters.AddWithValue("tenant", b.Value);
         wrongInsert.Parameters.AddWithValue("id", Guid.NewGuid());
         wrongInsert.Parameters.AddWithValue("perizia", perizia.Id);
