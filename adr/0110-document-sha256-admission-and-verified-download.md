@@ -154,3 +154,44 @@ Restano aperti i fault drill COMMIT/PUT ACK, provenienza
 crittografica indipendente del database, policy approvata per
 `NULL` legacy e verifica reale Azure/on-prem; gli emulatori
 Compose non costituiscono certificazione cloud.
+
+
+## Checkpoint offline: legame fra digest persistito e inventario S3
+
+Dopo l'introduzione di V014 i checkpoint di backup avevano un limite:
+`ObjectRecoveryCheckpoint.CaptureAsync` generava un nuovo SHA-256
+sui byte S3 ma non confrontava quel valore con il digest
+`documents.content_sha256` dei byte ammessi in upload. Una
+manomissione **precedente alla prima acquisizione** poteva quindi
+essere inglobata in un nuovo manifest, anche quando i bytes
+corrispondevano a un PDF valido di uguale lunghezza.
+
+- [Test 731e631](https://github.com/KeyserDSoze/Peritial/commit/731e6318f6eeefe785cdcc9c3e9f84c84305ff25):
+  test negativo SeaweedFS S3 reale: sovrascrive l'oggetto prima
+  del primo capture e attende rifiuto; ripristina poi i byte corretti.
+- [Fix 99112b1](https://github.com/KeyserDSoze/Peritial/commit/99112b1cd24dd3fd09b51566b16502fd5d8f2948):
+  il reader privato del checkpoint con credenziali BYPASSRLS legge
+  anche `content_sha256`, verifica il digest dei byte reali in
+  `CaptureAsync` e verifica la corrispondenza DB/manifest in
+  `VerifyMetadataAsync`, prima dell'import. Confronto tramite
+  `CryptographicOperations.FixedTimeEquals`; mismatch con errore
+  generico, senza filename, chiavi o digest.
+- [Test 9fb929a](https://github.com/KeyserDSoze/Peritial/commit/9fb929a4a39e440e24e6359bcf51b5a6858481b2):
+  un checkpoint formalmente valido, con SHA di un secondo PDF
+  di uguale lunghezza, è negato anche quando i riferimenti tenant,
+  ID, chiavi e byte del DB restano coerenti.
+- Il vincolo della V014 resta abilitato; la fixture di export/import
+  dei due server SeaweedFS/PostgreSQL è stata adeguata in
+  [56bedbc](https://github.com/KeyserDSoze/Peritial/commit/56bedbc7fb0a4c45d066e480bbcfc7af6c0e819e)
+  per usare l'SHA-256 dei byte originali senza inventare hash.
+- I documenti legacy `NULL` mantengono la possibilità di
+  archiviazione ma il checkpoint dimostra **solo i byte acquisiti
+  in quell'istante**, non che siano stati ammessi da una scansione
+  attendibile precedente. I download restano negati finché non
+  vengono ri-scansionati con approvazione (#27).
+- La prova terminale del test Compose sui nuovi commit va
+  verificata: un job backend verde non attesta un test con
+  SeaweedFS reale. Non equiparare la HMAC del manifest a una
+  firma indipendente dell'archivio.
+
+Vedere [runbook checkpoint](../docs/object-recovery-checkpoint.md).
