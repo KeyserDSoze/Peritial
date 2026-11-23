@@ -23,7 +23,7 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
       grant("peritial-test-no-scope")
     ]);
     const base = "http://localhost:8080/api/files";
-    const bytes = Buffer.from("%PDF-1.7\\n1 0 obj\\n<<>>\\nendobj\\n%%EOF\\n");
+    const bytes = Buffer.from("%PDF-1.7\n1 0 obj\n<<>>\nendobj\n%%EOF\n");
     const name = "private-" + Date.now() + "-" + Math.round(Math.random()*100000) + ".pdf";
     const posted = await request.post(base, {
       headers:{Authorization:"Bearer " + writer},
