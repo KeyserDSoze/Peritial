@@ -9,6 +9,60 @@ namespace Peritial.Infrastructures.Tests;
 public sealed class DocumentAtomicAuditTests
 {
     [Fact]
+    public async Task V014_denies_legacy_sql_insert_without_sha_and_preserves_upload_intent_for_valid_retry()
+    {
+        await using var databases = await Db.OpenAsync();
+        var tenant = TenantId.From(Guid.NewGuid());
+        var record = Record(tenant);
+        var invalid = record with { ContentSha256 = null };
+        var audit = Event(tenant, record.Id);
+        var repo = new PgDocumentRepository(databases.App);
+
+        // AddAsync is a legacy/test-only SQL insertion seam and does not
+        // enforce the Business checksum invariant. PostgreSQL must reject it
+        // even under a correctly signed tenant with FORCE RLS.
+        var sqlError = await Assert.ThrowsAsync<PostgresException>(() => repo.AddAsync(invalid));
+        Assert.Equal(PostgresErrorCodes.CheckViolation, sqlError.SqlState);
+        Assert.Equal("ck_documents_sha256_required_new", sqlError.ConstraintName);
+
+        await new PgUploadIntentLedger(databases.App)
+            .RecordAsync(tenant, record.Id, record.StorageKey);
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => repo.AddAuditedAsync(invalid, audit));
+
+        // Rejection must not consume upload intent, commit metadata or write a
+        // succeeded audit. The same admitted document can still be committed.
+        await using (var before = databases.Admin.CreateCommand(
+            "SELECT (SELECT count(*) FROM upload_intents WHERE tenant_id=@tenant AND document_id=@id), " +
+            "(SELECT count(*) FROM documents WHERE tenant_id=@tenant AND id=@id), " +
+            "(SELECT count(*) FROM security_audit WHERE tenant_id=@tenant AND id=@audit)"))
+        {
+            before.Parameters.AddWithValue("tenant", tenant.Value);
+            before.Parameters.AddWithValue("id", record.Id);
+            before.Parameters.AddWithValue("audit", audit.Id);
+            await using var reader = await before.ExecuteReaderAsync();
+            Assert.True(await reader.ReadAsync());
+            Assert.Equal(1L, reader.GetInt64(0));
+            Assert.Equal(0L, reader.GetInt64(1));
+            Assert.Equal(0L, reader.GetInt64(2));
+        }
+
+        await repo.AddAuditedAsync(record, audit);
+        await using var verify = databases.Admin.CreateCommand(
+            "SELECT (SELECT count(*) FROM upload_intents WHERE tenant_id=@tenant AND document_id=@id), " +
+            "(SELECT encode(content_sha256,'hex') FROM documents WHERE tenant_id=@tenant AND id=@id), " +
+            "(SELECT count(*) FROM security_audit WHERE tenant_id=@tenant AND id=@audit)");
+        verify.Parameters.AddWithValue("tenant", tenant.Value);
+        verify.Parameters.AddWithValue("id", record.Id);
+        verify.Parameters.AddWithValue("audit", audit.Id);
+        await using var saved = await verify.ExecuteReaderAsync();
+        Assert.True(await saved.ReadAsync());
+        Assert.Equal(0L, saved.GetInt64(0));
+        Assert.Equal(Convert.ToHexString(record.ContentSha256!).ToLowerInvariant(), saved.GetString(1));
+        Assert.Equal(1L, saved.GetInt64(2));
+    }
+
+    [Fact]
     public async Task Document_metadata_and_success_audit_share_a_transaction()
     {
         await using var databases = await Db.OpenAsync();
