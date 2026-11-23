@@ -2829,6 +2829,37 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     expect(await reservedDeviceMcp.text()).toContain('"isError":true');
     expect(await reservedDeviceMcp.text()).not.toContain("../../private-file");
 
+    // Valid OOXML ZIP containing both composed and decomposed Unicode
+    // spellings of the same media member. Different raw entry bytes must
+    // not shadow the same filesystem path after NFC normalization.
+    const ambiguousUnicodeDocx = Buffer.from("UEsDBBQAAAAIAA10d13HHBc8CgAAAAgAAAATAAAAW0NvbnRlbnRfVHlwZXNdLnhtbLMJqSxILda3AwBQSwMEFAAAAAgADXR3XV9b0UwNAAAACwAAABEAAAB3b3JkL2RvY3VtZW50LnhtbLNJyU8uzU3NK9G3AwBQSwMEFAAACAgADXR3XV1Gd3cGAAAABAAAABcAAAB3b3JkL21lZGlhL3LDqXN1bcOpLmJpbsvP1jUEAFBLAwQUAAAICAANdHdd5xd+7gYAAAAEAAAAGQAAAHdvcmQvbWVkaWEvcmXMgXN1bWXMgS5iaW7Lz9Y1AgBQSwECFAMUAAAACAANdHddxxwXPAoAAAAIAAAAEwAAAAAAAAAAAAAAgAEAAAAAW0NvbnRlbnRfVHlwZXNdLnhtbFBLAQIUAxQAAAAIAA10d11fW9FMDQAAAAsAAAARAAAAAAAAAAAAAACAATsAAAB3b3JkL2RvY3VtZW50LnhtbFBLAQIUAxQAAAgIAA10d11dRnd3BgAAAAQAAAAXAAAAAAAAAAAAAACAAXcAAAB3b3JkL21lZGlhL3LDqXN1bcOpLmJpblBLAQIUAxQAAAgIAA10d13nF37uBgAAAAQAAAAZAAAAAAAAAAAAAACAAbIAAAB3b3JkL21lZGlhL3JlzIFzdW1lzIEuYmluUEsFBgAAAAAEAAQADAEAAO8AAAAAAA==", "base64");
+    const ambiguousUnicodeRest = await request.post("http://localhost:8080/api/files", {
+      headers: {Authorization: "Bearer " + accessToken},
+      multipart: {file: {
+        name: "unicode-path-collision.docx",
+        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        buffer: ambiguousUnicodeDocx
+      }}
+    });
+    expect(ambiguousUnicodeRest.status(), await ambiguousUnicodeRest.text()).toBe(400);
+
+    const ambiguousUnicodeMcp = await request.post("http://localhost:8080/mcp", {
+      headers: {
+        Authorization: "Bearer " + accessToken,
+        Accept: "application/json,text/event-stream",
+        "Content-Type": "application/json"
+      },
+      data: {jsonrpc: "2.0", id: 55, method: "tools/call", params: {
+        name: "ingest_file", arguments: {
+          fileName: "unicode-path-collision.docx",
+          contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          base64: ambiguousUnicodeDocx.toString("base64")
+        }
+      }}
+    });
+    expect(ambiguousUnicodeMcp.ok(), await ambiguousUnicodeMcp.text()).toBeTruthy();
+    expect(await ambiguousUnicodeMcp.text()).toContain('"isError":true');
+
     // Safe EICAR test string is an entire stored file inside a minimal DOCX ZIP.
     // Appending it to a synthetic PDF is NOT reliable: ClamAV's PDF decoder
     // can legitimately skip bytes not referenced by the PDF structure.
