@@ -25,9 +25,14 @@ public static class ObjectRecoveryCheckpoint
     /// </summary>
     public static async Task<Manifest> CaptureAsync(
         NpgsqlDataSource administrator, IAmazonS3 objects, string bucket,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        long maxTotalBytes = ObjectRecoveryBudget.DefaultMaxTotalBytes)
     {
         var documents = await ReadAllMetadataAsync(administrator, ct);
+        // Preflight the COMPLETE cross-tenant inventory before the first S3
+        // GET. Per-object bounds alone do not protect backup capacity.
+        ObjectRecoveryBudget.RequireWithin(
+            documents.Select(row => row.LengthBytes), maxTotalBytes);
         var manifest = new List<Document>(documents.Count);
         foreach (var row in documents)
         {
@@ -58,9 +63,10 @@ public static class ObjectRecoveryCheckpoint
     /// </summary>
     public static async Task VerifyAsync(
         NpgsqlDataSource administrator, IAmazonS3 objects, string bucket,
-        Manifest checkpoint, CancellationToken ct = default)
+        Manifest checkpoint, CancellationToken ct = default,
+        long maxTotalBytes = ObjectRecoveryBudget.DefaultMaxTotalBytes)
     {
-        await VerifyMetadataAsync(administrator, checkpoint, ct);
+        await VerifyMetadataAsync(administrator, checkpoint, ct, maxTotalBytes);
         foreach (var saved in checkpoint.Documents)
         {
             var (length, hash) = await HashObjectAsync(objects, bucket, saved.StorageKey, saved.LengthBytes, ct);
@@ -77,12 +83,21 @@ public static class ObjectRecoveryCheckpoint
     /// </summary>
     public static async Task VerifyMetadataAsync(
         NpgsqlDataSource administrator, Manifest checkpoint,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        long maxTotalBytes = ObjectRecoveryBudget.DefaultMaxTotalBytes)
     {
         if (checkpoint is null || checkpoint.FormatVersion != 1 || checkpoint.Documents is null)
             throw new InvalidOperationException("Unsupported or malformed checkpoint.");
 
+        // A forged or stale checkpoint must not trigger a massive DB/S3
+        // traversal. Reject its aggregate sizes before querying the DB,
+        // then independently validate the privileged database inventory.
+        ObjectRecoveryBudget.RequireWithin(
+            checkpoint.Documents.Select(row => row?.LengthBytes ?? 0L),
+            maxTotalBytes);
         var documents = await ReadAllMetadataAsync(administrator, ct);
+        ObjectRecoveryBudget.RequireWithin(
+            documents.Select(row => row.LengthBytes), maxTotalBytes);
         if (documents.Count != checkpoint.Documents.Count)
             throw new InvalidOperationException("Restored document metadata count differs from checkpoint.");
 
