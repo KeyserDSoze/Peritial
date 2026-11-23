@@ -157,6 +157,32 @@ public sealed class DocumentDownloadTests
         Assert.Empty(audit.Events);
     }
 
+    [Theory]
+    [InlineData("NUL.pdf")]
+    [InlineData("COM1.pdf")]
+    [InlineData("invoice:alternate.pdf")]
+    [InlineData("invoice|draft.pdf")]
+    [InlineData("invoice\u202Efdp.pdf")]
+    public async Task Persisted_unsafe_file_name_cannot_reach_download_headers_or_blob_reader(
+        string fileName)
+    {
+        // Defense in depth for metadata written by previous releases or
+        // corruption: never stream bytes or emit Content-Disposition with an
+        // invalid filename, even when tenant/id/storage key match.
+        var tenant = TenantId.From(Guid.NewGuid());
+        var id = Guid.NewGuid();
+        var catalog = new Catalog();
+        Add(catalog, tenant, id, fileName: fileName);
+        var blobs = new Blobs();
+        var audit = new Audit();
+        var service = new DocumentDownloadService(new Actor(tenant), catalog, blobs, audit);
+
+        await Assert.ThrowsAsync<DocumentContentUnavailableException>(
+            () => service.ReadAsync(id));
+        Assert.Equal(0, blobs.Reads);
+        Assert.Empty(audit.Events);
+    }
+
     [Fact]
     public async Task Mismatched_storage_length_or_failed_audit_never_returns_bytes()
     {
