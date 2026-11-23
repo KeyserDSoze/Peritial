@@ -106,10 +106,10 @@ jobs:
             sleep 2
           done
           test "$ready" = "1"
-      - name: Provision V003–V012 only for disposable Compose E2E
+      - name: Provision V003–V013 only for disposable Compose E2E
         run: |
           # The Compose demo still boots the historical unjournaled V001 schema.
-          # Apply additive V003-V012 ONLY inside this disposable CI
+          # Apply additive V003-V013 ONLY inside this disposable CI
           # database. Do not simulate a journal or silently mutate prod volumes.
           # Real versioned deployments use the explicit privileged migrator.
           docker compose -f docker/compose.yml exec -T postgres \
@@ -146,6 +146,12 @@ jobs:
             psql -X -U peritial -d peritial -v ON_ERROR_STOP=1 \
             --single-transaction -f /dev/stdin \
             < scripts/db/migrations/V012__imported_sinistri_global_reference_guard.sql
+          # V013 is additive and must be present before any signed upload
+          # or download. The demo V001 remains unjournaled and disposable.
+          docker compose -f docker/compose.yml exec -T postgres \
+            psql -X -U peritial -d peritial -v ON_ERROR_STOP=1 \
+            --single-transaction -f /dev/stdin \
+            < scripts/db/migrations/V013__documents_content_sha256_integrity.sql
       - name: Seed isolated V012 imported-reference fixture for signed REST/MCP E2E
         run: |
           # Test-only fixture: it is NOT a migration, not used in deployments,
