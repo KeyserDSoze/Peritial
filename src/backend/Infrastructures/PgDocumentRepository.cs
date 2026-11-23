@@ -19,6 +19,8 @@ public sealed class PgDocumentRepository(NpgsqlDataSource dataSource) : IDocumen
             throw new UnauthorizedAccessException("Cross-tenant document audit denied.");
         if (audit.ResourceId != item.Id || audit.Action != "document.ingest" || audit.Outcome != "succeeded")
             throw new ArgumentException("Audit must describe this successful document ingestion.", nameof(audit));
+        if (item.ContentSha256 is not { Length: DocumentDigest.Size })
+            throw new ArgumentException("A SHA-256 digest is required for audited documents.", nameof(item));
 
         await using var scope = await TenantDbScope.OpenAsync(dataSource, item.TenantId, ct);
         // Arbitrates with SELECT ... FOR UPDATE by the reconciler. If cleanup
@@ -52,8 +54,8 @@ public sealed class PgDocumentRepository(NpgsqlDataSource dataSource) : IDocumen
     private static async Task InsertAsync(TenantDbScope scope, DocumentRecord item, CancellationToken ct)
     {
         await using var cmd = scope.Command(
-            "INSERT INTO documents (tenant_id,id,perizia_id,file_name,content_type,length_bytes,storage_key,created_at_utc) " +
-            "VALUES (@tenant,@id,@perizia,@name,@type,@length,@key,@created)");
+            "INSERT INTO documents (tenant_id,id,perizia_id,file_name,content_type,length_bytes,storage_key,created_at_utc,content_sha256) " +
+            "VALUES (@tenant,@id,@perizia,@name,@type,@length,@key,@created,@sha)");
         cmd.Parameters.AddWithValue("tenant", item.TenantId.Value);
         cmd.Parameters.AddWithValue("id", item.Id);
         cmd.Parameters.AddWithValue("perizia", (object?)item.PeriziaId ?? DBNull.Value);
@@ -62,6 +64,8 @@ public sealed class PgDocumentRepository(NpgsqlDataSource dataSource) : IDocumen
         cmd.Parameters.AddWithValue("length", item.Length);
         cmd.Parameters.AddWithValue("key", item.StorageKey);
         cmd.Parameters.AddWithValue("created", item.CreatedAtUtc);
+        cmd.Parameters.Add("sha", NpgsqlTypes.NpgsqlDbType.Bytea).Value =
+            (object?)item.ContentSha256 ?? DBNull.Value;
         await cmd.ExecuteNonQueryAsync(ct);
     }
 }
