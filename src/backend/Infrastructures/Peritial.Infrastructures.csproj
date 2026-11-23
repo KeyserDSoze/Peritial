@@ -23,5 +23,6 @@
     <EmbeddedResource Include="../../../scripts/db/migrations/V010__documents_catalog_keyset_indexes.sql" />
     <EmbeddedResource Include="../../../scripts/db/migrations/V011__legacy_xml_import_idempotency.sql" />
     <EmbeddedResource Include="../../../scripts/db/migrations/V012__imported_sinistri_global_reference_guard.sql" />
+    <EmbeddedResource Include="../../../scripts/db/migrations/V013__documents_content_sha256_integrity.sql" />
   </ItemGroup>
 </Project>
