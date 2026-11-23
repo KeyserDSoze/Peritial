@@ -32,7 +32,8 @@ public static partial class SchemaMigrator
             (10, "V010__documents_catalog_keyset_indexes.sql"),
             (11, "V011__legacy_xml_import_idempotency.sql"),
             (12, "V012__imported_sinistri_global_reference_guard.sql"),
-            (13, "V013__documents_content_sha256_integrity.sql")
+            (13, "V013__documents_content_sha256_integrity.sql"),
+            (14, "V014__documents_require_sha256_new_writes.sql")
         };
         var scripts = new List<Script>();
         foreach (var (version, file) in definitions)
