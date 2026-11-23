@@ -10,7 +10,7 @@ public sealed record DocumentDownloadLocation(DocumentSummaryDto Document, strin
 
 public interface IDocumentDownloadRepository
 {
-    Task<DocumentDownloadLocation?> FindAsync(
+    Task<DocumentDownloadLocation?> FindForDownloadAsync(
         TenantId tenant, Guid documentId, CancellationToken ct = default);
 }
 
@@ -42,7 +42,7 @@ public sealed class DocumentDownloadService(
         if (id == Guid.Empty)
             throw new KeyNotFoundException("Document not found.");
 
-        var location = await repository.FindAsync(actor.TenantId, id, ct)
+        var location = await repository.FindForDownloadAsync(actor.TenantId, id, ct)
             ?? throw new KeyNotFoundException("Document not found.");
         var item = location.Document;
         if (item.Id != id ||
