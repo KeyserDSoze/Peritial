@@ -128,6 +128,17 @@ internal static class UploadedDocumentValidation
             var scratch = new byte[64 * 1024];
             foreach (var entry in archive.Entries)
             {
+                // OOXML XML parts can be hidden outside word/document.xml,
+                // including the OPC .rels relationship files. A valid ZIP
+                // header alone is not a guarantee that its XML is safe for
+                // a downstream document processor. Buffer only XML parts,
+                // after bounding their real inflated size, and reject DTDs.
+                var xmlPart = entry.FullName.EndsWith(".xml",
+                        StringComparison.OrdinalIgnoreCase) ||
+                    entry.FullName.EndsWith(".rels", StringComparison.OrdinalIgnoreCase);
+                using var inflatedXml = xmlPart
+                    ? new MemoryStream((int)Math.Min(entry.Length, 1024 * 1024))
+                    : null;
                 using var part = entry.Open();
                 long readPart = 0;
                 int count;
@@ -137,14 +148,37 @@ internal static class UploadedDocumentValidation
                     expanded += count;
                     if (readPart > MaxDocxPartBytes || expanded > MaxDocxExpandedBytes)
                         throw new ArgumentException("DOCX ZIP expansion limit exceeded.");
+                    inflatedXml?.Write(scratch, 0, count);
                 }
                 if (readPart != entry.Length)
                     throw new ArgumentException("Invalid DOCX ZIP entry length.");
+
+                if (inflatedXml is not null)
+                {
+                    inflatedXml.Position = 0;
+                    using var reader = XmlReader.Create(inflatedXml, new XmlReaderSettings
+                    {
+                        DtdProcessing = DtdProcessing.Prohibit,
+                        XmlResolver = null,
+                        MaxCharactersInDocument = MaxDocxPartBytes,
+                        CheckCharacters = true,
+                        ConformanceLevel = ConformanceLevel.Document
+                    });
+                    if (reader.MoveToContent() != XmlNodeType.Element)
+                        throw new ArgumentException("DOCX XML part requires a root element.");
+                    while (reader.Read()) { }
+                }
             }
         }
         catch (InvalidDataException ex)
         {
             throw new ArgumentException("Invalid DOCX archive.", nameof(data), ex);
+        }
+        catch (XmlException)
+        {
+            // Do not echo any attacker-controlled XML or system-entity URI
+            // in an API error or audit. The caller has not scanned/stored it.
+            throw new ArgumentException("Invalid or unsafe DOCX XML part.", nameof(data));
         }
     }
 }
