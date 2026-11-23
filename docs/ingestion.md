@@ -215,3 +215,28 @@ I controlli non sostituiscono ClamAV, policy di quarantena,
 retention, rate limiting o convalida semantica OOXML.
 [ADR 0104](../adr/0104-docx-zip-windows-device-names-and-directory-payloads.md)
 e issue #5 riportano esiti e limiti.
+
+
+## DOCX OPC: relazioni esterne vietate in ingresso (ADR 0105)
+
+I membri DOCX `.rels` vengono non solo parsati con DTD e XML resolver
+disabilitati, ma anche esaminati per gli attributi `Target` e
+`TargetMode` degli elementi `Relationship`. Sono ammessi i
+collegamenti interni, compresi i percorsi relativi e i percorsi
+radicati **nel pacchetto** come `/word/media/image.png`.
+
+Sono rifiutate prima di ClamAV/storage/metadata/audit successo
+le relazioni con `TargetMode` diverso da `Internal`, URL assoluti
+anche senza `TargetMode="External"`, percorsi UNC e riferimenti
+di rete `//host`. I valori dei target vengono confrontati dopo
+il parsing degli attributi XML; eventuali URL ostili non vengono
+riportati nel messaggio d'errore. REST restituisce HTTP 400 e MCP
+segnala `isError:true`.
+
+I test Business coprono la distinzione fra link interni ed esterni,
+XML entity e whitespace, senza coinvolgere lo scanner per gli archivi
+rifiutati. È incluso un test E2E con JWT Keycloak e un DOCX ZIP
+sintetico con relazione esterna; la [ADR 0105](../adr/0105-docx-opc-relationship-external-target-admission.md)
+contiene i commit e i link alla CI. Il gate non rende automaticamente
+sicura la successiva conversione OOXML, né sostituisce sandboxing,
+antivirus, policy di quarantena, approvazione e retention.
