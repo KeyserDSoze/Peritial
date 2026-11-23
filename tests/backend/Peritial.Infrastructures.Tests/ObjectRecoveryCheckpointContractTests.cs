@@ -137,6 +137,16 @@ public sealed class ObjectRecoveryCheckpointContractTests
                 ObjectRecoveryCheckpoint.CaptureAsync(db, storage, bucket));
             await PutAsync(storage, bucket, key, original);
 
+            // An oversized S3 response must never be accepted just because
+            // its first bytes look like the admitted PDF. The verifier should
+            // stop hashing once the declared PostgreSQL byte limit is crossed.
+            var oversized = new byte[512 * 1024];
+            original.CopyTo(oversized, 0);
+            await PutAsync(storage, bucket, key, oversized);
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                ObjectRecoveryCheckpoint.CaptureAsync(db, storage, bucket));
+            await PutAsync(storage, bucket, key, original);
+
             var checkpoint = await ObjectRecoveryCheckpoint.CaptureAsync(db, storage, bucket);
             Assert.Equal(1, checkpoint.FormatVersion);
             Assert.Equal(2, checkpoint.Documents.Count);
