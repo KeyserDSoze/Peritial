@@ -1670,7 +1670,7 @@ public sealed class SinistroPersistenceTests
                     await command.ExecuteNonQueryAsync();
                 admin = NpgsqlDataSource.Create(new NpgsqlConnectionStringBuilder(cs)
                 { SearchPath = schema }.ConnectionString);
-                Assert.Equal(12, await SchemaMigrator.ApplyAsync(admin));
+                Assert.Equal(13, await SchemaMigrator.ApplyAsync(admin));
                 await TestDbRoleProvisioner.ConfigureAsync(admin);
                 await using (var conn = await root.OpenConnectionAsync())
                 await using (var grant = new NpgsqlCommand(
