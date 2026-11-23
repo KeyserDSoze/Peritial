@@ -64,11 +64,11 @@ public sealed class ObjectRecoveryCheckpointContractTests
             await using (var insert = new NpgsqlCommand(
                 """
                 INSERT INTO documents(tenant_id,id,perizia_id,file_name,content_type,
-                                      length_bytes,storage_key,created_at_utc)
+                                      length_bytes,storage_key,created_at_utc,content_sha256)
                 VALUES(@tenant,@doc,NULL,'checkpoint.pdf','application/pdf',
-                       @length,@key,now()),
+                       @length,@key,now(),@sha),
                       (@tenant2,@doc2,NULL,'second-checkpoint.pdf','application/pdf',
-                       @length,@key2,now())
+                       @length,@key2,now(),@sha)
                 """, conn))
             {
                 insert.Parameters.AddWithValue("tenant", tenant);
@@ -76,6 +76,10 @@ public sealed class ObjectRecoveryCheckpointContractTests
                 insert.Parameters.AddWithValue("tenant2", secondTenant);
                 insert.Parameters.AddWithValue("doc2", secondDocument);
                 insert.Parameters.AddWithValue("length", (long)original.Length);
+                // This fixture represents newly accepted documents under V014,
+                // not a pre-SHA legacy row. Both share the exact S3 body bytes.
+                insert.Parameters.Add("sha", NpgsqlTypes.NpgsqlDbType.Bytea).Value =
+                    System.Security.Cryptography.SHA256.HashData(original);
                 insert.Parameters.AddWithValue("key", key);
                 insert.Parameters.AddWithValue("key2", secondKey);
                 await insert.ExecuteNonQueryAsync();
