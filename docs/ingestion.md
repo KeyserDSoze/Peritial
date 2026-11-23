@@ -11,6 +11,36 @@ REST: POST /api/files (multipart file, periziaId opzionale); MCP: tool ingest_fi
 - Input non valido genera 400; file non autorizzato 403; perizia fuori dal tenant 404.
 - Prima che tutti i controlli passino, nessuna chiamata a IObjectStore e IDocumentRepository.
 
+## Download REST tenant-scoped (prima tranche #5/#11)
+
+`GET /api/files/{id}/download` richiede OAuth `peritial.read` oppure
+`peritial.write` sul JWT, risolve il documento e la chiave privata
+**solo** tramite un SELECT PostgreSQL tenant-scoped con FORCE RLS e
+verifica la chiave canonica `tenant/UUID.estensione`. ID mancanti/
+di altri tenant restituiscono 404; token assente 401; scope assente
+403. La risposta è un allegato `application/octet-stream`, mai
+inline o un redirect/presigned URL S3/Azure, con cache disabilitata,
+`nosniff` e sandbox CSP.
+
+SeaweedFS S3 e Azure Blob/Azurite sono letti con API private del
+provider; il server rifiuta il file se i byte non coincidono con
+`documents.length_bytes` o superano i **25 MiB**. Anche il filename
+persistito deve essere canonico prima di usarlo negli header.
+Prima di consegnare il buffer, il server scrive un audit append-only
+`document.download/succeeded` con tenant/subject/UUID e **senza**
+nome file, storage key, byte o URL. Un fallimento dell'audit blocca
+l'invio. Il successo dell'audit significa **autorizzazione e byte pronti**
+prima della risposta HTTP, non prova che il client abbia ricevuto
+interamente il corpo.
+
+Restano aperti: rate limiting e budget globale di memoria con molti
+download simultanei, governance retention/erasure/quarantena/riscan,
+esecuzione real Azure/Entra e link PWA per scaricare con il Bearer JWT.
+MCP continua a fornire soltanto metadata. Vedere
+[ADR 0094](../adr/0094-tenant-scoped-audited-document-download.md),
+`DocumentDownloadTests`, `DocumentCatalogRepositoryTests`,
+contratti S3/Azurite e Playwright autenticato.
+
 ## Test
 - tests/backend/Peritial.Business.Tests/FileIngestionSecurityTests.cs verifica file falsi, DTD/XXE, dimensione troncata/extra, nomi Windows, successo con stream non seekable, scope e la nuova ammissione DOCX valida/blocco zip bomb, traversal e nomi duplicati **prima di scanner, PUT e metadata**.
 - Tests frontend con OAuth in tests/frontend/authenticated.spec.ts.
@@ -32,7 +62,7 @@ Il daemon clamd **deve usare timezone UTC** (`TZ=UTC`): la data di VERSION non i
 
 Il **laboratorio opt-in con FreshClam periodico, volume persistente, UTC e soglia di età attiva** è descritto in [clamav-signature-updates.md](clamav-signature-updates.md); il test CI dell'overlay è configurativo e non scarica firme da Internet. Non confondere la prova di un database caricato recente con l'attestazione di un aggiornamento remoto riuscito.
 
-La Compose locale usa firme precaricate e `CLAMAV_NO_FRESHCLAMD=true`: **solo in Development** è consentito non impostare la soglia (controllo freshness disabilitato per la demo, non antivirus bypass). I test unitari e i contratti TCP reali del mock scanner verificano parsing e blocco prima di INSTREAM; non equivalgono a un aggiornamento FreshClam o a un test di deploy produzione. Quarantena, contenuti annidati e download autorizzati rimangono aperti.
+La Compose locale usa firme precaricate e `CLAMAV_NO_FRESHCLAMD=true`: **solo in Development** è consentito non impostare la soglia (controllo freshness disabilitato per la demo, non antivirus bypass). I test unitari e i contratti TCP reali del mock scanner verificano parsing e blocco prima di INSTREAM; non equivalgono a un aggiornamento FreshClam o a un test di deploy produzione. Quarantena e contenuti annidati, download PWA/MCP binario, governance e limiti di traffico rimangono aperti; esiste ora una prima route REST autorizzata e auditata (vedi sopra).
 
 ## Limite HTTP prima del Business
 ASP.NET Core applica `FormOptions.MultipartBodyLengthLimit = 25 MiB` e una soglia di dimensione complessiva HTTP di 25 MiB + 1 MiB di overhead per l'endpoint POST /api/files. Le richieste che superano i limiti multipart sono restituite come HTTP 413; i payload ammessi sono comunque rivalidati in Business anche per tool MCP o altri ingressi.
