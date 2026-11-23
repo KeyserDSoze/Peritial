@@ -140,8 +140,14 @@ public sealed class FileIngestionService(
         // document metadata + audit. If the database commit acknowledgement
         // is lost, deleting this blob here would be dangerous: it may already
         // be a valid, referenced document. Keep it for row-locked recovery.
+        // Hash exactly the bytes already admitted by ClamAV and uploaded
+        // to storage. The repository commits this private digest together
+        // with metadata, audit and the idempotency result.
+        var admittedSha256 = DocumentDigest.Compute(
+            buffer.GetBuffer().AsSpan(0, (int)total));
         var record = new DocumentRecord(id, context.TenantId, periziaId, safeName,
-            contentType, total, key, DateTime.UtcNow, RequiresIdempotency: keyed);
+            contentType, total, key, DateTime.UtcNow,
+            RequiresIdempotency: keyed, ContentSha256: admittedSha256);
         await documents.AddAuditedAsync(record, new SecurityAuditEvent(
             Guid.NewGuid(), context.TenantId, context.Subject, "document.ingest",
             "succeeded", id, DateTime.UtcNow), ct);
