@@ -78,7 +78,8 @@ public sealed class DocumentAtomicAuditTests
     {
         var id = Guid.NewGuid();
         return new DocumentRecord(id, tenant, null, "test.pdf", "application/pdf", 5,
-            tenant.Value.ToString("N") + "/" + id.ToString("N") + ".pdf", DateTime.UtcNow);
+            tenant.Value.ToString("N") + "/" + id.ToString("N") + ".pdf",
+            DateTime.UtcNow, ContentSha256: DocumentDigest.Compute("%PDF-"u8));
     }
 
     private static SecurityAuditEvent Event(TenantId tenant, Guid id) =>
