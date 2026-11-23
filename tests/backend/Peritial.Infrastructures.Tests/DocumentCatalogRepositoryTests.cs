@@ -74,6 +74,21 @@ public sealed class DocumentCatalogRepositoryTests
         Assert.DoesNotContain(latest.StorageKey,
             System.Text.Json.JsonSerializer.Serialize(metadata));
 
+        // Private signed-tenant download lookup is the ONLY read that may
+        // retrieve storage_key; it must enforce the same pooled-connection
+        // RLS boundaries as the metadata list and preserve the actual key.
+        var locator = await repo.FindForDownloadAsync(tenantA, latest.Id);
+        Assert.NotNull(locator);
+        Assert.Equal(latest.StorageKey, locator.StorageKey);
+        Assert.Equal(latest.Id, locator.Document.Id);
+        Assert.Null(await repo.FindForDownloadAsync(tenantB, latest.Id));
+        Assert.Null(await repo.FindForDownloadAsync(tenantA, foreign.Id));
+        Assert.Null(await repo.FindForDownloadAsync(tenantA, Guid.NewGuid()));
+        Assert.Equal(foreign.StorageKey,
+            (await repo.FindForDownloadAsync(tenantB, foreign.Id))!.StorageKey);
+        Assert.DoesNotContain("StorageKey",
+            System.Text.Json.JsonSerializer.Serialize(locator.Document));
+
         // RLS setting is transaction-local: same pooled connection with no
         // tenant setting may not see any metadata from either previous call.
         await using var conn = await app.OpenConnectionAsync();
