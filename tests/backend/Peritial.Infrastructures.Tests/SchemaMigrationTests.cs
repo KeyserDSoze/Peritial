@@ -112,6 +112,85 @@ public sealed class SchemaMigrationTests
 
 
     [Fact]
+    public async Task V014_new_sql_inserts_require_digest_but_preexisting_legacy_null_remains_readable()
+    {
+        await WithIsolatedSchemaAsync(async db =>
+        {
+            // The forward migration has to be journaled and idempotent.
+            Assert.Equal(14, await SchemaMigrator.ApplyAsync(db));
+            Assert.Equal(0, await SchemaMigrator.ApplyAsync(db));
+            await using var conn = await db.OpenConnectionAsync();
+            await using (var constraint = new NpgsqlCommand(
+                "SELECT NOT convalidated FROM pg_constraint " +
+                "WHERE conrelid=to_regclass('documents') AND conname='ck_documents_sha256_required_new'", conn))
+                Assert.True((bool)(await constraint.ExecuteScalarAsync())!);
+
+            // Recreate an isolated V013 installation without changing ANY
+            // historical migration files, then seed a genuine legacy NULL.
+            await using (var rewind = new NpgsqlCommand(
+                "ALTER TABLE documents DROP CONSTRAINT ck_documents_sha256_required_new; " +
+                "DELETE FROM schema_migrations WHERE version=14", conn))
+                await rewind.ExecuteNonQueryAsync();
+
+            var tenant = Guid.NewGuid();
+            var legacyId = Guid.NewGuid();
+            await using (var legacy = new NpgsqlCommand(
+                "INSERT INTO documents (tenant_id,id,file_name,content_type,length_bytes,storage_key,created_at_utc) " +
+                "VALUES (@tenant,@id,'old.pdf','application/pdf',5,@key,now())", conn))
+            {
+                legacy.Parameters.AddWithValue("tenant", tenant);
+                legacy.Parameters.AddWithValue("id", legacyId);
+                legacy.Parameters.AddWithValue("key", tenant.ToString("N") + "/" + legacyId.ToString("N") + ".pdf");
+                Assert.Equal(1, await legacy.ExecuteNonQueryAsync());
+            }
+
+            // A NOT VALID CHECK protects *future writes* without retroactive
+            // validation or an invented digest for historical data.
+            Assert.Equal(1, await SchemaMigrator.ApplyAsync(db));
+            await using (var persisted = new NpgsqlCommand(
+                "SELECT content_sha256 IS NULL FROM documents WHERE tenant_id=@tenant AND id=@id", conn))
+            {
+                persisted.Parameters.AddWithValue("tenant", tenant);
+                persisted.Parameters.AddWithValue("id", legacyId);
+                Assert.True((bool)(await persisted.ExecuteScalarAsync())!);
+            }
+
+            var invalidId = Guid.NewGuid();
+            await using (var invalid = new NpgsqlCommand(
+                "INSERT INTO documents (tenant_id,id,file_name,content_type,length_bytes,storage_key,created_at_utc) " +
+                "VALUES (@tenant,@id,'raw.pdf','application/pdf',5,@key,now())", conn))
+            {
+                invalid.Parameters.AddWithValue("tenant", tenant);
+                invalid.Parameters.AddWithValue("id", invalidId);
+                invalid.Parameters.AddWithValue("key", tenant.ToString("N") + "/" + invalidId.ToString("N") + ".pdf");
+                var failed = await Assert.ThrowsAsync<PostgresException>(() => invalid.ExecuteNonQueryAsync());
+                Assert.Equal("23514", failed.SqlState);
+                Assert.Equal("ck_documents_sha256_required_new", failed.ConstraintName);
+            }
+
+            var validId = Guid.NewGuid();
+            await using (var valid = new NpgsqlCommand(
+                "INSERT INTO documents (tenant_id,id,file_name,content_type,length_bytes,storage_key,created_at_utc,content_sha256) " +
+                "VALUES (@tenant,@id,'signed.pdf','application/pdf',5,@key,now(),decode(repeat('cd',32),'hex'))", conn))
+            {
+                valid.Parameters.AddWithValue("tenant", tenant);
+                valid.Parameters.AddWithValue("id", validId);
+                valid.Parameters.AddWithValue("key", tenant.ToString("N") + "/" + validId.ToString("N") + ".pdf");
+                Assert.Equal(1, await valid.ExecuteNonQueryAsync());
+            }
+
+            await using (var check = new NpgsqlCommand(
+                "SELECT count(*) FROM documents WHERE tenant_id=@tenant AND id IN (@legacy,@valid)", conn))
+            {
+                check.Parameters.AddWithValue("tenant", tenant);
+                check.Parameters.AddWithValue("legacy", legacyId);
+                check.Parameters.AddWithValue("valid", validId);
+                Assert.Equal(2L, (long)(await check.ExecuteScalarAsync())!);
+            }
+        });
+    }
+
+    [Fact]
     public async Task V013_document_digest_accepts_legacy_null_but_enforces_length_and_immutability()
     {
         await WithIsolatedSchemaAsync(async db =>
