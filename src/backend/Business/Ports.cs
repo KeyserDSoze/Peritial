@@ -96,7 +96,8 @@ public interface IDocumentRepository
 
 public sealed record DocumentRecord(
     Guid Id, TenantId TenantId, Guid? PeriziaId, string FileName, string ContentType,
-    long Length, string StorageKey, DateTime CreatedAtUtc, bool RequiresIdempotency = false);
+    long Length, string StorageKey, DateTime CreatedAtUtc, bool RequiresIdempotency = false,
+    byte[]? ContentSha256 = null);
 
 
 /// <summary>Durable reservation before PUT, not a client-provided storage key.</summary>
