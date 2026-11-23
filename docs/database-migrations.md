@@ -388,3 +388,41 @@ manutenzione con writer fermi e backup verificato.
 Il rollback operativo richiede restore gestito,
 non il `DROP TRIGGER` in un database popolato.
 [ADR 0054](../adr/0054-v012-imported-reference-global-sql-guard.md).
+
+## V013 — SHA-256 privato dei documenti e gate di download
+
+La [ADR 0110](../adr/0110-document-sha256-admission-and-verified-download.md)
+introduce `V013__documents_content_sha256_integrity.sql`, aggiunta
+**forward-only e transazionale** al migrator .NET: 13 script nel
+journal con checksum SHA-256 e replay idempotente. Gli script
+V001–V012 restano immutati.
+
+La nuova colonna `documents.content_sha256 bytea` è nullable **solo
+per compatibilità con record precedenti** e vincolata a 32 byte
+quando presente. La migrazione non legge, normalizza o riscrive
+blob/metadati e **non inventa checksum** per documenti già
+archiviati. Un trigger rifiuta ogni successivo UPDATE del digest;
+`peritial_app` mantiene i divieti UPDATE/DELETE di V009 e
+FORCE RLS. L'ingestione ordinaria obbliga SHA-256 dopo ClamAV,
+prima del PUT, e lo persiste nella stessa transazione di metadati,
+audit successo e completamento idempotency.
+
+**Avvertenza operativa:** il servizio di download ora rifiuta i record
+senza SHA-256. Prima di applicare V013 a un database reale, effettuare
+backup e inventario dei documenti legacy senza digest; predisporre
+una procedura approvata di ri-scansione e backfill, o accettare
+formalmente il blocco del download fino alla bonifica. Mai generare
+un digest da un blob non verificato assumendolo automaticamente
+sicuro. La versione V013 non abilita da sola la governance della
+quarantena, retention/legal hold e versioning, né sostituisce test
+Azure/on-prem. Il vincolo DB consente ancora null su INSERT SQL
+raw; il port di produzione `AddAuditedAsync` nega null e la issue
+[#27](https://github.com/KeyserDSoze/Peritial/issues/27) traccia
+l'enforcement completo e la policy legacy.
+
+I test PostgreSQL `SchemaMigrationTests` verificano replay V013,
+immutabilità digest e vincolo lunghezza; `DocumentCatalogRepositoryTests`
+verifica il lookup privato FORCE RLS e assenza dal DTO pubblico;
+`DocumentAtomicAuditTests` mantiene la transazione di commit.
+Monitorare CI backend e Compose dell'ultimo HEAD senza
+considerare un solo job verde come attestazione end-to-end.
