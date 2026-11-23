@@ -2550,6 +2550,39 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     expect(goodFile.status(), await goodFile.text()).toBe(201);
     expect((await goodFile.json() as {fileName: string}).fileName).toBe("valid.pdf");
 
+    // Filenames are persisted in document metadata and sent to clients as
+    // Content-Disposition attachments. Reject DOS devices, NTFS alternate
+    // data streams and Unicode bidi spoofing with both signed transports.
+    for (const [i, unsafeName] of [
+      "CON.pdf", "invoice:alternate.pdf", "invoice\u202Efdp.pdf"
+    ].entries()) {
+      const invalidNameRest = await request.post("http://localhost:8080/api/files", {
+        headers: {Authorization: "Bearer " + accessToken},
+        multipart: {file: {
+          name: unsafeName,
+          mimeType: "application/pdf",
+          buffer: pdf
+        }}
+      });
+      expect(invalidNameRest.status(), await invalidNameRest.text()).toBe(400);
+
+      const invalidNameMcp = await request.post("http://localhost:8080/mcp", {
+        headers: {
+          Authorization: "Bearer " + accessToken,
+          Accept: "application/json,text/event-stream",
+          "Content-Type": "application/json"
+        },
+        data: {jsonrpc: "2.0", id: 60 + i, method: "tools/call", params: {
+          name: "ingest_file", arguments: {
+            fileName: unsafeName, contentType: "application/pdf",
+            base64: pdf.toString("base64")
+          }
+        }}
+      });
+      expect(invalidNameMcp.ok(), await invalidNameMcp.text()).toBeTruthy();
+      expect(await invalidNameMcp.text()).toContain('"isError":true');
+    }
+
     // REST and MCP share one idempotency ledger per signed tenant and subject.
     const retryKey = "retry-e2e-" + Date.now() + "-" + Math.round(Math.random() * 100000);
     const retryBytes = Buffer.from("%PDF-1.7\n1 0 obj\n<<>>\nendobj\n%%EOF\n");
