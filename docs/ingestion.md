@@ -156,3 +156,19 @@ rivelare il target del link. Restano non verificati
 l'interpretazione di tutti i formati ZIP, i link esterni OOXML
 e gli scenari produttivi; i requisiti di #5 non sono conclusi.
 [ADR 0101](../adr/0101-docx-zip-unix-special-entry-admission.md).
+
+## DOCX: nomi ZIP controllati e tipo Unix coerente (ADR 0102)
+
+I nomi delle entry ZIP nel DOCX non possono includere TAB, CR, LF o
+altri caratteri di controllo. Il tipo file Unix eventualmente dichiarato
+deve corrispondere al percorso: un file regolare non può terminare con
+`/` e una directory Unix non può essere dichiarata su un nome senza
+`/`. Rimangono accettati i tipi non dichiarati dai writer ZIP legacy,
+senza indebolire i controlli precedenti su traversal, XML o dimensioni.
+
+I test Business verificano tre nomi con TAB/CR/LF e un file marcato
+directory, con scanner, storage, metadata e audit successo mai invocati.
+La prova Keycloak REST/MCP usa un DOCX ZIP sintetico con metadati Unix
+contraddittori e controlla HTTP 400 / `isError:true`. Questo non
+copre la semantica OOXML completa né elimina i gate produttivi #5.
+[ADR 0102](../adr/0102-docx-zip-entry-name-control-and-unix-type-consistency.md).
