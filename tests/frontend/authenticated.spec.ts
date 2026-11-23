@@ -2597,6 +2597,40 @@ test.describe("OAuth reale, REST e MCP su Docker Compose", () => {
     });
     expect(changedProof.status(), await changedProof.text()).toBe(409);
 
+    // OPC relationship XML can be perfectly well formed but still ask
+    // future renderers to fetch an attacker-controlled network resource.
+    // A genuine three-entry DOCX ZIP fixture has TargetMode="External"
+    // and Target="https://attacker.example/PRIVATE-EXTERNAL-REL".
+    const externalRelationshipDocx = Buffer.from("UEsDBBQAAAAIANNyd13HHBc8CgAAAAgAAAATAAAAW0NvbnRlbnRfVHlwZXNdLnhtbLMJqSxILda3AwBQSwMEFAAAAAgA03J3XV9b0UwNAAAACwAAABEAAAB3b3JkL2RvY3VtZW50LnhtbLNJyU8uzU3NK9G3AwBQSwMEFAAAAAgA03J3XdwaPlKgAAAA2gAAABwAAAB3b3JkL19yZWxzL2RvY3VtZW50LnhtbC5yZWxzVY9PC4JAFMS/iuxd1zp0EBU87EGwiEWi60NfKrl/ePsC+/YtRGDHmYHfzJQaV+DF2TAvPiSbWW2oxMzsCynDMKOBkDmPNiYPRwY4Spqkh+EJE8pjnp8k7RmiLvfMpB0rQe14EEn/9liJF9mCMXDUQBPy2Y3RVRsjWVh/7ndDiCOAOXYhZbiB8SvKq25vTa9Sde+VvjRdqlUnZF3Kvyv1B1BLAQIUAxQAAAAIANNyd13HHBc8CgAAAAgAAAATAAAAAAAAAAAAAACAAQAAAABbQ29udGVudF9UeXBlc10ueG1sUEsBAhQDFAAAAAgA03J3XV9b0UwNAAAACwAAABEAAAAAAAAAAAAAAIABOwAAAHdvcmQvZG9jdW1lbnQueG1sUEsBAhQDFAAAAAgA03J3XdwaPlKgAAAA2gAAABwAAAAAAAAAAAAAAIABdwAAAHdvcmQvX3JlbHMvZG9jdW1lbnQueG1sLnJlbHNQSwUGAAAAAAMAAwDKAAAAUQEAAAAA", "base64");
+    const externalRelRest = await request.post("http://localhost:8080/api/files", {
+      headers: {Authorization: "Bearer " + accessToken},
+      multipart: {file: {
+        name: "external-relationship.docx",
+        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        buffer: externalRelationshipDocx
+      }}
+    });
+    expect(externalRelRest.status(), await externalRelRest.text()).toBe(400);
+    expect(await externalRelRest.text()).not.toContain("PRIVATE-EXTERNAL-REL");
+
+    const externalRelMcp = await request.post("http://localhost:8080/mcp", {
+      headers: {
+        Authorization: "Bearer " + accessToken,
+        Accept: "application/json,text/event-stream",
+        "Content-Type": "application/json"
+      },
+      data: {jsonrpc: "2.0", id: 54, method: "tools/call", params: {
+        name: "ingest_file", arguments: {
+          fileName: "external-relationship.docx",
+          contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          base64: externalRelationshipDocx.toString("base64")
+        }
+      }}
+    });
+    expect(externalRelMcp.ok(), await externalRelMcp.text()).toBeTruthy();
+    expect(await externalRelMcp.text()).toContain('"isError":true');
+    expect(await externalRelMcp.text()).not.toContain("PRIVATE-EXTERNAL-REL");
+
     // A ZIP with valid central directory and valid main document can carry
     // an external-entity DTD in a secondary OPC .rels XML part. Reject it
     // at admission, before ClamAV/storage, through REST and MCP alike.
