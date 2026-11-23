@@ -86,7 +86,7 @@ result="$(docker exec "$name" psql -X -qAt -v ON_ERROR_STOP=1 -U peritial -d per
    AND (SELECT count(DISTINCT tenant_id) FROM perizie)=2
    AND (SELECT count(*) FROM documents WHERE file_name='legacy.pdf')=1
    AND (SELECT count(*) FROM security_audit WHERE action='document.ingest')=1
-   AND (SELECT count(*) FROM schema_migrations)=13
+   AND (SELECT count(*) FROM schema_migrations)=14
    -- A V001 document has no admitted checksum: migration must not forge one.
    AND (SELECT count(*) FROM documents
         WHERE file_name='legacy.pdf' AND content_sha256 IS NULL)=1
