@@ -337,8 +337,12 @@ a lunghezza invariata negati prima di restituirli, oltre a XML validi
 che continuano a poter essere scaricati.
 
 Non è un digest crittografico: un diverso file valido di uguale
-lunghezza può sfuggire alla verifica. Rimangono necessari checksum
-persistiti, versioning/retention/legal hold, quarantena e gestione
-delle firme antivirus prima del rilascio produttivo.
+lunghezza può sfuggire alla verifica. La verifica SHA-256 persistita
+per ogni oggetto è tracciata separatamente nella
+[issue #27](https://github.com/KeyserDSoze/Peritial/issues/27),
+distinta dai checksum dei backup. Restano necessari anche versioning,
+retention/legal hold, quarantena e gestione delle firme antivirus.
+I test positivi DOCX, XML, JPG e PNG confermano che il controllo non
+interrompe gli scaricamenti già ammessi.
 [ADR 0109](../adr/0109-download-mime-and-content-revalidation.md)
 e issue #11/#5 dettagliano prove e limiti.
