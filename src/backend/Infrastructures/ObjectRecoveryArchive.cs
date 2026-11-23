@@ -63,7 +63,7 @@ public static class ObjectRecoveryArchive
 
                 var filename = Path.Combine(objects, NameFor(index));
                 await using var local = new FileStream(filename, PrivateWriteOptions());
-                var (length, digest) = await CopyHashAsync(remote.ResponseStream, local, ct);
+                var (length, digest) = await CopyHashAsync(remote.ResponseStream, local, item.LengthBytes, ct);
                 if (length != item.LengthBytes ||
                     !string.Equals(digest, item.Sha256, StringComparison.Ordinal))
                     throw new InvalidOperationException(
@@ -122,7 +122,7 @@ public static class ObjectRecoveryArchive
             var file = Path.Combine(archiveDirectory, ObjectDirectory, NameFor(i));
             await using var input = new FileStream(
                 file, FileMode.Open, FileAccess.Read, FileShare.Read);
-            var (length, hash) = await CopyHashAsync(input, Stream.Null, ct);
+            var (length, hash) = await CopyHashAsync(input, Stream.Null, saved.LengthBytes, ct);
             if (length != saved.LengthBytes || hash != saved.Sha256)
                 throw new InvalidOperationException("Archive blob checksum or length differs.");
         }
@@ -276,18 +276,33 @@ public static class ObjectRecoveryArchive
     }
 
     private static async Task<(long Length, string Sha256)> CopyHashAsync(
-        Stream input, Stream output, CancellationToken ct)
+        Stream input, Stream output, long expectedLength, CancellationToken ct)
     {
+        if (expectedLength <= 0)
+            throw new InvalidOperationException("Archive requires a positive PostgreSQL document length.");
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         var buffer = new byte[65536];
         long length = 0;
-        int read;
-        while ((read = await input.ReadAsync(buffer, ct)) > 0)
+        // Prevent an oversized or swapped S3 stream from filling private
+        // tmpfs before the equality check at the end of the export. The
+        // archive reader also uses this bound against post-check TOCTOU.
+        while (true)
         {
-            length = checked(length + read);
+            var remaining = expectedLength - length;
+            var readLimit = (int)(remaining >= buffer.Length
+                ? buffer.Length : remaining + 1);
+            var read = await input.ReadAsync(buffer.AsMemory(0, readLimit), ct);
+            if (read == 0) break;
+            if (read > remaining)
+                throw new InvalidOperationException(
+                    "Archive source exceeds the committed document length.");
+            length += read;
             hash.AppendData(buffer, 0, read);
             await output.WriteAsync(buffer.AsMemory(0, read), ct);
         }
+        if (length != expectedLength)
+            throw new InvalidOperationException(
+                "Archive source is shorter than the committed document length.");
         return (length, Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant());
     }
 }
