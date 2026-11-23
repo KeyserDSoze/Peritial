@@ -129,6 +129,33 @@ public sealed class FileIngestionSecurityTests
     }
 
     [Theory]
+    [InlineData("../NUL")]
+    [InlineData("../COM1.bin")]
+    [InlineData("/word/media/LPT9.jpg")]
+    [InlineData("../media/AUX.txt")]
+    [InlineData("../media/CON%2ebin")]
+    public async Task Docx_con_relazione_interna_verso_dispositivo_windows_e_rifiutato(
+        string target)
+    {
+        // A relationship can point to a reserved Windows device even if no
+        // ZIP entry with that forbidden name exists. Reject it at admission.
+        var scanner = new CountingScanner();
+        var (service, store, docs) = NewService(scanner: scanner);
+        var xml = "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">" +
+            "<Relationship Id=\"rId1\" Type=\"urn:testing\" TargetMode=\"Internal\" Target=\"" +
+            target + "\"/></Relationships>";
+        var bytes = CreateDocx(("word/_rels/document.xml.rels", Encoding.UTF8.GetBytes(xml)));
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.IngestAsync("rapport.docx", DocxMime,
+                new MemoryStream(bytes), bytes.Length));
+        Assert.Equal(0, scanner.Scans);
+        Assert.Equal(0, store.Uploads);
+        Assert.Empty(docs.Records);
+        Assert.Empty(docs.AuditEvents);
+    }
+
+    [Theory]
     [InlineData("word/_rels/document.xml.rels", "../media/image.png")]
     [InlineData("word/_rels/document.xml.rels", "../media/my%20image.png")]
     [InlineData("word/_rels/document.xml.rels", "/word/media/image.png")]
