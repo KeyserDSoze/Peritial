@@ -144,6 +144,19 @@ public sealed class ObjectRecoveryCheckpointContractTests
             Assert.Contains(checkpoint.Documents, x => x.TenantId == secondTenant && x.DocumentId == secondDocument);
             await ObjectRecoveryCheckpoint.VerifyAsync(db, storage, bucket, checkpoint);
 
+            // Even a syntactically correct manifest digest cannot silently
+            // disagree with the admitted PostgreSQL checksum. Validate the
+            // metadata before any restored object write or S3 verification.
+            var falseDigest = Convert.ToHexString(
+                System.Security.Cryptography.SHA256.HashData(tampered)).ToLowerInvariant();
+            var alteredCheckpoint = checkpoint with
+            {
+                Documents = checkpoint.Documents.Select((x, i) =>
+                    i == 0 ? x with { Sha256 = falseDigest } : x).ToArray()
+            };
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                ObjectRecoveryCheckpoint.VerifyMetadataAsync(db, alteredCheckpoint));
+
             await PutAsync(storage, bucket, key, tampered);
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 ObjectRecoveryCheckpoint.VerifyAsync(db, storage, bucket, checkpoint));
