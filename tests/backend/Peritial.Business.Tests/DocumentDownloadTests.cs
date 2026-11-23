@@ -208,7 +208,7 @@ public sealed class DocumentDownloadTests
     [Theory]
     [InlineData("signed.pdf", "application/pdf", "NOT-A-PDF")]
     [InlineData("signed.xml", "application/xml", "<a><b></a>")]
-    [InlineData("signed.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "PK\\u0003\\u0004not-a-zip")]
+    [InlineData("signed.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "PK\u0003\u0004not-a-zip")]
     public async Task Stored_bytes_that_fail_content_validation_are_not_downloaded_or_success_audited(
         string fileName, string contentType, string storedBytes)
     {
