@@ -92,6 +92,14 @@ public sealed class ObjectRecoveryArchiveContractTests
 
             await PutAsync(original, bucket, keyOne, first);
             await PutAsync(original, bucket, keyTwo, second);
+            // The two-tenant inventory is below the byte cap but above
+            // a count cap of one. Export must refuse before making staging.
+            var countRefusal = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                ObjectRecoveryArchive.ExportAsync(sourceDb, original, bucket, archive,
+                    signingKey, maxObjects: 1));
+            Assert.Contains("count", countRefusal.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.False(Directory.Exists(archive));
+
             var documentBudget = first.LongLength + second.LongLength;
             var refused = await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 ObjectRecoveryArchive.ExportAsync(sourceDb, original, bucket, archive,
@@ -115,6 +123,16 @@ public sealed class ObjectRecoveryArchiveContractTests
             var refusedInventory = await restored.ListObjectsV2Async(
                 new ListObjectsV2Request { BucketName = bucket });
             Assert.True(refusedInventory.S3Objects is null || refusedInventory.S3Objects.Count == 0);
+
+            // The HMAC-authenticated archive still requires a local count
+            // capacity preflight before file traversal or any S3 PUT.
+            var importCountRefusal = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                ObjectRecoveryArchive.ImportAsync(destDb, restored, bucket, archive,
+                    signingKey, maxObjects: 1));
+            Assert.Contains("count", importCountRefusal.Message, StringComparison.OrdinalIgnoreCase);
+            var stillEmpty = await restored.ListObjectsV2Async(
+                new ListObjectsV2Request { BucketName = bucket });
+            Assert.True(stillEmpty.S3Objects is null || stillEmpty.S3Objects.Count == 0);
 
             var blob0 = Path.Combine(archive, "objects", "00000000.blob");
             var bytes = await File.ReadAllBytesAsync(blob0);
