@@ -145,6 +145,20 @@ public sealed class SealedBundleOffsiteContractTests
             Assert.False(Directory.Exists(retrieved));
             await PutAsync(client, bucket, remoteCipher, clean);
 
+            // Even with the original authenticated inventory, a provider
+            // returning extra or truncated ciphertext must fail closed.
+            foreach (var changed in new[] { clean.Concat(new byte[] { 1 }).ToArray(),
+                         clean[..^1] })
+            {
+                await PutAsync(client, bucket, remoteCipher, changed);
+                await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    SealedBundleOffsite.DownloadAsync(client, bucket, id, retrieved,
+                        aesKey, disposableUnprotectedDemo: true));
+                Assert.False(Directory.Exists(retrieved));
+                Assert.Empty(Directory.EnumerateFileSystemEntries(disk, "retrieved.partial-*"));
+            }
+            await PutAsync(client, bucket, remoteCipher, clean);
+
             await SealedBundleOffsite.DownloadAsync(client, bucket, id, retrieved, aesKey, disposableUnprotectedDemo: true);
             Assert.Equal(
                 await File.ReadAllBytesAsync(Path.Combine(encrypted, "payload", "00000000.enc")),

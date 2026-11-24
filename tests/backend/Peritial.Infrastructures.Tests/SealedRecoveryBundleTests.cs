@@ -115,6 +115,9 @@ public sealed class SealedRecoveryBundleTests
             var validMac = await File.ReadAllBytesAsync(macPath);
             foreach (var (entry, length, errorText) in new (int, long, string)[]
             {
+                (0, SealedRecoveryBudget.MaxPlaintextBytes + 1, "budget"),
+                (0, SealedRecoveryBudget.MaxPlaintextBytes, "budget"),
+                (0, long.MaxValue, "budget"),
                 (4, ObjectRecoveryBudget.DefaultMaxTotalBytes + 1, "budget"),
                 (4, 0, "budget"),
                 (3, 33, "metadata length"),

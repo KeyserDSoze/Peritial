@@ -61,7 +61,9 @@ public static partial class SealedBundleOffsite
                 Convert.ToHexString(hash).ToLowerInvariant()));
         }
 
-        var inventory = JsonSerializer.SerializeToUtf8Bytes(new Inventory(1, entries));
+        var transfer = new Inventory(1, entries);
+        ValidateEntries(transfer);
+        var inventory = JsonSerializer.SerializeToUtf8Bytes(transfer);
         if (inventory.Length == 0 || inventory.Length > MaxManifestBytes)
             throw new InvalidOperationException("Encrypted inventory exceeds maximum length.");
         var signature = Sign(encryptionKey, backupId, inventory);
@@ -86,7 +88,7 @@ public static partial class SealedBundleOffsite
                 await OffsiteObjectLockPolicy.RequireProtectedObjectVersionAsync(
                     destination, bucket, prefix + entry.Name, write.VersionId, started, ct);
             var received = await HashRemoteAsync(verifier, bucket,
-                prefix + entry.Name, ct);
+                prefix + entry.Name, entry.Length, ct);
             if (received.Length != entry.Length || received.Sha256 != entry.Sha256)
                 throw new InvalidOperationException(
                     "Remote ciphertext differs after upload; backup remains incomplete.");
@@ -262,7 +264,7 @@ public static partial class SealedBundleOffsite
                 var local = Path.Combine(stage,
                     entry.Name.Replace('/', Path.DirectorySeparatorChar));
                 var result = await CopyRemoteToFileAsync(source, bucket,
-                    prefix + entry.Name, local, ct,
+                    prefix + entry.Name, local, entry.Length, ct,
                     historicalVersions is null ? null : historicalVersions[entry.Name]);
                 if (result.Length != entry.Length || result.Sha256 != entry.Sha256)
                     throw new InvalidOperationException(
@@ -322,7 +324,7 @@ public static partial class SealedBundleOffsite
     {
         if (inventory is null || inventory.Version != 1 ||
             inventory.Files is null || inventory.Files.Count < 6 ||
-            inventory.Files.Count > 100_002)
+            inventory.Files.Count > ObjectRecoveryBudget.DefaultMaxObjects + 6)
             throw new InvalidOperationException("Remote encrypted inventory invalid.");
         for (int i = 0; i < inventory.Files.Count; i++)
         {
@@ -340,6 +342,9 @@ public static partial class SealedBundleOffsite
                 throw new InvalidOperationException(
                     "Remote encrypted inventory has unsafe file entries.");
         }
+        if (inventory.Files[0].Length > MaxManifestBytes || inventory.Files[1].Length != 32)
+            throw new InvalidOperationException("Remote encrypted inventory has unsafe index lengths.");
+        SealedRecoveryBudget.RequireTransfer(inventory.Files.Select(file => file.Length));
     }
 
     private static async Task<string?> PutBytesAsync(IAmazonS3 s3, string bucket,
@@ -372,14 +377,15 @@ public static partial class SealedBundleOffsite
     }
 
     private static async Task<(long Length, string Sha256)> HashRemoteAsync(
-        IAmazonS3 s3, string bucket, string key, CancellationToken ct)
+        IAmazonS3 s3, string bucket, string key, long expectedLength, CancellationToken ct)
     {
         using var remote = await ReadRemoteAsync(s3, bucket, key, ct);
-        return await CopyHashAsync(remote.ResponseStream, Stream.Null, ct);
+        return await ObjectRecoveryBoundedHash.CopyHashAsync(
+            remote.ResponseStream, Stream.Null, expectedLength, ct);
     }
 
     private static async Task<(long Length, string Sha256)> CopyRemoteToFileAsync(
-        IAmazonS3 s3, string bucket, string key, string file, CancellationToken ct,
+        IAmazonS3 s3, string bucket, string key, string file, long expectedLength, CancellationToken ct,
         string? versionId = null)
     {
         using var remote = await ReadRemoteAsync(s3, bucket, key, ct, versionId);
@@ -390,23 +396,8 @@ public static partial class SealedBundleOffsite
         if (!OperatingSystem.IsWindows())
             options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
         await using var output = new FileStream(file, options);
-        return await CopyHashAsync(remote.ResponseStream, output, ct);
-    }
-
-    private static async Task<(long Length, string Sha256)> CopyHashAsync(
-        Stream input, Stream output, CancellationToken ct)
-    {
-        using var digest = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        var buffer = new byte[65536];
-        long count = 0;
-        int n;
-        while ((n = await input.ReadAsync(buffer, ct)) > 0)
-        {
-            count = checked(count + n);
-            digest.AppendData(buffer, 0, n);
-            await output.WriteAsync(buffer.AsMemory(0, n), ct);
-        }
-        return (count, Convert.ToHexString(digest.GetHashAndReset()).ToLowerInvariant());
+        return await ObjectRecoveryBoundedHash.CopyHashAsync(
+            remote.ResponseStream, output, expectedLength, ct);
     }
 
     private static async Task<GetObjectResponse> ReadRemoteAsync(

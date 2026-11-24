@@ -18,9 +18,18 @@ S3 già applicata dal bundle interno: massimo 10.000 documenti e 512 MiB
 complessivi dei soli blob, con lunghezze positive. Verificano anche i limiti
 dei sidecar e del manifest. Le directory radice e payload vengono enumerate
 al massimo fino alla prima entry eccedente. Non cambia il formato v1.
-Questi limiti non includono il PGDMP e non costituiscono una garanzia di
-capacità complessiva del tmpfs. Il CLI checkpoint consente override, ma
-il bundle sigillato continua a usare i limiti default.
+ADR 0117 aggiunge un limite **complessivo di 1 GiB** sui file in
+chiaro (PGDMP, sidecar, manifest e blob), indipendente dai limiti S3.
+La replica cifrata limita i file trasferiti a 1 GiB + 64 MiB per
+consentire index e tag GCM; i tre piccoli file di protocollo remoto
+sono controllati separatamente. Dopo HMAC dell'inventario, il download
+rifiuta un set oltre quota prima dello staging; ogni stream remoto
+si interrompe al primo byte oltre la lunghezza autenticata.
+Non esiste override del bundle in questa tranche: backup precedenti
+più grandi vengono rifiutati e richiedono una procedura approvata.
+Il CLI checkpoint consente override, ma il bundle sigillato continua
+a usare i limiti default S3. Questi limiti non garantiscono capacità
+libera, RAM o inode: serve comunque capacity planning.
 
 ## Vincolo obbligatorio sul plaintext: Linux tmpfs privato e swap disabilitato (ADR 0023)
 

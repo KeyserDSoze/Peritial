@@ -39,7 +39,8 @@ public static partial class SealedRecoveryBundle
         SecureRecoveryStaging.RequirePrivateTmpfsFile(postgresDump + ".sha256");
         SecureRecoveryStaging.RequirePrivateTmpfsDirectory(s3Archive);
         CheckNewDirectory(destination);
-        await VerifyPostgresAsync(postgresDump, ct);
+        // Reject an oversized dump before hashing or reading any blob.
+        SealedRecoveryBudget.RequirePlaintext(new[] { new FileInfo(postgresDump).Length });
         var objects = await ObjectRecoveryArchive.ReadAndValidateAsync(
             s3Archive, s3SigningKey, ct);
         if (objects.Checkpoint.Documents.Count > MaxFiles - 4)
@@ -56,13 +57,6 @@ public static partial class SealedRecoveryBundle
         {
             var source = Path.Combine(s3Archive, "objects", ObjectName(i));
             CheckRegularFile(source);
-            await using var stream = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read);
-            var digest = await SHA256.HashDataAsync(stream, ct);
-            var record = objects.Checkpoint.Documents[i];
-            if (new FileInfo(source).Length != record.LengthBytes ||
-                !CryptographicOperations.FixedTimeEquals(digest,
-                    Convert.FromHexString(record.Sha256)))
-                throw new InvalidOperationException("Source S3 bytes no longer match signed archive manifest.");
             sources.Add(("s3/objects/" + ObjectName(i), source));
         }
         var entries = sources.Select(x =>
@@ -71,6 +65,18 @@ public static partial class SealedRecoveryBundle
             return new BundleFile(x.Relative, new FileInfo(x.Source).Length);
         }).ToArray();
         ValidateEntries(entries);
+        // Check the total capacity before hashing the PGDMP or S3 blobs.
+        await VerifyPostgresAsync(postgresDump, ct);
+        for (var i = 0; i < objects.Checkpoint.Documents.Count; i++)
+        {
+            var record = objects.Checkpoint.Documents[i];
+            await using var stream = new FileStream(sources[i + 4].Source,
+                FileMode.Open, FileAccess.Read, FileShare.Read);
+            var (_, digest) = await ObjectRecoveryBoundedHash.CopyHashAsync(
+                stream, Stream.Null, record.LengthBytes, ct);
+            if (!string.Equals(digest, record.Sha256, StringComparison.Ordinal))
+                throw new InvalidOperationException("Source S3 bytes no longer match signed archive manifest.");
+        }
         var salt = RandomNumberGenerator.GetBytes(32);
         var index = new BundleIndex(1, Convert.ToBase64String(salt), entries);
         var indexBytes = JsonSerializer.SerializeToUtf8Bytes(index);
@@ -228,6 +234,7 @@ public static partial class SealedRecoveryBundle
             files.Skip(4).Select(file => file.Length),
             ObjectRecoveryBudget.DefaultMaxTotalBytes,
             ObjectRecoveryBudget.DefaultMaxObjects);
+        SealedRecoveryBudget.RequirePlaintext(files.Select(file => file.Length));
     }
 
     private static async Task EncryptFileAsync(string source, string target, long length,
