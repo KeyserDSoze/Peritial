@@ -9,6 +9,42 @@ namespace Peritial.Infrastructures.Tests;
 /// </summary>
 public sealed class SecureRecoveryStagingTests
 {
+    [Theory]
+    [InlineData(4096, 1, 4096)]
+    [InlineData(8192, 4097, 8192)]
+    [InlineData(8192, 4096, 4096)]
+    public void Page_capacity_accepts_exact_rounded_size(long free, long first, long second)
+    {
+        SecureRecoveryStaging.RequirePageCapacity(new[] { first }, free, 4096);
+        SecureRecoveryStaging.RequirePageCapacity(new[] { second }, free, 4096);
+    }
+
+    [Fact]
+    public void Tiny_files_are_charged_separate_pages()
+    {
+        SecureRecoveryStaging.RequirePageCapacity(new long[] { 1, 1 }, 8192, 4096);
+        Assert.Throws<InvalidOperationException>(() =>
+            SecureRecoveryStaging.RequirePageCapacity(new long[] { 1, 1 }, 8191, 4096));
+        Assert.Throws<InvalidOperationException>(() =>
+            SecureRecoveryStaging.RequirePageCapacity(new long[] { 4097, 1 }, 8192, 4096));
+    }
+
+    [Fact]
+    public void Invalid_capacity_and_lengths_cannot_wrap_or_bypass_the_gate()
+    {
+        Assert.Throws<InvalidOperationException>(() =>
+            SecureRecoveryStaging.RequirePageCapacity(new[] { long.MaxValue },
+                long.MaxValue, 4096));
+        Assert.Throws<InvalidOperationException>(() =>
+            SecureRecoveryStaging.RequirePageCapacity(new long[] { 0 }, 8192, 4096));
+        Assert.Throws<InvalidOperationException>(() =>
+            SecureRecoveryStaging.RequirePageCapacity(new long[] { -1 }, 8192, 4096));
+        Assert.Throws<InvalidOperationException>(() =>
+            SecureRecoveryStaging.RequirePageCapacity(Array.Empty<long>(), -1, 4096));
+        Assert.Throws<InvalidOperationException>(() =>
+            SecureRecoveryStaging.RequirePageCapacity(Array.Empty<long>(), 8192, 0));
+    }
+
     [Fact]
     public void Private_tmpfs_accepts_only_safe_plaintext_paths()
     {
@@ -21,7 +57,13 @@ public sealed class SecureRecoveryStagingTests
         try
         {
             SecureRecoveryStaging.RequirePrivateTmpfsDirectory(root);
-            SecureRecoveryStaging.RequirePrivateTmpfsParent(Path.Combine(root, "new-unseal"));
+            var future = Path.Combine(root, "new-unseal");
+            SecureRecoveryStaging.RequirePrivateTmpfsParent(future);
+            SecureRecoveryStaging.RequireCapacityForFiles(future, new long[] { 1, 32 });
+            var capacityError = Assert.Throws<InvalidOperationException>(() =>
+                SecureRecoveryStaging.RequireCapacityForFiles(future, new[] { long.MaxValue }));
+            Assert.Contains("capacity", capacityError.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.False(Directory.Exists(future));
             var pg = Path.Combine(root, "peritial.dump");
             File.WriteAllBytes(pg, "PGDMP"u8.ToArray());
             SecureRecoveryStaging.RequirePrivateTmpfsFile(pg);

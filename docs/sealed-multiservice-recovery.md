@@ -57,6 +57,14 @@ export PERITIAL_ARCHIVE_DIR=/dev/shm/peritial-recovery-001/objects
 
 Il comando `scripts/db/backup.sh` è utilizzabile **anche autonomamente** per dump in chiaro su filesystem persistente: il suo comportamento non è stato modificato. **Per l'intera procedura cifrata, scegliere prima il percorso tmpfs**, poi sigillare con `seal`, e conservare durevolmente soltanto il bundle cifrato. Nel restore creare un'altra directory privata `tmpfs` di destinazione e passarla a `PERITIAL_BUNDLE_UNSEAL_DIR`. Non usare `/tmp` persistente o una directory di lavoro Git. Il bundle *cifrato* (`PERITIAL_BUNDLE_DIR`) può stare su un disco durabile, purché gestito con policy di backup/offsite.
 
+**Preflight spazio libero (ADR 0119):** `unseal` confronta le lunghezze
+autenticate di tutti i file in chiaro con lo spazio libero sul mount
+`tmpfs` effettivo della destinazione, arrotondando ciascun file a pagine
+di sistema. `export` applica lo stesso controllo ai blob prima della
+seconda lettura S3 e ai metadati prima di scriverli. Non viene riservato
+spazio: rimangono possibili esaurimento inode, limiti cgroup/RAM, variazioni
+concorrenti e overhead di directory. Nessun fallback su disco.
+
 In CI lo swap del runner effimero viene disattivato esplicitamente; il test usa una directory `mktemp` privata sotto il `tmpfs` host, bind-mounted nel container SDK. La copia del PGDMP da `0700` richiede privilegi CI senza abbassare le ACL. Un `tmpfs` di dimensione insufficiente produce errore di spazio e **non** autorizza fallback su disco; pianificare RAM/capacity per il set completo. Lo swap potrebbe essere riattivato da un amministratore **dopo** il controllo: è necessario mantenerlo disabilitato per tutta la finestra. Questo modello non difende da root, memory dumps, host compromise, processi concorrenti o perdita delle chiavi e non prova sicurezza produttiva.
 
 ## Prerequisiti: due chiavi distinte, sempre esterne al bundle

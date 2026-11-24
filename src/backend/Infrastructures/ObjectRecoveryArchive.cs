@@ -44,6 +44,11 @@ public static class ObjectRecoveryArchive
         CheckNewDestination(destinationDirectory);
         var checkpoint = await ObjectRecoveryCheckpoint.CaptureAsync(
             administrator, source, bucket, ct, maxTotalBytes, maxObjects);
+        // Check space for all blobs and at least one page per metadata
+        // file before starting the second pass of S3 GETs. The actual
+        // serialized manifest is checked separately before writing it.
+        SecureRecoveryStaging.RequireCapacityForFiles(destinationDirectory,
+            checkpoint.Documents.Select(item => item.LengthBytes).Append(1L).Append(32L));
         var stage = destinationDirectory + ".partial-" + Guid.NewGuid().ToString("N");
         try
         {
@@ -75,6 +80,8 @@ public static class ObjectRecoveryArchive
             var json = JsonSerializer.SerializeToUtf8Bytes(bundle);
             if (json.LongLength is <= 0 or > MaxManifestBytes)
                 throw new InvalidOperationException("Archive metadata exceeds allowed size.");
+            SecureRecoveryStaging.RequireCapacityForFiles(Path.Combine(stage, ManifestName),
+                new[] { json.LongLength, 32L });
             await using (var stream = new FileStream(
                 Path.Combine(stage, ManifestName), PrivateWriteOptions()))
             {

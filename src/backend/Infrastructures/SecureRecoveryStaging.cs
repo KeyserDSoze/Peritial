@@ -51,7 +51,7 @@ public static class SecureRecoveryStaging
             throw new InvalidOperationException(
                 "Plaintext recovery staging directory must be private (0700 or tighter).");
 
-        if (!IsTmpfs(full))
+        if (FindTmpfsMount(full) is null)
             throw new InvalidOperationException(
                 "Plaintext recovery staging must use an actual Linux tmpfs mount.");
 
@@ -64,13 +64,47 @@ public static class SecureRecoveryStaging
                 "Plaintext recovery tmpfs requires host swap to be disabled.");
     }
 
-    private static bool IsTmpfs(string fullPath)
+    /// <summary>
+    /// A point-in-time check of the actual destination mount. Each nonempty
+    /// file consumes whole tmpfs pages, even when its logical length is tiny.
+    /// This does not reserve space or guarantee inode or cgroup availability.
+    /// </summary>
+    internal static void RequireCapacityForFiles(string futurePath, IEnumerable<long> lengths)
+    {
+        RequirePrivateTmpfsParent(futurePath);
+        var parent = Path.GetDirectoryName(Path.GetFullPath(futurePath))!;
+        var mount = FindTmpfsMount(parent) ??
+            throw new InvalidOperationException("Plaintext recovery tmpfs mount changed.");
+        var available = new DriveInfo(mount).AvailableFreeSpace;
+        RequirePageCapacity(lengths, available, Environment.SystemPageSize);
+    }
+
+    internal static void RequirePageCapacity(IEnumerable<long> lengths, long availableBytes,
+        int pageBytes)
+    {
+        if (availableBytes < 0 || pageBytes <= 0)
+            throw new InvalidOperationException("Plaintext recovery staging capacity is invalid.");
+        // Compare in pages to avoid overflow while rounding or adding sizes.
+        long remainingPages = availableBytes / pageBytes;
+        foreach (var length in lengths)
+        {
+            if (length <= 0)
+                throw new InvalidOperationException("Plaintext recovery file length is invalid.");
+            var pages = (length - 1) / pageBytes + 1;
+            if (pages > remainingPages)
+                throw new InvalidOperationException("Insufficient free tmpfs staging capacity.");
+            remainingPages -= pages;
+        }
+    }
+
+    private static string? FindTmpfsMount(string fullPath)
     {
         // Linux mountinfo field 5 is mount-point, while the type is the first
         // field after ' - '. Prefer the MOST SPECIFIC mount (bind mounts have
         // separate entries). Do not infer tmpfs from '/dev/shm' string names.
         int maxLength = -1;
         string? actualFilesystem = null;
+        string? actualMount = null;
         foreach (var line in File.ReadLines("/proc/self/mountinfo"))
         {
             int separator = line.IndexOf(" - ", StringComparison.Ordinal);
@@ -90,9 +124,11 @@ public static class SecureRecoveryStaging
             {
                 maxLength = mountPoint.Length;
                 actualFilesystem = filesystemFields[0];
+                actualMount = mountPoint;
             }
         }
-        return string.Equals(actualFilesystem, "tmpfs", StringComparison.Ordinal);
+        return string.Equals(actualFilesystem, "tmpfs", StringComparison.Ordinal)
+            ? actualMount : null;
     }
 
     private static string DecodeMountPath(string raw) => raw

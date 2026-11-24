@@ -159,6 +159,34 @@ public sealed class SealedRecoveryBundleTests
                 Assert.False(Directory.Exists(restored));
                 Assert.Empty(Directory.EnumerateFileSystemEntries(baseDir, "restored.partial-*"));
             }
+            // On a small tmpfs, authenticate a dump length above the entire
+            // mount, but still inside the configured logical budget. No
+            // large file is allocated: capacity must reject before checking
+            // the mismatched ciphertext length or creating plaintext stage.
+            var mountSize = new DriveInfo("/dev/shm").TotalSize;
+            if (mountSize > 0 &&
+                mountSize < SealedRecoveryBudget.MaxSupportedPlaintextBytes - 8_000_000)
+            {
+                var forged = System.Text.Json.Nodes.JsonNode.Parse(validIndex)!;
+                forged["Files"]![0]!["Length"] = mountSize + 1;
+                var rawIndex = Encoding.UTF8.GetBytes(forged.ToJsonString());
+                var salt = Convert.FromBase64String(forged["Salt"]!.GetValue<string>());
+                var context = Encoding.UTF8.GetBytes("Peritial.SealedRecoveryBundle.AESGCM.v1|");
+                var derivationInput = new byte[context.Length + salt.Length + 4];
+                context.CopyTo(derivationInput, 0);
+                salt.CopyTo(derivationInput, context.Length);
+                System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(
+                    derivationInput.AsSpan(derivationInput.Length - 4), -1);
+                var indexKey = HMACSHA256.HashData(encryptionKey, derivationInput);
+                await File.WriteAllBytesAsync(indexPath, rawIndex);
+                await File.WriteAllBytesAsync(macPath, HMACSHA256.HashData(indexKey, rawIndex));
+                var capacityError = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    SealedRecoveryBundle.UnsealAsync(sealedDir, restored, encryptionKey,
+                        signingKey, maxPlaintextBytes: SealedRecoveryBudget.MaxSupportedPlaintextBytes));
+                Assert.Contains("tmpfs staging capacity", capacityError.Message);
+                Assert.False(Directory.Exists(restored));
+                Assert.Empty(Directory.EnumerateFileSystemEntries(baseDir, "restored.partial-*"));
+            }
             await File.WriteAllBytesAsync(indexPath, validIndex);
             await File.WriteAllBytesAsync(macPath, validMac);
             Assert.Equal(7, (await SealedRecoveryBundle.ValidateEncryptedAsync(sealedDir, encryptionKey)).Count);

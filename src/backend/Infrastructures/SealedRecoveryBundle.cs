@@ -165,6 +165,10 @@ public static partial class SealedRecoveryBundle
             throw new InvalidOperationException("Sealed recovery bundle authentication failed.");
 
         ValidateEntries(index.Files, maxPlaintextBytes);
+        // The authenticated index supplies the exact logical output lengths.
+        // Refuse insufficient actual tmpfs capacity before touching ciphertext.
+        SecureRecoveryStaging.RequireCapacityForFiles(destination,
+            index.Files.Select(file => file.Length));
         if (!ObjectRecoveryArchive.HasExactEntryCount(
                 Directory.EnumerateFileSystemEntries(payloadPath), index.Files.Count))
             throw new InvalidOperationException("Unexpected ciphertext in sealed bundle.");
