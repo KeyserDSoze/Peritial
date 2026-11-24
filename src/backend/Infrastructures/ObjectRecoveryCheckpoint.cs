@@ -179,7 +179,6 @@ public static class ObjectRecoveryCheckpoint
         {
             cmd.Parameters.AddWithValue("limit", maxObjects + 1);
             await using var rows = await cmd.ExecuteReaderAsync(ct);
-        {
             while (await rows.ReadAsync(ct))
             {
                 if (list.Count >= maxObjects)
