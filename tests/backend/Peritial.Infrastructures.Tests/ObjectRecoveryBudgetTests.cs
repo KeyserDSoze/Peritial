@@ -48,6 +48,41 @@ public sealed class ObjectRecoveryBudgetTests
     }
 
     [Fact]
+    public void Too_many_small_documents_are_rejected_even_well_below_byte_cap()
+    {
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            ObjectRecoveryBudget.RequireWithin(new long[] { 1, 1, 1 }, 500,
+                maxObjects: 2));
+        Assert.Contains("count", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Exactly_at_document_count_limit_is_allowed()
+    {
+        Assert.Equal(3L, ObjectRecoveryBudget.RequireWithin(
+            new long[] { 1, 1, 1 }, 500, maxObjects: 3));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-3)]
+    [InlineData(100001)]
+    public void Invalid_operator_document_count_limit_is_denied(int maxObjects)
+    {
+        Assert.Throws<InvalidOperationException>(() =>
+            ObjectRecoveryBudget.RequireWithin(new long[] { 1 }, 500,
+                maxObjects: maxObjects));
+    }
+
+    [Fact]
+    public void Empty_archive_still_rejects_invalid_count_limit()
+    {
+        Assert.Throws<InvalidOperationException>(() =>
+            ObjectRecoveryBudget.RequireWithin(Array.Empty<long>(), 100,
+                maxObjects: 0));
+    }
+
+    [Fact]
     public void Empty_archives_have_zero_admitted_bytes()
     {
         Assert.Equal(0L, ObjectRecoveryBudget.RequireWithin(Array.Empty<long>(), 1));
