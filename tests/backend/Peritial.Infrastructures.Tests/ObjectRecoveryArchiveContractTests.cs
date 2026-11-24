@@ -134,7 +134,35 @@ public sealed class ObjectRecoveryArchiveContractTests
                 new ListObjectsV2Request { BucketName = bucket });
             Assert.True(stillEmpty.S3Objects is null || stillEmpty.S3Objects.Count == 0);
 
+            // Authentication covers the manifest, not the directory entries.
+            // Extra root/object entries and missing blobs must still fail
+            // before touching the independent restore bucket.
+            var unexpectedRoot = Path.Combine(archive, "unexpected");
+            await File.WriteAllTextAsync(unexpectedRoot, "unexpected");
+            var extraRoot = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                ObjectRecoveryArchive.ImportAsync(destDb, restored, bucket, archive, signingKey));
+            Assert.Contains("unexpected entries", extraRoot.Message);
+            File.Delete(unexpectedRoot);
+
+            var unexpectedObject = Path.Combine(archive, "objects", "unexpected.blob");
+            await File.WriteAllTextAsync(unexpectedObject, "unexpected");
+            var extraObject = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                ObjectRecoveryArchive.ImportAsync(destDb, restored, bucket, archive, signingKey));
+            Assert.Contains("unexpected object files", extraObject.Message);
+            File.Delete(unexpectedObject);
+
             var blob0 = Path.Combine(archive, "objects", "00000000.blob");
+            var heldBlob = Path.Combine(scratch, "held.blob");
+            File.Move(blob0, heldBlob);
+            var missingObject = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                ObjectRecoveryArchive.ImportAsync(destDb, restored, bucket, archive, signingKey));
+            Assert.Contains("missing or unexpected object files", missingObject.Message);
+            File.Move(heldBlob, blob0);
+            var afterEntryRefusals = await restored.ListObjectsV2Async(
+                new ListObjectsV2Request { BucketName = bucket });
+            Assert.True(afterEntryRefusals.S3Objects is null ||
+                afterEntryRefusals.S3Objects.Count == 0);
+
             var bytes = await File.ReadAllBytesAsync(blob0);
             bytes[7] ^= 0x20; // same length; invalid digest
             await File.WriteAllBytesAsync(blob0, bytes);

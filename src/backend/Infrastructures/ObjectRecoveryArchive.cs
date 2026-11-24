@@ -189,8 +189,10 @@ public static class ObjectRecoveryArchive
             new FileInfo(manifestPath).Length is <= 0 or > MaxManifestBytes)
             throw new InvalidOperationException("Archive manifest, authentication or content directory is unsafe.");
 
+        // Only three entries are legal. One extra is sufficient to reject
+        // without enumerating or allocating a potentially huge directory.
         var topEntries = Directory.EnumerateFileSystemEntries(archiveDirectory)
-            .Select(Path.GetFileName).ToArray();
+            .Take(4).Select(Path.GetFileName).ToArray();
         if (topEntries.Length != 3 ||
             !topEntries.Contains(ManifestName, StringComparer.Ordinal) ||
             !topEntries.Contains(AuthenticatorName, StringComparer.Ordinal) ||
@@ -216,8 +218,10 @@ public static class ObjectRecoveryArchive
         ObjectRecoveryBudget.RequireWithin(
             manifest.Checkpoint.Documents.Select(item => item?.LengthBytes ?? 0L),
             maxTotalBytes, maxObjects);
-        var objects = Directory.EnumerateFileSystemEntries(objectDir).ToArray();
-        if (objects.Length != manifest.Checkpoint.Documents.Count)
+        // The authenticated count is already within the operator's budget.
+        // Stop at the first surplus entry; do not materialize filenames.
+        if (!HasExactEntryCount(Directory.EnumerateFileSystemEntries(objectDir),
+                manifest.Checkpoint.Documents.Count))
             throw new InvalidOperationException("Archive has missing or unexpected object files.");
         for (var i = 0; i < manifest.Checkpoint.Documents.Count; i++)
         {
@@ -234,6 +238,21 @@ public static class ObjectRecoveryArchive
                 throw new InvalidOperationException("Archive object entry invalid or incomplete.");
         }
         return manifest;
+    }
+
+    internal static bool HasExactEntryCount(IEnumerable<string> entries, int expectedCount)
+    {
+        if (expectedCount is < 0 or > ObjectRecoveryBudget.MaxSupportedObjects)
+            throw new InvalidOperationException("Archive entry count is invalid.");
+
+        var count = 0;
+        foreach (var _ in entries)
+        {
+            if (count == expectedCount)
+                return false;
+            count++;
+        }
+        return count == expectedCount;
     }
 
     private static void RequireSigningKey(byte[] key)
