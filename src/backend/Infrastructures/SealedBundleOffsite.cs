@@ -24,8 +24,10 @@ public static partial class SealedBundleOffsite
     public static async Task UploadAsync(
         string sealedDirectory, IAmazonS3 destination, string bucket,
         string backupId, byte[] encryptionKey, CancellationToken ct = default,
-        bool disposableUnprotectedDemo = false, IAmazonS3? verificationSource = null)
+        bool disposableUnprotectedDemo = false, IAmazonS3? verificationSource = null,
+        long maxPlaintextBytes = SealedRecoveryBudget.MaxPlaintextBytes)
     {
+        SealedRecoveryBudget.RequireLimit(maxPlaintextBytes);
         Validate(encryptionKey, bucket, backupId);
         // Production upload uses two distinct clients: a write-only publisher
         // and a read-only verifier. Even S3-compatible servers that conflate
@@ -38,7 +40,7 @@ public static partial class SealedBundleOffsite
         var verifier = verificationSource ?? destination;
         // Authenticate every GCM tag in memory, with no temporary plaintext.
         var files = await SealedRecoveryBundle.ValidateEncryptedAsync(
-            sealedDirectory, encryptionKey, ct);
+            sealedDirectory, encryptionKey, ct, maxPlaintextBytes);
         // Production is fail-closed. The only opt-out is explicitly selected
         // by disposable local tests; CLI restricts it to a fixed CI host.
         if (!disposableUnprotectedDemo)
@@ -62,7 +64,7 @@ public static partial class SealedBundleOffsite
         }
 
         var transfer = new Inventory(1, entries);
-        ValidateEntries(transfer);
+        ValidateEntries(transfer, maxPlaintextBytes);
         var inventory = JsonSerializer.SerializeToUtf8Bytes(transfer);
         if (inventory.Length == 0 || inventory.Length > MaxManifestBytes)
             throw new InvalidOperationException("Encrypted inventory exceeds maximum length.");
@@ -127,9 +129,10 @@ public static partial class SealedBundleOffsite
     public static Task DownloadAsync(
         IAmazonS3 source, string bucket, string backupId,
         string destinationDirectory, byte[] encryptionKey, CancellationToken ct = default,
-        bool disposableUnprotectedDemo = false) =>
+        bool disposableUnprotectedDemo = false,
+        long maxPlaintextBytes = SealedRecoveryBudget.MaxPlaintextBytes) =>
         DownloadCoreAsync(source, bucket, backupId, destinationDirectory,
-            encryptionKey, ct, disposableUnprotectedDemo, null);
+            encryptionKey, ct, disposableUnprotectedDemo, null, maxPlaintextBytes);
 
     /// <summary>
     /// Explicit forensic restore of a complete, authenticated set of
@@ -140,17 +143,20 @@ public static partial class SealedBundleOffsite
     public static Task DownloadHistoricalAsync(
         IAmazonS3 source, string bucket, string backupId,
         string destinationDirectory, byte[] encryptionKey,
-        IReadOnlyDictionary<string, string> pinnedVersions, CancellationToken ct = default) =>
+        IReadOnlyDictionary<string, string> pinnedVersions, CancellationToken ct = default,
+        long maxPlaintextBytes = SealedRecoveryBudget.MaxPlaintextBytes) =>
         DownloadCoreAsync(source, bucket, backupId, destinationDirectory,
             encryptionKey, ct, false, pinnedVersions ??
-            throw new InvalidOperationException("Historical restore requires explicitly pinned versions."));
+            throw new InvalidOperationException("Historical restore requires explicitly pinned versions."),
+            maxPlaintextBytes);
 
     private static async Task DownloadCoreAsync(
         IAmazonS3 source, string bucket, string backupId,
         string destinationDirectory, byte[] encryptionKey, CancellationToken ct,
         bool disposableUnprotectedDemo,
-        IReadOnlyDictionary<string, string>? historicalVersions)
+        IReadOnlyDictionary<string, string>? historicalVersions, long maxPlaintextBytes)
     {
+        SealedRecoveryBudget.RequireLimit(maxPlaintextBytes);
         Validate(encryptionKey, bucket, backupId);
         if (!Path.IsPathFullyQualified(destinationDirectory) ||
             !Directory.Exists(Path.GetDirectoryName(destinationDirectory)) ||
@@ -192,7 +198,7 @@ public static partial class SealedBundleOffsite
         Inventory? inventory;
         try { inventory = JsonSerializer.Deserialize<Inventory>(raw); }
         catch (JsonException) { throw new InvalidOperationException("Remote inventory malformed."); }
-        ValidateEntries(inventory);
+        ValidateEntries(inventory, maxPlaintextBytes);
 
         var expected = new HashSet<string>(StringComparer.Ordinal)
         {
@@ -272,7 +278,7 @@ public static partial class SealedBundleOffsite
             }
             // Re-check all AES-GCM tags and the original sealed index MAC
             // before publishing the encrypted archive locally.
-            await SealedRecoveryBundle.ValidateEncryptedAsync(stage, encryptionKey, ct);
+            await SealedRecoveryBundle.ValidateEncryptedAsync(stage, encryptionKey, ct, maxPlaintextBytes);
             if (Directory.Exists(destinationDirectory) || File.Exists(destinationDirectory))
                 throw new InvalidOperationException("Downloaded backup destination already exists.");
             Directory.Move(stage, destinationDirectory);
@@ -320,7 +326,7 @@ public static partial class SealedBundleOffsite
         return hash.GetHashAndReset();
     }
 
-    private static void ValidateEntries(Inventory? inventory)
+    private static void ValidateEntries(Inventory? inventory, long maxPlaintextBytes)
     {
         if (inventory is null || inventory.Version != 1 ||
             inventory.Files is null || inventory.Files.Count < 6 ||
@@ -344,7 +350,7 @@ public static partial class SealedBundleOffsite
         }
         if (inventory.Files[0].Length > MaxManifestBytes || inventory.Files[1].Length != 32)
             throw new InvalidOperationException("Remote encrypted inventory has unsafe index lengths.");
-        SealedRecoveryBudget.RequireTransfer(inventory.Files.Select(file => file.Length));
+        SealedRecoveryBudget.RequireTransfer(inventory.Files.Select(file => file.Length), maxPlaintextBytes);
     }
 
     private static async Task<string?> PutBytesAsync(IAmazonS3 s3, string bucket,

@@ -25,11 +25,18 @@ consentire index e tag GCM; i tre piccoli file di protocollo remoto
 sono controllati separatamente. Dopo HMAC dell'inventario, il download
 rifiuta un set oltre quota prima dello staging; ogni stream remoto
 si interrompe al primo byte oltre la lunghezza autenticata.
-Non esiste override del bundle in questa tranche: backup precedenti
-più grandi vengono rifiutati e richiedono una procedura approvata.
-Il CLI checkpoint consente override, ma il bundle sigillato continua
-a usare i limiti default S3. Questi limiti non garantiscono capacità
-libera, RAM o inode: serve comunque capacity planning.
+ADR 0118 rende configurabile la quota complessiva: il default resta 1 GiB,
+con override esplicito `PERITIAL_BUNDLE_MAX_PLAINTEXT_BYTES` (intero
+decimale in byte, 1–4.294.967.296). Applicare lo stesso valore approvato
+su seal, unseal, push-sealed, pull-sealed e pull-historic; il budget
+trasferimento è derivato aggiungendo 64 MiB. Valori invalidi falliscono
+prima di caricare chiavi o contattare S3. I limiti S3 interni rimangono
+512 MiB e 10.000 oggetti. Nessuna modalità illimitata.
+Il cap 4 GiB è una scelta conservativa sotto il limite single PUT S3,
+non una certificazione del provider. Prima di aumentare la quota,
+verificare capacità tmpfs, RAM, inode, spazio cifrato e RPO/RTO.
+Un set sopra il cap resta non supportato; non modificare il manifest
+per aggirarlo.
 
 ## Vincolo obbligatorio sul plaintext: Linux tmpfs privato e swap disabilitato (ADR 0023)
 

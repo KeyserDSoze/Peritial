@@ -11,8 +11,10 @@ public static partial class SealedRecoveryBundle
     /// file paths are returned, for transfer of an encrypted bundle.
     /// </summary>
     public static async Task<IReadOnlyList<string>> ValidateEncryptedAsync(
-        string directory, byte[] encryptionKey, CancellationToken ct = default)
+        string directory, byte[] encryptionKey, CancellationToken ct = default,
+        long maxPlaintextBytes = SealedRecoveryBudget.MaxPlaintextBytes)
     {
+        SealedRecoveryBudget.RequireLimit(maxPlaintextBytes);
         if (encryptionKey is not { Length: 32 })
             throw new InvalidOperationException("A 32-byte encrypted bundle key is required.");
         if (!Path.IsPathFullyQualified(directory) ||
@@ -50,7 +52,7 @@ public static partial class SealedRecoveryBundle
             if (!CryptographicOperations.FixedTimeEquals(expected, actual))
                 throw new InvalidOperationException("Encrypted bundle index authentication failed.");
 
-            ValidateEntries(index.Files);
+            ValidateEntries(index.Files, maxPlaintextBytes);
             if (!ObjectRecoveryArchive.HasExactEntryCount(
                     Directory.EnumerateFileSystemEntries(payloadPath), index.Files.Count))
                 throw new InvalidOperationException("Unexpected encrypted bundle object count.");

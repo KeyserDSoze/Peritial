@@ -68,13 +68,26 @@ public sealed class SealedRecoveryBundleTests
                 SealedRecoveryBundle.SealAsync(
                     sourceDump, s3Archive, sealedDir, signingKey, signingKey));
 
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                SealedRecoveryBundle.SealAsync(sourceDump, s3Archive, sealedDir,
+                    encryptionKey, signingKey, maxPlaintextBytes: postgres.LongLength));
+            Assert.False(Directory.Exists(sealedDir));
             await SealedRecoveryBundle.SealAsync(
-                sourceDump, s3Archive, sealedDir, encryptionKey, signingKey);
+                sourceDump, s3Archive, sealedDir, encryptionKey, signingKey,
+                maxPlaintextBytes: 4_000_000);
             Assert.False(File.Exists(Path.Combine(sealedDir, "postgres", "peritial.dump")));
             Assert.False(Directory.Exists(Path.Combine(sealedDir, "s3")));
             Assert.False(Directory.Exists(Path.Combine(sealedDir, "source-objects")));
             Assert.True(File.Exists(Path.Combine(sealedDir, "index.hmac")));
             Assert.Equal(5, Directory.GetFiles(Path.Combine(sealedDir, "payload")).Length);
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                SealedRecoveryBundle.ValidateEncryptedAsync(sealedDir, encryptionKey,
+                    maxPlaintextBytes: postgres.LongLength));
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                SealedRecoveryBundle.UnsealAsync(sealedDir, restored, encryptionKey,
+                    signingKey, maxPlaintextBytes: postgres.LongLength));
+            Assert.False(Directory.Exists(restored));
 
             // Both encrypted-only validation and unseal must reject surplus
             // and missing directory entries before processing ciphertext.

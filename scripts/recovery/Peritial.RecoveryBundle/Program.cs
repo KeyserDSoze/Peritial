@@ -49,6 +49,10 @@ try
     if (Environment.GetEnvironmentVariable("PERITIAL_BUNDLE_CONFIRM") != expectedConfirmation)
         throw new InvalidOperationException("Explicit offline recovery confirmation required.");
 
+    // Validate before loading keys or constructing remote clients.
+    var maxPlaintextBytes = SealedRecoveryBudget.ParsePlaintextLimit(
+        Environment.GetEnvironmentVariable("PERITIAL_BUNDLE_MAX_PLAINTEXT_BYTES"));
+
     master = PrivateKey("PERITIAL_BUNDLE_AES_KEY_FILE");
     s3SigningKey = PrivateKey("PERITIAL_ARCHIVE_HMAC_KEY_FILE");
     if (CryptographicOperations.FixedTimeEquals(master, s3SigningKey))
@@ -60,14 +64,14 @@ try
         await SealedRecoveryBundle.SealAsync(
             Required("PERITIAL_BUNDLE_POSTGRES_DUMP"),
             Required("PERITIAL_ARCHIVE_DIR"),
-            bundle, master, s3SigningKey);
+            bundle, master, s3SigningKey, maxPlaintextBytes: maxPlaintextBytes);
         Console.WriteLine("Private, authenticated encrypted PostgreSQL+S3 recovery bundle sealed.");
     }
     else if (args[0] == "unseal")
     {
         await SealedRecoveryBundle.UnsealAsync(
             bundle, Required("PERITIAL_BUNDLE_UNSEAL_DIR"),
-            master, s3SigningKey);
+            master, s3SigningKey, maxPlaintextBytes: maxPlaintextBytes);
         Console.WriteLine("Encrypted recovery bundle authenticated and unsealed to isolated private directory.");
     }
     else
@@ -107,7 +111,7 @@ try
                 new AmazonS3Config { ServiceURL = endpoint, ForcePathStyle = true });
             await SealedBundleOffsite.UploadAsync(bundle, remote, bucket, backupId,
                 master, disposableUnprotectedDemo: disposableDemo,
-                verificationSource: verifier);
+                verificationSource: verifier, maxPlaintextBytes: maxPlaintextBytes);
             Console.WriteLine(disposableDemo
                 ? "Disposable demo encrypted backup copied and verified without Object Lock or distinct S3 reader."
                 : "Encrypted backup copied, integrity verified by an independent S3 reader, and remote completion marker published.");
@@ -116,7 +120,7 @@ try
         {
             await SealedBundleOffsite.DownloadAsync(remote, bucket, backupId,
                 Required("PERITIAL_BUNDLE_DOWNLOAD_DIR"), master,
-                disposableUnprotectedDemo: disposableDemo);
+                disposableUnprotectedDemo: disposableDemo, maxPlaintextBytes: maxPlaintextBytes);
             Console.WriteLine("Remote encrypted backup authenticated and recovered to a private directory.");
         }
         else
@@ -129,7 +133,8 @@ try
             var selected = SealedBundleOffsite.LoadHistoricalVersionSelection(
                 Required("PERITIAL_OFFSITE_VERSION_SELECTION_FILE"));
             await SealedBundleOffsite.DownloadHistoricalAsync(remote, bucket, backupId,
-                Required("PERITIAL_BUNDLE_DOWNLOAD_DIR"), master, selected);
+                Required("PERITIAL_BUNDLE_DOWNLOAD_DIR"), master, selected,
+                maxPlaintextBytes: maxPlaintextBytes);
             Console.WriteLine("Explicitly pinned historical encrypted S3 versions authenticated and recovered.");
         }
     }

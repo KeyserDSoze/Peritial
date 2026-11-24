@@ -75,8 +75,22 @@ public sealed class SealedBundleOffsiteContractTests
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 SealedBundleOffsite.UploadAsync(encrypted, client, bucket, id,
                     RandomNumberGenerator.GetBytes(32), disposableUnprotectedDemo: true));
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                SealedBundleOffsite.UploadAsync(encrypted, client, bucket, id, aesKey,
+                    disposableUnprotectedDemo: true, maxPlaintextBytes: 1));
+            var afterBudgetDenial = await client.ListObjectsV2Async(new ListObjectsV2Request
+            {
+                BucketName = bucket, Prefix = "sealed-v1/" + id + "/"
+            });
+            Assert.True(afterBudgetDenial.S3Objects is null ||
+                afterBudgetDenial.S3Objects.Count == 0);
             await SealedBundleOffsite.UploadAsync(
-                encrypted, client, bucket, id, aesKey, disposableUnprotectedDemo: true);
+                encrypted, client, bucket, id, aesKey, disposableUnprotectedDemo: true,
+                maxPlaintextBytes: 4096);
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                SealedBundleOffsite.DownloadAsync(client, bucket, id, retrieved, aesKey,
+                    disposableUnprotectedDemo: true, maxPlaintextBytes: 1));
+            Assert.False(Directory.Exists(retrieved));
 
             // Production download also fails closed without proven Object Lock.
             await Assert.ThrowsAsync<InvalidOperationException>(() =>

@@ -5,6 +5,42 @@ namespace Peritial.Infrastructures.Tests;
 
 public sealed class SealedRecoveryBudgetTests
 {
+    [Theory]
+    [InlineData(null, 1073741824L)]
+    [InlineData("1", 1L)]
+    [InlineData("4294967296", 4294967296L)]
+    public void Parse_explicit_capacity_with_default(string? input, long expected) =>
+        Assert.Equal(expected, SealedRecoveryBudget.ParsePlaintextLimit(input));
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("0")]
+    [InlineData("-1")]
+    [InlineData("+1")]
+    [InlineData(" 1")]
+    [InlineData("1.5")]
+    [InlineData("4294967297")]
+    [InlineData("9223372036854775808")]
+    public void Invalid_capacity_never_means_unlimited(string input) =>
+        Assert.Throws<InvalidOperationException>(() =>
+            SealedRecoveryBudget.ParsePlaintextLimit(input));
+
+    [Fact]
+    public void Explicit_larger_capacity_admits_old_sets_without_relaxing_hard_cap()
+    {
+        var large = SealedRecoveryBudget.MaxPlaintextBytes + 1;
+        Assert.Throws<InvalidOperationException>(() =>
+            SealedRecoveryBudget.RequirePlaintext(new[] { large }));
+        Assert.Equal(large, SealedRecoveryBudget.RequirePlaintext(new[] { large }, large));
+        Assert.Equal(large + 64L * 1024 * 1024,
+            SealedRecoveryBudget.RequireTransfer(
+                new[] { large + 64L * 1024 * 1024 }, large));
+        Assert.Throws<InvalidOperationException>(() =>
+            SealedRecoveryBudget.RequireTransfer(Array.Empty<long>(), long.MaxValue));
+        Assert.Throws<InvalidOperationException>(() =>
+            SealedRecoveryBudget.RequirePlaintext(Array.Empty<long>(), 0));
+    }
+
     [Fact]
     public void Exact_plaintext_capacity_is_admitted_including_metadata()
     {

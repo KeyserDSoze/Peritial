@@ -30,8 +30,10 @@ public static partial class SealedRecoveryBundle
     /// </summary>
     public static async Task SealAsync(string postgresDump, string s3Archive,
         string destination, byte[] encryptionKey, byte[] s3SigningKey,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        long maxPlaintextBytes = SealedRecoveryBudget.MaxPlaintextBytes)
     {
+        SealedRecoveryBudget.RequireLimit(maxPlaintextBytes);
         ValidateKeys(encryptionKey, s3SigningKey);
         // Reject plaintext PGDMP or S3 archives on disk-backed staging
         // BEFORE reading them or starting the encrypted publication.
@@ -40,7 +42,8 @@ public static partial class SealedRecoveryBundle
         SecureRecoveryStaging.RequirePrivateTmpfsDirectory(s3Archive);
         CheckNewDirectory(destination);
         // Reject an oversized dump before hashing or reading any blob.
-        SealedRecoveryBudget.RequirePlaintext(new[] { new FileInfo(postgresDump).Length });
+        SealedRecoveryBudget.RequirePlaintext(new[] { new FileInfo(postgresDump).Length },
+            maxPlaintextBytes);
         var objects = await ObjectRecoveryArchive.ReadAndValidateAsync(
             s3Archive, s3SigningKey, ct);
         if (objects.Checkpoint.Documents.Count > MaxFiles - 4)
@@ -64,7 +67,7 @@ public static partial class SealedRecoveryBundle
             CheckRegularFile(x.Source);
             return new BundleFile(x.Relative, new FileInfo(x.Source).Length);
         }).ToArray();
-        ValidateEntries(entries);
+        ValidateEntries(entries, maxPlaintextBytes);
         // Check the total capacity before hashing the PGDMP or S3 blobs.
         await VerifyPostgresAsync(postgresDump, ct);
         for (var i = 0; i < objects.Checkpoint.Documents.Count; i++)
@@ -113,8 +116,10 @@ public static partial class SealedRecoveryBundle
     /// the usual PostgreSQL restore and S3 import checks before activation.
     /// </summary>
     public static async Task UnsealAsync(string bundleDirectory, string destination,
-        byte[] encryptionKey, byte[] s3SigningKey, CancellationToken ct = default)
+        byte[] encryptionKey, byte[] s3SigningKey, CancellationToken ct = default,
+        long maxPlaintextBytes = SealedRecoveryBudget.MaxPlaintextBytes)
     {
+        SealedRecoveryBudget.RequireLimit(maxPlaintextBytes);
         ValidateKeys(encryptionKey, s3SigningKey);
         // The target will contain the full decrypted PostgreSQL database and
         // every document. Never publish it on overlay/ext4 by accident.
@@ -159,7 +164,7 @@ public static partial class SealedRecoveryBundle
         if (!CryptographicOperations.FixedTimeEquals(expectedMac, actualMac))
             throw new InvalidOperationException("Sealed recovery bundle authentication failed.");
 
-        ValidateEntries(index.Files);
+        ValidateEntries(index.Files, maxPlaintextBytes);
         if (!ObjectRecoveryArchive.HasExactEntryCount(
                 Directory.EnumerateFileSystemEntries(payloadPath), index.Files.Count))
             throw new InvalidOperationException("Unexpected ciphertext in sealed bundle.");
@@ -210,7 +215,7 @@ public static partial class SealedRecoveryBundle
         }
     }
 
-    private static void ValidateEntries(IReadOnlyList<BundleFile>? files)
+    private static void ValidateEntries(IReadOnlyList<BundleFile>? files, long maxPlaintextBytes)
     {
         if (files is null || files.Count < 4 || files.Count > MaxFiles)
             throw new InvalidOperationException("Invalid recovery bundle file count.");
@@ -234,7 +239,7 @@ public static partial class SealedRecoveryBundle
             files.Skip(4).Select(file => file.Length),
             ObjectRecoveryBudget.DefaultMaxTotalBytes,
             ObjectRecoveryBudget.DefaultMaxObjects);
-        SealedRecoveryBudget.RequirePlaintext(files.Select(file => file.Length));
+        SealedRecoveryBudget.RequirePlaintext(files.Select(file => file.Length), maxPlaintextBytes);
     }
 
     private static async Task EncryptFileAsync(string source, string target, long length,
