@@ -14,6 +14,8 @@ Il comando `capture` costruisce un inventario ordinato dei documenti referenziat
 
 **Budget complessivo del recovery (ADR 0113):** `capture`, `verify`, `export` e `restore-objects` applicano una quota totale di default **536870912 byte (512 MiB)** sui documenti di **tutti i tenant**. Il valore configurabile `PERITIAL_RECOVERY_MAX_TOTAL_BYTES` deve essere un intero positivo decimale: valori invalidi/zero/negativi sono rifiutati. Il controllo avviene prima del primo S3 GET del checkpoint, prima della creazione della directory `tmpfs` per export e, dopo HMAC, prima della lettura file/PUT S3 nel restore. Un archivio con molti file piccoli non può superare la somma ammessa. **La quota non riserva lo spazio**: scegliere un valore sensibilmente inferiore alla capienza `tmpfs`/bucket effettivamente disponibile, considerando overhead di directory, manifest, dump DB, SDK e altri servizi. Mai aumentarla automaticamente in caso di rifiuto senza un capacity plan verificato.
 
+**Budget cumulativo degli oggetti (ADR 0114):** i medesimi quattro comandi limitano separatamente il **numero di documenti di tutti i tenant**, con default **10.000** e tetto massimo configurabile **100.000**. `PERITIAL_RECOVERY_MAX_OBJECTS` accetta esclusivamente un intero decimale positivo compreso fra 1 e 100000. Il reader privilegiato PostgreSQL usa una query ordinata con `LIMIT maxObjects + 1` e si arresta al primo elemento in eccesso; non carica milioni di righe in RAM. Manifest autenticato e inventario del database restaurato sono verificati con lo stesso cap prima di attraversare gli oggetti S3. Un archive con molti file di 1 byte può dunque essere negato **anche se la somma dei byte è sotto i 512 MiB**. Il limite non sostituisce l'inventario completo del bucket, la quota fisica `tmpfs`, o una finestra con writer realmente fermi. [ADR 0114](../adr/0114-offline-recovery-cross-tenant-object-count-budget.md).
+
 **Importante:** non c'è una transazione comune tra S3 e PostgreSQL. Il lock `SHARE NOWAIT` su `documents` e i registri di upload limita corse durante l'inventario DB, ma è rilasciato prima della lettura dei blob. La conferma `WRITERS_STOPPED` **non rileva da sola** processi ancora attivi: l'operatore deve fermarli realmente. Il semplice manifest di `capture` continua a **non contenere** i byte degli oggetti. Per salvare i byte, usare `export`: la cartella di archive contiene un manifest distinto e i file binari. Il semplice checkpoint `capture` NON è autenticato. L'archive `export`/ `restore-objects` autentica ora il proprio manifest con **HMAC-SHA256** usando un segreto esterno; **non** è cifrato, non ha firma asimmetrica né garantisce uno snapshot atomico con PostgreSQL.
 
 ## Prerequisiti operatore
@@ -36,6 +38,8 @@ export PERITIAL_CHECKPOINT_FILE=/secure/backups/peritial-documents-checkpoint.js
 # Opzionale: quota cumulativa in byte, default 536870912 (512 MiB).
 # Impostare SOLO dopo capacity planning dello staging e del bucket.
 # export PERITIAL_RECOVERY_MAX_TOTAL_BYTES=268435456
+# Opzionale: limite cross-tenant oggetti, default 10000, massimo 100000.
+# export PERITIAL_RECOVERY_MAX_OBJECTS=5000
 ```
 
 Durante la manutenzione, **dopo** aver fermato i writer e coordinato la copia dei blob e `pg_dump`:
