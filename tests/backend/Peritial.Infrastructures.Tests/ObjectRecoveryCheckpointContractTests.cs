@@ -122,6 +122,14 @@ public sealed class ObjectRecoveryCheckpointContractTests
             await using (var clear = new NpgsqlCommand("DELETE FROM upload_request_keys", conn))
                 await clear.ExecuteNonQueryAsync();
 
+            // Even when all byte totals are tiny, an object-count cap must
+            // reject a cross-tenant inventory before any S3 GET. Both objects
+            // are still absent at this point, making the failure observable.
+            var tooMany = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                ObjectRecoveryCheckpoint.CaptureAsync(
+                    db, storage, bucket, maxObjects: 1));
+            Assert.Contains("count", tooMany.Message, StringComparison.OrdinalIgnoreCase);
+
             // Quota is cumulative across BOTH tenant documents. Reject
             // before the first S3 GET: referenced objects are still missing.
             // This must fail for the configured quota, not for missing S3.
