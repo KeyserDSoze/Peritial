@@ -26,13 +26,14 @@ public static class ObjectRecoveryCheckpoint
     public static async Task<Manifest> CaptureAsync(
         NpgsqlDataSource administrator, IAmazonS3 objects, string bucket,
         CancellationToken ct = default,
-        long maxTotalBytes = ObjectRecoveryBudget.DefaultMaxTotalBytes)
+        long maxTotalBytes = ObjectRecoveryBudget.DefaultMaxTotalBytes,
+        int maxObjects = ObjectRecoveryBudget.DefaultMaxObjects)
     {
-        var documents = await ReadAllMetadataAsync(administrator, ct);
+        var documents = await ReadAllMetadataAsync(administrator, ct, maxObjects);
         // Preflight the COMPLETE cross-tenant inventory before the first S3
         // GET. Per-object bounds alone do not protect backup capacity.
         ObjectRecoveryBudget.RequireWithin(
-            documents.Select(row => row.LengthBytes), maxTotalBytes);
+            documents.Select(row => row.LengthBytes), maxTotalBytes, maxObjects);
         var manifest = new List<Document>(documents.Count);
         foreach (var row in documents)
         {
@@ -64,9 +65,10 @@ public static class ObjectRecoveryCheckpoint
     public static async Task VerifyAsync(
         NpgsqlDataSource administrator, IAmazonS3 objects, string bucket,
         Manifest checkpoint, CancellationToken ct = default,
-        long maxTotalBytes = ObjectRecoveryBudget.DefaultMaxTotalBytes)
+        long maxTotalBytes = ObjectRecoveryBudget.DefaultMaxTotalBytes,
+        int maxObjects = ObjectRecoveryBudget.DefaultMaxObjects)
     {
-        await VerifyMetadataAsync(administrator, checkpoint, ct, maxTotalBytes);
+        await VerifyMetadataAsync(administrator, checkpoint, ct, maxTotalBytes, maxObjects);
         foreach (var saved in checkpoint.Documents)
         {
             var (length, hash) = await HashObjectAsync(objects, bucket, saved.StorageKey, saved.LengthBytes, ct);
@@ -84,7 +86,8 @@ public static class ObjectRecoveryCheckpoint
     public static async Task VerifyMetadataAsync(
         NpgsqlDataSource administrator, Manifest checkpoint,
         CancellationToken ct = default,
-        long maxTotalBytes = ObjectRecoveryBudget.DefaultMaxTotalBytes)
+        long maxTotalBytes = ObjectRecoveryBudget.DefaultMaxTotalBytes,
+        int maxObjects = ObjectRecoveryBudget.DefaultMaxObjects)
     {
         if (checkpoint is null || checkpoint.FormatVersion != 1 || checkpoint.Documents is null)
             throw new InvalidOperationException("Unsupported or malformed checkpoint.");
@@ -94,10 +97,10 @@ public static class ObjectRecoveryCheckpoint
         // then independently validate the privileged database inventory.
         ObjectRecoveryBudget.RequireWithin(
             checkpoint.Documents.Select(row => row?.LengthBytes ?? 0L),
-            maxTotalBytes);
-        var documents = await ReadAllMetadataAsync(administrator, ct);
+            maxTotalBytes, maxObjects);
+        var documents = await ReadAllMetadataAsync(administrator, ct, maxObjects);
         ObjectRecoveryBudget.RequireWithin(
-            documents.Select(row => row.LengthBytes), maxTotalBytes);
+            documents.Select(row => row.LengthBytes), maxTotalBytes, maxObjects);
         if (documents.Count != checkpoint.Documents.Count)
             throw new InvalidOperationException("Restored document metadata count differs from checkpoint.");
 
@@ -125,8 +128,11 @@ public static class ObjectRecoveryCheckpoint
         byte[]? ContentSha256);
 
     private static async Task<List<Metadata>> ReadAllMetadataAsync(
-        NpgsqlDataSource administrator, CancellationToken ct)
+        NpgsqlDataSource administrator, CancellationToken ct, int maxObjects)
     {
+        // Reject invalid limits before any PostgreSQL access, then cap the
+        // SQL cursor and memory materialization at maxObjects + 1.
+        ObjectRecoveryBudget.RequireCountLimit(maxObjects);
         await using var conn = await administrator.OpenConnectionAsync(ct);
         await using var tx = await conn.BeginTransactionAsync(IsolationLevel.RepeatableRead, ct);
 
@@ -168,11 +174,17 @@ public static class ObjectRecoveryCheckpoint
             """
             SELECT tenant_id,id,storage_key,length_bytes,content_sha256
               FROM documents ORDER BY tenant_id,id
+              LIMIT @limit
             """, conn, tx))
-        await using (var rows = await cmd.ExecuteReaderAsync(ct))
+        {
+            cmd.Parameters.AddWithValue("limit", maxObjects + 1);
+            await using var rows = await cmd.ExecuteReaderAsync(ct);
         {
             while (await rows.ReadAsync(ct))
             {
+                if (list.Count >= maxObjects)
+                    throw new InvalidOperationException(
+                        "Offline recovery object count budget exceeded.");
                 var item = new Metadata(
                     rows.GetGuid(0), rows.GetGuid(1), rows.GetString(2), rows.GetInt64(3),
                     rows.IsDBNull(4) ? null : rows.GetFieldValue<byte[]>(4));
