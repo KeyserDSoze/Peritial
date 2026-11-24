@@ -76,6 +76,77 @@ public sealed class SealedRecoveryBundleTests
             Assert.True(File.Exists(Path.Combine(sealedDir, "index.hmac")));
             Assert.Equal(5, Directory.GetFiles(Path.Combine(sealedDir, "payload")).Length);
 
+            // Both encrypted-only validation and unseal must reject surplus
+            // and missing directory entries before processing ciphertext.
+            var extra = Path.Combine(sealedDir, "extra");
+            await File.WriteAllTextAsync(extra, "extra");
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                SealedRecoveryBundle.ValidateEncryptedAsync(sealedDir, encryptionKey));
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                SealedRecoveryBundle.UnsealAsync(sealedDir, restored, encryptionKey, signingKey));
+            Assert.False(Directory.Exists(restored));
+            File.Delete(extra);
+
+            extra = Path.Combine(sealedDir, "payload", "extra.enc");
+            await File.WriteAllTextAsync(extra, "extra");
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                SealedRecoveryBundle.ValidateEncryptedAsync(sealedDir, encryptionKey));
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                SealedRecoveryBundle.UnsealAsync(sealedDir, restored, encryptionKey, signingKey));
+            Assert.False(Directory.Exists(restored));
+            File.Delete(extra);
+
+            var firstCipher = Path.Combine(sealedDir, "payload", "00000000.enc");
+            var heldCipher = Path.Combine(baseDir, "held.enc");
+            File.Move(firstCipher, heldCipher);
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                SealedRecoveryBundle.ValidateEncryptedAsync(sealedDir, encryptionKey));
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                SealedRecoveryBundle.UnsealAsync(sealedDir, restored, encryptionKey, signingKey));
+            Assert.False(Directory.Exists(restored));
+            File.Move(heldCipher, firstCipher);
+
+            // Sign an intentionally oversized but authenticated index. The
+            // inner S3 archive budget must be checked before ciphertext
+            // lengths/tags or any plaintext staging, not after decryption.
+            var indexPath = Path.Combine(sealedDir, "index.json");
+            var macPath = Path.Combine(sealedDir, "index.hmac");
+            var validIndex = await File.ReadAllBytesAsync(indexPath);
+            var validMac = await File.ReadAllBytesAsync(macPath);
+            foreach (var (entry, length, errorText) in new (int, long, string)[]
+            {
+                (4, ObjectRecoveryBudget.DefaultMaxTotalBytes + 1, "budget"),
+                (4, 0, "budget"),
+                (3, 33, "metadata length"),
+                (2, 50_000_001, "metadata length")
+            })
+            {
+                var forged = System.Text.Json.Nodes.JsonNode.Parse(validIndex)!;
+                forged["Files"]![entry]!["Length"] = length;
+                var rawIndex = Encoding.UTF8.GetBytes(forged.ToJsonString());
+                var salt = Convert.FromBase64String(forged["Salt"]!.GetValue<string>());
+                var context = Encoding.UTF8.GetBytes("Peritial.SealedRecoveryBundle.AESGCM.v1|");
+                var derivationInput = new byte[context.Length + salt.Length + 4];
+                context.CopyTo(derivationInput, 0);
+                salt.CopyTo(derivationInput, context.Length);
+                System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(
+                    derivationInput.AsSpan(derivationInput.Length - 4), -1);
+                var indexKey = HMACSHA256.HashData(encryptionKey, derivationInput);
+                await File.WriteAllBytesAsync(indexPath, rawIndex);
+                await File.WriteAllBytesAsync(macPath, HMACSHA256.HashData(indexKey, rawIndex));
+                var validateError = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    SealedRecoveryBundle.ValidateEncryptedAsync(sealedDir, encryptionKey));
+                Assert.Contains(errorText, validateError.Message);
+                var unsealError = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    SealedRecoveryBundle.UnsealAsync(sealedDir, restored, encryptionKey, signingKey));
+                Assert.Contains(errorText, unsealError.Message);
+                Assert.False(Directory.Exists(restored));
+                Assert.Empty(Directory.EnumerateFileSystemEntries(baseDir, "restored.partial-*"));
+            }
+            await File.WriteAllBytesAsync(indexPath, validIndex);
+            await File.WriteAllBytesAsync(macPath, validMac);
+            Assert.Equal(7, (await SealedRecoveryBundle.ValidateEncryptedAsync(sealedDir, encryptionKey)).Count);
+
             // Wrong password/key and corrupt ciphertext must not publish even
             // a partial plaintext restore directory.
             await Assert.ThrowsAsync<InvalidOperationException>(() =>

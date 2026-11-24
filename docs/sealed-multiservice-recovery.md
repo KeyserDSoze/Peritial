@@ -10,6 +10,18 @@ L'output è una **nuova directory privata** con `index.json`, `index.hmac` e fil
 
 `unseal` **non pubblica** una destinazione anche parzialmente decifrata quando fallisce la verifica. Decifra in una nuova directory temporanea privata e la rinomina nella destinazione richiesta soltanto dopo controllo AES-GCM di tutti i blocchi, SHA-256 del PostgreSQL e HMAC del manifest S3. La directory decifrata **contiene dati personali e documenti in chiaro**. Non usare destinazioni condivise o permanenti.
 
+### Preflight capacità del bundle sigillato (ADR 0116)
+
+Dopo autenticazione HMAC dell'indice esterno, `unseal` e la verifica cifrata
+usata dal trasferimento offsite controllano **prima di decifrare** la quota
+S3 già applicata dal bundle interno: massimo 10.000 documenti e 512 MiB
+complessivi dei soli blob, con lunghezze positive. Verificano anche i limiti
+dei sidecar e del manifest. Le directory radice e payload vengono enumerate
+al massimo fino alla prima entry eccedente. Non cambia il formato v1.
+Questi limiti non includono il PGDMP e non costituiscono una garanzia di
+capacità complessiva del tmpfs. Il CLI checkpoint consente override, ma
+il bundle sigillato continua a usare i limiti default.
+
 ## Vincolo obbligatorio sul plaintext: Linux tmpfs privato e swap disabilitato (ADR 0023)
 
 Le operazioni `ObjectRecoveryArchive.ExportAsync`, `ObjectRecoveryArchive.ImportAsync`, `SealedRecoveryBundle.SealAsync` e `SealedRecoveryBundle.UnsealAsync` ora **rifiutano** file sorgenti e destinazioni temporanee in chiaro quando non risiedono su un vero mount **`tmpfs` Linux**, in una directory privata (permessi `0700` o più restrittivi), senza componenti symlink e con **nessuno swap attivo** visibile in `/proc/swaps`. Il tipo di filesystem viene ricavato dal mount **più specifico** di `/proc/self/mountinfo`: una directory chiamata `/dev/shm` non basta da sola. Se il sistema operativo non è Linux, la modalità plaintext fallisce chiusa finché non è disponibile un backend scratch crittografato specificamente verificato.

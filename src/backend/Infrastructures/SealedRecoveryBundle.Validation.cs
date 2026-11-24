@@ -27,7 +27,8 @@ public static partial class SealedRecoveryBundle
         if (!Directory.Exists(payloadPath) || IsLink(payloadPath) ||
             new FileInfo(manifestPath).Length is <= 0 or > MaxIndexBytes ||
             new FileInfo(signaturePath).Length != 32 ||
-            Directory.EnumerateFileSystemEntries(directory).Count() != 3)
+            !ObjectRecoveryArchive.HasExactEntryCount(
+                Directory.EnumerateFileSystemEntries(directory), 3))
             throw new InvalidOperationException("Encrypted bundle structure is unsafe.");
 
         var indexBytes = await File.ReadAllBytesAsync(manifestPath, ct);
@@ -50,7 +51,8 @@ public static partial class SealedRecoveryBundle
                 throw new InvalidOperationException("Encrypted bundle index authentication failed.");
 
             ValidateEntries(index.Files);
-            if (Directory.EnumerateFileSystemEntries(payloadPath).Count() != index.Files.Count)
+            if (!ObjectRecoveryArchive.HasExactEntryCount(
+                    Directory.EnumerateFileSystemEntries(payloadPath), index.Files.Count))
                 throw new InvalidOperationException("Unexpected encrypted bundle object count.");
 
             var result = new List<string> { IndexName, IndexMacName };

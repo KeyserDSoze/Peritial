@@ -70,6 +70,7 @@ public static partial class SealedRecoveryBundle
             CheckRegularFile(x.Source);
             return new BundleFile(x.Relative, new FileInfo(x.Source).Length);
         }).ToArray();
+        ValidateEntries(entries);
         var salt = RandomNumberGenerator.GetBytes(32);
         var index = new BundleIndex(1, Convert.ToBase64String(salt), entries);
         var indexBytes = JsonSerializer.SerializeToUtf8Bytes(index);
@@ -124,7 +125,8 @@ public static partial class SealedRecoveryBundle
         if (!Directory.Exists(payloadPath) || IsLink(payloadPath) ||
             new FileInfo(indexPath).Length is <= 0 or > MaxIndexBytes ||
             new FileInfo(macPath).Length != 32 ||
-            Directory.EnumerateFileSystemEntries(bundleDirectory).Count() != 3)
+            !ObjectRecoveryArchive.HasExactEntryCount(
+                Directory.EnumerateFileSystemEntries(bundleDirectory), 3))
             throw new InvalidOperationException("Sealed recovery bundle structure is unsafe.");
 
         var indexBytes = await File.ReadAllBytesAsync(indexPath, ct);
@@ -152,7 +154,8 @@ public static partial class SealedRecoveryBundle
             throw new InvalidOperationException("Sealed recovery bundle authentication failed.");
 
         ValidateEntries(index.Files);
-        if (Directory.EnumerateFileSystemEntries(payloadPath).Count() != index.Files.Count)
+        if (!ObjectRecoveryArchive.HasExactEntryCount(
+                Directory.EnumerateFileSystemEntries(payloadPath), index.Files.Count))
             throw new InvalidOperationException("Unexpected ciphertext in sealed bundle.");
         for (var i = 0; i < index.Files.Count; i++)
         {
@@ -214,6 +217,17 @@ public static partial class SealedRecoveryBundle
             if (files[i] is null || files[i].Path != expected || files[i].Length < 0)
                 throw new InvalidOperationException("Invalid recovery bundle file path or length.");
         }
+
+        // Enforce the inner archive's existing default budgets before
+        // decrypting any file or validating the ciphertext payload. The
+        // authenticated outer index already contains these exact lengths.
+        if (files[0].Length < 5 || files[1].Length is < 64 or > 128 ||
+            files[2].Length is <= 0 or > MaxIndexBytes || files[3].Length != 32)
+            throw new InvalidOperationException("Invalid recovery bundle metadata length.");
+        ObjectRecoveryBudget.RequireWithin(
+            files.Skip(4).Select(file => file.Length),
+            ObjectRecoveryBudget.DefaultMaxTotalBytes,
+            ObjectRecoveryBudget.DefaultMaxObjects);
     }
 
     private static async Task EncryptFileAsync(string source, string target, long length,
