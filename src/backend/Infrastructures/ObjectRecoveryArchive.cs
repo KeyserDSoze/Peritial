@@ -35,14 +35,15 @@ public static class ObjectRecoveryArchive
     public static async Task<ArchiveManifest> ExportAsync(
         NpgsqlDataSource administrator, IAmazonS3 source, string bucket,
         string destinationDirectory, byte[] signingKey, CancellationToken ct = default,
-        long maxTotalBytes = ObjectRecoveryBudget.DefaultMaxTotalBytes)
+        long maxTotalBytes = ObjectRecoveryBudget.DefaultMaxTotalBytes,
+        int maxObjects = ObjectRecoveryBudget.DefaultMaxObjects)
     {
         RequireSigningKey(signingKey);
         // Fail before any S3 GET or local plaintext write on persistent disk.
         SecureRecoveryStaging.RequirePrivateTmpfsParent(destinationDirectory);
         CheckNewDestination(destinationDirectory);
         var checkpoint = await ObjectRecoveryCheckpoint.CaptureAsync(
-            administrator, source, bucket, ct, maxTotalBytes);
+            administrator, source, bucket, ct, maxTotalBytes, maxObjects);
         var stage = destinationDirectory + ".partial-" + Guid.NewGuid().ToString("N");
         try
         {
@@ -110,12 +111,13 @@ public static class ObjectRecoveryArchive
     public static async Task<int> ImportAsync(
         NpgsqlDataSource restoredDatabase, IAmazonS3 destination, string bucket,
         string archiveDirectory, byte[] signingKey, CancellationToken ct = default,
-        long maxTotalBytes = ObjectRecoveryBudget.DefaultMaxTotalBytes)
+        long maxTotalBytes = ObjectRecoveryBudget.DefaultMaxTotalBytes,
+        int maxObjects = ObjectRecoveryBudget.DefaultMaxObjects)
     {
         var manifest = await ReadAndValidateAsync(
-            archiveDirectory, signingKey, ct, maxTotalBytes);
+            archiveDirectory, signingKey, ct, maxTotalBytes, maxObjects);
         await ObjectRecoveryCheckpoint.VerifyMetadataAsync(
-            restoredDatabase, manifest.Checkpoint, ct, maxTotalBytes);
+            restoredDatabase, manifest.Checkpoint, ct, maxTotalBytes, maxObjects);
 
         // Fail before ANY S3 PUT if one file has been modified after export.
         // Hash every source file rather than trusting the manifest alone.
@@ -159,15 +161,17 @@ public static class ObjectRecoveryArchive
         }
         // GET every restored object and validate SHA-256 against the database.
         await ObjectRecoveryCheckpoint.VerifyAsync(
-            restoredDatabase, destination, bucket, manifest.Checkpoint, ct, maxTotalBytes);
+            restoredDatabase, destination, bucket, manifest.Checkpoint, ct, maxTotalBytes, maxObjects);
         return manifest.Checkpoint.Documents.Count;
     }
 
     public static async Task<ArchiveManifest> ReadAndValidateAsync(
         string archiveDirectory, byte[] signingKey, CancellationToken ct = default,
-        long maxTotalBytes = ObjectRecoveryBudget.DefaultMaxTotalBytes)
+        long maxTotalBytes = ObjectRecoveryBudget.DefaultMaxTotalBytes,
+        int maxObjects = ObjectRecoveryBudget.DefaultMaxObjects)
     {
         RequireSigningKey(signingKey);
+        ObjectRecoveryBudget.RequireCountLimit(maxObjects);
         // Archive contains plaintext S3 documents, not merely an index.
         SecureRecoveryStaging.RequirePrivateTmpfsDirectory(archiveDirectory);
         if (!Path.IsPathFullyQualified(archiveDirectory) ||
@@ -211,7 +215,7 @@ public static class ObjectRecoveryArchive
         // validation. Fail before S3 PUT or even walking the archive objects.
         ObjectRecoveryBudget.RequireWithin(
             manifest.Checkpoint.Documents.Select(item => item?.LengthBytes ?? 0L),
-            maxTotalBytes);
+            maxTotalBytes, maxObjects);
         var objects = Directory.EnumerateFileSystemEntries(objectDir).ToArray();
         if (objects.Length != manifest.Checkpoint.Documents.Count)
             throw new InvalidOperationException("Archive has missing or unexpected object files.");
